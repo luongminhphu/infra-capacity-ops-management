@@ -655,7 +655,9 @@ function sizingExistingPayload() {
   const includeExisting = $('#szPdfIncludeExisting') ? $('#szPdfIncludeExisting').checked : true;
   const detail = (document.querySelector('input[name="szPdfDetail"]:checked') || {}).value === 'brief' ? 'brief' : 'full';
   const doc = sizingState().doc;
+  const logo = sizingLogoOverride();
   return { ...payload, existing, policyText, mode, targetCluster, includeNewOption, includeExisting, detail,
+    logoDataUrl: logo ? logo.dataUrl : null,
     customerName: doc.customerName || '', preparedOrg: doc.preparedOrg || '', preparedBy: doc.preparedBy || '', documentCode: doc.documentCode || '' };
 }
 
@@ -678,6 +680,46 @@ function refreshSizingPdfOptions() {
   if (rows.some(a => a.name === prev)) sel.value = prev;
   const hint = $('#szPdfClusterHint');
   if (hint) hint.textContent = rows.length ? `${rows.length} cluster trong phạm vi vCenter đang chọn; % tính sau khi cộng toàn bộ nhu cầu dự án.` : 'Chưa có dữ liệu cluster hiện hữu — PDF sẽ ghi rõ không có cluster để đối chiếu.';
+}
+
+/* ---------- Per-report logo override (falls back to the default report logo) ---------- */
+const SIZING_LOGO_KEY = 'vco.sizing.logo.v1';
+const SZ_MAX_LOGO_BYTES = 2 * 1024 * 1024;
+function sizingLogoOverride() {
+  const st = sizingState();
+  if (st.logoOverride === undefined) {
+    try { st.logoOverride = JSON.parse(localStorage.getItem(SIZING_LOGO_KEY) || 'null'); } catch (e) { st.logoOverride = null; }
+  }
+  return st.logoOverride;
+}
+function setSizingLogoOverride(val) {
+  sizingState().logoOverride = val;
+  try { val ? localStorage.setItem(SIZING_LOGO_KEY, JSON.stringify(val)) : localStorage.removeItem(SIZING_LOGO_KEY); } catch (e) { /* too large for storage: keep for this session */ }
+}
+async function refreshSizingLogoPreview() {
+  const img = $('#szLogoImg'), empty = $('#szLogoEmpty'), hint = $('#szLogoHint'), reset = $('#btnSzLogoReset');
+  if (!img) return;
+  const ov = sizingLogoOverride();
+  let src = ov ? ov.dataUrl : null;
+  let note = ov ? `Logo riêng cho báo cáo này: ${ov.name || 'ảnh đã chọn'}.` : '';
+  if (!src) {
+    try { const res = await api.getLogo(); src = res && res.dataUrl ? res.dataUrl : null; } catch (e) { src = null; }
+    note = src ? 'Đang dùng logo mặc định trong Cài đặt báo cáo.' : 'Chưa có logo mặc định — PDF sẽ không có logo.';
+  }
+  img.classList.toggle('hidden', !src);
+  empty.classList.toggle('hidden', !!src);
+  if (src) img.src = src; else img.removeAttribute('src');
+  reset.classList.toggle('hidden', !ov);
+  hint.textContent = `${note} Không chọn → dùng logo mặc định. PNG / JPEG / SVG / WEBP, tối đa 2MB; áp dụng cho PDF và Excel Sizing (logo SVG chỉ hiển thị trên PDF).`;
+}
+async function onSizingLogoFile(file) {
+  if (!file) return;
+  if (!/^image\/(png|jpeg|svg\+xml|webp)$/i.test(file.type)) { szPdfStatus('Logo phải là PNG, JPEG, SVG hoặc WEBP.', true); return; }
+  if (file.size > SZ_MAX_LOGO_BYTES) { szPdfStatus('Logo vượt quá 2MB cho phép.', true); return; }
+  const dataUrl = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = () => reject(new Error('Không đọc được tệp ảnh.')); r.readAsDataURL(file); });
+  setSizingLogoOverride({ dataUrl, name: file.name });
+  szPdfStatus('');
+  refreshSizingLogoPreview();
 }
 
 function szPdfStatus(msg, isError = false) {
@@ -711,7 +753,10 @@ async function exportSizingPdf(btn) {
 }
 
 async function exportSizingXlsx(btn) {
-  const payload = sizingPayload();
+  const doc = sizingState().doc;
+  const logo = sizingLogoOverride();
+  const payload = { ...sizingPayload(), customerName: doc.customerName || '', preparedOrg: doc.preparedOrg || '',
+    preparedBy: doc.preparedBy || '', documentCode: doc.documentCode || '', logoDataUrl: logo ? logo.dataUrl : null };
   if (!payload.vms.length) { showValidationBanner(['Danh sách VM trống — chưa có gì để xuất.'], []); return; }
   const label = btn.textContent;
   btn.disabled = true; btn.textContent = 'Đang tạo Excel…';
@@ -751,9 +796,13 @@ function bindSizingView() {
   $('#sizingPdfDropdown').addEventListener('toggle', e => {
     if (!e.currentTarget.open) return;
     szPdfStatus('');
+    refreshSizingLogoPreview();
     try { refreshSizingPdfOptions(); }
     catch (err) { console.error('Sizing PDF options failed', err); szPdfStatus(`Không nạp được danh sách cluster: ${err.message}`, true); }
   });
+  $('#btnSzLogoBrowse').addEventListener('click', () => $('#szLogoFile').click());
+  $('#szLogoFile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; onSizingLogoFile(f).catch(err => szPdfStatus(err.message, true)); });
+  $('#btnSzLogoReset').addEventListener('click', () => { setSizingLogoOverride(null); refreshSizingLogoPreview(); });
   document.querySelectorAll('input[name="szPdfMode"]').forEach(r => r.addEventListener('change', refreshSizingPdfOptions));
   document.addEventListener('click', e => {
     const dd = $('#sizingPdfDropdown');

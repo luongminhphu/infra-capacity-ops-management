@@ -163,7 +163,7 @@ def workload_profile(vms, demand: Dict[str, Any], th: Optional[AdvisoryThreshold
     if ratio <= th.compute_max_gb_per_vcpu:
         character, char_label = "compute", "Thiên về tính toán (compute-intensive)"
     elif ratio <= th.memory_min_gb_per_vcpu:
-        character, char_label = "balanced", "Cân bằng CPU / RAM (general purpose)"
+        character, char_label = "balanced", "Cân đối giữa CPU và RAM (general purpose)"
     else:
         character, char_label = "memory", "Thiên về bộ nhớ (memory-intensive)"
 
@@ -399,6 +399,8 @@ def _finding(sev: str, area: str, title: str, detail: str, action: str) -> Dict[
 
 
 def findings(demand, params, best, workload, proj, results=None) -> List[Dict[str, str]]:
+    """Findings written in the voice of the SI consultant addressing the customer
+    ("chúng tôi" khuyến nghị, "Quý khách" quyết định) — plain language, terms explained."""
     out: List[Dict[str, str]] = []
     if not best or not demand["vmCount"]:
         return out
@@ -406,150 +408,160 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     a = best["advisory"]
     prof = best["profile"]
     f = best["failure"]
+    red = best["redundancy"]
 
-    # Alternative that is cheaper (when optimising for hosts) or more compact (when optimising for cost).
+    # Alternative that is noticeably cheaper.
     best_tco = a["costs"]["tco"]
     for r in results or []:
         if r is best or not r["hostsTotal"]:
             continue
         tco = r["advisory"]["costs"]["tco"]
         if best_tco and tco and tco < best_tco * (1 - th.cheaper_alt_pct / 100.0) and r["failure"]["ok"]:
-            out.append(_finding("info", "Chi phí", f"Phương án {r['profile']['name']} rẻ hơn {(1 - tco / best_tco) * 100:.0f}% TCO",
-                                f"{r['hostsTotal']} host thay vì {best['hostsTotal']}; vẫn đạt N+{r['redundancy']}.",
-                                "Chuyển tiêu chí tối ưu sang 'Chi phí thấp nhất' nếu ưu tiên ngân sách hơn số host / không gian rack."))
+            out.append(_finding("info", "Chi phí", f"Có phương án tiết kiệm hơn {(1 - tco / best_tco) * 100:.0f}% tổng chi phí",
+                                f"Cấu hình {r['profile']['name']} cần {r['hostsTotal']} máy chủ (thay vì {best['hostsTotal']}) nhưng tổng chi phí sở hữu thấp hơn và vẫn đảm bảo dự phòng N+{r['redundancy']}.",
+                                "Nếu Quý khách ưu tiên ngân sách hơn số lượng máy chủ / không gian tủ rack, chúng tôi sẽ điều chỉnh đề xuất theo phương án này."))
             break
 
     # Resilience
-    if best["redundancy"] == 0:
-        out.append(_finding("critical", "Chịu lỗi", "Không có dự phòng host (N)",
-                            "Một host hỏng hoặc bảo trì sẽ làm thiếu năng lực cho toàn bộ dự án.",
-                            "Chọn tối thiểu N+1 cho môi trường Production."))
+    if red == 0:
+        out.append(_finding("critical", "Chịu lỗi", "Hệ thống chưa có máy chủ dự phòng",
+                            "Khi một máy chủ gặp sự cố hoặc cần bảo trì, hệ thống sẽ không đủ tài nguyên để chạy toàn bộ ứng dụng.",
+                            "Chúng tôi khuyến nghị bổ sung tối thiểu 1 máy chủ dự phòng (N+1) cho môi trường Production."))
     elif not f["ok"]:
-        out.append(_finding("critical", "Chịu lỗi", f"Chưa đạt dự phòng N+{best['redundancy']}",
-                            f"Mất {best['redundancy']} host thì phần còn lại phải gánh CPU {f['cpuPct'] or 0:.0f}% · RAM {f['ramPct'] or 0:.0f}% năng lực mục tiêu.",
-                            "Thêm host hoặc hạ overcommit mục tiêu."))
+        out.append(_finding("critical", "Chịu lỗi", f"Chưa đảm bảo dự phòng N+{red}",
+                            f"Nếu {red} máy chủ ngừng hoạt động, các máy còn lại phải gánh {f['cpuPct'] or 0:.0f}% CPU và {f['ramPct'] or 0:.0f}% RAM — vượt mức an toàn.",
+                            "Chúng tôi sẽ bổ sung máy chủ hoặc điều chỉnh mức chia sẻ tài nguyên (overcommit) để đảm bảo dự phòng."))
     else:
-        out.append(_finding("ok", "Chịu lỗi", f"Đạt dự phòng N+{best['redundancy']}",
-                            f"Khi mất {best['redundancy']} host: CPU {f['cpuPct'] or 0:.0f}% · RAM {f['ramPct'] or 0:.0f}% năng lực mục tiêu.",
-                            f"Bật vSphere HA (admission control dành năng lực tương ứng N+{best['redundancy']}) và DRS."))
-    if best["hostsTotal"] == 2 and best["redundancy"] >= 1:
-        out.append(_finding("info", "Chịu lỗi", "Cluster 2 host: 50% năng lực dành cho dự phòng",
-                            "Khi một host bảo trì, cluster chạy không còn dự phòng.",
-                            "Cân nhắc 3 host cấu hình nhỏ hơn để giảm phần năng lực 'nằm chờ' và bảo trì an toàn."))
+        out.append(_finding("ok", "Chịu lỗi", f"Đảm bảo dự phòng N+{red}",
+                            f"Khi {red} máy chủ ngừng hoạt động, hệ thống vẫn chạy ổn định ở mức {f['cpuPct'] or 0:.0f}% CPU và {f['ramPct'] or 0:.0f}% RAM.",
+                            f"Chúng tôi sẽ cấu hình vSphere HA (tự khởi động lại VM khi máy chủ lỗi) dành sẵn năng lực cho N+{red}, cùng DRS để tự cân bằng tải."))
+    if best["hostsTotal"] == 2 and red >= 1:
+        out.append(_finding("info", "Chịu lỗi", "Cụm 2 máy chủ: một nửa năng lực dành cho dự phòng",
+                            "Trong lúc một máy chủ bảo trì, hệ thống tạm thời không còn dự phòng.",
+                            "Quý khách có thể cân nhắc 3 máy chủ cấu hình nhỏ hơn để bảo trì an toàn và giảm phần năng lực 'nằm chờ'."))
 
     # Fit / NUMA
     numa = a["numa"]
     if numa["noFit"]:
-        out.append(_finding("critical", "Cấu hình VM", "VM không vừa một host",
-                            f"{', '.join(numa['noFit'][:4])} cần nhiều vCPU/RAM hơn năng lực khả dụng của một host {prof['name']}.",
-                            "Chọn host lớn hơn hoặc chia nhỏ VM (scale-out)."))
+        out.append(_finding("critical", "Cấu hình VM", "Có máy ảo lớn hơn khả năng của một máy chủ",
+                            f"{', '.join(numa['noFit'][:4])} cần nhiều CPU/RAM hơn một máy chủ {prof['name']} có thể cung cấp.",
+                            "Chúng tôi sẽ đề xuất máy chủ cấu hình lớn hơn, hoặc cùng đội ứng dụng tách máy ảo này thành nhiều máy nhỏ."))
     if numa["wideCpu"]:
-        out.append(_finding("warning", "NUMA", f"{len(numa['wideCpu'])} nhóm VM vượt số core của một socket",
-                            f"{', '.join(numa['wideCpu'][:4])} có vCPU > {prof['coresPerSocket']} cores/socket → VM trải trên nhiều NUMA node, tăng độ trễ bộ nhớ.",
-                            "Cấu hình vNUMA/cores-per-socket đúng topology, hoặc chọn CPU nhiều core hơn mỗi socket."))
+        out.append(_finding("warning", "NUMA", f"{len(numa['wideCpu'])} nhóm máy ảo lớn hơn một bộ xử lý (CPU socket)",
+                            f"{', '.join(numa['wideCpu'][:4])} có số vCPU lớn hơn {prof['coresPerSocket']} core của một CPU, nên phải dùng bộ nhớ của cả hai CPU — có thể giảm hiệu năng.",
+                            "Chúng tôi sẽ cấu hình vNUMA đúng kiến trúc phần cứng; nếu máy ảo nhạy hiệu năng, nên chọn CPU nhiều core hơn."))
     if numa["wideRam"]:
-        out.append(_finding("warning", "NUMA", f"{len(numa['wideRam'])} nhóm VM vượt RAM của một NUMA node",
-                            f"{', '.join(numa['wideRam'][:4])} có RAM > {numa['ramPerSocketGB']:.0f} GB/socket.",
-                            "Tăng RAM mỗi host hoặc giảm RAM cấp phát của VM nếu thực tế dùng thấp."))
+        out.append(_finding("warning", "NUMA", f"{len(numa['wideRam'])} nhóm máy ảo có RAM lớn hơn bộ nhớ gắn với một CPU",
+                            f"{', '.join(numa['wideRam'][:4])} cần hơn {numa['ramPerSocketGB']:.0f} GB RAM — phần vượt sẽ truy cập chậm hơn.",
+                            "Chúng tôi khuyến nghị tăng RAM mỗi máy chủ, hoặc rà soát lại RAM cấp cho máy ảo nếu thực tế dùng ít hơn."))
 
     # Balance
     bal = a["balance"]
-    # Only meaningful when the cluster is sized by load, not by the minimum host count.
     loaded = max(bal["cpuUtilPct"], bal["ramUtilPct"]) >= th.balance_min_load_pct
     if not loaded:
         pass
     elif bal["strandedCpuPct"] >= th.stranded_warn_pct and bal["idealRamPerHostGB"]:
-        out.append(_finding("warning", "Cân bằng tài nguyên", f"Dư CPU ~{bal['strandedCpuPct']:.0f}% do RAM là ràng buộc",
-                            f"Workload {workload['ramPerVcpu']:.1f} GB RAM/vCPU; với {prof['cores']} cores/host, RAM cân bằng ≈ {_gb_txt(bal['idealRamPerHostGB'])}/host (hiện {_gb_txt(prof['ramGB'])}).",
-                            "Đề nghị nhà cung cấp báo giá cấu hình nhiều RAM hơn — thường giảm được số host và license."))
+        out.append(_finding("warning", "Cân bằng tài nguyên", f"RAM hết trước, còn dư khoảng {bal['strandedCpuPct']:.0f}% CPU",
+                            f"Ứng dụng của Quý khách dùng nhiều RAM ({workload['ramPerVcpu']:.1f} GB cho mỗi vCPU). Với {prof['cores']} core mỗi máy chủ, mức RAM cân đối là khoảng {_gb_txt(bal['idealRamPerHostGB'])} (cấu hình hiện tại {_gb_txt(prof['ramGB'])}).",
+                            "Chúng tôi khuyến nghị nâng RAM mỗi máy chủ — thường giúp giảm số máy chủ và chi phí license."))
     elif bal["strandedRamPct"] >= th.stranded_warn_pct and bal["idealCoresPerHost"]:
-        out.append(_finding("warning", "Cân bằng tài nguyên", f"Dư RAM ~{bal['strandedRamPct']:.0f}% do CPU là ràng buộc",
-                            f"Với {_gb_txt(prof['ramGB'])}/host, số core cân bằng ≈ {bal['idealCoresPerHost']:.0f} cores/host (hiện {prof['cores']}).",
-                            "Chọn CPU nhiều core hơn hoặc giảm RAM/host để tối ưu chi phí."))
+        out.append(_finding("warning", "Cân bằng tài nguyên", f"CPU hết trước, còn dư khoảng {bal['strandedRamPct']:.0f}% RAM",
+                            f"Với {_gb_txt(prof['ramGB'])} RAM mỗi máy chủ, số core cân đối là khoảng {bal['idealCoresPerHost']:.0f} core (cấu hình hiện tại {prof['cores']}).",
+                            "Chúng tôi khuyến nghị chọn CPU nhiều core hơn hoặc giảm RAM mỗi máy chủ để tối ưu chi phí."))
     elif bal["gapPct"] < th.balance_ok_gap_pct:
-        out.append(_finding("ok", "Cân bằng tài nguyên", "CPU và RAM được dùng cân bằng",
-                            f"Mức dùng CPU {bal['cpuUtilPct']:.0f}% · RAM {bal['ramUtilPct']:.0f}% năng lực — ít tài nguyên bị lãng phí.", "Giữ tỷ lệ cấu hình này."))
+        out.append(_finding("ok", "Cân bằng tài nguyên", "CPU và RAM được sử dụng cân đối",
+                            f"Mức dùng CPU {bal['cpuUtilPct']:.0f}% và RAM {bal['ramUtilPct']:.0f}% — tài nguyên được khai thác hiệu quả, ít lãng phí.",
+                            "Giữ tỷ lệ cấu hình này."))
 
     # Overcommit policy
     if params.ram_ratio > th.ram_ratio_warn:
-        out.append(_finding("warning", "Overcommit", f"Overcommit RAM {params.ram_ratio:g}x",
-                            "Overcommit bộ nhớ dễ gây ballooning / swap khi tải cao, ảnh hưởng hiệu năng toàn cluster.",
-                            f"Giữ RAM ≤ {th.ram_ratio_warn:g}x cho Production; chỉ overcommit RAM ở Dev/Test."))
+        out.append(_finding("warning", "Overcommit", f"Cấp phát RAM vượt dung lượng thật ({params.ram_ratio:g}x)",
+                            "Khi tải cao, hệ thống phải thu hồi hoặc đẩy bộ nhớ xuống đĩa, làm chậm toàn bộ máy ảo.",
+                            f"Chúng tôi khuyến nghị giữ tỷ lệ RAM ≤ {th.ram_ratio_warn:g}x cho Production; chỉ áp dụng mức cao hơn cho Dev/Test."))
     if workload["dbLike"] and params.cpu_ratio > th.db_cpu_ratio_max:
-        out.append(_finding("warning", "Overcommit", "Có workload CSDL / middleware nhạy độ trễ",
-                            f"{', '.join(workload['dbLike'][:4])} chạy chung overcommit CPU {params.cpu_ratio:g}x.",
-                            f"Đặt CPU reservation hoặc tách cluster/host group riêng với overcommit ≤ {th.db_cpu_ratio_max:g}x cho các VM này."))
+        out.append(_finding("warning", "Overcommit", "Cơ sở dữ liệu / middleware dùng chung tài nguyên CPU",
+                            f"{', '.join(workload['dbLike'][:4])} là các hệ thống nhạy về độ trễ nhưng đang dùng chung CPU ở tỷ lệ {params.cpu_ratio:g} vCPU / luồng xử lý.",
+                            f"Chúng tôi sẽ dành riêng CPU (reservation) hoặc nhóm các máy ảo này trên máy chủ riêng với tỷ lệ ≤ {th.db_cpu_ratio_max:g}x."))
     elif params.cpu_ratio >= th.high_cpu_ratio_warn:
-        out.append(_finding("warning", "Overcommit", f"Overcommit CPU mục tiêu cao ({params.cpu_ratio:g}x)",
-                            "Phù hợp Dev/Test, rủi ro CPU ready cao với Production.", "Prod nên 2–4x; theo dõi CPU Ready < 5%."))
+        out.append(_finding("warning", "Overcommit", f"Tỷ lệ chia sẻ CPU cao ({params.cpu_ratio:g}x)",
+                            "Phù hợp môi trường Dev/Test; với Production, máy ảo có thể phải chờ CPU khi tải cao.",
+                            "Chúng tôi khuyến nghị 2–4x cho Production và sẽ theo dõi chỉ số CPU Ready (thời gian chờ CPU) dưới 5%."))
 
     # Growth
     run = a["runway"]["extraGrowthPct"]
     if run is not None and run < th.low_runway_pct:
-        out.append(_finding("warning", "Tăng trưởng", "Dư địa tăng trưởng thấp",
-                            f"Ngoài +{params.growth_pct:g}% đã dự phòng, cluster chỉ chịu thêm ~{max(0, run):.0f}% tải trước khi mất N+{best['redundancy']}.",
-                            "Cân nhắc thêm 1 host hoặc cấu hình lớn hơn nếu dự án có kế hoạch mở rộng."))
+        out.append(_finding("warning", "Tăng trưởng", "Dư địa mở rộng còn ít",
+                            f"Ngoài phần +{params.growth_pct:g}% đã dự phòng, hệ thống chỉ tiếp nhận thêm khoảng {max(0, run):.0f}% tải trước khi mất khả năng dự phòng.",
+                            "Nếu ứng dụng có kế hoạch mở rộng, chúng tôi khuyến nghị bổ sung 1 máy chủ hoặc chọn cấu hình lớn hơn ngay từ đầu."))
     if proj and proj.get("expandYear") is not None:
         out.append(_finding("info", "Tăng trưởng", f"Cần mở rộng vào năm thứ {proj['expandYear']}",
-                            f"Với tăng trưởng {proj['annualGrowthPct']:g}%/năm, nhu cầu vượt {proj['installed']} host đã lắp sau {proj['expandYear']} năm.",
-                            "Đưa hạng mục mở rộng vào kế hoạch ngân sách năm tương ứng."))
+                            f"Với mức tăng trưởng {proj['annualGrowthPct']:g}%/năm, nhu cầu sẽ vượt năng lực {proj['installed']} máy chủ sau {proj['expandYear']} năm.",
+                            "Chúng tôi sẽ đồng hành cùng Quý khách lập kế hoạch mở rộng và đưa vào ngân sách năm tương ứng."))
     if params.growth_pct <= 0:
-        out.append(_finding("info", "Tăng trưởng", "Chưa dự phòng tăng trưởng",
-                            "Yêu cầu của team Dev thường tăng 15–30% trong năm đầu vận hành.", "Đặt dự phòng tăng trưởng 15–25%."))
+        out.append(_finding("info", "Tăng trưởng", "Chưa tính dự phòng tăng trưởng",
+                            "Thực tế, nhu cầu tài nguyên thường tăng 15–30% trong năm đầu vận hành.",
+                            "Chúng tôi khuyến nghị dự phòng tăng trưởng 15–25%."))
 
     # Licensing
     lic = a["license"]
     if lic["paddedCores"] > 0:
-        out.append(_finding("info", "License", f"Trả license cho {lic['paddedCores']} core không dùng tới",
-                            f"License VMware tính tối thiểu {params.license_min_cores_per_socket} core/socket; cấu hình {prof['coresPerSocket']} cores/socket bị làm tròn lên.",
-                            f"Chọn CPU ≥ {params.license_min_cores_per_socket} cores/socket để tận dụng license đã trả."))
+        out.append(_finding("info", "License", f"{lic['paddedCores']} core license không được khai thác",
+                            f"License VMware tính tối thiểu {params.license_min_cores_per_socket} core cho mỗi CPU, trong khi cấu hình chỉ có {prof['coresPerSocket']} core/CPU.",
+                            f"Chúng tôi khuyến nghị chọn CPU từ {params.license_min_cores_per_socket} core trở lên để tận dụng trọn license."))
 
     # Scale / cluster size
     if best["hostsTotal"] > th.cluster_warn_hosts:
-        out.append(_finding("warning", "Kiến trúc", f"Cluster lớn ({best['hostsTotal']} host)",
-                            "Cluster quá lớn khó vận hành, nâng cấp và khoanh vùng sự cố.", f"Chia thành nhiều cluster ≤ {th.cluster_info_hosts}–{th.cluster_warn_hosts} host hoặc chọn host lớn hơn."))
+        out.append(_finding("warning", "Kiến trúc", f"Cụm máy chủ quá lớn ({best['hostsTotal']} máy chủ)",
+                            "Cụm quá lớn khó vận hành, nâng cấp và khoanh vùng khi có sự cố.",
+                            f"Chúng tôi sẽ thiết kế thành nhiều cụm, mỗi cụm {th.cluster_info_hosts}–{th.cluster_warn_hosts} máy chủ, hoặc dùng máy chủ cấu hình lớn hơn."))
     elif best["hostsTotal"] > th.cluster_info_hosts:
-        out.append(_finding("info", "Kiến trúc", f"{best['hostsTotal']} host — cân nhắc chia cluster",
-                            "Vẫn trong giới hạn vSphere nhưng nên chia theo tầng ứng dụng / miền sự cố.", "Thiết kế 2+ cluster, mỗi cluster có N+1 riêng."))
+        out.append(_finding("info", "Kiến trúc", f"{best['hostsTotal']} máy chủ — nên chia thành nhiều cụm",
+                            "Vẫn trong giới hạn của vSphere nhưng nên tách theo tầng ứng dụng để dễ vận hành và hạn chế ảnh hưởng khi có sự cố.",
+                            "Chúng tôi sẽ thiết kế từ 2 cụm trở lên, mỗi cụm có dự phòng N+1 riêng."))
 
     # Storage
     st = best["storage"]
     if params.storage_mode == "local":
         if st.get("ok") is False:
-            out.append(_finding("critical", "Lưu trữ", "Thiếu đĩa cục bộ",
-                                f"Cần ~{_gb_txt(st.get('perHostNeededGB') or 0)}/host nhưng cấu hình chỉ có {_gb_txt(prof['diskGB'] or 0)}.",
-                                "Tăng số/kích thước ổ đĩa mỗi host hoặc chuyển sang SAN."))
+            out.append(_finding("critical", "Lưu trữ", "Dung lượng ổ đĩa trên máy chủ chưa đủ",
+                                f"Mỗi máy chủ cần khoảng {_gb_txt(st.get('perHostNeededGB') or 0)} nhưng cấu hình hiện có {_gb_txt(prof['diskGB'] or 0)}.",
+                                "Chúng tôi sẽ bổ sung số lượng / dung lượng ổ đĩa mỗi máy chủ, hoặc đề xuất phương án lưu trữ tập trung (SAN)."))
         min_vsan = 4 if (params.storage_protection_factor or 1) < 1.9 and (params.storage_protection_factor or 1) > 1.0 else 3
         if best["hostsTotal"] < min_vsan:
-            out.append(_finding("warning", "Lưu trữ", f"vSAN cần tối thiểu {min_vsan} host",
-                                f"Hệ số bảo vệ ×{params.storage_protection_factor:g} yêu cầu ≥ {min_vsan} host.", f"Nâng cluster lên {min_vsan} host."))
+            out.append(_finding("warning", "Lưu trữ", f"vSAN cần tối thiểu {min_vsan} máy chủ",
+                                f"Mức bảo vệ dữ liệu ×{params.storage_protection_factor:g} yêu cầu từ {min_vsan} máy chủ trở lên.",
+                                f"Chúng tôi sẽ điều chỉnh cụm lên {min_vsan} máy chủ."))
     else:
-        out.append(_finding("info", "Lưu trữ", f"Cấp {_gb_txt(demand['storageNeededGB'])} trên SAN",
-                            f"Đã gồm +{params.growth_pct:g}% tăng trưởng và +{params.storage_overhead_pct:g}% overhead.",
-                            "Xác nhận dung lượng trống, IOPS và chính sách snapshot/replication với nhóm Storage."))
+        out.append(_finding("info", "Lưu trữ", f"Cần {_gb_txt(demand['storageNeededGB'])} dung lượng trên hệ thống lưu trữ (SAN)",
+                            f"Đã bao gồm +{params.growth_pct:g}% tăng trưởng và +{params.storage_overhead_pct:g}% cho snapshot, swap và vùng trống an toàn.",
+                            "Chúng tôi sẽ cùng Quý khách xác nhận dung lượng trống, hiệu năng (IOPS) và chính sách sao lưu / nhân bản dữ liệu."))
 
     out.sort(key=lambda x: SEVERITY_ORDER.get(x["severity"], 9))
     return out
 
 
 def next_steps(demand, params, best, n_findings_crit: int) -> List[Dict[str, str]]:
+    """Engagement roadmap from the SI's side: what we do, what the customer decides."""
     if not best:
         return []
     p = best["profile"]
     steps = [
-        {"phase": "1. Xác nhận yêu cầu", "when": "Tuần 1",
-         "what": f"Rà soát danh sách {demand['vmCount']} VM và giả định (overcommit {params.cpu_ratio:g}x, tăng trưởng {params.growth_pct:g}%, N+{params.redundancy}) với chủ dự án."},
-        {"phase": "2. Báo giá & lựa chọn", "when": "Tuần 2–3",
-         "what": f"Lấy báo giá 2–3 nhà cung cấp cho {best['hostsTotal']} host {p['name']}; so sánh TCO {params.horizon_years} năm gồm license và bảo hành."},
-        {"phase": "3. Phê duyệt", "when": "Tuần 3–4", "what": "Trình duyệt ngân sách và chủ trương đầu tư kèm báo cáo này."},
-        {"phase": "4. Triển khai", "when": "Sau khi có thiết bị",
-         "what": "Lắp đặt, cấu hình cluster: vSphere HA (admission control), DRS, EVC, VM/host group cho CSDL, chuẩn hoá template VM."},
-        {"phase": "5. Kiểm thử", "when": "Trước go-live", "what": f"Kiểm thử chịu lỗi: tắt {max(1, best['redundancy'])} host, xác nhận VM khởi động lại và hiệu năng đạt yêu cầu."},
-        {"phase": "6. Vận hành & tối ưu", "when": "30 / 60 / 90 ngày",
-         "what": "Theo dõi CPU Ready, RAM active, right-size VM cấp thừa; đánh giá lại sizing sau 6 tháng."},
+        {"phase": "1. Thống nhất yêu cầu", "when": "Tuần 1",
+         "what": f"Chúng tôi cùng Quý khách rà soát danh sách {demand['vmCount']} máy ảo và các giả định (tỷ lệ chia sẻ CPU {params.cpu_ratio:g}x, tăng trưởng {params.growth_pct:g}%, dự phòng N+{params.redundancy})."},
+        {"phase": "2. Chốt cấu hình & báo giá", "when": "Tuần 2",
+         "what": f"Chúng tôi hoàn thiện cấu hình {best['hostsTotal']} máy chủ {p['name']} và gửi báo giá trọn gói gồm phần cứng, license, bảo hành và dịch vụ triển khai, kèm TCO {params.horizon_years} năm."},
+        {"phase": "3. Phê duyệt", "when": "Tuần 3–4",
+         "what": "Quý khách phê duyệt phương án và ngân sách; chúng tôi hỗ trợ hồ sơ thuyết minh kỹ thuật (báo cáo này) cho việc trình duyệt."},
+        {"phase": "4. Triển khai", "when": "Sau khi bàn giao thiết bị",
+         "what": "Chúng tôi lắp đặt và cấu hình cụm máy chủ: vSphere HA, DRS, EVC, nhóm máy chủ riêng cho cơ sở dữ liệu, chuẩn hoá mẫu máy ảo."},
+        {"phase": "5. Kiểm thử & nghiệm thu", "when": "Trước khi vận hành chính thức",
+         "what": f"Kiểm thử chịu lỗi: tắt {max(1, best['redundancy'])} máy chủ, xác nhận máy ảo tự khởi động lại và hiệu năng đạt yêu cầu; nghiệm thu cùng Quý khách."},
+        {"phase": "6. Đồng hành vận hành", "when": "30 / 60 / 90 ngày",
+         "what": "Chúng tôi theo dõi hiệu năng, tối ưu máy ảo cấp thừa và đánh giá lại năng lực sau 6 tháng để chủ động kế hoạch mở rộng."},
     ]
     if n_findings_crit:
-        steps.insert(1, {"phase": "0. Xử lý rủi ro", "when": "Trước báo giá", "what": f"Giải quyết {n_findings_crit} rủi ro nghiêm trọng nêu trong mục Rủi ro & khuyến nghị."})
+        steps.insert(1, {"phase": "0. Xử lý rủi ro", "when": "Trước khi chốt cấu hình",
+                         "what": f"Chúng tôi điều chỉnh thiết kế để xử lý {n_findings_crit} rủi ro nghiêm trọng nêu tại mục Rủi ro & khuyến nghị."})
     return steps
 
 

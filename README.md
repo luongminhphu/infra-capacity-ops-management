@@ -150,8 +150,18 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   Trên web, kết quả có thêm 9 biểu đồ Chart.js (phân bố VM, top nhóm VM, thác nước RAM, số host theo ràng
   buộc, radar đa tiêu chí, phân bổ năng lực cluster, dự báo theo năm, độ nhạy chọn được, TCO), danh sách rủi ro
   và lộ trình.
-- **Xuất Excel** (`POST /api/sizing/export`): Tóm tắt, So sánh cấu hình (thêm core license, TCO, chi phí/VM/tháng,
-  dư địa, điểm), Rủi ro & khuyến nghị (+ lộ trình), Phân tích workload, Độ nhạy & dự báo, Danh sách VM.
+- **Xuất Excel dạng dashboard** (`POST /api/sizing/export`, `backend/app/excel_sizing.py`): sheet **Dashboard**
+  (dải tiêu đề kèm logo, mức sẵn sàng, 6 ô KPI, kết luận chính, 7 biểu đồ Excel gốc — số máy chủ theo phương án,
+  phân bố kích thước VM, phân bổ năng lực, dự báo theo năm, nhóm VM lớn nhất, độ nhạy, TCO — và rủi ro chính), tiếp
+  theo là các sheet chi tiết dạng Excel Table có lọc, tô màu điều kiện và data bar: So sánh phương án (+ bảng điểm),
+  Rủi ro & khuyến nghị (+ lộ trình), Phân tích workload, Độ nhạy & dự báo, Giả định & ngưỡng, Danh sách VM (cột tổng
+  là công thức); dữ liệu nguồn của biểu đồ ở sheet cuối "Dữ liệu biểu đồ". Đã thiết lập in A4 vừa khổ ngang.
+- **Logo riêng cho báo cáo Sizing**: trong hộp Xuất PDF, mục **Logo trên báo cáo** → *Chọn logo…* (PNG/JPEG/SVG/WEBP,
+  ≤ 2MB) để dùng logo khác cho PDF và Excel (`logoDataUrl`); không chọn hoặc bấm *Dùng logo mặc định* → dùng logo trong
+  Cài đặt báo cáo. Logo đã chọn được nhớ trên trình duyệt. Excel không nhúng được SVG.
+- **Giọng văn báo cáo đầy đủ**: viết theo góc nhìn đơn vị tư vấn tích hợp giải pháp (SI) gửi khách hàng — "chúng tôi
+  khuyến nghị / triển khai", "Quý khách phê duyệt", hạn chế thuật ngữ và giải thích ngắn khi cần. Tờ trình tóm tắt
+  (`detail=brief`) giữ văn phong nội bộ.
 - **Báo cáo tư vấn đầy đủ** (mặc định, `detail=full`): trang bìa white-label (khách hàng `customerName`, đơn vị
   tư vấn `preparedOrg`, người lập `preparedBy`, mã tài liệu `documentCode`, logo báo cáo), mục lục có số trang,
   và các chương: Tóm tắt điều hành (+ đồng hồ mức dùng CPU/RAM khi vận hành và khi mất host) → (Hạ tầng hiện

@@ -253,7 +253,7 @@ def assumption_lines(p: SizingParams) -> List[str]:
     lines = [
         f"Overcommit CPU mục tiêu {p.cpu_ratio:g}x trên pCPU logic (HT ×{p.ht_factor:g}); RAM {p.ram_ratio:g}x.",
         f"Chỉ dùng tối đa {p.max_util_pct:g}% năng lực mỗi host (headroom {100 - p.max_util_pct:g}%).",
-        f"Dự phòng tăng trưởng +{p.growth_pct:g}% trên yêu cầu của team Dev.",
+        f"Dự phòng tăng trưởng +{p.growth_pct:g}% trên nhu cầu ban đầu.",
         f"Dự phòng hỏng hóc N+{p.redundancy}; tối thiểu {p.min_hosts} host/cluster.",
         f"ESXi chiếm {p.reserve_cores:g} core và {p.reserve_ram_gb:g} GB RAM mỗi host.",
     ]
@@ -285,22 +285,22 @@ def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Opt
     )
     fail = best["failure"]
     fail_txt = (
-        f"Mất {best['redundancy']} host vẫn chạy được ({fail['cpuPct']:.0f}% CPU · {fail['ramPct']:.0f}% RAM năng lực còn lại)."
+        f"Khi {best['redundancy']} máy chủ gặp sự cố, các máy còn lại vẫn đáp ứng ({fail['cpuPct']:.0f}% CPU · {fail['ramPct']:.0f}% RAM)."
         if fail["ok"] and fail["cpuPct"] is not None else
-        "Chưa đạt dự phòng N+%d — cần thêm host hoặc hạ overcommit mục tiêu." % best["redundancy"]
+        "Chưa đảm bảo dự phòng N+%d — cần bổ sung máy chủ hoặc điều chỉnh tỷ lệ chia sẻ tài nguyên." % best["redundancy"]
     )
     store_txt = (
-        f"Cần cấp {tb} trên SAN." if params.storage_mode == "san"
-        else f"Cần {tb} lưu trữ cục bộ (~{_fmt_int(best['storage'].get('perHostNeededGB', 0))} GB/host)."
+        f"Dung lượng lưu trữ cần cấp: {tb} trên SAN." if params.storage_mode == "san"
+        else f"Dung lượng lưu trữ cục bộ: {tb} (~{_fmt_int(best['storage'].get('perHostNeededGB', 0))} GB mỗi máy chủ)."
     )
+    bind = {"CPU": "CPU", "RAM": "RAM", "CPU & RAM": "cả CPU và RAM"}.get(best["binding"], best["binding"])
     detail = (
-        f"Ràng buộc chính: {best['binding']} (cần {best['hostsForCpu']} host theo CPU, {best['hostsForRam']} host theo RAM, "
-        f"+{best['redundancy']} dự phòng). Sau khi lắp: overcommit CPU {best['after']['cpuOvercommit']:.2f}x, "
-        f"RAM {best['after']['ramOvercommit']:.2f}x. {fail_txt} {store_txt}"
+        f"Số máy chủ được quyết định bởi {bind}: cần {best['hostsForCpu']} máy chủ để đủ CPU, {best['hostsForRam']} máy chủ để đủ RAM, "
+        f"cộng {best['redundancy']} máy dự phòng. {fail_txt} {store_txt}"
     )
     extra = best["spare"].get("extraAvgVms")
     if extra is not None:
-        detail += f" Dư địa sau N+{best['redundancy']}: thêm được ~{extra} VM cỡ trung bình của dự án."
+        detail += f" Sau khi trừ dự phòng, hệ thống vẫn còn chỗ cho khoảng {extra} máy ảo cỡ trung bình nữa."
     return {"headline": headline, "detail": detail}
 
 

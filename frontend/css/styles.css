@@ -489,6 +489,11 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sz-compare td.sz-hosts{font-size:var(--fs-body-sm);}
 .sz-headline .sz-detail{margin-top:var(--space-1);color:var(--text-primary);font-weight:var(--fw-regular);}
 .sz-param-group{margin-top:var(--space-4);}
+.sz-logo-row{display:flex;align-items:center;gap:var(--space-3);}
+.sz-logo-preview{flex:none;width:140px;height:56px;border:1px dashed var(--border);border-radius:var(--radius-sm);display:grid;place-items:center;background:#fff;overflow:hidden;padding:4px;}
+.sz-logo-preview img{max-width:100%;max-height:100%;object-fit:contain;}
+.sz-logo-preview .muted-sub{color:#667085;}
+.sz-logo-actions{display:flex;flex-direction:column;gap:var(--space-1);align-items:flex-start;}
 .sz-adv-thresholds{margin-top:var(--space-4);}
 .sz-adv-thresholds summary{cursor:pointer;list-style:revert;}
 .sz-adv-thresholds summary h4{display:inline;}
