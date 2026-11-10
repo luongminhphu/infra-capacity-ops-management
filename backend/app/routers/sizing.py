@@ -124,6 +124,8 @@ class SizingPayload(BaseModel):
     documentCode: str = Field(default="", max_length=60)
     # 'full' = consulting report with charts & advisory (default) · 'brief' = 2-page decision memo
     detail: str = Field(default="full", pattern="^(full|brief)$")
+    # Optional per-report logo (data URL, same formats/limit as Settings → logo); empty = default report logo
+    logoDataUrl: Optional[str] = Field(default=None, max_length=3_000_000)
     # PDF content: 'new' = buy new servers (default) · 'reuse' = place the project on an existing cluster
     mode: str = Field(default="new", pattern="^(new|reuse)$")
     targetCluster: Optional[str] = Field(default=None, max_length=120)
@@ -158,8 +160,10 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
     vms, params, profiles = _inputs(payload)
     if not vms or not any(v.qty > 0 for v in vms):
         raise HTTPException(status_code=422, detail="Danh sách VM trống — không có gì để lập đề xuất.")
-    logo_row = db.query(ReportLogo).filter(ReportLogo.id == 1).first()
-    logo_data_url = f"data:{logo_row.mime_type};base64,{logo_row.data_base64}" if logo_row else None
+    logo_data_url = _override_logo(payload.logoDataUrl)
+    if logo_data_url is None:
+        logo_row = db.query(ReportLogo).filter(ReportLogo.id == 1).first()
+        logo_data_url = f"data:{logo_row.mime_type};base64,{logo_row.data_base64}" if logo_row else None
     existing = [e.model_dump() for e in (payload.existing or [])][:20]
     try:
         pdf_bytes = report_sizing.build_sizing_pdf(vms, params, profiles, existing=existing, policy_txt=payload.policyText,
@@ -174,6 +178,24 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
     kind = "tan_dung_hien_huu" if payload.mode == "reuse" else "trang_bi_moi"
     filename = f"VCO_De_xuat_cau_hinh_may_chu_{(label + '_') if label else ''}{kind}_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     return StreamingResponse(iter([pdf_bytes]), media_type="application/pdf", headers=_attachment_headers(filename))
+
+
+def _override_logo(data_url: Optional[str]) -> Optional[str]:
+    """Validate a per-report logo override; None when not provided."""
+    if not data_url or not data_url.strip():
+        return None
+    import base64
+    from .settings import DATA_URL_RE, MAX_LOGO_BYTES
+    m = DATA_URL_RE.match(data_url.strip())
+    if not m:
+        raise HTTPException(status_code=422, detail="Logo không hợp lệ. Chỉ chấp nhận PNG, JPEG, SVG hoặc WEBP.")
+    try:
+        raw = base64.b64decode(m.group(2), validate=True)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Không giải mã được dữ liệu logo.")
+    if len(raw) > MAX_LOGO_BYTES:
+        raise HTTPException(status_code=413, detail=f"Logo vượt quá {MAX_LOGO_BYTES // (1024 * 1024)}MB.")
+    return f"data:{m.group(1).lower()};base64,{m.group(2)}"
 
 
 @router.get("/defaults")
@@ -273,153 +295,20 @@ def sizing_template(user: User = Depends(get_current_user)):
 
 
 @router.post("/export")
-def sizing_export(payload: SizingPayload, user: User = Depends(get_current_user)):
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill
+def sizing_export(payload: SizingPayload, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Dashboard-style workbook (see excel_sizing.py): Dashboard with KPI tiles and native charts,
+    then detail sheets as formatted Excel tables."""
+    from .. import excel_sizing
 
     result = _build(payload)
-    demand = result["demand"]
+    logo = _override_logo(payload.logoDataUrl)
+    if logo is None:
+        row = db.query(ReportLogo).filter(ReportLogo.id == 1).first()
+        logo = f"data:{row.mime_type};base64,{row.data_base64}" if row else None
+    meta = {"customerName": payload.customerName, "preparedOrg": payload.preparedOrg, "preparedBy": payload.preparedBy,
+            "documentCode": payload.documentCode, "logoDataUrl": logo}
+    vms = [v.model_dump() for v in payload.vms]
+    wb = excel_sizing.build_workbook(result, vms, meta)
     params = result["params"]
-    wb = Workbook()
-
-    # Sheet 1 — summary & recommendation
-    ws = wb.active
-    ws.title = "Tóm tắt"
-    ws.append(["Sizing máy chủ vật lý — " + (params.get("environment") or "dự án mới")])
-    ws["A1"].font = Font(bold=True, size=14)
-    ws.append([f"Ngày: {dt.date.today().strftime('%d/%m/%Y')}"])
-    ws.append([])
-    ws.append(["Đề xuất", result["recommendation"]["headline"]])
-    ws.append(["Chi tiết", result["recommendation"]["detail"]])
-    ws.append([])
-    ws.append(["Nhu cầu từ team Dev", "Giá trị", "Sau dự phòng tăng trưởng"])
-    _style_header(ws, ws.max_row)
-    ws.append(["Số VM", demand["vmCount"], demand["vmCount"]])
-    ws.append(["vCPU", demand["vcpu"], round(demand["vcpuPlanned"], 1)])
-    ws.append(["RAM (GB)", demand["ramGB"], round(demand["ramPlannedGB"], 1)])
-    ws.append(["Disk (GB)", demand["diskGB"], round(demand["diskPlannedGB"], 1)])
-    ws.append(["Dung lượng lưu trữ cần cấp (GB, gồm overhead)", "", round(demand["storageNeededGB"], 1)])
-    ws.append([])
-    ws.append(["Giả định"])
-    ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
-    for line in result["assumptions"]:
-        ws.append([line])
-    ws.append([])
-    ws.append(["Ngưỡng tư vấn áp dụng"])
-    ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
-    th = params.get("advisory") or {}
-    for key, label, unit in sizing_advisory.THRESHOLD_META:
-        ws.append([label, f"{th.get(key)} {unit}".strip()])
-    _autowidth(ws, max_w=90)
-
-    # Sheet 2 — candidate comparison
-    ws2 = wb.create_sheet("So sánh cấu hình")
-    headers = ["Cấu hình host", "Sockets × cores", "RAM/host (GB)", "Số host theo CPU", "Số host theo RAM",
-               "Dự phòng N+x", "Tổng số host", "Ràng buộc", "Tổng cores", "Tổng RAM (GB)",
-               "Overcommit CPU sau", "Overcommit RAM sau", "CPU % khi mất host", "RAM % khi mất host",
-               "Đạt N+x", "Thêm được ~VM", "Đơn giá", "Ngân sách ước tính",
-               "Core license", "License / năm", f"TCO {params.get('horizon_years', 3)} năm", "Chi phí / VM / tháng",
-               "Dư địa tăng trưởng thêm (%)", "Điểm đa tiêu chí", "Đề xuất"]
-    ws2.append(headers)
-    _style_header(ws2)
-    for r in result["results"]:
-        p = r["profile"]
-        adv = r["advisory"]
-        ws2.append([
-            p["name"], f"{p['sockets']}×{p['coresPerSocket']}", p["ramGB"], r["hostsForCpu"], r["hostsForRam"],
-            r["redundancy"], r["hostsTotal"], r["binding"], r["totals"]["cores"], r["totals"]["ramGB"],
-            round(r["after"]["cpuOvercommit"], 2) if r["after"]["cpuOvercommit"] is not None else None,
-            round(r["after"]["ramOvercommit"], 2) if r["after"]["ramOvercommit"] is not None else None,
-            round(r["failure"]["cpuPct"], 1) if r["failure"]["cpuPct"] is not None else None,
-            round(r["failure"]["ramPct"], 1) if r["failure"]["ramPct"] is not None else None,
-            "Đạt" if r["failure"]["ok"] else "Chưa đạt",
-            r["spare"]["extraAvgVms"], p["unitPrice"], r["budget"],
-            adv["license"]["coresTotal"], adv["license"]["yearlyCost"], adv["costs"]["tco"],
-            round(adv["costs"]["perVmMonth"]) if adv["costs"]["perVmMonth"] is not None else None,
-            round(adv["runway"]["extraGrowthPct"], 1) if adv["runway"]["extraGrowthPct"] is not None else None,
-            round(adv["scoreTotal"]) if adv.get("scoreTotal") is not None else None,
-            "✓" if r["recommended"] else "",
-        ])
-        if r["recommended"]:
-            for cell in ws2[ws2.max_row]:
-                cell.fill = PatternFill("solid", fgColor="E6F4EA")
-                cell.font = Font(bold=True)
-    ws2.freeze_panes = "B2"
-    _autowidth(ws2)
-
-    analysis = result.get("analysis") or {}
-
-    # Sheet — risks & advisories + roadmap
-    ws4 = wb.create_sheet("Rủi ro & khuyến nghị")
-    ws4.append(["Mức độ", "Lĩnh vực", "Nhận định", "Chi tiết", "Khuyến nghị"])
-    _style_header(ws4)
-    sev_vi = {"critical": "Nghiêm trọng", "warning": "Cảnh báo", "info": "Lưu ý", "ok": "Đạt"}
-    sev_fill = {"critical": "FBE4E2", "warning": "FDF1E0", "ok": "E7F5EC"}
-    for f in analysis.get("findings", []):
-        ws4.append([sev_vi.get(f["severity"], f["severity"]), f["area"], f["title"], f["detail"], f["action"]])
-        if f["severity"] in sev_fill:
-            ws4.cell(row=ws4.max_row, column=1).fill = PatternFill("solid", fgColor=sev_fill[f["severity"]])
-    ws4.append([])
-    ws4.append(["Lộ trình triển khai"])
-    ws4.cell(row=ws4.max_row, column=1).font = Font(bold=True)
-    ws4.append(["Giai đoạn", "Thời điểm", "Nội dung"])
-    _style_header(ws4, ws4.max_row)
-    for st in analysis.get("nextSteps", []):
-        ws4.append([st["phase"], st["when"], st["what"]])
-    _autowidth(ws4, max_w=80)
-
-    # Sheet — workload profile
-    ws5 = wb.create_sheet("Phân tích workload")
-    wl = analysis.get("workload") or {}
-    ws5.append(["Đặc tính", wl.get("characterLabel"), f"{(wl.get('ramPerVcpu') or 0):.1f} GB RAM / vCPU"])
-    ws5.append([])
-    ws5.append(["Nhóm kích thước", "Số VM", "vCPU", "RAM (GB)"])
-    _style_header(ws5, ws5.max_row)
-    for b in wl.get("sizeBuckets", []):
-        ws5.append([b["label"], b["count"], b["vcpu"], b["ramGB"]])
-    ws5.append([])
-    ws5.append(["Nhóm VM", "Số lượng", "Tổng vCPU", "Tổng RAM (GB)", "Tổng Disk (GB)", "% vCPU", "% RAM", "% Disk"])
-    _style_header(ws5, ws5.max_row)
-    for g in wl.get("topGroups", []):
-        ws5.append([g["name"], g["qty"], g["vcpu"], g["ramGB"], g["diskGB"], round(g["vcpuShare"], 1), round(g["ramShare"], 1), round(g["diskShare"], 1)])
-    _autowidth(ws5, max_w=50)
-
-    # Sheet — sensitivity & projection
-    ws6 = wb.create_sheet("Độ nhạy & dự báo")
-    sens = analysis.get("sensitivity") or {}
-    titles = {"growth": "Dự phòng tăng trưởng (%)", "cpuRatio": "Overcommit CPU mục tiêu (x)", "maxUtil": "Mức dùng tối đa / host (%)"}
-    for key, title in titles.items():
-        sw = sens.get(key)
-        if not sw:
-            continue
-        ws6.append([f"Số host theo {title.lower()}"])
-        ws6.cell(row=ws6.max_row, column=1).font = Font(bold=True)
-        ws6.append([title] + sw["x"])
-        _style_header(ws6, ws6.max_row)
-        for srs in sw["series"]:
-            ws6.append([srs["name"]] + srs["hosts"])
-        ws6.append([])
-    proj = analysis.get("projection")
-    if proj:
-        ws6.append([f"Dự báo theo năm — tăng trưởng {proj['annualGrowthPct']:g}%/năm, đã lắp {proj['installed']} host"])
-        ws6.cell(row=ws6.max_row, column=1).font = Font(bold=True)
-        ws6.append(["Năm", "Tăng trưởng lũy kế (%)", "Số host cần", "Đủ năng lực"])
-        _style_header(ws6, ws6.max_row)
-        for pt in proj["points"]:
-            ws6.append([pt["year"], round(pt["growthPct"], 1), pt["hosts"], "Có" if pt["hosts"] <= proj["installed"] else "Cần mở rộng"])
-    _autowidth(ws6, max_w=40)
-
-    # Sheet 3 — VM list as submitted
-    ws3 = wb.create_sheet("Danh sách VM")
-    ws3.append(["Tên VM", "Số lượng", "vCPU", "RAM (GB)", "Disk (GB)", "Tổng vCPU", "Tổng RAM (GB)", "Tổng Disk (GB)", "Ghi chú"])
-    _style_header(ws3)
-    for v in payload.vms:
-        ws3.append([v.name, v.qty, v.vcpu, v.ramGB, v.diskGB, v.qty * v.vcpu, v.qty * v.ramGB, v.qty * v.diskGB, v.note])
-    ws3.append(["TỔNG", demand["vmCount"], "", "", "", demand["vcpu"], demand["ramGB"], demand["diskGB"], ""])
-    for cell in ws3[ws3.max_row]:
-        cell.font = Font(bold=True)
-    ws3.freeze_panes = "A2"
-    _autowidth(ws3)
-
     base = "VCO_Sizing" + (("_" + _ascii_slug(params.get("environment"), fallback="")) if (params.get("environment") or "").strip() else "")
     return _xlsx_response(wb, base)

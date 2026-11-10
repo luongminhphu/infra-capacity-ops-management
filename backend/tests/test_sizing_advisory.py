@@ -124,3 +124,16 @@ def test_cluster_size_threshold():
     prof = [sizing.HostProfile(name="small", sockets=1, cores_per_socket=16, ram_gb=64)]
     r = sizing.build_sizing(vms, sizing.SizingParams(advisory={"cluster_info_hosts": 2, "cluster_warn_hosts": 3}), prof)
     assert any(f["area"] == "Kiến trúc" and f["severity"] == "warning" for f in r["analysis"]["findings"])
+
+
+def test_excel_dashboard_workbook():
+    from app import excel_sizing
+    rows = [dict(r) for r in sizing.TEMPLATE_ROWS]
+    res = sizing.build_sizing(_vms(), sizing.SizingParams(license_price_per_core=3.5e6), _profiles())
+    wb = excel_sizing.build_workbook(res, rows, {"customerName": "ACME", "preparedOrg": "Partner"})
+    assert wb.sheetnames[0] == "Dashboard" and wb.sheetnames[-1] == "Dữ liệu biểu đồ"
+    assert len(wb["Dashboard"]._charts) == 7
+    assert "Giả định & ngưỡng" in wb.sheetnames and "Danh sách VM" in wb.sheetnames
+    # minimal input (no prices, no analysis extras) must still build
+    small = sizing.build_sizing([sizing.VmSpec(name="x", qty=1, vcpu=2, ram_gb=4)], sizing.SizingParams(), _profiles((None, None, None)))
+    excel_sizing.build_workbook(small, [{"name": "x", "qty": 1, "vcpu": 2, "ramGB": 4, "diskGB": 0}], {})

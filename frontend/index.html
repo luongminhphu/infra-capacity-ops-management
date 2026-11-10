@@ -444,11 +444,21 @@
                       <label class="planning-field">Người lập<input id="szPreparedBy" placeholder="Họ tên"></label>
                       <label class="planning-field">Mã tài liệu<input id="szDocCode" placeholder="VD: SZ-2026-001"></label>
                     </div>
+                    <div class="planning-panel-title">Logo trên báo cáo</div>
+                    <div class="sz-logo-row">
+                      <div class="sz-logo-preview" id="szLogoPreview"><span class="muted-sub" id="szLogoEmpty">Chưa có logo</span><img id="szLogoImg" class="hidden" alt="Logo báo cáo"></div>
+                      <div class="sz-logo-actions">
+                        <input type="file" id="szLogoFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden>
+                        <button class="btn btn-secondary btn-sm" id="btnSzLogoBrowse" type="button">Chọn logo…</button>
+                        <button class="btn btn-ghost btn-sm hidden" id="btnSzLogoReset" type="button">Dùng logo mặc định</button>
+                      </div>
+                    </div>
+                    <p class="logo-upload-hint" id="szLogoHint">Không chọn → dùng logo mặc định trong Cài đặt báo cáo. PNG / JPEG / SVG / WEBP, tối đa 2MB; áp dụng cho PDF và Excel Sizing (logo SVG chỉ hiển thị trên PDF).</p>
                     <button class="btn btn-primary btn-sm" id="btnSizingPdf" type="button" style="align-self:flex-start;">Tạo PDF</button>
                     <p class="logo-upload-hint hidden" id="szPdfStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
-                <button class="btn btn-secondary" id="btnSizingExport" type="button" title="Xuất Excel: tóm tắt, so sánh cấu hình, chi phí, độ nhạy, dự báo, rủi ro & khuyến nghị, danh sách VM"><i data-lucide="download"></i>Xuất Excel</button>
+                <button class="btn btn-secondary" id="btnSizingExport" type="button" title="Xuất Excel dạng dashboard: KPI, biểu đồ, so sánh phương án, rủi ro & khuyến nghị, độ nhạy, dự báo, danh sách VM (dùng thông tin tài liệu &amp; logo trong mục Xuất PDF)"><i data-lucide="download"></i>Xuất Excel</button>
               </div>
             </div>
             <div class="sim-card sim-result hidden" id="sizingResult"></div>

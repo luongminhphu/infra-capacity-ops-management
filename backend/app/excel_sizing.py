@@ -1,0 +1,850 @@
+"""Excel workbook for the host-sizing consulting report, laid out as a dashboard.
+
+Sheet 1 "Dashboard": title band (with logo), KPI tiles, key conclusions, native
+Excel charts (hosts per option, VM size mix, top consumers, capacity
+allocation, multi-year projection, sensitivity, TCO) and the top findings.
+The following sheets hold the detail as formatted Excel tables (filters,
+banding, data bars / colour scales) so the customer can keep working with
+the numbers: options comparison, risks & recommendations, roadmap, workload,
+sensitivity & projection, assumptions & thresholds, VM list. Chart source
+data lives on a dedicated "Dữ liệu biểu đồ" sheet.
+
+Pure openpyxl (+ Pillow for the logo, already a WeasyPrint dependency).
+"""
+import base64
+import datetime as dt
+import io
+from typing import Any, Dict, List, Optional
+
+from openpyxl import Workbook
+from openpyxl.chart import BarChart, DoughnutChart, LineChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.series import SeriesLabel
+from openpyxl.formatting.rule import CellIsRule, ColorScaleRule, DataBarRule
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
+from . import sizing_advisory
+
+# ---------------------------------------------------------------------------
+# Palette & styles (aligned with the PDF report)
+# ---------------------------------------------------------------------------
+NAVY = "074B9B"
+BLUE = "2681FF"
+TEAL = "0891B2"
+INK = "101828"
+MUTED = "475467"
+FAINT = "98A2B3"
+LINE = "D0D5E0"
+SURFACE = "F8FAFC"
+SURFACE2 = "EEF2F7"
+OK, OK_BG = "15803D", "E7F5EC"
+WARN, WARN_BG = "B45309", "FDF1E0"
+CRIT, CRIT_BG = "B91C1C", "FBE4E2"
+FONT = "Calibri"
+
+SERIES = ["2681FF", "0891B2", "074B9B", "7C3AED", "CA8A04", "DB2777", "15803D", "EA580C"]
+SEV = {"critical": ("Nghiêm trọng", CRIT, CRIT_BG), "warning": ("Cảnh báo", WARN, WARN_BG),
+       "info": ("Lưu ý", NAVY, SURFACE2), "ok": ("Đạt", OK, OK_BG)}
+READY = {"ok": ("SẴN SÀNG TRIỂN KHAI", OK, OK_BG), "warn": ("TRIỂN KHAI ĐƯỢC · CẦN LƯU Ý", WARN, WARN_BG),
+         "crit": ("CẦN XỬ LÝ RỦI RO", CRIT, CRIT_BG)}
+
+thin = Side(style="thin", color=LINE)
+BOX = Border(left=thin, right=thin, top=thin, bottom=thin)
+NUM = "#,##0"
+NUM1 = "#,##0.0"
+MONEY = "#,##0"
+
+
+def _fill(c: str) -> PatternFill:
+    return PatternFill("solid", fgColor=c)
+
+
+def _font(size=10, bold=False, color=INK, italic=False) -> Font:
+    return Font(name=FONT, size=size, bold=bold, color=color, italic=italic)
+
+
+def _gb(v: Optional[float]) -> str:
+    if v is None:
+        return "—"
+    return f"{v / 1024:,.1f} TB" if v >= 1024 else f"{v:,.0f} GB"
+
+
+def _money_short(v: Optional[float]) -> str:
+    if v is None:
+        return "—"
+    if abs(v) >= 1e9:
+        return f"{v / 1e9:,.2f} tỷ".replace(",", "X").replace(".", ",").replace("X", ".")
+    if abs(v) >= 1e6:
+        return f"{v / 1e6:,.0f} tr".replace(",", ".")
+    return f"{v:,.0f}".replace(",", ".")
+
+
+def _r(v: Optional[float], d: int = 1):
+    return None if v is None else round(v, d)
+
+
+# ---------------------------------------------------------------------------
+# Generic helpers
+# ---------------------------------------------------------------------------
+def _widths(ws, widths: Dict[str, float]) -> None:
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+
+
+def _sheet_title(ws, title: str, subtitle: str, ncols: int) -> int:
+    """Navy title band on rows 1–2; returns the first free row."""
+    ws.sheet_view.showGridLines = False
+    last = get_column_letter(ncols)
+    ws.merge_cells(f"A1:{last}1")
+    ws.merge_cells(f"A2:{last}2")
+    ws["A1"] = title
+    ws["A1"].font = _font(15, True, "FFFFFF")
+    ws["A1"].fill = _fill(NAVY)
+    ws["A1"].alignment = Alignment(vertical="center", indent=1)
+    ws["A2"] = subtitle
+    ws["A2"].font = _font(9.5, False, "DCE7F7")
+    ws["A2"].fill = _fill(NAVY)
+    ws["A2"].alignment = Alignment(vertical="center", indent=1)
+    for c in range(1, ncols + 1):
+        ws.cell(row=1, column=c).fill = _fill(NAVY)
+        ws.cell(row=2, column=c).fill = _fill(NAVY)
+    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[2].height = 18
+    return 4
+
+
+def _section(ws, row: int, text: str, ncols: int, col: int = 1) -> int:
+    end = get_column_letter(col + ncols - 1)
+    start = get_column_letter(col)
+    ws.merge_cells(f"{start}{row}:{end}{row}")
+    c = ws[f"{start}{row}"]
+    c.value = text.upper()
+    c.font = _font(10, True, NAVY)
+    c.alignment = Alignment(vertical="center")
+    for i in range(col, col + ncols):
+        ws.cell(row=row, column=i).border = Border(bottom=Side(style="medium", color=NAVY))
+    ws.row_dimensions[row].height = 20
+    return row + 1
+
+
+def _table(ws, ref: str, name: str, style: str = "TableStyleMedium2") -> None:
+    t = Table(displayName=name, ref=ref)
+    t.tableStyleInfo = TableStyleInfo(name=style, showRowStripes=True, showColumnStripes=False)
+    ws.add_table(t)
+
+
+def _write_rows(ws, row: int, header: List[str], rows: List[List[Any]], fmts: Optional[Dict[int, str]] = None,
+                wrap_cols: tuple = ()) -> int:
+    """Header + rows starting at column A; returns last data row."""
+    for j, h in enumerate(header, 1):
+        c = ws.cell(row=row, column=j, value=h)
+        c.font = _font(10, True, "FFFFFF")
+        c.fill = _fill(NAVY)
+        c.alignment = Alignment(vertical="center", wrap_text=True)
+    ws.row_dimensions[row].height = 30
+    for i, r in enumerate(rows, 1):
+        for j, v in enumerate(r, 1):
+            c = ws.cell(row=row + i, column=j, value=v)
+            c.font = _font(10)
+            c.alignment = Alignment(vertical="top", wrap_text=j in wrap_cols)
+            if fmts and j in fmts:
+                c.number_format = fmts[j]
+    return row + len(rows)
+
+
+def _fit_heights(ws, first: int, last: int, widths: Dict[int, float], line_h: float = 13.5) -> None:
+    """Estimate row heights for wrapped text (Excel does not auto-fit rows written by openpyxl)."""
+    import math
+    for r in range(first, last + 1):
+        lines = 1
+        for col, w in widths.items():
+            v = ws.cell(row=r, column=col).value
+            if isinstance(v, str) and v:
+                lines = max(lines, math.ceil(len(v) / max(1.0, w * 1.05)))
+        ws.row_dimensions[r].height = max(18, lines * line_h + 4)
+
+
+def _print_setup(ws, landscape: bool = True) -> None:
+    ws.page_setup.orientation = "landscape" if landscape else "portrait"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_margins.left = ws.page_margins.right = 0.4
+    ws.page_margins.top = ws.page_margins.bottom = 0.5
+
+
+def _logo_image(data_url: Optional[str], max_h: int = 46):
+    if not data_url or ";base64," not in data_url:
+        return None
+    mime = data_url[5:data_url.index(";")].lower()
+    if "svg" in mime:
+        return None  # Excel/openpyxl cannot embed SVG
+    try:
+        from openpyxl.drawing.image import Image as XLImage
+        from PIL import Image as PILImage
+        raw = base64.b64decode(data_url.split(",", 1)[1])
+        im = PILImage.open(io.BytesIO(raw))
+        im.load()
+        if im.mode not in ("RGB", "RGBA"):
+            im = im.convert("RGBA")
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        buf.seek(0)
+        x = XLImage(buf)
+        ratio = max_h / float(x.height or max_h)
+        x.height = max_h
+        x.width = int((x.width or max_h) * ratio)
+        return x
+    except Exception:  # noqa: BLE001 — a bad logo must never break the export
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Dashboard sheet
+# ---------------------------------------------------------------------------
+DASH_COLS = 16  # A..P, each 10 wide → tiles are 2–3 columns
+
+
+def _tile(ws, row: int, col: int, span: int, label: str, value: str, sub: str, accent: str = BLUE) -> None:
+    a, b = get_column_letter(col), get_column_letter(col + span - 1)
+    for r, (text, font, h) in enumerate([(label.upper(), _font(8.5, True, MUTED), 16),
+                                         (value, _font(18, True, INK), 30),
+                                         (sub, _font(8.5, False, MUTED), 28)]):
+        rr = row + r
+        ws.merge_cells(f"{a}{rr}:{b}{rr}")
+        c = ws[f"{a}{rr}"]
+        c.value = text
+        c.font = font
+        c.alignment = Alignment(vertical="center" if r else "bottom", horizontal="left", indent=1, wrap_text=(r == 2))
+        for cc in range(col, col + span):
+            cell = ws.cell(row=rr, column=cc)
+            cell.fill = _fill(SURFACE)
+            top = Side(style="thick", color=accent) if r == 0 else None
+            cell.border = Border(left=thin if cc == col else None, right=thin if cc == col + span - 1 else None,
+                                 top=top, bottom=thin if r == 2 else None)
+
+
+def _dashboard(wb, result, payload_meta, data_ws, refs) -> None:
+    ws = wb.active
+    ws.title = "Dashboard"
+    ws.sheet_view.showGridLines = False
+    ws.sheet_properties.tabColor = NAVY
+    for i in range(1, DASH_COLS + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 10.5
+    d, p, a = result["demand"], result["params"], result.get("analysis") or {}
+    best = result["results"][result["recommendedIndex"]] if result["recommendedIndex"] is not None else None
+    env = p.get("environment") or "Dự án mới"
+
+    # Title band rows 1–3
+    for r in (1, 2, 3):
+        for c in range(1, DASH_COLS + 1):
+            ws.cell(row=r, column=c).fill = _fill(NAVY)
+    ws.merge_cells("A1:L1")
+    ws.merge_cells("A2:L2")
+    ws.merge_cells("A3:L3")
+    ws["A1"] = (payload_meta.get("preparedOrg") or "Báo cáo tư vấn").upper()
+    ws["A1"].font = _font(9, True, "9DC2F5")
+    ws["A2"] = f"Đề xuất cấu hình máy chủ — {env}"
+    ws["A2"].font = _font(18, True, "FFFFFF")
+    sub = ["Sizing hạ tầng ảo hoá VMware vSphere"]
+    if payload_meta.get("customerName"):
+        sub.append(f"Khách hàng: {payload_meta['customerName']}")
+    if payload_meta.get("preparedBy"):
+        sub.append(f"Người lập: {payload_meta['preparedBy']}")
+    if payload_meta.get("documentCode"):
+        sub.append(f"Mã: {payload_meta['documentCode']}")
+    sub.append(f"Ngày: {dt.date.today().strftime('%d/%m/%Y')}")
+    ws["A3"] = "   ·   ".join(sub)
+    ws["A3"].font = _font(9.5, False, "DCE7F7")
+    for cell in ("A1", "A2", "A3"):
+        ws[cell].alignment = Alignment(vertical="center", indent=1)
+    ws.row_dimensions[1].height = 20
+    ws.row_dimensions[2].height = 32
+    ws.row_dimensions[3].height = 20
+    logo = _logo_image(payload_meta.get("logoDataUrl"))
+    if logo is not None:
+        # white plate behind the logo so any logo colour stays legible
+        ws.merge_cells("N1:P3")
+        ws["N1"].fill = _fill("FFFFFF")
+        for r in (1, 2, 3):
+            for c in (14, 15, 16):
+                ws.cell(row=r, column=c).fill = _fill("FFFFFF")
+        ws.add_image(logo, "N1")
+
+    # Readiness + headline (row 5–6)
+    label, fg, bg = READY.get(a.get("readiness") or "ok", READY["ok"])
+    ws.merge_cells("A5:C5")
+    ws["A5"] = label
+    ws["A5"].font = _font(9, True, fg)
+    ws["A5"].fill = _fill(bg)
+    ws["A5"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.merge_cells("D5:P5")
+    fc = a.get("findingCounts") or {}
+    ws["D5"] = f"  {fc.get('critical', 0)} nghiêm trọng · {fc.get('warning', 0)} cảnh báo · {fc.get('info', 0)} lưu ý · {fc.get('ok', 0)} đạt"
+    ws["D5"].font = _font(9, False, MUTED)
+    ws.merge_cells("A6:P6")
+    ws["A6"] = result["recommendation"]["headline"]
+    ws["A6"].font = _font(12, True, NAVY)
+    ws["A6"].alignment = Alignment(wrap_text=True, vertical="center")
+    ws.row_dimensions[6].height = 36
+
+    # KPI tiles (rows 8–10)
+    costs = best["advisory"]["costs"] if best else {}
+    tiles = [
+        ("Máy ảo yêu cầu", f"{d['vmCount']:,}", f"TB {d['avgVcpu']:.1f} vCPU · {_gb(d['avgRamGB'])} / VM", BLUE),
+        ("vCPU (sau tăng trưởng)", f"{d['vcpuPlanned']:,.0f}", f"yêu cầu {d['vcpu']:,.0f} · +{p['growth_pct']:g}%", BLUE),
+        ("RAM (sau tăng trưởng)", _gb(d["ramPlannedGB"]), f"yêu cầu {_gb(d['ramGB'])}", BLUE),
+        ("Máy chủ đề xuất", f"{best['hostsTotal']}" if best else "—", f"{best['profile']['name']} · N+{best['redundancy']}" if best else "", OK),
+        ("Lưu trữ cần cấp", _gb(d["storageNeededGB"]), "SAN dùng chung" if p["storage_mode"] == "san" else "cục bộ / vSAN", TEAL),
+        ((f"TCO {costs.get('years')} năm" if costs.get("tco") else "License (core)"),
+         (_money_short(costs.get("tco")) if costs.get("tco") else (f"{best['advisory']['license']['coresTotal']:,}" if best else "—")),
+         ("phần cứng + license" if costs.get("tco") else "tối thiểu 16 core / CPU"), NAVY),
+    ]
+    col = 1
+    spans = [3, 3, 3, 2, 3, 2]
+    for (lbl, val, s, acc), span in zip(tiles, spans):
+        _tile(ws, 8, col, span, lbl, val, s, acc)
+        col += span
+
+    # Key conclusions (rows 12–17)
+    row = _section(ws, 12, "Kết luận chính", DASH_COLS)
+    lines: List[str] = [result["recommendation"]["detail"]]
+    proj = a.get("projection")
+    if proj:
+        lines.append(f"Tăng trưởng {proj['annualGrowthPct']:g}%/năm: " + (f"cần mở rộng vào năm thứ {proj['expandYear']}." if proj["expandYear"] is not None
+                                                                     else f"giải pháp đáp ứng đủ trong {proj['years']} năm."))
+    if best and best["advisory"]["costs"].get("perVmMonth"):
+        c = best["advisory"]["costs"]
+        lines.append(f"Chi phí bình quân {_money_short(c['perVmMonth'])} / máy ảo / tháng (TCO {c['years']} năm {_money_short(c['tco'])}).")
+    for ln in lines:
+        ws.merge_cells(f"A{row}:P{row}")
+        ws[f"A{row}"] = "•  " + ln
+        ws[f"A{row}"].font = _font(10, False, INK)
+        ws[f"A{row}"].alignment = Alignment(wrap_text=True, vertical="top", indent=1)
+        ws.row_dimensions[row].height = 30 if len(ln) > 150 else 18
+        row += 1
+
+    # Charts grid
+    row += 1
+    row = _section(ws, row, "Biểu đồ phân tích", DASH_COLS)
+    chart_top = row
+    H, W = 7.2, 13.6  # cm
+    charts = []
+    if refs.get("hosts"):
+        charts.append(refs["hosts"])
+    if refs.get("sizes"):
+        charts.append(refs["sizes"])
+    if refs.get("alloc"):
+        charts.append(refs["alloc"])
+    if refs.get("projection"):
+        charts.append(refs["projection"])
+    if refs.get("top"):
+        charts.append(refs["top"])
+    if refs.get("sens"):
+        charts.append(refs["sens"])
+    if refs.get("tco"):
+        charts.append(refs["tco"])
+    rows_per_chart = 15
+    for i, ch in enumerate(charts):
+        ch.height, ch.width = H, W
+        r = chart_top + (i // 2) * rows_per_chart
+        c = "A" if i % 2 == 0 else "I"
+        ws.add_chart(ch, f"{c}{r}")
+    row = chart_top + ((len(charts) + 1) // 2) * rows_per_chart + 1
+
+    # Top findings
+    fnd = [f for f in a.get("findings", []) if f["severity"] in ("critical", "warning")][:5] or a.get("findings", [])[:4]
+    if fnd:
+        row = _section(ws, row, "Rủi ro & khuyến nghị chính", DASH_COLS)
+        for f in fnd:
+            lbl, fg, bg = SEV.get(f["severity"], SEV["info"])
+            ws.merge_cells(f"A{row}:B{row}")
+            ws[f"A{row}"] = lbl
+            ws[f"A{row}"].font = _font(9, True, fg)
+            ws[f"A{row}"].fill = _fill(bg)
+            ws[f"A{row}"].alignment = Alignment(horizontal="center", vertical="center")
+            ws.merge_cells(f"C{row}:H{row}")
+            ws[f"C{row}"] = f["title"]
+            ws[f"C{row}"].font = _font(10, True)
+            ws[f"C{row}"].alignment = Alignment(wrap_text=True, vertical="center")
+            ws.merge_cells(f"I{row}:P{row}")
+            ws[f"I{row}"] = f["action"]
+            ws[f"I{row}"].font = _font(9.5, False, MUTED)
+            ws[f"I{row}"].alignment = Alignment(wrap_text=True, vertical="center")
+            ws.row_dimensions[row].height = 32
+            for cc in range(1, DASH_COLS + 1):
+                ws.cell(row=row, column=cc).border = Border(bottom=Side(style="thin", color=LINE))
+            row += 1
+        row += 1
+    ws.merge_cells(f"A{row}:P{row}")
+    ws[f"A{row}"] = ("Chi tiết từng hạng mục xem ở các sheet tiếp theo. Báo cáo được lập dựa trên danh sách máy ảo và giả định tại sheet "
+                     "\"Giả định & ngưỡng\"; cấu hình và chi phí chính xác được xác nhận trong báo giá chính thức.")
+    ws[f"A{row}"].font = _font(8.5, False, FAINT, italic=True)
+    ws[f"A{row}"].alignment = Alignment(wrap_text=True)
+    ws.row_dimensions[row].height = 26
+    _print_setup(ws, landscape=False)
+    ws.print_area = f"A1:P{row}"
+
+
+# ---------------------------------------------------------------------------
+# Chart data sheet + chart objects
+# ---------------------------------------------------------------------------
+def _labels(show_percent: bool = False) -> DataLabelList:
+    dl = DataLabelList()
+    dl.showVal = not show_percent
+    dl.showPercent = show_percent
+    dl.showSerName = False
+    dl.showCatName = False
+    dl.showLegendKey = False
+    dl.showLeaderLines = False
+    return dl
+
+
+def _style_chart(ch, title: str, y_title: Optional[str] = None) -> None:
+    ch.title = title
+    ch.style = 10
+    ch.legend.position = "b"
+    if y_title and hasattr(ch, "y_axis"):
+        ch.y_axis.title = y_title
+    if hasattr(ch, "y_axis"):
+        ch.y_axis.majorGridlines = ch.y_axis.majorGridlines  # keep default light grid
+        ch.y_axis.delete = False
+        ch.x_axis.delete = False
+
+
+def _color_series(ch, colors: List[str]) -> None:
+    for s, c in zip(ch.series, colors):
+        s.graphicalProperties.solidFill = c
+        s.graphicalProperties.line.solidFill = c
+
+
+def _chart_data(wb, result) -> Dict[str, Any]:
+    ws = wb.create_sheet("Dữ liệu biểu đồ")
+    ws.sheet_properties.tabColor = FAINT
+    a = result.get("analysis") or {}
+    rows_sorted = sorted(result["results"], key=lambda r: r["rank"] or 99)
+    best = result["results"][result["recommendedIndex"]] if result["recommendedIndex"] is not None else None
+    refs: Dict[str, Any] = {}
+    row = 1
+
+    def block(title: str, header: List[str], data: List[List[Any]]) -> int:
+        nonlocal row
+        ws.cell(row=row, column=1, value=title).font = _font(10, True, NAVY)
+        row += 1
+        top = row
+        for j, h in enumerate(header, 1):
+            c = ws.cell(row=row, column=j, value=h)
+            c.font = _font(9, True, "FFFFFF")
+            c.fill = _fill(NAVY)
+        for i, r in enumerate(data, 1):
+            for j, v in enumerate(r, 1):
+                ws.cell(row=row + i, column=j, value=v).font = _font(9)
+        row += len(data) + 2
+        return top
+
+    # 1. Hosts per option
+    if rows_sorted:
+        top = block("Số máy chủ theo phương án", ["Cấu hình", "Theo CPU", "Theo RAM", "Tổng (gồm dự phòng)"],
+                    [[r["profile"]["name"] + (" ★" if r["recommended"] else ""), r["hostsForCpu"], r["hostsForRam"], r["hostsTotal"]] for r in rows_sorted])
+        n = len(rows_sorted)
+        ch = BarChart()
+        ch.type = "col"
+        ch.grouping = "clustered"
+        ch.add_data(Reference(ws, min_col=2, max_col=4, min_row=top, max_row=top + n), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + n))
+        _style_chart(ch, "Số máy chủ theo từng phương án", "máy chủ")
+        _color_series(ch, [BLUE, TEAL, NAVY])
+        ch.dataLabels = _labels()
+        refs["hosts"] = ch
+
+    # 2. VM size mix
+    wl = a.get("workload") or {}
+    buckets = [b for b in wl.get("sizeBuckets", []) if b["count"]]
+    if buckets:
+        top = block("Phân bố kích thước máy ảo", ["Nhóm", "Số VM"], [[b["label"], b["count"]] for b in buckets])
+        ch = DoughnutChart()
+        ch.add_data(Reference(ws, min_col=2, min_row=top, max_row=top + len(buckets)), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(buckets)))
+        ch.title = "Phân bố kích thước máy ảo"
+        ch.holeSize = 55
+        ch.legend.position = "r"
+        ch.dataLabels = _labels(show_percent=True)
+        from openpyxl.chart.series import DataPoint
+        pal = ["BFDBFE", "60A5FA", "2681FF", "1D4ED8", "074B9B"]
+        s = ch.series[0]
+        for i in range(len(buckets)):
+            pt = DataPoint(idx=i)
+            pt.graphicalProperties.solidFill = pal[i % len(pal)]
+            s.dPt.append(pt)
+        refs["sizes"] = ch
+
+    # 3. Top consumers
+    topg = wl.get("topGroups", [])[:8]
+    if topg:
+        top = block("Nhóm máy ảo chiếm tài nguyên lớn nhất (%)", ["Nhóm", "% vCPU", "% RAM"],
+                    [[g["name"], round(g["vcpuShare"], 1), round(g["ramShare"], 1)] for g in reversed(topg)])
+        ch = BarChart()
+        ch.type = "bar"
+        ch.add_data(Reference(ws, min_col=2, max_col=3, min_row=top, max_row=top + len(topg)), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(topg)))
+        _style_chart(ch, "Nhóm máy ảo chiếm tài nguyên lớn nhất (% tổng)")
+        _color_series(ch, [BLUE, TEAL])
+        refs["top"] = ch
+
+    # 4. Capacity allocation (recommended)
+    if best:
+        p = result["params"]
+        n, red, n_fail = best["hostsTotal"], best["redundancy"], best["failure"]["hostsLeft"]
+        util = max(0.05, min(1.0, p["max_util_pct"] / 100.0))
+        ph, prof, dmd = best["perHost"], best["profile"], result["demand"]
+
+        def segs(total, usable_host, req, planned):
+            vals = [req, planned - req, max(0.0, usable_host * n_fail * util - planned), usable_host * n_fail * (1 - util),
+                    usable_host * red, max(0.0, total - usable_host * n)]
+            t = sum(max(0.0, v) for v in vals) or 1.0
+            return [round(max(0.0, v) / t * 100, 1) for v in vals]
+
+        cpu = segs(prof["cores"] * max(1.0, p["ht_factor"]) * p["cpu_ratio"] * n, ph["logicalCpu"] * p["cpu_ratio"], dmd["vcpu"], dmd["vcpuPlanned"])
+        ram = segs(prof["ramGB"] * p["ram_ratio"] * n, ph["usableRamGB"] * p["ram_ratio"], dmd["ramGB"], dmd["ramPlannedGB"])
+        labels = ["Yêu cầu", "Dự phòng tăng trưởng", "Còn trống", f"Vùng an toàn {100 - p['max_util_pct']:g}%", f"Dự phòng N+{red}", "ESXi"]
+        top = block("Phân bổ năng lực cụm đề xuất (%)", ["Tài nguyên"] + labels, [["CPU"] + cpu, ["RAM"] + ram])
+        ch = BarChart()
+        ch.type = "bar"
+        ch.grouping = "percentStacked"
+        ch.overlap = 100
+        ch.add_data(Reference(ws, min_col=2, max_col=7, min_row=top, max_row=top + 2), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + 2))
+        _style_chart(ch, f"Phân bổ năng lực — {prof['name']} × {n}")
+        _color_series(ch, ["2681FF", "93C5FD", "86EFAC", "FCD34D", "FCA5A5", "CBD5E1"])
+        refs["alloc"] = ch
+
+    # 5. Projection
+    proj = a.get("projection")
+    if proj:
+        pts = proj["points"]
+        top = block("Dự báo số máy chủ theo năm", ["Năm", "Máy chủ cần", "Đã đề xuất"],
+                    [["Hiện tại" if pt["year"] == 0 else f"Năm {pt['year']}", pt["hosts"], proj["installed"]] for pt in pts])
+        bar = BarChart()
+        bar.add_data(Reference(ws, min_col=2, min_row=top, max_row=top + len(pts)), titles_from_data=True)
+        bar.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(pts)))
+        _style_chart(bar, f"Dự báo số máy chủ (tăng trưởng {proj['annualGrowthPct']:g}%/năm)", "máy chủ")
+        _color_series(bar, [BLUE])
+        bar.dataLabels = _labels()
+        line = LineChart()
+        line.add_data(Reference(ws, min_col=3, min_row=top, max_row=top + len(pts)), titles_from_data=True)
+        line.series[0].graphicalProperties.line.solidFill = OK
+        line.series[0].graphicalProperties.line.dashStyle = "dash"
+        line.series[0].graphicalProperties.line.width = 28000
+        bar += line
+        refs["projection"] = bar
+
+    # 6. Sensitivity (growth)
+    sens = (a.get("sensitivity") or {}).get("growth")
+    if sens:
+        xs = sens["x"]
+        hdr = ["Dự phòng tăng trưởng"] + [s["name"] for s in sens["series"]]
+        top = block("Độ nhạy — số máy chủ theo mức dự phòng tăng trưởng", hdr,
+                    [[f"{x:g}%"] + [s["hosts"][i] for s in sens["series"]] for i, x in enumerate(xs)])
+        ch = LineChart()
+        ch.add_data(Reference(ws, min_col=2, max_col=1 + len(sens["series"]), min_row=top, max_row=top + len(xs)), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(xs)))
+        _style_chart(ch, "Số máy chủ theo mức dự phòng tăng trưởng", "máy chủ")
+        for s, c in zip(ch.series, SERIES):
+            s.graphicalProperties.line.solidFill = c
+            s.graphicalProperties.line.width = 22000
+            s.marker.symbol = "circle"
+            s.marker.size = 5
+            s.marker.graphicalProperties.solidFill = c
+        refs["sens"] = ch
+
+    # 7. TCO
+    priced = [r for r in rows_sorted if r["advisory"]["costs"].get("tco")]
+    if priced:
+        top = block("TCO theo phương án", ["Cấu hình", "Phần cứng", f"License {priced[0]['advisory']['costs']['years']} năm"],
+                    [[r["profile"]["name"] + (" ★" if r["recommended"] else ""), r["advisory"]["costs"]["hardware"] or 0,
+                      r["advisory"]["costs"]["license"] or 0] for r in priced])
+        ch = BarChart()
+        ch.type = "bar"
+        ch.grouping = "stacked"
+        ch.overlap = 100
+        ch.add_data(Reference(ws, min_col=2, max_col=3, min_row=top, max_row=top + len(priced)), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(priced)))
+        _style_chart(ch, "Tổng chi phí sở hữu (TCO) theo phương án")
+        _color_series(ch, [BLUE, TEAL])
+        ch.y_axis.number_format = '#,##0,," tr"' 
+        refs["tco"] = ch
+
+    _widths(ws, {"A": 34, "B": 16, "C": 16, "D": 18, "E": 16, "F": 18, "G": 14, "H": 14, "I": 14})
+    return refs
+
+
+# ---------------------------------------------------------------------------
+# Detail sheets
+# ---------------------------------------------------------------------------
+def _options_sheet(wb, result, subtitle: str) -> None:
+    ws = wb.create_sheet("So sánh phương án")
+    ws.sheet_properties.tabColor = BLUE
+    p = result["params"]
+    years = p.get("horizon_years", 3)
+    header = ["Hạng", "Cấu hình máy chủ", "CPU × core", "RAM / máy (GB)", "Máy chủ theo CPU", "Máy chủ theo RAM", "Dự phòng",
+              "Tổng máy chủ", "Yếu tố quyết định", "Tổng core", "Tổng RAM (GB)", "CPU khi mất máy (%)", "RAM khi mất máy (%)",
+              "Đạt dự phòng", "Thêm được ~VM", "Đơn giá máy chủ", "Chi phí phần cứng", "Core license", "License / năm",
+              f"TCO {years} năm", "Chi phí / VM / tháng", "Dư địa tăng trưởng (%)", "Điểm tổng hợp", "Đề xuất"]
+    rows = []
+    for r in sorted(result["results"], key=lambda x: x["rank"] or 99):
+        pr, adv = r["profile"], r["advisory"]
+        rows.append([r["rank"], pr["name"], f"{pr['sockets']}×{pr['coresPerSocket']}", pr["ramGB"], r["hostsForCpu"], r["hostsForRam"],
+                     f"N+{r['redundancy']}", r["hostsTotal"], r["binding"], r["totals"]["cores"], r["totals"]["ramGB"],
+                     _r(r["failure"]["cpuPct"]), _r(r["failure"]["ramPct"]), "Đạt" if r["failure"]["ok"] else "Chưa đạt",
+                     r["spare"]["extraAvgVms"], pr["unitPrice"], r["budget"], adv["license"]["coresTotal"], adv["license"]["yearlyCost"],
+                     adv["costs"]["tco"], _r(adv["costs"]["perVmMonth"], 0), _r(adv["runway"]["extraGrowthPct"]),
+                     _r(adv.get("scoreTotal"), 0), "★ Đề xuất" if r["recommended"] else ""])
+    start = _sheet_title(ws, "So sánh phương án cấu hình", subtitle, len(header))
+    last = _write_rows(ws, start, header, rows, fmts={4: NUM, 10: NUM, 11: NUM, 12: NUM1, 13: NUM1, 16: MONEY, 17: MONEY, 18: NUM,
+                                                       19: MONEY, 20: MONEY, 21: MONEY, 22: NUM1, 23: NUM})
+    _table(ws, f"A{start}:{get_column_letter(len(header))}{last}", "SoSanhPhuongAn")
+    for i, r in enumerate(sorted(result["results"], key=lambda x: x["rank"] or 99)):
+        if r["recommended"]:
+            for c in range(1, len(header) + 1):
+                cell = ws.cell(row=start + 1 + i, column=c)
+                cell.fill = _fill(OK_BG)
+                cell.font = _font(10, True)
+    rng = lambda col: f"{col}{start + 1}:{col}{last}"  # noqa: E731
+    ws.conditional_formatting.add(rng("H"), DataBarRule(start_type="num", start_value=0, end_type="max", color=BLUE))
+    ws.conditional_formatting.add(rng("W"), ColorScaleRule(start_type="num", start_value=40, start_color="FBE4E2",
+                                                           mid_type="num", mid_value=70, mid_color="FDF1E0", end_type="num", end_value=100, end_color="C9EBD3"))
+    for col in ("L", "M"):
+        ws.conditional_formatting.add(rng(col), CellIsRule(operator="greaterThan", formula=["100"], font=Font(color=CRIT, bold=True)))
+    ws.conditional_formatting.add(rng("N"), CellIsRule(operator="equal", formula=['"Chưa đạt"'], font=Font(color=CRIT, bold=True), fill=_fill(CRIT_BG)))
+    widths = [7, 22, 11, 11, 11, 11, 10, 11, 12, 10, 12, 12, 12, 11, 11, 15, 16, 11, 15, 16, 14, 13, 11, 12]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = ws.cell(row=start + 1, column=3)
+
+    # Scorecard block
+    axes = (result.get("analysis") or {}).get("scoreAxes") or []
+    if axes:
+        row = last + 3
+        row = _section(ws, row, "Bảng điểm đa tiêu chí (0–100, cao = tốt)", 2 + len(axes))
+        hdr = ["Cấu hình", ""] + [ax["label"] for ax in axes]
+        srows = []
+        for r in sorted(result["results"], key=lambda x: x["rank"] or 99):
+            sc = r["advisory"].get("scores") or {}
+            srows.append([r["profile"]["name"], "★" if r["recommended"] else ""] + [_r(sc.get(ax["key"]), 0) for ax in axes])
+        top = row
+        lst = _write_rows(ws, row, hdr, srows, fmts={i: NUM for i in range(3, 3 + len(axes))})
+        _table(ws, f"A{top}:{get_column_letter(len(hdr))}{lst}", "BangDiem", "TableStyleLight9")
+        ws.conditional_formatting.add(f"C{top + 1}:{get_column_letter(len(hdr))}{lst}",
+                                      ColorScaleRule(start_type="num", start_value=0, start_color="FBE4E2", mid_type="num", mid_value=60,
+                                                     mid_color="FDF1E0", end_type="num", end_value=100, end_color="C9EBD3"))
+    _print_setup(ws)
+
+
+def _findings_sheet(wb, result, subtitle: str) -> None:
+    ws = wb.create_sheet("Rủi ro & khuyến nghị")
+    ws.sheet_properties.tabColor = WARN
+    a = result.get("analysis") or {}
+    header = ["Mức độ", "Lĩnh vực", "Nhận định", "Chi tiết", "Khuyến nghị"]
+    start = _sheet_title(ws, "Rủi ro & khuyến nghị", subtitle, len(header))
+    fnd = a.get("findings", [])
+    rows = [[SEV.get(f["severity"], SEV["info"])[0], f["area"], f["title"], f["detail"], f["action"]] for f in fnd]
+    last = _write_rows(ws, start, header, rows, wrap_cols=(3, 4, 5)) if rows else start
+    if rows:
+        _table(ws, f"A{start}:E{last}", "RuiRo")
+        for i, f in enumerate(fnd, 1):
+            lbl, fg, bg = SEV.get(f["severity"], SEV["info"])
+            c = ws.cell(row=start + i, column=1)
+            c.font = _font(10, True, fg)
+            c.fill = _fill(bg)
+            c.alignment = Alignment(horizontal="center", vertical="top")
+            ws.cell(row=start + i, column=3).font = _font(10, True)
+    _widths(ws, {"A": 24, "B": 20, "C": 42, "D": 60, "E": 60})
+    if rows:
+        _fit_heights(ws, start + 1, last, {3: 42, 4: 60, 5: 60})
+
+    steps = a.get("nextSteps", [])
+    if steps:
+        row = _section(ws, last + 3, "Lộ trình triển khai", 5)
+        top = row
+        lst = _write_rows(ws, row, ["Giai đoạn", "Thời điểm", "Nội dung", "", ""],
+                          [[s["phase"], s["when"], s["what"], "", ""] for s in steps], wrap_cols=(3,))
+        for rr in range(top + 1, lst + 1):
+            ws.merge_cells(f"C{rr}:E{rr}")
+            ws.row_dimensions[rr].height = max(20, -(-len(str(ws.cell(row=rr, column=3).value or "")) // 150) * 14 + 6)
+            ws.cell(row=rr, column=1).font = _font(10, True)
+        for c in range(1, 6):
+            ws.cell(row=top, column=c).fill = _fill(NAVY)
+    ws.freeze_panes = ws.cell(row=start + 1, column=1)
+    _print_setup(ws)
+
+
+def _workload_sheet(wb, result, subtitle: str) -> None:
+    ws = wb.create_sheet("Phân tích workload")
+    ws.sheet_properties.tabColor = TEAL
+    a = result.get("analysis") or {}
+    wl = a.get("workload") or {}
+    d = result["demand"]
+    start = _sheet_title(ws, "Phân tích nhu cầu workload", subtitle, 8)
+    facts = [("Đặc tính", wl.get("characterLabel")), ("GB RAM / vCPU", _r(wl.get("ramPerVcpu"))),
+             ("Số máy ảo", d["vmCount"]), ("Nhóm cấu hình", wl.get("groupCount")),
+             ("Số nhóm chiếm 80% RAM", wl.get("paretoLines")),
+             ("Máy ảo lớn nhất", f"{(wl.get('largestVm') or {}).get('name', '—')} · {(wl.get('largestVm') or {}).get('vcpu', 0):g} vCPU / {_gb((wl.get('largestVm') or {}).get('ramGB'))}"),
+             ("Cơ sở dữ liệu / middleware", ", ".join(wl.get("dbLike", [])) or "—")]
+    row = start
+    for k, v in facts:
+        ws.cell(row=row, column=1, value=k).font = _font(10, True, MUTED)
+        ws.merge_cells(f"B{row}:H{row}")
+        ws.cell(row=row, column=2, value=v).font = _font(10, True)
+        ws.cell(row=row, column=2).alignment = Alignment(horizontal="left")
+        for c in range(1, 9):
+            ws.cell(row=row, column=c).border = Border(bottom=thin)
+        row += 1
+    row = _section(ws, row + 1, "Phân bố kích thước máy ảo", 4)
+    top = row
+    lst = _write_rows(ws, row, ["Nhóm kích thước", "Số VM", "vCPU", "RAM (GB)"],
+                      [[b["label"], b["count"], b["vcpu"], b["ramGB"]] for b in wl.get("sizeBuckets", [])], fmts={2: NUM, 3: NUM, 4: NUM})
+    _table(ws, f"A{top}:D{lst}", "PhanBoKichThuoc", "TableStyleMedium9")
+    ws.conditional_formatting.add(f"B{top + 1}:B{lst}", DataBarRule(start_type="num", start_value=0, end_type="max", color=BLUE))
+    row = _section(ws, lst + 2, "Nhóm máy ảo theo mức sử dụng tài nguyên", 8)
+    top = row
+    lst = _write_rows(ws, row, ["Nhóm máy ảo", "Số lượng", "Tổng vCPU", "Tổng RAM (GB)", "Tổng Disk (GB)", "% vCPU", "% RAM", "% Disk"],
+                      [[g["name"], g["qty"], g["vcpu"], g["ramGB"], g["diskGB"], _r(g["vcpuShare"]), _r(g["ramShare"]), _r(g["diskShare"])]
+                       for g in wl.get("topGroups", [])], fmts={2: NUM, 3: NUM, 4: NUM, 5: NUM, 6: NUM1, 7: NUM1, 8: NUM1})
+    if lst > top:
+        _table(ws, f"A{top}:H{lst}", "NhomMayAo", "TableStyleMedium9")
+        for col, color in (("F", BLUE), ("G", TEAL), ("H", "94A3B8")):
+            ws.conditional_formatting.add(f"{col}{top + 1}:{col}{lst}", DataBarRule(start_type="num", start_value=0, end_type="num", end_value=100, color=color))
+    _widths(ws, {"A": 30, "B": 12, "C": 12, "D": 14, "E": 14, "F": 12, "G": 12, "H": 12})
+    _print_setup(ws)
+
+
+def _sensitivity_sheet(wb, result, subtitle: str) -> None:
+    ws = wb.create_sheet("Độ nhạy & dự báo")
+    ws.sheet_properties.tabColor = "7C3AED"
+    a = result.get("analysis") or {}
+    sens = a.get("sensitivity") or {}
+    names = [s["name"] for s in (sens.get("growth") or {}).get("series", [])]
+    start = _sheet_title(ws, "Độ nhạy & dự báo tăng trưởng", subtitle, max(4, 1 + len(names)))
+    row = start
+    titles = {"growth": "Dự phòng tăng trưởng (%)", "cpuRatio": "Tỷ lệ chia sẻ CPU (x)", "maxUtil": "Mức sử dụng tối đa / máy chủ (%)"}
+    tno = 0
+    for key, title in titles.items():
+        sw = sens.get(key)
+        if not sw:
+            continue
+        row = _section(ws, row, f"Số máy chủ theo {title.lower()}", 1 + len(sw["series"]))
+        top = row
+        rows = [[(f"{x:g}x" if key == "cpuRatio" else f"{x:g}%") + (" (hiện tại)" if x == sw["current"] else "")]
+                + [s["hosts"][i] for s in sw["series"]] for i, x in enumerate(sw["x"])]
+        lst = _write_rows(ws, row, [title] + [s["name"] for s in sw["series"]], rows, fmts={i: NUM for i in range(2, 2 + len(sw["series"]))})
+        tno += 1
+        _table(ws, f"A{top}:{get_column_letter(1 + len(sw['series']))}{lst}", f"DoNhay{tno}", "TableStyleLight9")
+        ws.conditional_formatting.add(f"B{top + 1}:{get_column_letter(1 + len(sw['series']))}{lst}",
+                                      ColorScaleRule(start_type="min", start_color="E8F1FF", end_type="max", end_color="7FB2FF"))
+        for i, x in enumerate(sw["x"]):
+            if x == sw["current"]:
+                for c in range(1, 2 + len(sw["series"])):
+                    ws.cell(row=top + 1 + i, column=c).font = _font(10, True, NAVY)
+        row = lst + 2
+    proj = a.get("projection")
+    if proj:
+        row = _section(ws, row, f"Dự báo theo năm — tăng trưởng {proj['annualGrowthPct']:g}%/năm, đề xuất {proj['installed']} máy chủ", 4)
+        top = row
+        lst = _write_rows(ws, row, ["Năm", "Tăng trưởng lũy kế (%)", "Máy chủ cần", "Đánh giá"],
+                          [["Hiện tại" if pt["year"] == 0 else f"Năm {pt['year']}", _r(pt["growthPct"]), pt["hosts"],
+                            "Đáp ứng" if pt["hosts"] <= proj["installed"] else "Cần mở rộng"] for pt in proj["points"]],
+                          fmts={2: NUM1, 3: NUM})
+        _table(ws, f"A{top}:D{lst}", "DuBao", "TableStyleLight9")
+        ws.conditional_formatting.add(f"D{top + 1}:D{lst}", CellIsRule(operator="equal", formula=['"Cần mở rộng"'], font=Font(color=CRIT, bold=True), fill=_fill(CRIT_BG)))
+        ws.conditional_formatting.add(f"D{top + 1}:D{lst}", CellIsRule(operator="equal", formula=['"Đáp ứng"'], font=Font(color=OK, bold=True), fill=_fill(OK_BG)))
+    ws.column_dimensions["A"].width = 34
+    for i in range(2, 2 + max(4, len(names))):
+        ws.column_dimensions[get_column_letter(i)].width = 20
+    _print_setup(ws)
+
+
+def _assumptions_sheet(wb, result, subtitle: str) -> None:
+    ws = wb.create_sheet("Giả định & ngưỡng")
+    ws.sheet_properties.tabColor = MUTED
+    start = _sheet_title(ws, "Giả định & ngưỡng tư vấn", subtitle, 3)
+    row = _section(ws, start, "Giả định sizing", 3)
+    for ln in result["assumptions"]:
+        ws.merge_cells(f"A{row}:C{row}")
+        ws.cell(row=row, column=1, value="•  " + ln).font = _font(10)
+        ws.cell(row=row, column=1).alignment = Alignment(wrap_text=True)
+        row += 1
+    row = _section(ws, row + 1, "Ngưỡng tư vấn áp dụng", 3)
+    th = (result["params"] or {}).get("advisory") or {}
+    defaults = sizing_advisory.AdvisoryThresholds().__dict__
+    top = row
+    rows = []
+    for key, label, unit in sizing_advisory.THRESHOLD_META:
+        v = th.get(key, defaults.get(key))
+        rows.append([label, f"{v} {unit}".strip(), "Đã điều chỉnh" if v != defaults.get(key) else "Mặc định"])
+    lst = _write_rows(ws, row, ["Ngưỡng", "Giá trị", "Trạng thái"], rows, wrap_cols=(2,))
+    _table(ws, f"A{top}:C{lst}", "NguongTuVan", "TableStyleLight9")
+    ws.conditional_formatting.add(f"C{top + 1}:C{lst}", CellIsRule(operator="equal", formula=['"Đã điều chỉnh"'], font=Font(color=NAVY, bold=True)))
+    _widths(ws, {"A": 52, "B": 60, "C": 16})
+    _print_setup(ws, landscape=False)
+
+
+def _vm_sheet(wb, vms: List[Dict[str, Any]], result, subtitle: str) -> None:
+    ws = wb.create_sheet("Danh sách VM")
+    ws.sheet_properties.tabColor = FAINT
+    header = ["Tên VM / nhóm", "Số lượng", "vCPU / VM", "RAM / VM (GB)", "Disk / VM (GB)", "Tổng vCPU", "Tổng RAM (GB)", "Tổng Disk (GB)", "Ghi chú"]
+    start = _sheet_title(ws, "Danh sách máy ảo", subtitle, len(header))
+    rows = []
+    for i, v in enumerate(vms):
+        r = start + 1 + i
+        rows.append([v["name"], v["qty"], v["vcpu"], v["ramGB"], v["diskGB"], f"=B{r}*C{r}", f"=B{r}*D{r}", f"=B{r}*E{r}", v.get("note") or ""])
+    last = _write_rows(ws, start, header, rows, fmts={2: NUM, 3: NUM, 4: NUM, 5: NUM, 6: NUM, 7: NUM, 8: NUM}, wrap_cols=(9,))
+    if rows:
+        _table(ws, f"A{start}:I{last}", "DanhSachVM")
+        tot = last + 1
+        ws.cell(row=tot, column=1, value="TỔNG")
+        for col in "BFGH":
+            ws[f"{col}{tot}"] = f"=SUM({col}{start + 1}:{col}{last})"
+            ws[f"{col}{tot}"].number_format = NUM
+        for c in range(1, 10):
+            cell = ws.cell(row=tot, column=c)
+            cell.font = _font(10, True)
+            cell.fill = _fill(SURFACE2)
+            cell.border = Border(top=Side(style="medium", color=NAVY))
+    _widths(ws, {"A": 28, "B": 10, "C": 10, "D": 13, "E": 13, "F": 12, "G": 14, "H": 14, "I": 40})
+    ws.freeze_panes = ws.cell(row=start + 1, column=2)
+    _print_setup(ws)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+def build_workbook(result: Dict[str, Any], vms: List[Dict[str, Any]], meta: Dict[str, Any]) -> Workbook:
+    """`result` = sizing.build_sizing() output; `vms` = submitted VM rows (name/qty/vcpu/ramGB/diskGB/note);
+    `meta` = {customerName, preparedOrg, preparedBy, documentCode, logoDataUrl}."""
+    wb = Workbook()
+    env = result["params"].get("environment") or "Dự án mới"
+    parts = [env]
+    if meta.get("customerName"):
+        parts.append(meta["customerName"])
+    if meta.get("preparedOrg"):
+        parts.append(meta["preparedOrg"])
+    parts.append(dt.date.today().strftime("%d/%m/%Y"))
+    subtitle = "   ·   ".join(parts)
+    refs = _chart_data(wb, result)
+    _dashboard(wb, result, meta, wb["Dữ liệu biểu đồ"], refs)
+    _options_sheet(wb, result, subtitle)
+    _findings_sheet(wb, result, subtitle)
+    _workload_sheet(wb, result, subtitle)
+    _sensitivity_sheet(wb, result, subtitle)
+    _assumptions_sheet(wb, result, subtitle)
+    _vm_sheet(wb, vms, result, subtitle)
+    # Chart data last
+    data = wb["Dữ liệu biểu đồ"]
+    wb.move_sheet(data, offset=len(wb.sheetnames) - wb.sheetnames.index(data.title) - 1)
+    wb.active = 0
+    wb.properties.title = f"Đề xuất cấu hình máy chủ — {env}"
+    wb.properties.creator = meta.get("preparedOrg") or "VMware Capacity Ops"
+    return wb
