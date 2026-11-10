@@ -392,6 +392,21 @@
               <div class="field"><label for="szStorageOverhead" title="Snapshot, swap, tăng trưởng vmdk, mức trống tối thiểu của datastore.">Overhead lưu trữ (%)</label><input id="szStorageOverhead" value="25"></div>
               <div class="field hidden" id="szProtectionField"><label for="szProtection" title="vSAN FTT=1 mirror = 2.0; RAID-5 = 1.33; RAID-6 = 1.5">Hệ số bảo vệ dữ liệu (×)</label><input id="szProtection" value="2.0"></div>
             </div>
+            <h4 class="sz-param-group">Tư vấn &amp; chi phí</h4>
+            <div class="sizing-params">
+              <div class="field"><label for="szOptimize" title="Cách chọn phương án đề xuất giữa các cấu hình ứng viên.">Tiêu chí chọn phương án</label>
+                <select id="szOptimize"><option value="hosts" selected>Ít host nhất, rồi chi phí</option><option value="cost">Chi phí (TCO) thấp nhất</option></select></div>
+              <div class="field"><label for="szAnnualGrowth" title="Tăng trưởng tự nhiên mỗi năm, dùng cho biểu đồ dự báo nhiều năm.">Tăng trưởng hằng năm (%)</label><input id="szAnnualGrowth" value="15"></div>
+              <div class="field"><label for="szHorizon" title="Số năm dự báo và số năm tính TCO (license).">Kỳ dự báo / TCO (năm)</label><input id="szHorizon" value="3"></div>
+              <div class="field"><label for="szLicPrice" title="Đơn giá license theo core mỗi năm (VD: VMware VCF/VVF). Để trống nếu chưa có báo giá.">Đơn giá license / core / năm (tuỳ chọn)</label><input id="szLicPrice" placeholder="VND"></div>
+              <div class="field"><label for="szLicMin" title="VMware tính license tối thiểu 16 core cho mỗi CPU socket.">License tối thiểu (core / socket)</label><input id="szLicMin" value="16"></div>
+            </div>
+            <details class="sz-adv-thresholds" id="szAdvDetails">
+              <summary><h4>Ngưỡng tư vấn (nâng cao)</h4></summary>
+              <p class="panel-sub">Quyết định cách phân loại workload, các cảnh báo/khuyến nghị và bảng điểm trong báo cáo. Giá trị đã đổi được đánh dấu * trong PDF.</p>
+              <div class="sizing-params" id="szAdvFields"></div>
+              <button class="btn btn-secondary btn-sm" id="btnSzAdvReset" type="button">Khôi phục mặc định</button>
+            </details>
           </aside>
 
           <div class="sim-shell">
@@ -404,8 +419,11 @@
               <div class="sim-actions">
                 <button class="btn btn-primary" id="btnSizingRun" type="button">Tính sizing</button>
                 <details class="finding-filter-dropdown" id="sizingPdfDropdown">
-                  <summary class="btn btn-secondary" title="PDF 'Đề xuất cấu hình máy chủ' theo bố cục báo cáo quản trị (tóm tắt → so sánh → giả định) để đính kèm tờ trình">Xuất PDF đề xuất <i data-lucide="chevron-down"></i></summary>
+                  <summary class="btn btn-secondary" title="PDF báo cáo tư vấn sizing (đầy đủ, có biểu đồ) hoặc tờ trình tóm tắt để đính kèm">Xuất PDF đề xuất <i data-lucide="chevron-down"></i></summary>
                   <div class="finding-filter-panel planning-panel sz-pdf-panel">
+                    <div class="planning-panel-title">Mức chi tiết</div>
+                    <label class="sz-radio"><input type="radio" name="szPdfDetail" value="full" checked> <span><b>Báo cáo tư vấn đầy đủ</b> <span class="muted-sub">(mặc định)</span><br><span class="muted-sub">Trang bìa, mục lục, phân tích workload, so sánh đa tiêu chí, thiết kế chi tiết, độ nhạy, dự báo, TCO, rủi ro &amp; lộ trình — kèm biểu đồ.</span></span></label>
+                    <label class="sz-radio"><input type="radio" name="szPdfDetail" value="brief"> <span><b>Tờ trình tóm tắt</b><br><span class="muted-sub">2–3 trang: quyết định đề nghị, bảng so sánh, giả định.</span></span></label>
                     <div class="planning-panel-title">Nội dung đề xuất</div>
                     <label class="sz-radio"><input type="radio" name="szPdfMode" value="new" checked> <span><b>Trang bị mới server</b> <span class="muted-sub">(mặc định)</span><br><span class="muted-sub">Số host vật lý cần mua theo từng cấu hình ứng viên, ngân sách ước tính.</span></span></label>
                     <label class="sz-radio"><input type="radio" name="szPdfMode" value="reuse"> <span><b>Tận dụng server hiện hữu</b><br><span class="muted-sub">Đặt dự án lên cluster đang có: CPU/RAM sau tiếp nhận, N+1, dư địa còn lại, chi phí tránh được.</span></span></label>
@@ -419,11 +437,18 @@
                       <p class="logo-upload-hint" id="szPdfClusterHint"></p>
                       <label class="sz-check"><input type="checkbox" id="szPdfIncludeNew" checked> Kèm phương án B — trang bị mới để đối chiếu</label>
                     </div>
+                    <div class="planning-panel-title">Thông tin tài liệu (white-label)</div>
+                    <label class="planning-field">Khách hàng / đơn vị nhận<input id="szCustomer" placeholder="VD: Ngân hàng ABC"></label>
+                    <label class="planning-field">Đơn vị tư vấn (hiển thị trên bìa)<input id="szPreparedOrg" placeholder="VD: Phòng Hạ tầng / tên đối tác"></label>
+                    <div class="sz-two">
+                      <label class="planning-field">Người lập<input id="szPreparedBy" placeholder="Họ tên"></label>
+                      <label class="planning-field">Mã tài liệu<input id="szDocCode" placeholder="VD: SZ-2026-001"></label>
+                    </div>
                     <button class="btn btn-primary btn-sm" id="btnSizingPdf" type="button" style="align-self:flex-start;">Tạo PDF</button>
                     <p class="logo-upload-hint hidden" id="szPdfStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
-                <button class="btn btn-secondary" id="btnSizingExport" type="button" title="Xuất Excel: tóm tắt + so sánh cấu hình + danh sách VM"><i data-lucide="download"></i>Xuất Excel</button>
+                <button class="btn btn-secondary" id="btnSizingExport" type="button" title="Xuất Excel: tóm tắt, so sánh cấu hình, chi phí, độ nhạy, dự báo, rủi ro & khuyến nghị, danh sách VM"><i data-lucide="download"></i>Xuất Excel</button>
               </div>
             </div>
             <div class="sim-card sim-result hidden" id="sizingResult"></div>

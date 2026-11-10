@@ -18,8 +18,10 @@ and a future PDF report.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+from .sizing_advisory import AdvisoryThresholds
 
 # Column aliases accepted when importing an Excel/CSV VM list (lower-case,
 # matched as "contains" after stripping spaces / diacritics-insensitive words).
@@ -72,6 +74,16 @@ class SizingParams:
     storage_overhead_pct: float = 25.0  # snapshots, swap, vmdk growth, free-space floor
     storage_protection_factor: float = 1.0  # local/vSAN only: FTT=1 mirror → 2.0, RAID-5 → 1.33 ...
     environment: str = ""            # free text shown on the report, e.g. "Core Banking phase 2"
+    # Advisory / costing (see sizing_advisory.py)
+    annual_growth_pct: float = 15.0  # yearly organic growth used for the multi-year projection
+    horizon_years: int = 3           # projection horizon and TCO period
+    license_price_per_core: Optional[float] = None  # per-core subscription price per year (VCF/VVF-style), optional
+    license_min_cores_per_socket: int = 16          # per-core licensing minimum per CPU socket
+    optimize_for: str = "hosts"      # 'hosts' = fewest hosts first · 'cost' = lowest TCO first (when priced)
+    advisory: AdvisoryThresholds = field(default_factory=AdvisoryThresholds)  # tunable advisory thresholds
+
+    def __post_init__(self):
+        self.advisory = AdvisoryThresholds.from_any(self.advisory)
 
 
 def _ceil_pos(x: float) -> int:
@@ -199,21 +211,27 @@ def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingPar
     }
 
 
-def _rank_key(r: Dict[str, Any]):
-    # Prefer: fewest hosts → lowest budget (if any) → highest efficiency of the binding resource.
+def _rank_key(r: Dict[str, Any], optimize_for: str = "hosts"):
+    # Prefer: fewest hosts → lowest cost (TCO incl. license when priced, else hardware budget)
+    # → highest efficiency of the binding resource.
     eff = r["efficiency"]
     eff_bind = eff["cpuPct"] if r["binding"].startswith("CPU") else eff["ramPct"]
-    return (
-        r["hostsTotal"] if r["hostsTotal"] else 10**9,
-        r["budget"] if r["budget"] is not None else float("inf"),
-        -(eff_bind or 0),
-    )
+    tco = (r.get("advisory") or {}).get("costs", {}).get("tco")
+    cost = tco if tco is not None else r["budget"]
+    hosts = r["hostsTotal"] if r["hostsTotal"] else 10**9
+    cost_k = cost if cost is not None else float("inf")
+    if optimize_for == "cost":
+        return (cost_k, hosts, -(eff_bind or 0))
+    return (hosts, cost_k, -(eff_bind or 0))
 
 
 def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostProfile]) -> Dict[str, Any]:
+    from . import sizing_advisory
+
     demand = summarize_demand(vms, params)
     results = [size_profile(p, demand, params) for p in profiles]
-    ranked = sorted(range(len(results)), key=lambda i: _rank_key(results[i]))
+    sizing_advisory.annotate_results(results, vms, params, demand)
+    ranked = sorted(range(len(results)), key=lambda i: _rank_key(results[i], params.optimize_for))
     best_idx = ranked[0] if ranked and demand["vmCount"] else None
     for i, r in enumerate(results):
         r["recommended"] = (i == best_idx)
@@ -222,11 +240,12 @@ def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostPro
     recommendation = _recommendation_text(demand, params, results[best_idx] if best_idx is not None else None)
     return {
         "demand": demand,
-        "params": params.__dict__,
+        "params": {**params.__dict__, "advisory": params.advisory.__dict__.copy()},
         "results": results,
         "recommendedIndex": best_idx,
         "recommendation": recommendation,
         "assumptions": assumption_lines(params),
+        "analysis": sizing_advisory.build_advisory(vms, params, profiles, demand, results, best_idx),
     }
 
 
@@ -242,6 +261,11 @@ def assumption_lines(p: SizingParams) -> List[str]:
         lines.append(f"Lưu trữ cục bộ/vSAN: overhead {p.storage_overhead_pct:g}%, hệ số bảo vệ ×{p.storage_protection_factor:g}.")
     else:
         lines.append(f"Lưu trữ trên SAN dùng chung: dung lượng cấp phát + {p.storage_overhead_pct:g}% overhead (snapshot, swap, tăng trưởng vmdk).")
+    lines.append(f"Dự báo {p.horizon_years} năm với tăng trưởng tự nhiên {p.annual_growth_pct:g}%/năm; TCO tính trong {p.horizon_years} năm.")
+    if p.license_price_per_core is not None:
+        lines.append(f"License tính theo core (tối thiểu {p.license_min_cores_per_socket} core/socket), {p.license_price_per_core:,.0f}/core/năm.")
+    else:
+        lines.append(f"License tính theo core (tối thiểu {p.license_min_cores_per_socket} core/socket); chưa nhập đơn giá license.")
     return lines
 
 

@@ -488,6 +488,34 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sz-compare tr.sz-best td{background:var(--green-a8);}
 .sz-compare td.sz-hosts{font-size:var(--fs-body-sm);}
 .sz-headline .sz-detail{margin-top:var(--space-1);color:var(--text-primary);font-weight:var(--fw-regular);}
+.sz-param-group{margin-top:var(--space-4);}
+.sz-adv-thresholds{margin-top:var(--space-4);}
+.sz-adv-thresholds summary{cursor:pointer;list-style:revert;}
+.sz-adv-thresholds summary h4{display:inline;}
+.sz-adv-thresholds .field.sz-adv-changed label{color:var(--accent,var(--primary));font-weight:var(--fw-semibold);}
+.sz-adv-thresholds .field.sz-adv-wide{grid-column:1 / -1;}
+.sz-adv-thresholds #btnSzAdvReset{margin-top:var(--space-2);}
+.sz-two{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);}
+.sz-pdf-panel .planning-field input{width:100%;}
+.sz-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);margin-bottom:var(--space-3);}
+.sz-chart-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));}
+.sz-chart{border:1px solid var(--border);border-radius:var(--radius-sm,8px);padding:var(--space-3);background:var(--surface,transparent);min-width:0;}
+.sz-chart-title{font-size:var(--fs-caption);font-weight:var(--fw-semibold);color:var(--text-primary);margin-bottom:2px;}
+.sz-chart-sub{font-size:var(--fs-micro);line-height:var(--lh-micro);color:var(--text-secondary);margin-bottom:var(--space-2);}
+.sz-chart .chart-wrap{min-height:220px;}
+.sz-chart .chart-wrap.tall{min-height:260px;}
+.sz-readiness{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;margin:var(--space-2) 0;}
+.sz-findings{display:flex;flex-direction:column;gap:var(--space-2);}
+.sz-finding{display:grid;grid-template-columns:92px 1fr 1fr;gap:var(--space-3);align-items:start;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-left:4px solid var(--text-tertiary);border-radius:var(--radius-xs,6px);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.sz-finding.critical{border-left-color:var(--crit);}
+.sz-finding.warning{border-left-color:var(--warn);}
+.sz-finding.ok{border-left-color:var(--ok);}
+.sz-finding .sz-f-title{font-weight:var(--fw-semibold);color:var(--text-primary);}
+.sz-finding .sz-f-detail,.sz-finding .sz-f-area{color:var(--text-secondary);}
+.sz-steps{counter-reset:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);}
+.sz-step{border:1px solid var(--border);border-radius:var(--radius-xs,6px);padding:var(--space-2) var(--space-3);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.sz-step b{display:block;color:var(--text-primary);}
+.sz-step .muted-sub{display:block;margin-bottom:2px;}
 .sz-assumptions{margin-top:var(--space-3);font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);}
 
 /* ── Planning page ──────────────────────────────────────────────────── */
@@ -602,6 +630,7 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
   .lic-3col{grid-template-columns:1fr;}
   .lic-form-6,.lic-form-5{grid-template-columns:repeat(3,minmax(0,1fr));}
   .sz-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .sz-chart-grid.three,.sz-steps{grid-template-columns:repeat(2,minmax(0,1fr));}
   .sz-profile-grid{grid-template-columns:repeat(3,minmax(0,1fr)) !important;}
   .history-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
   .history-chart-grid,.history-vm-grid{grid-template-columns:1fr;}
@@ -627,6 +656,7 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 }
 @media (max-width:760px){
   .kpi-grid,.chart-grid,.scenario-grid,.sim-form-grid,.settings-form,.exec-chart-grid,.history-kpis,.sz-kpis{grid-template-columns:1fr;}
+  .sz-chart-grid,.sz-chart-grid.three,.sz-steps,.sz-finding,.sz-two{grid-template-columns:1fr;}
   .lic-kpi-6,.lic-kpi-5,.lic-kpi-4,.lic-2col,.lic-form-6,.lic-form-5,.lic-form-2{grid-template-columns:1fr;}
   .panel-head{flex-direction:column;align-items:flex-start;}
   .sim-tabbar{width:100%;}
