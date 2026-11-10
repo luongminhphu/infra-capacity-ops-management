@@ -123,9 +123,37 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   (đã gồm overhead). Khối **Hạ tầng hiện hữu có hấp thụ được không?** đưa toàn bộ nhu cầu vào từng
   cluster đang có (dữ liệu vCenter hiện tại), tính % ngưỡng trước → sau và N+1, kết luận có thể chưa
   cần mua host hay bắt buộc bổ sung.
-- **Xuất Excel** (`POST /api/sizing/export`): 3 sheet — Tóm tắt (đề xuất, nhu cầu, giả định), So sánh
-  cấu hình (dòng đề xuất tô xanh), Danh sách VM (kèm tổng).
-- **Xuất PDF · Đề xuất** (`POST /api/sizing/pdf`, `backend/app/report_sizing.py`): file "Đề xuất cấu hình
+- **Phân tích tư vấn** (`backend/app/sizing_advisory.py`, trả về trong khối `analysis` của `/api/sizing/calc`):
+  - *Workload*: phân bố VM theo T-shirt size (S/M/L/XL/XXL), tỷ lệ GB RAM / vCPU → đặc tính compute /
+    cân bằng / memory-intensive, nhóm VM chiếm tài nguyên lớn nhất (Pareto 80% RAM), VM lớn nhất, nhận diện
+    workload CSDL/middleware nhạy độ trễ.
+  - *Thác nước nhu cầu*: yêu cầu → +tăng trưởng → headroom → năng lực lắp đặt (CPU và RAM).
+  - *Mỗi cấu hình*: kiểm tra NUMA (VM vượt cores/RAM của một socket, VM không vừa host), cân bằng CPU/RAM
+    (% tài nguyên bị "kẹt" và RAM/cores cân bằng nên chọn), license theo core (tối thiểu 16 core/socket),
+    TCO = phần cứng + license × số năm, chi phí / VM / tháng, / vCPU, dư địa tăng trưởng thêm, **bảng điểm
+    0–100** trên 7 trục (số host, chi phí, hiệu suất, cân bằng, chịu lỗi, mở rộng, NUMA).
+  - *Độ nhạy*: số host của từng cấu hình khi đổi dự phòng tăng trưởng / overcommit CPU / mức dùng tối đa.
+  - *Dự báo nhiều năm*: số host cần theo năm với tăng trưởng hằng năm, năm cần mở rộng.
+  - *Rủi ro & khuyến nghị* (mức Nghiêm trọng / Cảnh báo / Lưu ý / Đạt kèm hành động), mức sẵn sàng triển khai
+    và *lộ trình triển khai* 6 giai đoạn.
+  - Tham số mới (cột trái, nhóm **Tư vấn & chi phí**): `optimize_for` (`hosts` = ít host nhất, `cost` = TCO
+    thấp nhất), `annual_growth_pct`, `horizon_years`, `license_price_per_core`, `license_min_cores_per_socket`.
+  Trên web, kết quả có thêm 9 biểu đồ Chart.js (phân bố VM, top nhóm VM, thác nước RAM, số host theo ràng
+  buộc, radar đa tiêu chí, phân bổ năng lực cluster, dự báo theo năm, độ nhạy chọn được, TCO), danh sách rủi ro
+  và lộ trình.
+- **Xuất Excel** (`POST /api/sizing/export`): Tóm tắt, So sánh cấu hình (thêm core license, TCO, chi phí/VM/tháng,
+  dư địa, điểm), Rủi ro & khuyến nghị (+ lộ trình), Phân tích workload, Độ nhạy & dự báo, Danh sách VM.
+- **Báo cáo tư vấn đầy đủ** (mặc định, `detail=full`): trang bìa white-label (khách hàng `customerName`, đơn vị
+  tư vấn `preparedOrg`, người lập `preparedBy`, mã tài liệu `documentCode`, logo báo cáo), mục lục có số trang,
+  và các chương: Tóm tắt điều hành (+ đồng hồ mức dùng CPU/RAM khi vận hành và khi mất host) → (Hạ tầng hiện
+  hữu, chế độ tận dụng) → Phân tích workload → So sánh phương án (biểu đồ số host, radar, bảng điểm, TCO, chi
+  phí đơn vị) → Thiết kế đề xuất chi tiết (thông số, phân bổ năng lực, cân bằng CPU/RAM) → Độ nhạy & dự báo →
+  Rủi ro & khuyến nghị → Lộ trình triển khai → Giả định & phương pháp → Phụ lục VM. Biểu đồ là SVG nội tuyến
+  (`backend/app/report_sizing_charts.py`) nên PDF không phụ thuộc mạng. `detail=brief` giữ tờ trình ngắn bên dưới.
+- **Hướng tới dịch vụ độc lập**: `sizing.py` + `sizing_advisory.py` là Python thuần (không DB, không I/O),
+  `report_sizing*.py` chỉ cần WeasyPrint — có thể tách thành micro-service/CLI riêng cho đối tác, khách hàng
+  mà giữ nguyên API (`/calc`, `/pdf`, `/export`). Test: `cd backend && python -m pytest tests`.
+- **Xuất PDF · Tờ trình tóm tắt** (`POST /api/sizing/pdf` với `detail=brief`, `backend/app/report_sizing.py`): file "Đề xuất cấu hình
   máy chủ — <dự án>" khổ A4, 2 trang, bố cục báo cáo quản trị để đính kèm tờ trình: hộp **Tổng kết — đề
   xuất & quyết định đề nghị** (câu đề xuất; các dòng "Mua N host … → Duyệt ngân sách …", "Cấp X TB SAN →
   Duyệt cấp dung lượng", dự phòng N+x, phương án thay thế dùng cluster hiện hữu nếu hấp thụ được; 5 ô số

@@ -15,7 +15,10 @@ const SIZING_DEFAULT_PARAMS = {
   environment: '', cpu_ratio: 3, ht_factor: 2, ram_ratio: 1.0, max_util_pct: 80, growth_pct: 20,
   redundancy: 1, min_hosts: 2, reserve_cores: 2, reserve_ram_gb: 16,
   storage_mode: 'san', storage_overhead_pct: 25, storage_protection_factor: 2.0,
+  optimize_for: 'hosts', annual_growth_pct: 15, horizon_years: 3, license_price_per_core: null, license_min_cores_per_socket: 16,
 };
+const SIZING_DEFAULT_DOC = { customerName: '', preparedOrg: '', preparedBy: '', documentCode: '' };
+const SZ_SERIES = ['#2681FF', '#0891b2', '#7c3aed', '#ca8a04', '#db2777', '#15803d', '#ea580c', '#475467'];
 const SIZING_DEFAULT_PROFILES = [
   { name: '2×16C / 512 GB', sockets: 2, coresPerSocket: 16, ramGB: 512, diskGB: 0, unitPrice: null },
   { name: '2×24C / 768 GB', sockets: 2, coresPerSocket: 24, ramGB: 768, diskGB: 0, unitPrice: null },
@@ -27,13 +30,14 @@ const nextSizingId = () => `sz${Date.now().toString(36)}${(sizingSeq++).toString
 
 function sizingState() {
   if (!appState.sizing) {
-    appState.sizing = { vms: [], params: { ...SIZING_DEFAULT_PARAMS }, profiles: deepClone(SIZING_DEFAULT_PROFILES), result: null, warnings: [], bound: false };
+    appState.sizing = { vms: [], params: { ...SIZING_DEFAULT_PARAMS }, profiles: deepClone(SIZING_DEFAULT_PROFILES), doc: { ...SIZING_DEFAULT_DOC }, result: null, warnings: [], bound: false, sensKey: 'growth' };
     try {
       const raw = localStorage.getItem(SIZING_STORE_KEY);
       if (raw) {
         const saved = JSON.parse(raw);
         if (Array.isArray(saved.vms)) appState.sizing.vms = saved.vms;
         if (saved.params) appState.sizing.params = { ...SIZING_DEFAULT_PARAMS, ...saved.params };
+        if (saved.doc) appState.sizing.doc = { ...SIZING_DEFAULT_DOC, ...saved.doc };
         // Older builds auto-filled the sample project name into "Tên dự án / hệ thống" and persisted it; drop it once.
         if (/^Ví dụ\s*[—-]\s*ứng dụng 3 lớp$/i.test(String(appState.sizing.params.environment || '').trim())) appState.sizing.params.environment = '';
         if (Array.isArray(saved.profiles) && saved.profiles.length) appState.sizing.profiles = saved.profiles;
@@ -48,7 +52,7 @@ function sizingState() {
 function persistSizing() {
   const st = sizingState();
   try {
-    localStorage.setItem(SIZING_STORE_KEY, JSON.stringify({ vms: st.vms, params: st.params, profiles: st.profiles }));
+    localStorage.setItem(SIZING_STORE_KEY, JSON.stringify({ vms: st.vms, params: st.params, profiles: st.profiles, doc: st.doc }));
   } catch (e) { /* storage full / disabled */ }
 }
 
@@ -63,8 +67,10 @@ const SIZING_PARAM_FIELDS = {
   environment: 'szEnv', cpu_ratio: 'szCpuRatio', ht_factor: 'szHt', ram_ratio: 'szRamRatio', max_util_pct: 'szUtil',
   growth_pct: 'szGrowth', redundancy: 'szRedundancy', min_hosts: 'szMinHosts', reserve_cores: 'szReserveCores',
   reserve_ram_gb: 'szReserveRam', storage_mode: 'szStorageMode', storage_overhead_pct: 'szStorageOverhead',
-  storage_protection_factor: 'szProtection',
+  storage_protection_factor: 'szProtection', optimize_for: 'szOptimize', annual_growth_pct: 'szAnnualGrowth',
+  horizon_years: 'szHorizon', license_price_per_core: 'szLicPrice', license_min_cores_per_socket: 'szLicMin',
 };
+const SIZING_DOC_FIELDS = { customerName: 'szCustomer', preparedOrg: 'szPreparedOrg', preparedBy: 'szPreparedBy', documentCode: 'szDocCode' };
 
 function sizingParamsToDom() {
   const p = sizingState().params;
@@ -72,6 +78,8 @@ function sizingParamsToDom() {
     const el = document.getElementById(id);
     if (el) el.value = p[key] ?? '';
   });
+  const doc = sizingState().doc;
+  Object.entries(SIZING_DOC_FIELDS).forEach(([key, id]) => { const el = document.getElementById(id); if (el) el.value = doc[key] || ''; });
   $('#szProtectionField').classList.toggle('hidden', p.storage_mode !== 'local');
 }
 
@@ -80,11 +88,15 @@ function sizingParamsFromDom() {
   Object.entries(SIZING_PARAM_FIELDS).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (key === 'environment' || key === 'storage_mode') p[key] = el.value.trim();
-    else if (key === 'redundancy' || key === 'min_hosts') p[key] = Math.max(0, Math.round(cleanNum(el.value)));
+    if (key === 'environment' || key === 'storage_mode' || key === 'optimize_for') p[key] = el.value.trim();
+    else if (key === 'license_price_per_core') p[key] = szOptNum(el.value);
+    else if (key === 'redundancy' || key === 'min_hosts' || key === 'license_min_cores_per_socket') p[key] = Math.max(0, Math.round(cleanNum(el.value)));
+    else if (key === 'horizon_years') p[key] = Math.min(10, Math.max(1, Math.round(cleanNum(el.value)) || 3));
     else p[key] = cleanNum(el.value);
   });
   if (p.min_hosts < 1) p.min_hosts = 1;
+  const doc = sizingState().doc;
+  Object.entries(SIZING_DOC_FIELDS).forEach(([key, id]) => { const el = document.getElementById(id); if (el) doc[key] = el.value.trim(); });
   $('#szProtectionField').classList.toggle('hidden', p.storage_mode !== 'local');
   persistSizing();
   return p;
@@ -346,11 +358,191 @@ function renderSizingResult(result, payload, scroll = true) {
       </tr></thead>
       <tbody>${cmpRows}</tbody>
     </table></div>
+    ${sizingAdvisoryHtml(result)}
     <div class="sz-assumptions"><b>Giả định:</b> ${result.assumptions.map(esc).join(' ')}</div>
     ${absorbHtml}
   `;
   area.classList.remove('hidden');
+  renderSizingCharts(result);
   if (scroll) area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---------- Advisory: findings, charts, roadmap ---------- */
+const SZ_SEV = { critical: ['crit', 'Nghiêm trọng'], warning: ['warn', 'Cảnh báo'], info: ['na', 'Lưu ý'], ok: ['ok', 'Đạt'] };
+const SZ_READY = { ok: ['ok', 'Sẵn sàng triển khai'], warn: ['warn', 'Triển khai được · cần lưu ý'], crit: ['crit', 'Cần xử lý rủi ro trước'] };
+const szMoneyShort = (v) => {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  if (Math.abs(v) >= 1e9) return `${(v / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ`;
+  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 0 })} tr`;
+  return Number(v).toLocaleString('vi-VN');
+};
+
+function sizingCapacitySegments(best, d, p) {
+  const n = best.hostsTotal, red = best.redundancy, nFail = best.failure.hostsLeft;
+  const util = Math.max(0.05, Math.min(1, p.max_util_pct / 100));
+  const ph = best.perHost, prof = best.profile;
+  const mk = (total, usableHost, req, planned) => [
+    ['Yêu cầu dự án', req], ['Dự phòng tăng trưởng', planned - req], ['Còn trống', Math.max(0, usableHost * nFail * util - planned)],
+    [`Headroom ${100 - p.max_util_pct}%`, usableHost * nFail * (1 - util)], [`Dự phòng N+${red}`, usableHost * red], ['ESXi', Math.max(0, total - usableHost * n)],
+  ];
+  return {
+    cpu: mk(prof.cores * Math.max(1, p.ht_factor) * p.cpu_ratio * n, ph.logicalCpu * p.cpu_ratio, d.vcpu, d.vcpuPlanned),
+    ram: mk(prof.ramGB * p.ram_ratio * n, ph.usableRamGB * p.ram_ratio, d.ramGB, d.ramPlannedGB),
+  };
+}
+
+function sizingAdvisoryHtml(result) {
+  const a = result.analysis;
+  if (!a) return '';
+  const best = result.recommendedIndex != null ? result.results[result.recommendedIndex] : null;
+  const wl = a.workload;
+  const anyCost = result.results.some(r => r.advisory && r.advisory.costs && r.advisory.costs.tco);
+  const [rcls, rtxt] = SZ_READY[a.readiness] || SZ_READY.ok;
+  const fc = a.findingCounts || {};
+  const costTiles = best && best.advisory.costs.tco ? `
+      <article class="kpi-card"><div class="label">TCO ${best.advisory.costs.years} năm (đề xuất)</div><div class="value">${szMoneyShort(best.advisory.costs.tco)}</div><div class="sub">phần cứng ${szMoneyShort(best.advisory.costs.hardware)} · license ${szMoneyShort(best.advisory.costs.license)}</div></article>
+      <article class="kpi-card"><div class="label">Chi phí / VM / tháng</div><div class="value">${szMoneyShort(best.advisory.costs.perVmMonth)}</div><div class="sub">/ VM: ${szMoneyShort(best.advisory.costs.perVm)} · / vCPU: ${szMoneyShort(best.advisory.costs.perVcpu)}</div></article>` : '';
+  const insightTiles = best ? `
+    <div class="kpi-grid sz-kpis">
+      <article class="kpi-card"><div class="label">Đặc tính workload</div><div class="value">${szNum(wl.ramPerVcpu, 1)} GB/vCPU</div><div class="sub">${esc(wl.characterLabel)}</div></article>
+      <article class="kpi-card"><div class="label">Dư địa tăng trưởng thêm</div><div class="value">${best.advisory.runway.extraGrowthPct == null ? '—' : '+' + szNum(Math.max(0, best.advisory.runway.extraGrowthPct)) + '%'}</div><div class="sub">ngoài +${szNum(result.params.growth_pct)}% đã dự phòng, vẫn giữ N+${best.redundancy}</div></article>
+      <article class="kpi-card"><div class="label">License theo core</div><div class="value">${szNum(best.advisory.license.coresTotal)} core</div><div class="sub">${szNum(best.advisory.license.coresPerHost)}/host${best.advisory.license.paddedCores ? ` · ${szNum(best.advisory.license.paddedCores)} core trả thừa` : ''}</div></article>
+      <article class="kpi-card"><div class="label">Cần mở rộng</div><div class="value">${a.projection && a.projection.expandYear != null ? 'Năm ' + a.projection.expandYear : 'Không'}</div><div class="sub">trong ${a.projection ? a.projection.years : '—'} năm · tăng ${szNum(result.params.annual_growth_pct)}%/năm</div></article>
+      ${costTiles}
+    </div>` : '';
+
+  const findings = (a.findings || []).map(f => {
+    const [cls, lbl] = SZ_SEV[f.severity] || SZ_SEV.info;
+    return `<div class="sz-finding ${f.severity}"><div><span class="pill ${cls}">${lbl}</span><div class="sz-f-area">${esc(f.area)}</div></div>
+      <div><div class="sz-f-title">${esc(f.title)}</div><div class="sz-f-detail">${esc(f.detail)}</div></div>
+      <div><b>Khuyến nghị:</b> ${esc(f.action)}</div></div>`;
+  }).join('');
+  const steps = (a.nextSteps || []).map(st => `<div class="sz-step"><span class="muted-sub">${esc(st.when)}</span><b>${esc(st.phase)}</b>${esc(st.what)}</div>`).join('');
+  const sensOpts = [['growth', 'Dự phòng tăng trưởng'], ['cpuRatio', 'Overcommit CPU mục tiêu'], ['maxUtil', 'Mức dùng tối đa / host']]
+    .map(([k, l]) => `<option value="${k}" ${sizingState().sensKey === k ? 'selected' : ''}>${l}</option>`).join('');
+
+  return `
+    <div class="sz-section-title">Phân tích tư vấn</div>
+    <div class="sz-readiness"><span class="pill ${rcls}">${rtxt}</span><span class="muted-sub">${fc.critical || 0} nghiêm trọng · ${fc.warning || 0} cảnh báo · ${fc.info || 0} lưu ý · ${fc.ok || 0} đạt</span></div>
+    ${insightTiles}
+    <div class="sz-chart-grid three">
+      <div class="sz-chart"><div class="sz-chart-title">Phân bố kích thước VM</div><div class="sz-chart-sub">Số VM theo nhóm T-shirt size.</div><div class="chart-wrap"><canvas id="szChartSizes"></canvas></div></div>
+      <div class="sz-chart"><div class="sz-chart-title">Nhóm VM chiếm tài nguyên lớn nhất</div><div class="sz-chart-sub">% tổng vCPU / RAM của dự án; ${wl.paretoLines} nhóm chiếm 80% RAM.</div><div class="chart-wrap"><canvas id="szChartTop"></canvas></div></div>
+      <div class="sz-chart"><div class="sz-chart-title">Từ yêu cầu đến năng lực lắp đặt</div><div class="sz-chart-sub">RAM (GB): yêu cầu → tăng trưởng → headroom → lắp đặt.</div><div class="chart-wrap"><canvas id="szChartWaterfall"></canvas></div></div>
+    </div>
+    <div class="sz-chart-grid">
+      <div class="sz-chart"><div class="sz-chart-title">Số host theo từng ràng buộc</div><div class="sz-chart-sub">Host cần theo CPU, theo RAM và tổng gồm N+x cho mỗi cấu hình.</div><div class="chart-wrap"><canvas id="szChartHosts"></canvas></div></div>
+      <div class="sz-chart"><div class="sz-chart-title">Bảng điểm đa tiêu chí</div><div class="sz-chart-sub">0–100, cao = tốt: số host, chi phí, hiệu suất, cân bằng, chịu lỗi, mở rộng, NUMA.</div><div class="chart-wrap tall"><canvas id="szChartRadar"></canvas></div></div>
+    </div>
+    ${best ? `<div class="sz-chart-grid">
+      <div class="sz-chart"><div class="sz-chart-title">Phân bổ năng lực cluster đề xuất</div><div class="sz-chart-sub">${esc(best.profile.name)} × ${best.hostsTotal}: năng lực ở overcommit mục tiêu được dùng vào đâu.</div><div class="chart-wrap"><canvas id="szChartAlloc"></canvas></div></div>
+      <div class="sz-chart"><div class="sz-chart-title">Dự báo nhu cầu host theo năm</div><div class="sz-chart-sub">Tăng trưởng ${szNum(result.params.annual_growth_pct)}%/năm; đường xanh = số host đề xuất lắp đặt.</div><div class="chart-wrap"><canvas id="szChartProjection"></canvas></div></div>
+    </div>
+    <div class="sz-chart-grid">
+      <div class="sz-chart"><div class="panel-head panel-head-tight"><div><div class="sz-chart-title">Phân tích độ nhạy</div><div class="sz-chart-sub">Số host của từng cấu hình khi một giả định thay đổi.</div></div>
+        <select id="szSensKey" class="btn-sm">${sensOpts}</select></div><div class="chart-wrap"><canvas id="szChartSens"></canvas></div></div>
+      ${anyCost ? `<div class="sz-chart"><div class="sz-chart-title">TCO ${best.advisory.costs.years} năm theo phương án</div><div class="sz-chart-sub">Phần cứng + license theo core.</div><div class="chart-wrap"><canvas id="szChartCost"></canvas></div></div>`
+        : `<div class="sz-chart"><div class="sz-chart-title">Chi phí</div><div class="sz-chart-sub">Nhập đơn giá host và/hoặc đơn giá license / core để xem TCO, chi phí / VM / tháng và so sánh chi phí giữa các phương án.</div></div>`}
+    </div>` : ''}
+    <div class="sz-section-title">Rủi ro &amp; khuyến nghị</div>
+    <div class="sz-findings">${findings || '<div class="empty-note">Không có nhận định.</div>'}</div>
+    ${steps ? `<div class="sz-section-title">Lộ trình triển khai đề xuất</div><div class="sz-steps">${steps}</div>` : ''}`;
+}
+
+function renderSizingCharts(result) {
+  ['szSizes', 'szTop', 'szWaterfall', 'szHosts', 'szRadar', 'szAlloc', 'szProjection', 'szSens', 'szCost'].forEach(destroyChart);
+  if (typeof Chart === 'undefined' || !result.analysis) return;
+  const c = chartPalette();
+  const a = result.analysis;
+  const d = result.demand;
+  const p = result.params;
+  const best = result.recommendedIndex != null ? result.results[result.recommendedIndex] : null;
+  const rows = result.results.slice().sort((x, y) => (x.rank || 99) - (y.rank || 99));
+  const scales = (extra = {}) => ({ x: { ticks: { color: c.muted }, grid: { color: c.divider }, ...(extra.x || {}) }, y: { beginAtZero: true, ticks: { color: c.muted }, grid: { color: c.divider }, ...(extra.y || {}) } });
+  const legend = { labels: { color: c.text, boxWidth: 12 } };
+  const mk = (key, id, cfg) => { const el = document.getElementById(id); if (el) appState.charts[key] = new Chart(el, cfg); };
+
+  const buckets = a.workload.sizeBuckets.filter(b => b.count);
+  mk('szSizes', 'szChartSizes', { type: 'doughnut',
+    data: { labels: buckets.map(b => b.label), datasets: [{ data: buckets.map(b => b.count), backgroundColor: ['#bfdbfe', '#60a5fa', '#2681FF', '#1d4ed8', '#074B9B'].slice(0, 5).filter((_, i) => a.workload.sizeBuckets[i].count), borderWidth: 0 }] },
+    options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { ...legend, position: 'bottom' } } } });
+
+  const top = a.workload.topGroups.slice(0, 8);
+  mk('szTop', 'szChartTop', { type: 'bar',
+    data: { labels: top.map(g => g.name), datasets: [
+      { label: '% vCPU', data: top.map(g => +g.vcpuShare.toFixed(1)), backgroundColor: c.primary, borderRadius: 3 },
+      { label: '% RAM', data: top.map(g => +g.ramShare.toFixed(1)), backgroundColor: c.accent, borderRadius: 3 }] },
+    options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend }, scales: scales({ x: { ticks: { color: c.muted, callback: v => v + '%' } } }) } });
+
+  // Floating-bar waterfall (RAM)
+  const steps = a.waterfall.ram;
+  let prev = 0;
+  const wfData = steps.map((st, i) => { const last = i === steps.length - 1; const v = (i === 0 || last) ? [0, st.value] : [Math.min(prev, st.value), Math.max(prev, st.value)]; prev = st.value; return v; });
+  mk('szWaterfall', 'szChartWaterfall', { type: 'bar',
+    data: { labels: steps.map(st => st.label), datasets: [{ label: 'GB RAM', data: wfData, borderRadius: 3,
+      backgroundColor: steps.map((_, i) => i === 0 ? c.primary : i === steps.length - 1 ? '#074B9B' : c.warn) }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const [lo, hi] = ctx.raw; const i = ctx.dataIndex; return (i === 0 || i === steps.length - 1) ? `${szGB(hi)}` : `+${szGB(hi - lo)} → ${szGB(steps[i].value)}`; } } } }, scales: scales() } });
+
+  mk('szHosts', 'szChartHosts', { type: 'bar',
+    data: { labels: rows.map(r => r.profile.name), datasets: [
+      { label: 'Theo CPU', data: rows.map(r => r.hostsForCpu), backgroundColor: c.primary, borderRadius: 4 },
+      { label: 'Theo RAM', data: rows.map(r => r.hostsForRam), backgroundColor: c.accent, borderRadius: 4 },
+      { label: 'Tổng (gồm N+x)', data: rows.map(r => r.hostsTotal), backgroundColor: '#074B9B', borderRadius: 4 }] },
+    options: { maintainAspectRatio: false, plugins: { legend }, scales: scales({ y: { ticks: { color: c.muted, precision: 0 } } }) } });
+
+  const axes = a.scoreAxes || [];
+  mk('szRadar', 'szChartRadar', { type: 'radar',
+    data: { labels: axes.map(x => x.label), datasets: rows.filter(r => r.advisory && r.advisory.scores).slice(0, 5).map((r, i) => ({
+      label: `${r.profile.name}${r.recommended ? ' ★' : ''} (${szNum(r.advisory.scoreTotal)})`, data: axes.map(x => +r.advisory.scores[x.key].toFixed(0)),
+      borderColor: SZ_SERIES[i % SZ_SERIES.length], backgroundColor: SZ_SERIES[i % SZ_SERIES.length] + '22', borderWidth: r.recommended ? 2.5 : 1.5, pointRadius: 2 })) },
+    options: { maintainAspectRatio: false, plugins: { legend: { ...legend, position: 'bottom' } },
+      scales: { r: { min: 0, max: 100, ticks: { display: false, stepSize: 25 }, grid: { color: c.divider }, angleLines: { color: c.divider }, pointLabels: { color: c.text, font: { size: 11 } } } } } });
+
+  if (best) {
+    const seg = sizingCapacitySegments(best, d, p);
+    const segColors = ['#2681FF', '#93c5fd', '#86efac', '#fcd34d', '#fca5a5', '#cbd5e1'];
+    const pct = (arr) => { const t = arr.reduce((s, x) => s + Math.max(0, x[1]), 0) || 1; return arr.map(x => +(Math.max(0, x[1]) / t * 100).toFixed(1)); };
+    const cpuPct = pct(seg.cpu), ramPct = pct(seg.ram);
+    mk('szAlloc', 'szChartAlloc', { type: 'bar',
+      data: { labels: ['CPU', 'RAM'], datasets: seg.cpu.map((s, i) => ({ label: s[0], data: [cpuPct[i], ramPct[i]], backgroundColor: segColors[i] })) },
+      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { ...legend, position: 'bottom' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}%` } } },
+        scales: { x: { stacked: true, max: 100, ticks: { color: c.muted, callback: v => v + '%' }, grid: { color: c.divider } }, y: { stacked: true, ticks: { color: c.text }, grid: { display: false } } } } });
+
+    const pr = a.projection;
+    if (pr) {
+      mk('szProjection', 'szChartProjection', { type: 'bar',
+        data: { labels: pr.points.map(pt => pt.year === 0 ? 'Hiện tại' : `Năm ${pt.year}`), datasets: [
+          { type: 'line', label: `Đã lắp (${pr.installed})`, data: pr.points.map(() => pr.installed), borderColor: c.ok, borderDash: [6, 4], pointRadius: 0, borderWidth: 2 },
+          { label: 'Host cần', data: pr.points.map(pt => pt.hosts), backgroundColor: pr.points.map(pt => pt.hosts > pr.installed ? c.crit : c.primary), borderRadius: 4 }] },
+        options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { afterLabel: ctx => ctx.datasetIndex === 1 ? `Tải +${szNum(pr.points[ctx.dataIndex].growthPct)}% so với hiện tại` : '' } } },
+          scales: scales({ y: { ticks: { color: c.muted, precision: 0 } } }) } });
+    }
+
+    const drawSens = () => {
+      destroyChart('szSens');
+      const key = sizingState().sensKey || 'growth';
+      const sw = a.sensitivity && a.sensitivity[key];
+      if (!sw) return;
+      const fmt = key === 'cpuRatio' ? (x => `${x}x`) : (x => `${x}%`);
+      mk('szSens', 'szChartSens', { type: 'line',
+        data: { labels: sw.x.map(fmt), datasets: sw.series.map((s, i) => ({ label: s.name, data: s.hosts, borderColor: SZ_SERIES[i % SZ_SERIES.length], backgroundColor: SZ_SERIES[i % SZ_SERIES.length], stepped: false, tension: 0, pointRadius: sw.x.map(x => x === sw.current ? 5 : 2.5) })) },
+        options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { title: items => `${items[0].label}${sw.x[items[0].dataIndex] === sw.current ? ' (hiện tại)' : ''}` } } },
+          scales: scales({ y: { ticks: { color: c.muted, precision: 0 }, title: { display: true, text: 'host', color: c.muted } } }) } });
+    };
+    drawSens();
+    const sel = $('#szSensKey');
+    if (sel) sel.addEventListener('change', () => { sizingState().sensKey = sel.value; drawSens(); });
+
+    const costRows = rows.filter(r => r.advisory.costs.tco);
+    if (costRows.length) {
+      mk('szCost', 'szChartCost', { type: 'bar',
+        data: { labels: costRows.map(r => r.profile.name + (r.recommended ? ' ★' : '')), datasets: [
+          { label: 'Phần cứng', data: costRows.map(r => r.advisory.costs.hardware || 0), backgroundColor: c.primary, borderRadius: 3 },
+          { label: `License ${costRows[0].advisory.costs.years} năm`, data: costRows.map(r => r.advisory.costs.license || 0), backgroundColor: c.accent, borderRadius: 3 }] },
+        options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${szMoney(ctx.raw)}`, footer: items => `TCO: ${szMoney(costRows[items[0].dataIndex].advisory.costs.tco)}` } } },
+          scales: { x: { stacked: true, ticks: { color: c.muted, callback: v => szMoneyShort(v) }, grid: { color: c.divider } }, y: { stacked: true, ticks: { color: c.text }, grid: { display: false } } } } });
+    }
+  }
 }
 
 /* ---------- Import / template / sample / export ---------- */
@@ -412,7 +604,10 @@ function sizingExistingPayload() {
   const targetCluster = clusterSel && clusterSel.value ? clusterSel.value : null;
   const includeNewOption = $('#szPdfIncludeNew') ? $('#szPdfIncludeNew').checked : true;
   const includeExisting = $('#szPdfIncludeExisting') ? $('#szPdfIncludeExisting').checked : true;
-  return { ...payload, existing, policyText, mode, targetCluster, includeNewOption, includeExisting };
+  const detail = (document.querySelector('input[name="szPdfDetail"]:checked') || {}).value === 'brief' ? 'brief' : 'full';
+  const doc = sizingState().doc;
+  return { ...payload, existing, policyText, mode, targetCluster, includeNewOption, includeExisting, detail,
+    customerName: doc.customerName || '', preparedOrg: doc.preparedOrg || '', preparedBy: doc.preparedBy || '', documentCode: doc.documentCode || '' };
 }
 
 /* Fill the "cluster tiếp nhận" select and toggle option rows for the chosen PDF content. */
@@ -515,6 +710,10 @@ function bindSizingView() {
     if (dd && dd.open && !dd.contains(e.target)) dd.removeAttribute('open');
   });
 
+  Object.values(SIZING_DOC_FIELDS).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => sizingParamsFromDom());
+  });
   Object.values(SIZING_PARAM_FIELDS).forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
