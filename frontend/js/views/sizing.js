@@ -17,6 +17,29 @@ const SIZING_DEFAULT_PARAMS = {
   storage_mode: 'san', storage_overhead_pct: 25, storage_protection_factor: 2.0,
   optimize_for: 'hosts', annual_growth_pct: 15, horizon_years: 3, license_price_per_core: null, license_min_cores_per_socket: 16,
 };
+// Advisory thresholds — mirror of backend sizing_advisory.AdvisoryThresholds / THRESHOLD_META.
+const SIZING_DEFAULT_ADVISORY = {
+  compute_max_gb_per_vcpu: 3, memory_min_gb_per_vcpu: 6, stranded_warn_pct: 35, balance_ok_gap_pct: 15, balance_min_load_pct: 40,
+  db_cpu_ratio_max: 2, high_cpu_ratio_warn: 5, ram_ratio_warn: 1, low_runway_pct: 10, failover_comfort_pct: 60, cheaper_alt_pct: 3,
+  cluster_info_hosts: 32, cluster_warn_hosts: 64,
+  db_keywords: 'db, database, sql, mssql, mysql, postgres, postgresql, oracle, mongo, mongodb, redis, kafka, elastic, elasticsearch, sap, hana, cassandra',
+};
+const SIZING_ADVISORY_META = [
+  ['compute_max_gb_per_vcpu', 'Workload thiên CPU khi RAM/vCPU ≤', 'GB'],
+  ['memory_min_gb_per_vcpu', 'Workload thiên RAM khi RAM/vCPU >', 'GB'],
+  ['stranded_warn_pct', 'Cảnh báo tài nguyên thừa khi ≥', '%'],
+  ['balance_ok_gap_pct', 'Coi là cân bằng khi chênh CPU/RAM <', '%'],
+  ['balance_min_load_pct', 'Chỉ xét cân bằng khi tải ràng buộc ≥', '%'],
+  ['db_cpu_ratio_max', 'Overcommit CPU tối đa cho CSDL', 'x'],
+  ['high_cpu_ratio_warn', 'Cảnh báo overcommit CPU mục tiêu ≥', 'x'],
+  ['ram_ratio_warn', 'Cảnh báo overcommit RAM >', 'x'],
+  ['low_runway_pct', 'Cảnh báo dư địa tăng trưởng <', '%'],
+  ['failover_comfort_pct', 'Tải khi mất host đạt điểm tối đa ≤', '%'],
+  ['cheaper_alt_pct', 'Gợi ý phương án rẻ hơn khi TCO thấp hơn ≥', '%'],
+  ['cluster_info_hosts', 'Gợi ý chia cluster khi số host >', 'host'],
+  ['cluster_warn_hosts', 'Cảnh báo cluster quá lớn khi số host >', 'host'],
+  ['db_keywords', 'Từ khoá nhận diện VM CSDL / middleware (phân cách bằng dấu phẩy)', ''],
+];
 const SIZING_DEFAULT_DOC = { customerName: '', preparedOrg: '', preparedBy: '', documentCode: '' };
 const SZ_SERIES = ['#2681FF', '#0891b2', '#7c3aed', '#ca8a04', '#db2777', '#15803d', '#ea580c', '#475467'];
 const SIZING_DEFAULT_PROFILES = [
@@ -43,6 +66,7 @@ function sizingState() {
         if (Array.isArray(saved.profiles) && saved.profiles.length) appState.sizing.profiles = saved.profiles;
       }
     } catch (e) { /* ignore corrupt storage */ }
+    appState.sizing.params.advisory = { ...SIZING_DEFAULT_ADVISORY, ...(appState.sizing.params.advisory || {}) };
     appState.sizing.vms.forEach(v => { if (!v.id) v.id = nextSizingId(); });
     appState.sizing.profiles.forEach(p => { if (!p.id) p.id = nextSizingId(); });
   }
@@ -100,6 +124,31 @@ function sizingParamsFromDom() {
   $('#szProtectionField').classList.toggle('hidden', p.storage_mode !== 'local');
   persistSizing();
   return p;
+}
+
+/* ---------- Advisory thresholds ---------- */
+function renderSizingAdvisoryFields() {
+  const box = $('#szAdvFields');
+  if (!box) return;
+  const adv = sizingState().params.advisory;
+  box.innerHTML = SIZING_ADVISORY_META.map(([key, label, unit]) => {
+    const changed = String(adv[key]) !== String(SIZING_DEFAULT_ADVISORY[key]);
+    const wide = key === 'db_keywords';
+    return `<div class="field ${wide ? 'sz-adv-wide' : ''} ${changed ? 'sz-adv-changed' : ''}"><label for="szAdv_${key}" title="Mặc định: ${esc(SIZING_DEFAULT_ADVISORY[key])}${unit ? ' ' + unit : ''}">${esc(label)}${unit ? ` (${unit})` : ''}${changed ? ' *' : ''}</label>
+      <input id="szAdv_${key}" data-adv="${key}" value="${esc(adv[key])}"></div>`;
+  }).join('');
+  box.querySelectorAll('input[data-adv]').forEach(inp => inp.addEventListener('change', () => {
+    const key = inp.dataset.adv;
+    if (key === 'db_keywords') adv[key] = inp.value.trim();
+    else {
+      const n = cleanNum(inp.value);
+      adv[key] = isFinite(n) && n > 0 ? (key.startsWith('cluster_') ? Math.round(n) : n) : SIZING_DEFAULT_ADVISORY[key];
+    }
+    persistSizing();
+    renderSizingAdvisoryFields();
+  }));
+  const det = $('#szAdvDetails');
+  if (det && SIZING_ADVISORY_META.some(([k]) => String(adv[k]) !== String(SIZING_DEFAULT_ADVISORY[k]))) det.open = true;
 }
 
 /* ---------- VM table ---------- */
@@ -223,7 +272,7 @@ function sizingPayload() {
     .map(v => ({ name: String(v.name || '').trim(), qty: Math.max(0, Math.round(cleanNum(v.qty))), vcpu: cleanNum(v.vcpu), ramGB: cleanNum(v.ramGB), diskGB: cleanNum(v.diskGB), note: String(v.note || '') }))
     .filter(v => v.qty > 0 && (v.vcpu > 0 || v.ramGB > 0));
   const profiles = st.profiles.map(p => ({ name: p.name, sockets: p.sockets, coresPerSocket: p.coresPerSocket, ramGB: p.ramGB, diskGB: p.diskGB || 0, unitPrice: p.unitPrice == null ? null : p.unitPrice }));
-  const params = { ...st.params };
+  const params = { ...st.params, advisory: { ...SIZING_DEFAULT_ADVISORY, ...(st.params.advisory || {}) } };
   if (params.storage_mode !== 'local') params.storage_protection_factor = 1.0;
   return { vms, params, profiles };
 }
@@ -696,6 +745,7 @@ function bindSizingView() {
     persistSizing(); renderSizingProfiles();
   });
   $('#btnSizingRun').addEventListener('click', e => runSizing(e.currentTarget));
+  $('#btnSzAdvReset').addEventListener('click', () => { st.params.advisory = { ...SIZING_DEFAULT_ADVISORY }; persistSizing(); renderSizingAdvisoryFields(); });
   $('#btnSizingExport').addEventListener('click', e => exportSizingXlsx(e.currentTarget));
   $('#btnSizingPdf').addEventListener('click', e => exportSizingPdf(e.currentTarget));
   $('#sizingPdfDropdown').addEventListener('toggle', e => {
@@ -728,6 +778,7 @@ function renderSizingView() {
   sizingState();
   bindSizingView();
   sizingParamsToDom();
+  renderSizingAdvisoryFields();
   renderSizingVmTable();
   renderSizingProfiles();
   if (appState.sizing.result) renderSizingResult(appState.sizing.result, sizingPayload(), false);

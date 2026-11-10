@@ -5,7 +5,7 @@ assumptions, with the requested VM list and the existing-cluster absorption
 check as appendices. Meant to be attached to a procurement proposal."""
 from typing import Any, Dict, List, Optional
 
-from . import sizing
+from . import sizing, sizing_advisory
 from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
                          fmt_num, fmt_pct, html_to_pdf_bytes)
 from .report_planning import _planning_css
@@ -693,6 +693,26 @@ def _existing_chart(existing: List[Dict[str, Any]]) -> str:
     </div>"""
 
 
+def _thresholds_html(result: Dict[str, Any]) -> str:
+    th = (result.get("analysis") or {}).get("thresholds") or {}
+    defaults = sizing_advisory.AdvisoryThresholds().__dict__
+    cells = ""
+    for key, label, unit in sizing_advisory.THRESHOLD_META:
+        v = th.get(key, defaults.get(key))
+        if key == "db_keywords":
+            continue
+        changed = v != defaults.get(key)
+        val = f"{v:g}" if isinstance(v, (int, float)) else str(v)
+        cells += (f'<tr><td>{esc(label)}</td><td style="text-align:right;white-space:nowrap;{"font-weight:700;color:" + COLORS["primary_dark"] + ";" if changed else ""}">'
+                  f'{esc(val)} {esc(unit)}{" *" if changed else ""}</td></tr>')
+    kw = th.get("db_keywords", defaults["db_keywords"])
+    return f"""<div class="chart-card soft" style="margin-top:8px;font-size:8.6px;">
+      <div class="chart-card-title">Ngưỡng tư vấn áp dụng</div>
+      <table class="spec-table">{cells}</table>
+      <div class="small-note">Từ khoá nhận diện VM CSDL / middleware: {esc(kw)}. Dấu * = đã điều chỉnh so với mặc định.</div>
+    </div>"""
+
+
 def _roadmap_html(steps: List[Dict[str, str]]) -> str:
     rows = "".join(f'<tr><td style="white-space:nowrap;"><b>{esc(s["phase"])}</b></td><td style="white-space:nowrap;color:{COLORS["muted"]};">{esc(s["when"])}</td><td>{esc(s["what"])}</td></tr>' for s in steps)
     return f'<table class="roadmap-table"><thead><tr><th>Giai đoạn</th><th>Thời điểm</th><th>Nội dung</th></tr></thead><tbody>{rows}</tbody></table>'
@@ -799,7 +819,7 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
     n += 1
     sections.append(_section("sec-roadmap", n, "Lộ trình triển khai đề xuất", "", _roadmap_html(a["nextSteps"])))
     n += 1
-    sections.append(_section("sec-method", n, "Giả định & phương pháp", "", _assumptions_html(result)))
+    sections.append(_section("sec-method", n, "Giả định & phương pháp", "", _assumptions_html(result) + _thresholds_html(result)))
     n += 1
     sections.append(_section("sec-appendix", n, "Phụ lục — Danh sách VM yêu cầu", "Do chủ dự án / team phát triển cung cấp.",
                              _vm_table(vm_dicts, result["demand"])

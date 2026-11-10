@@ -98,3 +98,29 @@ def test_pdf_html_renders_all_sections():
     assert "ACME" in html and "Partner" in html and "<svg" in html
     brief = report_sizing.render_sizing_html(_vms(), sizing.SizingParams(), _profiles(), detail="brief")
     assert "sec-workload" not in brief
+
+
+def test_custom_thresholds_change_findings_and_classification():
+    from app.sizing_advisory import AdvisoryThresholds
+    base = sizing.build_sizing(_vms(), sizing.SizingParams(), _profiles())
+    assert base["analysis"]["workload"]["character"] == "memory"
+    assert any(f["area"] == "Cân bằng tài nguyên" and f["severity"] == "warning" for f in base["analysis"]["findings"])
+
+    th = {"memory_min_gb_per_vcpu": 10, "stranded_warn_pct": 90, "db_keywords": "oracle"}
+    r = sizing.build_sizing(_vms(), sizing.SizingParams(advisory=th), _profiles())
+    a = r["analysis"]
+    assert a["workload"]["character"] == "balanced"
+    assert a["workload"]["dbLike"] == ["DB-BIG"]
+    assert not any(f["area"] == "Cân bằng tài nguyên" and f["severity"] == "warning" for f in a["findings"])
+    assert a["thresholds"]["stranded_warn_pct"] == 90
+    assert r["params"]["advisory"]["memory_min_gb_per_vcpu"] == 10
+    # unknown keys ignored, dataclass instance accepted
+    assert AdvisoryThresholds.from_any({"nope": 1}).stranded_warn_pct == 35
+    assert sizing.SizingParams(advisory=AdvisoryThresholds(cluster_info_hosts=2)).advisory.cluster_info_hosts == 2
+
+
+def test_cluster_size_threshold():
+    vms = [sizing.VmSpec(name="APP", qty=10, vcpu=4, ram_gb=16)]
+    prof = [sizing.HostProfile(name="small", sockets=1, cores_per_socket=16, ram_gb=64)]
+    r = sizing.build_sizing(vms, sizing.SizingParams(advisory={"cluster_info_hosts": 2, "cluster_warn_hosts": 3}), prof)
+    assert any(f["area"] == "Kiến trúc" and f["severity"] == "warning" for f in r["analysis"]["findings"])

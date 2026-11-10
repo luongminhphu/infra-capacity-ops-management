@@ -401,6 +401,12 @@
               <div class="field"><label for="szLicPrice" title="Đơn giá license theo core mỗi năm (VD: VMware VCF/VVF). Để trống nếu chưa có báo giá.">Đơn giá license / core / năm (tuỳ chọn)</label><input id="szLicPrice" placeholder="VND"></div>
               <div class="field"><label for="szLicMin" title="VMware tính license tối thiểu 16 core cho mỗi CPU socket.">License tối thiểu (core / socket)</label><input id="szLicMin" value="16"></div>
             </div>
+            <details class="sz-adv-thresholds" id="szAdvDetails">
+              <summary><h4>Ngưỡng tư vấn (nâng cao)</h4></summary>
+              <p class="panel-sub">Quyết định cách phân loại workload, các cảnh báo/khuyến nghị và bảng điểm trong báo cáo. Giá trị đã đổi được đánh dấu * trong PDF.</p>
+              <div class="sizing-params" id="szAdvFields"></div>
+              <button class="btn btn-secondary btn-sm" id="btnSzAdvReset" type="button">Khôi phục mặc định</button>
+            </details>
           </aside>
 
           <div class="sim-shell">

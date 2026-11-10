@@ -18,8 +18,10 @@ and a future PDF report.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+from .sizing_advisory import AdvisoryThresholds
 
 # Column aliases accepted when importing an Excel/CSV VM list (lower-case,
 # matched as "contains" after stripping spaces / diacritics-insensitive words).
@@ -78,6 +80,10 @@ class SizingParams:
     license_price_per_core: Optional[float] = None  # per-core subscription price per year (VCF/VVF-style), optional
     license_min_cores_per_socket: int = 16          # per-core licensing minimum per CPU socket
     optimize_for: str = "hosts"      # 'hosts' = fewest hosts first · 'cost' = lowest TCO first (when priced)
+    advisory: AdvisoryThresholds = field(default_factory=AdvisoryThresholds)  # tunable advisory thresholds
+
+    def __post_init__(self):
+        self.advisory = AdvisoryThresholds.from_any(self.advisory)
 
 
 def _ceil_pos(x: float) -> int:
@@ -234,7 +240,7 @@ def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostPro
     recommendation = _recommendation_text(demand, params, results[best_idx] if best_idx is not None else None)
     return {
         "demand": demand,
-        "params": params.__dict__,
+        "params": {**params.__dict__, "advisory": params.advisory.__dict__.copy()},
         "results": results,
         "recommendedIndex": best_idx,
         "recommendation": recommendation,

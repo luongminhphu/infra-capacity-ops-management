@@ -7,10 +7,10 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
-from .. import report_sizing, sizing
+from .. import report_sizing, sizing, sizing_advisory
 from ..database import get_db
 from ..models import ReportLogo, User
 from ..security import get_current_user
@@ -40,6 +40,32 @@ class ProfileIn(BaseModel):
     unitPrice: Optional[float] = Field(default=None, ge=0)
 
 
+class AdvisoryIn(BaseModel):
+    """Advisory thresholds (see sizing_advisory.AdvisoryThresholds); every field optional → engine default."""
+    compute_max_gb_per_vcpu: float = Field(default=3.0, gt=0, le=64)
+    memory_min_gb_per_vcpu: float = Field(default=6.0, gt=0, le=128)
+    stranded_warn_pct: float = Field(default=35.0, ge=0, le=100)
+    balance_ok_gap_pct: float = Field(default=15.0, ge=0, le=100)
+    balance_min_load_pct: float = Field(default=40.0, ge=0, le=100)
+    db_cpu_ratio_max: float = Field(default=2.0, gt=0, le=20)
+    high_cpu_ratio_warn: float = Field(default=5.0, gt=0, le=40)
+    ram_ratio_warn: float = Field(default=1.0, gt=0, le=4)
+    low_runway_pct: float = Field(default=10.0, ge=0, le=500)
+    failover_comfort_pct: float = Field(default=60.0, ge=0, le=99)
+    cheaper_alt_pct: float = Field(default=3.0, ge=0, le=100)
+    cluster_info_hosts: int = Field(default=32, ge=2, le=1000)
+    cluster_warn_hosts: int = Field(default=64, ge=2, le=1000)
+    db_keywords: str = Field(default=sizing_advisory.DEFAULT_DB_KEYWORDS, max_length=600)
+
+    @model_validator(mode="after")
+    def _ordered(self):
+        if self.memory_min_gb_per_vcpu < self.compute_max_gb_per_vcpu:
+            raise ValueError("Ngưỡng 'thiên RAM' phải ≥ ngưỡng 'thiên CPU' (GB RAM / vCPU).")
+        if self.cluster_warn_hosts < self.cluster_info_hosts:
+            raise ValueError("Ngưỡng cảnh báo cluster lớn phải ≥ ngưỡng gợi ý chia cluster.")
+        return self
+
+
 class ParamsIn(BaseModel):
     cpu_ratio: float = Field(default=3.0, gt=0, le=20)
     ht_factor: float = Field(default=2.0, ge=1, le=4)
@@ -59,6 +85,7 @@ class ParamsIn(BaseModel):
     license_price_per_core: Optional[float] = Field(default=None, ge=0)
     license_min_cores_per_socket: int = Field(default=16, ge=0, le=128)
     optimize_for: str = Field(default="hosts", pattern="^(hosts|cost)$")
+    advisory: AdvisoryIn = AdvisoryIn()
 
 
 class ExistingClusterIn(BaseModel):
@@ -151,7 +178,10 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
 
 @router.get("/defaults")
 def sizing_defaults(user: User = Depends(get_current_user)):
-    return {"params": sizing.SizingParams().__dict__, "profiles": sizing.DEFAULT_PROFILES, "sampleVms": sizing.TEMPLATE_ROWS}
+    params = sizing.SizingParams()
+    return {"params": {**params.__dict__, "advisory": params.advisory.__dict__.copy()}, "profiles": sizing.DEFAULT_PROFILES,
+            "sampleVms": sizing.TEMPLATE_ROWS,
+            "advisoryMeta": [{"key": k, "label": lbl, "unit": u} for k, lbl, u in sizing_advisory.THRESHOLD_META]}
 
 
 @router.post("/calc")
@@ -274,6 +304,12 @@ def sizing_export(payload: SizingPayload, user: User = Depends(get_current_user)
     ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
     for line in result["assumptions"]:
         ws.append([line])
+    ws.append([])
+    ws.append(["Ngưỡng tư vấn áp dụng"])
+    ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
+    th = params.get("advisory") or {}
+    for key, label, unit in sizing_advisory.THRESHOLD_META:
+        ws.append([label, f"{th.get(key)} {unit}".strip()])
     _autowidth(ws, max_w=90)
 
     # Sheet 2 — candidate comparison

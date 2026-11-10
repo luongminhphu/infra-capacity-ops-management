@@ -136,6 +136,15 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   - *Dự báo nhiều năm*: số host cần theo năm với tăng trưởng hằng năm, năm cần mở rộng.
   - *Rủi ro & khuyến nghị* (mức Nghiêm trọng / Cảnh báo / Lưu ý / Đạt kèm hành động), mức sẵn sàng triển khai
     và *lộ trình triển khai* 6 giai đoạn.
+  - **Ngưỡng tư vấn cấu hình được** (cột trái, mục **Ngưỡng tư vấn (nâng cao)**; API: `params.advisory`,
+    model `AdvisoryThresholds` trong `sizing_advisory.py`): ngưỡng GB RAM/vCPU phân loại workload, % tài nguyên
+    thừa, độ chênh coi là cân bằng, tải tối thiểu để xét cân bằng, overcommit CPU tối đa cho CSDL, overcommit
+    CPU/RAM bị cảnh báo, dư địa tăng trưởng thấp, mức tải khi mất host đạt điểm tối đa, % TCO để gợi ý phương
+    án rẻ hơn, số host gợi ý chia / cảnh báo cluster lớn, và danh sách từ khoá nhận diện VM CSDL. Mỗi đối tác /
+    khách hàng có thể gửi bộ ngưỡng riêng theo từng yêu cầu; trường bỏ trống dùng mặc định
+    (`GET /api/sizing/defaults` trả về giá trị mặc định + nhãn `advisoryMeta`). Giá trị lưu trên trình duyệt,
+    có nút **Khôi phục mặc định**; PDF liệt kê ngưỡng đã áp dụng ở mục Giả định & phương pháp (đánh dấu * giá
+    trị đã đổi), Excel ghi ở sheet Tóm tắt.
   - Tham số mới (cột trái, nhóm **Tư vấn & chi phí**): `optimize_for` (`hosts` = ít host nhất, `cost` = TCO
     thấp nhất), `annual_growth_pct`, `horizon_years`, `license_price_per_core`, `license_min_cores_per_socket`.
   Trên web, kết quả có thêm 9 biểu đồ Chart.js (phân bố VM, top nhóm VM, thác nước RAM, số host theo ràng

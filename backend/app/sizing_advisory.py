@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import math
 import re
+from dataclasses import dataclass, fields
 from typing import Any, Dict, List, Optional
 
 # T-shirt sizes by (vCPU, RAM GB) upper bounds — a VM lands in the first bucket
@@ -36,11 +37,67 @@ SIZE_BUCKETS = [
     ("XXL", "XXL (lớn hơn)", math.inf, math.inf),
 ]
 
-# Names / notes hinting at latency-sensitive workloads that deserve a lower
-# CPU overcommit than general app servers.
-_DB_HINT = re.compile(r"\b(db|database|sql|mssql|mysql|postgres|postgresql|oracle|mongo|mongodb|redis|kafka|elastic|elasticsearch|sap|hana|cassandra)\b", re.I)
-
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2, "ok": 3}
+
+DEFAULT_DB_KEYWORDS = "db, database, sql, mssql, mysql, postgres, postgresql, oracle, mongo, mongodb, redis, kafka, elastic, elasticsearch, sap, hana, cassandra"
+
+
+@dataclass
+class AdvisoryThresholds:
+    """Tunable thresholds behind the workload classification, findings and
+    scorecard. Defaults are common VMware practice; a partner / customer can
+    override any of them per request (``params.advisory``) without code changes."""
+    compute_max_gb_per_vcpu: float = 3.0     # ≤ → compute-intensive
+    memory_min_gb_per_vcpu: float = 6.0      # > → memory-intensive
+    stranded_warn_pct: float = 35.0          # idle share of the non-binding resource that triggers a warning
+    balance_ok_gap_pct: float = 15.0         # |CPU% − RAM%| below this = balanced
+    balance_min_load_pct: float = 40.0       # balance findings only when the binding resource is at least this loaded
+    db_cpu_ratio_max: float = 2.0            # max CPU overcommit for DB / latency-sensitive VMs
+    high_cpu_ratio_warn: float = 5.0         # CPU overcommit target considered high for Production
+    ram_ratio_warn: float = 1.0              # RAM overcommit above this triggers a warning
+    low_runway_pct: float = 10.0             # extra growth headroom below this triggers a warning
+    failover_comfort_pct: float = 60.0       # load after host loss up to this scores 100 on resilience
+    cheaper_alt_pct: float = 3.0             # flag an alternative at least this % cheaper (TCO)
+    cluster_info_hosts: int = 32             # suggest splitting the cluster above this
+    cluster_warn_hosts: int = 64             # warn above this
+    db_keywords: str = DEFAULT_DB_KEYWORDS   # comma-separated name/note keywords marking DB-like VMs
+
+    @classmethod
+    def from_any(cls, v: Any) -> "AdvisoryThresholds":
+        if isinstance(v, cls):
+            return v
+        if isinstance(v, dict):
+            known = {f.name for f in fields(cls)}
+            return cls(**{k: val for k, val in v.items() if k in known and val is not None})
+        return cls()
+
+
+# Labels / units for UI forms and the report's methodology section.
+THRESHOLD_META = [
+    ("compute_max_gb_per_vcpu", "Workload thiên CPU khi RAM/vCPU ≤", "GB"),
+    ("memory_min_gb_per_vcpu", "Workload thiên RAM khi RAM/vCPU >", "GB"),
+    ("stranded_warn_pct", "Cảnh báo tài nguyên thừa khi ≥", "%"),
+    ("balance_ok_gap_pct", "Coi là cân bằng khi chênh CPU/RAM <", "%"),
+    ("balance_min_load_pct", "Chỉ xét cân bằng khi tải ràng buộc ≥", "%"),
+    ("db_cpu_ratio_max", "Overcommit CPU tối đa cho CSDL", "x"),
+    ("high_cpu_ratio_warn", "Cảnh báo overcommit CPU mục tiêu ≥", "x"),
+    ("ram_ratio_warn", "Cảnh báo overcommit RAM >", "x"),
+    ("low_runway_pct", "Cảnh báo dư địa tăng trưởng <", "%"),
+    ("failover_comfort_pct", "Tải khi mất host đạt điểm tối đa ≤", "%"),
+    ("cheaper_alt_pct", "Gợi ý phương án rẻ hơn khi TCO thấp hơn ≥", "%"),
+    ("cluster_info_hosts", "Gợi ý chia cluster khi số host >", "host"),
+    ("cluster_warn_hosts", "Cảnh báo cluster quá lớn khi số host >", "host"),
+    ("db_keywords", "Từ khoá nhận diện VM CSDL / middleware", ""),
+]
+
+
+def thresholds_of(params) -> AdvisoryThresholds:
+    return AdvisoryThresholds.from_any(getattr(params, "advisory", None))
+
+
+def _db_regex(keywords: str):
+    words = [re.escape(w.strip()) for w in (keywords or "").split(",") if w.strip()]
+    return re.compile(r"\b(" + "|".join(words) + r")\b", re.I) if words else None
 
 
 def _fin(v: Any) -> bool:
@@ -60,7 +117,9 @@ def _gb_txt(v: float) -> str:
 # ---------------------------------------------------------------------------
 # Workload profile
 # ---------------------------------------------------------------------------
-def workload_profile(vms, demand: Dict[str, Any]) -> Dict[str, Any]:
+def workload_profile(vms, demand: Dict[str, Any], th: Optional[AdvisoryThresholds] = None) -> Dict[str, Any]:
+    th = th or AdvisoryThresholds()
+    db_re = _db_regex(th.db_keywords)
     buckets = {k: {"key": k, "label": lbl, "count": 0, "vcpu": 0.0, "ramGB": 0.0} for k, lbl, _, _ in SIZE_BUCKETS}
     groups = []
     largest = None
@@ -80,7 +139,7 @@ def workload_profile(vms, demand: Dict[str, Any]) -> Dict[str, Any]:
                        "vcpuEach": v.vcpu, "ramEach": v.ram_gb})
         if largest is None or (v.vcpu, v.ram_gb) > (largest["vcpu"], largest["ramGB"]):
             largest = {"name": v.name, "vcpu": v.vcpu, "ramGB": v.ram_gb}
-        if _DB_HINT.search(f"{v.name} {v.note}"):
+        if db_re and db_re.search(f"{v.name} {v.note}"):
             db_like.append(v.name)
 
     tot_cpu = demand["vcpu"] or 1.0
@@ -101,9 +160,9 @@ def workload_profile(vms, demand: Dict[str, Any]) -> Dict[str, Any]:
             break
 
     ratio = (demand["ramGB"] / demand["vcpu"]) if demand["vcpu"] else 0.0
-    if ratio <= 3:
+    if ratio <= th.compute_max_gb_per_vcpu:
         character, char_label = "compute", "Thiên về tính toán (compute-intensive)"
-    elif ratio <= 6:
+    elif ratio <= th.memory_min_gb_per_vcpu:
         character, char_label = "balanced", "Cân bằng CPU / RAM (general purpose)"
     else:
         character, char_label = "memory", "Thiên về bộ nhớ (memory-intensive)"
@@ -239,7 +298,7 @@ def _runway(r: Dict[str, Any], demand: Dict[str, Any]) -> Dict[str, Any]:
     return {"extraGrowthPct": (mult - 1) * 100, "totalGrowthPct": (total_mult - 1) * 100 if total_mult is not None else None}
 
 
-def _scores(rows: List[Dict[str, Any]]) -> None:
+def _scores(rows: List[Dict[str, Any]], th: Optional[AdvisoryThresholds] = None) -> None:
     """0–100 per axis, higher = better; relative axes compare against the best candidate."""
     valid = [r for r in rows if r["hostsTotal"]]
     if not valid:
@@ -262,7 +321,8 @@ def _scores(rows: List[Dict[str, Any]]) -> None:
         elif not f["ok"]:
             resil = 10.0
         else:
-            resil = _clamp(100 - max(0.0, worst_fail - 60) * 2.0, 30, 100)
+            comfort = min(99.0, max(0.0, (th or AdvisoryThresholds()).failover_comfort_pct))
+            resil = _clamp(100 - max(0.0, worst_fail - comfort) * (70.0 / max(1.0, 100.0 - comfort)), 30, 100)
         if min_tco and a["costs"]["tco"]:
             cost = min_tco / a["costs"]["tco"] * 100
         else:  # no prices → licensing cores as the cost proxy
@@ -342,6 +402,7 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     out: List[Dict[str, str]] = []
     if not best or not demand["vmCount"]:
         return out
+    th = thresholds_of(params)
     a = best["advisory"]
     prof = best["profile"]
     f = best["failure"]
@@ -352,7 +413,7 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
         if r is best or not r["hostsTotal"]:
             continue
         tco = r["advisory"]["costs"]["tco"]
-        if best_tco and tco and tco < best_tco * 0.97 and r["failure"]["ok"]:
+        if best_tco and tco and tco < best_tco * (1 - th.cheaper_alt_pct / 100.0) and r["failure"]["ok"]:
             out.append(_finding("info", "Chi phí", f"Phương án {r['profile']['name']} rẻ hơn {(1 - tco / best_tco) * 100:.0f}% TCO",
                                 f"{r['hostsTotal']} host thay vì {best['hostsTotal']}; vẫn đạt N+{r['redundancy']}.",
                                 "Chuyển tiêu chí tối ưu sang 'Chi phí thấp nhất' nếu ưu tiên ngân sách hơn số host / không gian rack."))
@@ -394,37 +455,37 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     # Balance
     bal = a["balance"]
     # Only meaningful when the cluster is sized by load, not by the minimum host count.
-    loaded = max(bal["cpuUtilPct"], bal["ramUtilPct"]) >= 40
+    loaded = max(bal["cpuUtilPct"], bal["ramUtilPct"]) >= th.balance_min_load_pct
     if not loaded:
         pass
-    elif bal["strandedCpuPct"] >= 35 and bal["idealRamPerHostGB"]:
+    elif bal["strandedCpuPct"] >= th.stranded_warn_pct and bal["idealRamPerHostGB"]:
         out.append(_finding("warning", "Cân bằng tài nguyên", f"Dư CPU ~{bal['strandedCpuPct']:.0f}% do RAM là ràng buộc",
                             f"Workload {workload['ramPerVcpu']:.1f} GB RAM/vCPU; với {prof['cores']} cores/host, RAM cân bằng ≈ {_gb_txt(bal['idealRamPerHostGB'])}/host (hiện {_gb_txt(prof['ramGB'])}).",
                             "Đề nghị nhà cung cấp báo giá cấu hình nhiều RAM hơn — thường giảm được số host và license."))
-    elif bal["strandedRamPct"] >= 35 and bal["idealCoresPerHost"]:
+    elif bal["strandedRamPct"] >= th.stranded_warn_pct and bal["idealCoresPerHost"]:
         out.append(_finding("warning", "Cân bằng tài nguyên", f"Dư RAM ~{bal['strandedRamPct']:.0f}% do CPU là ràng buộc",
                             f"Với {_gb_txt(prof['ramGB'])}/host, số core cân bằng ≈ {bal['idealCoresPerHost']:.0f} cores/host (hiện {prof['cores']}).",
                             "Chọn CPU nhiều core hơn hoặc giảm RAM/host để tối ưu chi phí."))
-    elif bal["gapPct"] < 15:
+    elif bal["gapPct"] < th.balance_ok_gap_pct:
         out.append(_finding("ok", "Cân bằng tài nguyên", "CPU và RAM được dùng cân bằng",
                             f"Mức dùng CPU {bal['cpuUtilPct']:.0f}% · RAM {bal['ramUtilPct']:.0f}% năng lực — ít tài nguyên bị lãng phí.", "Giữ tỷ lệ cấu hình này."))
 
     # Overcommit policy
-    if params.ram_ratio > 1.0:
+    if params.ram_ratio > th.ram_ratio_warn:
         out.append(_finding("warning", "Overcommit", f"Overcommit RAM {params.ram_ratio:g}x",
                             "Overcommit bộ nhớ dễ gây ballooning / swap khi tải cao, ảnh hưởng hiệu năng toàn cluster.",
-                            "Giữ RAM 1.0x cho Production; chỉ overcommit RAM ở Dev/Test."))
-    if workload["dbLike"] and params.cpu_ratio > 2.0:
+                            f"Giữ RAM ≤ {th.ram_ratio_warn:g}x cho Production; chỉ overcommit RAM ở Dev/Test."))
+    if workload["dbLike"] and params.cpu_ratio > th.db_cpu_ratio_max:
         out.append(_finding("warning", "Overcommit", "Có workload CSDL / middleware nhạy độ trễ",
                             f"{', '.join(workload['dbLike'][:4])} chạy chung overcommit CPU {params.cpu_ratio:g}x.",
-                            "Đặt CPU reservation hoặc tách cluster/host group riêng với overcommit ≤ 2x cho các VM này."))
-    elif params.cpu_ratio >= 5:
+                            f"Đặt CPU reservation hoặc tách cluster/host group riêng với overcommit ≤ {th.db_cpu_ratio_max:g}x cho các VM này."))
+    elif params.cpu_ratio >= th.high_cpu_ratio_warn:
         out.append(_finding("warning", "Overcommit", f"Overcommit CPU mục tiêu cao ({params.cpu_ratio:g}x)",
                             "Phù hợp Dev/Test, rủi ro CPU ready cao với Production.", "Prod nên 2–4x; theo dõi CPU Ready < 5%."))
 
     # Growth
     run = a["runway"]["extraGrowthPct"]
-    if run is not None and run < 10:
+    if run is not None and run < th.low_runway_pct:
         out.append(_finding("warning", "Tăng trưởng", "Dư địa tăng trưởng thấp",
                             f"Ngoài +{params.growth_pct:g}% đã dự phòng, cluster chỉ chịu thêm ~{max(0, run):.0f}% tải trước khi mất N+{best['redundancy']}.",
                             "Cân nhắc thêm 1 host hoặc cấu hình lớn hơn nếu dự án có kế hoạch mở rộng."))
@@ -444,10 +505,10 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
                             f"Chọn CPU ≥ {params.license_min_cores_per_socket} cores/socket để tận dụng license đã trả."))
 
     # Scale / cluster size
-    if best["hostsTotal"] > 64:
+    if best["hostsTotal"] > th.cluster_warn_hosts:
         out.append(_finding("warning", "Kiến trúc", f"Cluster lớn ({best['hostsTotal']} host)",
-                            "Cluster quá lớn khó vận hành, nâng cấp và khoanh vùng sự cố.", "Chia thành nhiều cluster ≤ 32–64 host hoặc chọn host lớn hơn."))
-    elif best["hostsTotal"] > 32:
+                            "Cluster quá lớn khó vận hành, nâng cấp và khoanh vùng sự cố.", f"Chia thành nhiều cluster ≤ {th.cluster_info_hosts}–{th.cluster_warn_hosts} host hoặc chọn host lớn hơn."))
+    elif best["hostsTotal"] > th.cluster_info_hosts:
         out.append(_finding("info", "Kiến trúc", f"{best['hostsTotal']} host — cân nhắc chia cluster",
                             "Vẫn trong giới hạn vSphere nhưng nên chia theo tầng ứng dụng / miền sự cố.", "Thiết kế 2+ cluster, mỗi cluster có N+1 riêng."))
 
@@ -506,7 +567,7 @@ def annotate_results(results: List[Dict[str, Any]], vms, params, demand: Dict[st
             "costs": _costs(r, lic, demand, params),
             "runway": _runway(r, demand),
         }
-    _scores(results)
+    _scores(results, thresholds_of(params))
 
 
 def build_advisory(vms, params, profiles, demand: Dict[str, Any], results: List[Dict[str, Any]],
@@ -515,7 +576,8 @@ def build_advisory(vms, params, profiles, demand: Dict[str, Any], results: List[
         annotate_results(results, vms, params, demand)
 
     best = results[best_idx] if best_idx is not None else None
-    wl = workload_profile(vms, demand)
+    th = thresholds_of(params)
+    wl = workload_profile(vms, demand, th)
     proj = projection(vms, params, profiles[best_idx], best["hostsTotal"]) if best else None
     fnd = findings(demand, params, best, wl, proj, results)
     n_crit = sum(1 for x in fnd if x["severity"] == "critical")
@@ -530,4 +592,5 @@ def build_advisory(vms, params, profiles, demand: Dict[str, Any], results: List[
         "readiness": readiness,
         "nextSteps": next_steps(demand, params, best, n_crit),
         "scoreAxes": [{"key": k, "label": lbl} for k, lbl in SCORE_AXES],
+        "thresholds": th.__dict__.copy(),
     }
