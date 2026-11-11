@@ -92,6 +92,8 @@ class ParamsIn(BaseModel):
     platform: str = Field(default="vmware", pattern="^(vmware|nutanix|hyperv|proxmox|generic)$")
     license_edition: str = Field(default="VMware vSphere Foundation (VVF)", max_length=120)
     suggest_variants: bool = True
+    pick_profile: str = Field(default="", max_length=40, pattern=r"^(\d+x\d+x[\d.]+)?$")
+    host_override: int = Field(default=0, ge=0, le=500)
     advisory: AdvisoryIn = AdvisoryIn()
 
 
@@ -115,6 +117,24 @@ class ExistingClusterIn(BaseModel):
     cpuOcAfter: Optional[float] = None
     ramOcAfter: Optional[float] = None
     extraAvgVms: Optional[int] = None
+
+
+class ExtraFindingIn(BaseModel):
+    severity: str = Field(default="info", pattern="^(critical|warning|info|ok)$")
+    area: str = Field(default="Khác", max_length=40)
+    title: str = Field(default="", max_length=200)
+    detail: str = Field(default="", max_length=600)
+    action: str = Field(default="", max_length=400)
+
+
+class ReportOptionsIn(BaseModel):
+    """Adjustments made after the calculation, applied to the full PDF report only."""
+    sections: Dict[str, bool] = Field(default_factory=dict)       # e.g. {"bom": false, "glossary": false}
+    headline: str = Field(default="", max_length=400)            # replaces the automatic conclusion sentence
+    note: str = Field(default="", max_length=2000)               # "Ghi chú của người lập" in the summary
+    selectionNote: str = Field(default="", max_length=400)       # why the option / host count was changed
+    hiddenFindings: List[str] = Field(default_factory=list, max_length=60)
+    extraFindings: List[ExtraFindingIn] = Field(default_factory=list, max_length=20)
 
 
 class SizingPayload(BaseModel):
@@ -141,6 +161,7 @@ class SizingPayload(BaseModel):
     detail: str = Field(default="full", pattern="^(full|brief)$")
     # Optional per-report logo (data URL, same formats/limit as Settings → logo); empty = default report logo
     logoDataUrl: Optional[str] = Field(default=None, max_length=3_000_000)
+    reportOptions: Optional[ReportOptionsIn] = None
     # PDF content: 'new' = buy new servers (default) · 'reuse' = place the project on an existing cluster
     mode: str = Field(default="new", pattern="^(new|reuse)$")
     targetCluster: Optional[str] = Field(default=None, max_length=120)
@@ -189,7 +210,8 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
                                                    prepared_org=payload.preparedOrg, document_code=payload.documentCode,
                                                    version=payload.version, version_note=payload.versionNote, approved_by=payload.approvedBy,
                                                    customer_contact=payload.customerContact, input_source=payload.inputSource,
-                                                   input_date=payload.inputDate, out_of_scope=[x[:200] for x in (payload.outOfScope or [])])
+                                                   input_date=payload.inputDate, out_of_scope=[x[:200] for x in (payload.outOfScope or [])],
+                                                   report_options=payload.reportOptions.model_dump() if payload.reportOptions else None)
     except Exception as exc:  # pragma: no cover - surfaced to the UI
         raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
     label = _ascii_slug(params.environment, fallback="")

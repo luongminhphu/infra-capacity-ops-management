@@ -352,7 +352,7 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .legend-list{display:grid;gap:var(--space-2);font-size:var(--fs-caption);color:var(--text-secondary);margin-top:var(--space-4);}
 .legend-item{display:flex;align-items:center;gap:var(--space-2);}
 .legend-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
-.sim-shell{display:grid;gap:var(--space-4);}
+.sim-shell{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-4);min-width:0;}
 .sim-shell .sim-card{margin-bottom:0;}
 .scenario-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);}
 .scenario-btn{padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface-2);text-align:left;transition:background-color var(--transition),border-color var(--transition);}
@@ -490,6 +490,30 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sz-compare td.sz-hosts{font-size:var(--fs-body-sm);}
 .sz-headline .sz-detail{margin-top:var(--space-1);color:var(--text-primary);font-weight:var(--fw-regular);}
 .sz-param-group{margin-top:var(--space-4);}
+.sz-adjust .sz-adj-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);}
+.sz-adj-box{border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3);min-width:0;}
+.sz-adj-box>summary{cursor:pointer;font-weight:var(--fw-semibold);color:var(--text-primary);font-size:var(--fs-body-sm);list-style:revert;}
+.sz-adj-box[open]>summary{margin-bottom:var(--space-2);}
+.sz-adj-row{display:grid;grid-template-columns:minmax(0,1fr) 64px;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);font-size:var(--fs-caption);}
+.sz-adj-row input[type=range]{width:100%;}
+.sz-adj-row output{font-weight:var(--fw-semibold);text-align:right;font-variant-numeric:tabular-nums;}
+.sz-adj-label{grid-column:1 / -1;color:var(--text-secondary);}
+.sz-adj-box .field{margin-bottom:var(--space-2);}
+.sz-adj-box .field input,.sz-adj-box .field select,.sz-adj-box .field textarea{width:100%;}
+.sz-adj-box textarea{min-height:52px;resize:vertical;font:inherit;padding:var(--space-1) var(--space-2);border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--field-bg);color:var(--text-primary);}
+.sz-adj-checks{columns:2;column-gap:var(--space-4);font-size:var(--fs-caption);}
+.sz-adj-group{break-inside:avoid;margin-bottom:4px;}
+.sz-adj-group label{margin-bottom:2px;}
+.sz-adj-checks label{display:flex;gap:var(--space-1);align-items:center;cursor:pointer;}
+@media (max-width:760px){.sz-adj-checks{columns:1;}}
+.sz-adj-checks label.sub{padding-left:var(--space-4);color:var(--text-secondary);}
+.sz-adj-findings{max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:2px;font-size:var(--fs-caption);margin-bottom:var(--space-2);}
+.sz-adj-findings label{display:flex;gap:var(--space-2);align-items:flex-start;cursor:pointer;}
+.sz-adj-findings label.off span.t{text-decoration:line-through;color:var(--text-tertiary);}
+.sz-adj-extra{display:grid;grid-template-columns:110px minmax(0,1fr);gap:var(--space-1) var(--space-2);font-size:var(--fs-caption);}
+.sz-adj-extra .full{grid-column:1 / -1;}
+.sz-adj-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-3);}
+.sz-adj-badge{font-size:var(--fs-micro);}
 .sz-logo-row{display:flex;align-items:center;gap:var(--space-3);}
 .sz-logo-preview{flex:none;width:140px;height:56px;border:1px dashed var(--border);border-radius:var(--radius-sm);display:grid;place-items:center;background:#fff;overflow:hidden;padding:4px;}
 .sz-logo-preview img{max-width:100%;max-height:100%;object-fit:contain;}
@@ -664,7 +688,7 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 }
 @media (max-width:760px){
   .kpi-grid,.chart-grid,.scenario-grid,.sim-form-grid,.settings-form,.exec-chart-grid,.history-kpis,.sz-kpis{grid-template-columns:1fr;}
-  .sz-chart-grid,.sz-chart-grid.three,.sz-steps,.sz-finding,.sz-two{grid-template-columns:1fr;}
+  .sz-chart-grid,.sz-chart-grid.three,.sz-steps,.sz-finding,.sz-two,.sz-adjust .sz-adj-grid{grid-template-columns:1fr;}
   .lic-kpi-6,.lic-kpi-5,.lic-kpi-4,.lic-2col,.lic-form-6,.lic-form-5,.lic-form-2{grid-template-columns:1fr;}
   .panel-head{flex-direction:column;align-items:flex-start;}
   .sim-tabbar{width:100%;}
