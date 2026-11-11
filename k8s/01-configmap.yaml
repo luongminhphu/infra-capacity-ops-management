@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: vco-config
+  name: ico-config
   namespace: cattle-monitoring-system
 data:
   ADMIN_USERNAME: "admin"
@@ -48,9 +48,9 @@ data:
   VCENTER_4_DEMO: "false"
 
   # ---- Veritas NetBackup (module Backup) — phần KHÔNG nhạy cảm ----
-  # User / mật khẩu (hoặc API key) nằm trong Secret vco-secrets.
+  # User / mật khẩu (hoặc API key) nằm trong Secret ico-secrets.
   # TLS: xác thực bằng CA của NetBackup (root "nbatd" + trung gian "broker"), lấy bằng
-  # k8s/nbu-ca.sh vào ConfigMap nbu-ca, mount tại /etc/netbackup-ca (xem 04-app.yaml).
+  # k8s/nbu-ca.sh vào ConfigMap ico-nbu-ca, mount tại /etc/netbackup-ca (xem 04-app.yaml).
   # KEY không đổi sau khi đã chạy (lịch sử job lưu theo KEY).
   BACKUP_INITIAL_DAYS: "14"
   BACKUP_RETENTION_DAYS: "400"

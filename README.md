@@ -445,7 +445,7 @@ thị đầy đủ dấu tiếng Việt trong PDF.
 ## Kiến trúc
 
 ```
-vmware-capacity-ops/
+infra-capacity-ops-management/
 ├── backend/                  FastAPI (Python) — API, auth, polling scheduler, DB models
 │   ├── app/
 │   │   ├── main.py            entrypoint, mount static frontend
@@ -549,12 +549,12 @@ App chỉ **đọc** (GET) — không khởi chạy, huỷ hay sửa job/policy.
    `NETBACKUP_CA_CERT` dùng chung cho mọi server):
    - Lấy CA: chạy `./k8s/nbu-ca.sh <nbu-host> <namespace>` — script lấy CA gốc `nbatd` qua
      `/netbackup/security/cacert` (không cần đăng nhập) và CA trung gian `broker` từ chuỗi chứng chỉ,
-     kiểm tra cả hostname, rồi tạo/cập nhật ConfigMap `nbu-ca`. Đối chiếu fingerprint CA gốc in ra với
+     kiểm tra cả hostname, rồi tạo/cập nhật ConfigMap `ico-nbu-ca`. Đối chiếu fingerprint CA gốc in ra với
      `/usr/openv/netbackup/bin/nbcertcmd -displayCACertDetail` trên primary.
    - `NETBACKUP_i_HOST` phải trùng tên trong chứng chỉ của primary server (thường là FQDN), không dùng IP.
    - Docker Compose: mount file vào container (ví dụ `./certs/nbu-ca.pem:/etc/netbackup-ca/ca.pem:ro`)
      rồi đặt `NETBACKUP_1_CA_CERT=/etc/netbackup-ca/ca.pem`. Kubernetes: `k8s/04-app.yaml` đã mount
-     ConfigMap `nbu-ca` tại `/etc/netbackup-ca` (xem mục Triển khai trên Kubernetes).
+     ConfigMap `ico-nbu-ca` tại `/etc/netbackup-ca` (xem mục Triển khai trên Kubernetes).
    - CA nội bộ của NetBackup không có extension *keyUsage*; Python 3.13 mặc định bật chế độ X.509
      strict và từ chối CA này (`CA cert does not include key usage extension`). App dùng một SSL
      context riêng cho NetBackup (`nbu_ssl_context`) bỏ cờ strict nhưng vẫn kiểm tra chuỗi chứng chỉ
@@ -575,15 +575,15 @@ sẵn của cụm — manifest không tạo namespace). Thư mục `k8s/` khớp
 
 | File | Nội dung |
 |---|---|
-| `01-configmap.yaml` | `vco-config` — biến không nhạy cảm: polling, vCenter, NetBackup (`NETBACKUP_1_*` đã cấu hình). |
-| `02-secret.example.yaml` | Mẫu `vco-secrets` — Postgres, JWT, admin, mật khẩu vCenter, user/mật khẩu NetBackup. Bản thật `02-secret.yaml` nằm trong `.gitignore`. |
-| `03-postgres.yaml` | StatefulSet + Service headless `vco-postgres` (PVC 10Gi, StorageClass mặc định của cụm). |
-| `04-app.yaml` | Deployment `vco-app` (init `wait-postgres`, mount CA NetBackup từ ConfigMap `nbu-ca`) + Service NodePort `30080`. |
-| `nbu-ca.sh` | Lấy CA của NetBackup (gốc `nbatd` + trung gian `broker`), kiểm tra, tạo/cập nhật ConfigMap `nbu-ca`. |
+| `01-configmap.yaml` | `ico-config` — biến không nhạy cảm: polling, vCenter, NetBackup (`NETBACKUP_1_*` đã cấu hình). |
+| `02-secret.example.yaml` | Mẫu `ico-secrets` — Postgres, JWT, admin, mật khẩu vCenter, user/mật khẩu NetBackup. Bản thật `02-secret.yaml` nằm trong `.gitignore`. |
+| `03-postgres.yaml` | StatefulSet + Service headless `ico-postgres` (PVC 10Gi, StorageClass mặc định của cụm). |
+| `04-app.yaml` | Deployment `ico-app` (init `wait-postgres`, mount CA NetBackup từ ConfigMap `ico-nbu-ca`) + Service NodePort `30080`. |
+| `nbu-ca.sh` | Lấy CA của NetBackup (gốc `nbatd` + trung gian `broker`), kiểm tra, tạo/cập nhật ConfigMap `ico-nbu-ca`. |
 | `kustomization.yaml` | Áp dụng 01–04 vào `cattle-monitoring-system`. |
 
 Image được GitHub Action `.github/workflows/build-push.yml` build và đẩy lên GHCR mỗi khi push lên
-`main`: `ghcr.io/luongminhphu/vmware-capacity-ops-management-app:latest` (package **Public**, không cần
+`main`: `ghcr.io/luongminhphu/infra-capacity-ops-management-app:latest` (package **Public**, không cần
 Image Pull Secret). Deployment dùng `imagePullPolicy: Always`, nên `rollout restart` là kéo bản mới nhất.
 
 Các lệnh dưới đây chạy trên máy có `kubectl` trỏ vào cụm (ví dụ `infra-rke-cp01`) hoặc **Kubectl Shell**
@@ -598,21 +598,120 @@ NS=cattle-monitoring-system
 1. Merge vào `main`, đợi workflow **Build and push image to GHCR** chạy xong (tab Actions).
 2. Lưu digest image đang chạy để rollback và backup DB:
    ```bash
-   kubectl -n $NS get pod -l app=vco-app -o jsonpath='{.items[0].status.containerStatuses[0].imageID}{"\n"}' > ~/vco-app-old-digest.txt
+   kubectl -n $NS get pod -l app=ico-app -o jsonpath='{.items[0].status.containerStatuses[0].imageID}{"\n"}' > ~/ico-app-old-digest.txt
    ```
    ```bash
-   kubectl -n $NS exec sts/vco-postgres -- sh -c 'pg_dumpall -U "$POSTGRES_USER"' > ~/vco-db-backup-$(date +%F).sql
+   kubectl -n $NS exec sts/ico-postgres -- sh -c 'pg_dumpall -U "$POSTGRES_USER"' > ~/ico-db-backup-$(date +%F).sql
    ```
 3. Kéo image mới và đợi pod sẵn sàng:
    ```bash
-   kubectl -n $NS rollout restart deploy/vco-app && kubectl -n $NS rollout status deploy/vco-app
+   kubectl -n $NS rollout restart deploy/ico-app && kubectl -n $NS rollout status deploy/ico-app
    ```
 4. Rollback nếu cần:
    ```bash
-   kubectl -n $NS set image deploy/vco-app app=$(cat ~/vco-app-old-digest.txt)
+   kubectl -n $NS set image deploy/ico-app app=$(cat ~/ico-app-old-digest.txt)
    ```
 
 Bảng mới / cột mới trong DB được tạo tự động khi app khởi động (`ensure_schema`) — không có bước migrate riêng.
+
+### Chuyển hệ cũ (`vco-*`, repo `vmware-capacity-ops-management`) sang `ico-*`
+
+Thực hiện một lần khi đổi tên repo thành `infra-capacity-ops-management`. Hệ mới chạy song song trong cùng
+namespace, dữ liệu được chuyển nguyên vẹn; hệ cũ chỉ bị xoá ở bước cuối, sau khi hệ mới đã chạy ổn.
+
+| Hệ cũ | Hệ mới |
+|---|---|
+| `vco-app`, `vco-postgres`, `vco-config`, `vco-secrets`, `nbu-ca` | `ico-app`, `ico-postgres`, `ico-config`, `ico-secrets`, `ico-nbu-ca` |
+| DB `vmware_capacity_ops`, user `vmware_app` | DB `infra_capacity_ops`, user `ico_app` (mật khẩu mới) |
+| Image `…/vmware-capacity-ops-management-app` | Image `…/infra-capacity-ops-management-app` |
+
+**0. Chuẩn bị**
+- Đổi tên repo trên GitHub: **Settings → General → Repository name** → `infra-capacity-ops-management`.
+- Chạy workflow **Build and push image to GHCR** (tab Actions → *Run workflow*, hoặc merge vào `main`) để có
+  image tên mới. Package mới trên GHCR mặc định **Private**: vào package → **Package settings → Change
+  visibility → Public** (tắt "Inherit access from source repository" nếu có).
+- Tất cả lệnh dưới đây chạy trên máy có `kubectl` trỏ vào cụm:
+  ```bash
+  NS=cattle-monitoring-system
+  ```
+
+**1. Lưu cấu hình cũ (để rollback)**
+```bash
+mkdir -p ~/vco-backup && chmod 700 ~/vco-backup && for r in deploy/vco-app sts/vco-postgres svc/vco-app svc/vco-postgres cm/vco-config secret/vco-secrets cm/nbu-ca; do kubectl -n $NS get $r -o yaml > ~/vco-backup/$(echo $r | tr / _).yaml; done; ls ~/vco-backup
+```
+
+**2. Tạo `ico-config`, `ico-nbu-ca`, `ico-secrets` từ cấu hình đang chạy** (không in giá trị; Postgres
+được đặt user / DB mới và mật khẩu ngẫu nhiên, các giá trị khác — JWT, admin, vCenter, NetBackup — giữ nguyên):
+```bash
+kubectl -n $NS get cm vco-config -o json | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'ico-config','namespace':d['metadata']['namespace']},'data':d.get('data',{})}))" | kubectl apply -f -
+```
+```bash
+kubectl -n $NS get cm nbu-ca -o json | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'ico-nbu-ca','namespace':d['metadata']['namespace']},'data':d.get('data',{})}))" | kubectl apply -f -
+```
+```bash
+kubectl -n $NS get secret vco-secrets -o json | python3 -c "
+import base64, json, secrets, sys
+d = json.load(sys.stdin)
+data = {k: base64.b64decode(v).decode() for k, v in d.get('data', {}).items()}
+pw = secrets.token_urlsafe(24)
+data.update({'POSTGRES_USER': 'ico_app', 'POSTGRES_DB': 'infra_capacity_ops', 'POSTGRES_PASSWORD': pw,
+             'DATABASE_URL': 'postgresql+psycopg2://ico_app:%s@ico-postgres:5432/infra_capacity_ops' % pw})
+print(json.dumps({'apiVersion': 'v1', 'kind': 'Secret', 'type': 'Opaque',
+                  'metadata': {'name': 'ico-secrets', 'namespace': d['metadata']['namespace']}, 'stringData': data}))
+" | kubectl apply -f -
+```
+
+**3. Dừng app cũ và backup dữ liệu cuối cùng** (dừng trước để không còn dữ liệu ghi thêm)
+```bash
+kubectl -n $NS scale deploy/vco-app --replicas=0
+```
+```bash
+kubectl -n $NS exec sts/vco-postgres -- sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-owner --no-privileges' > ~/vco-backup/vco-db.dump && ls -lh ~/vco-backup/vco-db.dump
+```
+```bash
+kubectl -n $NS exec sts/vco-postgres -- sh -c 'pg_dumpall -U "$POSTGRES_USER"' > ~/vco-backup/vco-db-all.sql
+```
+
+**4. Tạo Postgres mới và khôi phục dữ liệu** — áp dụng `k8s/03-postgres.yaml` (Rancher: **Import YAML**
+ở góc trên bên phải, dán nội dung file, chọn namespace `cattle-monitoring-system`; hoặc `kubectl apply -f`), rồi:
+```bash
+kubectl -n $NS rollout status sts/ico-postgres --timeout=300s
+```
+```bash
+kubectl -n $NS exec -i sts/ico-postgres -- sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges' < ~/vco-backup/vco-db.dump
+```
+Đối chiếu số dòng một vài bảng giữa DB cũ và mới (hai kết quả phải giống nhau):
+```bash
+Q="select 'snapshot_runs',count(*) from snapshot_runs union all select 'vm_snapshots',count(*) from vm_snapshots union all select 'backup_jobs',count(*) from backup_jobs union all select 'license_entitlements',count(*) from license_entitlements"
+```
+```bash
+for s in vco-postgres ico-postgres; do echo "== $s"; kubectl -n $NS exec sts/$s -- sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"$Q\""; done
+```
+
+**5. Chạy app mới** — xoá Service cũ để giải phóng NodePort `30080`, rồi áp dụng `k8s/04-app.yaml`
+(Import YAML hoặc `kubectl apply -f`):
+```bash
+kubectl -n $NS delete svc vco-app
+```
+```bash
+kubectl -n $NS rollout status deploy/ico-app --timeout=300s && kubectl -n $NS logs deploy/ico-app -c app --tail=20
+```
+Mở `http://<IP-node>:30080` — đăng nhập bằng tài khoản cũ, kiểm tra lịch sử xu hướng, license, trang Backup
+(phạm vi, ngưỡng), bấm **Đồng bộ ngay** và **Backup → Nguồn & ngưỡng → Đồng bộ**.
+
+**Rollback** (trước bước 6): `kubectl -n $NS scale deploy/ico-app --replicas=0`,
+`kubectl -n $NS delete svc ico-app`, `kubectl apply -f ~/vco-backup/svc_vco-app.yaml` (xoá trường
+`resourceVersion`, `uid`, `clusterIP`, `clusterIPs` trong file trước khi apply), rồi
+`kubectl -n $NS scale deploy/vco-app --replicas=1`.
+
+**6. Xoá hệ cũ** — sau vài ngày hệ mới chạy ổn; giữ thư mục `~/vco-backup` ở nơi an toàn:
+```bash
+kubectl -n $NS delete deploy/vco-app sts/vco-postgres svc/vco-postgres cm/vco-config cm/nbu-ca secret/vco-secrets
+```
+```bash
+kubectl -n $NS delete pvc pgdata-vco-postgres-0
+```
+Package GHCR cũ `vmware-capacity-ops-management-app` có thể xoá trong GitHub → Packages.
 
 ### Triển khai lại từ đầu (cụm mới hoặc khôi phục)
 
@@ -633,12 +732,12 @@ Bảng mới / cột mới trong DB được tạo tự động khi app khởi �
    kubectl apply -k k8s/
    ```
    ```bash
-   kubectl -n $NS get pods -l 'app in (vco-app,vco-postgres)' -w
+   kubectl -n $NS get pods -l 'app in (ico-app,ico-postgres)' -w
    ```
 5. Truy cập `http://<IP-node>:30080`, đăng nhập `admin`, bấm **Đồng bộ ngay** (vCenter) và
    **Backup → Nguồn & ngưỡng → Đồng bộ** (NetBackup). Khôi phục dữ liệu cũ nếu cần:
    ```bash
-   kubectl -n $NS exec -i sts/vco-postgres -- sh -c 'psql -U "$POSTGRES_USER" -d postgres' < ~/vco-db-backup-<ngày>.sql
+   kubectl -n $NS exec -i sts/ico-postgres -- sh -c 'psql -U "$POSTGRES_USER" -d postgres' < ~/ico-db-backup-<ngày>.sql
    ```
 
 Trước khi `kubectl apply -k` lên cụm đang chạy, xem trước khác biệt so với cấu hình thật để không ghi
@@ -660,7 +759,7 @@ kubectl diff -k k8s/
   read -s -p "Mat khau ita_collector_user: " P; echo
   ```
   ```bash
-  kubectl -n $NS patch secret vco-secrets --type merge -p "{\"stringData\":{\"NETBACKUP_1_PASSWORD\":\"$P\"}}" && unset P && kubectl -n $NS rollout restart deploy/vco-app
+  kubectl -n $NS patch secret ico-secrets --type merge -p "{\"stringData\":{\"NETBACKUP_1_PASSWORD\":\"$P\"}}" && unset P && kubectl -n $NS rollout restart deploy/ico-app
   ```
 - Kiểm tra mạng tới NetBackup từ từng node (firewall nhìn IP node, không phải IP pod) — kết quả `401` là đạt:
   ```bash
@@ -670,12 +769,12 @@ kubectl diff -k k8s/
 
 ### Lưu ý
 
-- **Giữ `replicas: 1`** cho `vco-app` — polling vCenter / NetBackup chạy trong tiến trình app, không có
+- **Giữ `replicas: 1`** cho `ico-app` — polling vCenter / NetBackup chạy trong tiến trình app, không có
   khoá phối hợp giữa nhiều pod.
-- Sửa ConfigMap / Secret xong phải `kubectl -n $NS rollout restart deploy/vco-app` (env không tự nạp lại).
+- Sửa ConfigMap / Secret xong phải `kubectl -n $NS rollout restart deploy/ico-app` (env không tự nạp lại).
 - `cattle-monitoring-system` là namespace của Rancher Monitoring: **không gỡ / cài lại Rancher Monitoring**
   khi chưa backup DB, vì thao tác đó có thể xoá cả namespace. Khi chuyển app sang namespace riêng, đổi
-  `namespace:` trong `kustomization.yaml` và các file 01–04, tạo lại Secret / `nbu-ca` ở namespace mới,
+  `namespace:` trong `kustomization.yaml` và các file 01–04, tạo lại Secret / `ico-nbu-ca` ở namespace mới,
   khôi phục DB từ bản `pg_dumpall`.
 - PVC Postgres `Pending`: kiểm tra `kubectl get storageclass` và thêm `storageClassName` vào
   `volumeClaimTemplates` trong `03-postgres.yaml`.

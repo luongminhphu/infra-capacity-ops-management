@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     app_name: str = "Infra Capacity Ops Management"
     environment: str = Field(default="production")
 
-    database_url: str = Field(default="postgresql+psycopg2://vmware_app:devpassword@localhost:5432/vmware_capacity_ops")
+    database_url: str = Field(default="postgresql+psycopg2://ico_app:devpassword@localhost:5432/infra_capacity_ops")
 
     jwt_secret: str = Field(default="change-me-in-.env-please")
     jwt_algorithm: str = "HS256"

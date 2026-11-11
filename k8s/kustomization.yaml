@@ -7,4 +7,4 @@ resources:
   - 02-secret.yaml   # tự tạo từ 02-secret.example.yaml — không commit bản thật (.gitignore)
   - 03-postgres.yaml
   - 04-app.yaml
-# ConfigMap `nbu-ca` (CA của NetBackup) tạo bằng k8s/nbu-ca.sh — không nằm trong kustomize.
+# ConfigMap `ico-nbu-ca` (CA của NetBackup) tạo bằng k8s/nbu-ca.sh — không nằm trong kustomize.
