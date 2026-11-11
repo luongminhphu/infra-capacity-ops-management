@@ -631,21 +631,42 @@ def _tco_comparable(r, result) -> bool:
     return not (any_hw and c.get("hardware") is None)
 
 
+def _tco_matrix_html(c, currency) -> str:
+    """TCO as a matrix: columns = years + N-year total, rows = cost components, then yearly total and cumulative."""
+    ys = c["yearly"]
+    years = c["years"]
+    dash = '<span class="muted">–</span>'
+
+    def money(v, zero_dash=True):
+        if v is None:
+            return '<span class="warn-txt">Chưa nhập</span>'
+        return dash if (zero_dash and not v) else money_short(v, currency)
+
+    hw = [money(y["hardware"]) if y["hardware"] is not None else "—" for y in ys]
+    lic = [money(y["license"]) if y["license"] is not None else "—" for y in ys]
+    war = ['<span class="muted">Đã gồm</span>' if y["inWarranty"] else money(y["warranty"]) for y in ys]
+    tot = [f"<b>{money_short(y['total'], currency)}</b>" for y in ys]
+    cum = [f'<span class="muted">{money_short(y["cumulative"], currency)}</span>' for y in ys]
+    rows = [
+        ["<b>Phần cứng</b>"] + hw + [f"<b>{money(c['hardware'], False) if c['hardware'] is not None else '—'}</b>"],
+        ["<b>License</b>"] + lic + [f"<b>{money(c['license'], False) if c['license'] is not None else '—'}</b>"],
+        ["<b>Dịch vụ bảo hành HW</b><div class='muted small'>" + f"{c['warrantyIncludedYears']} năm đầu đã gồm trong giá HW</div>"]
+        + war + [f"<b>{money_short(c['warranty'] or 0, currency)}</b>"],
+        {"style": f' style="background:{COLORS["surface2"]};"', "cells": ["<b>Tổng theo năm</b>"] + tot + [f"<b>{money_short(c['tco'], currency)}</b>"]},
+        ["<span class='muted'>Lũy kế</span>"] + cum + [""],
+    ]
+    header = ["Thành phần"] + [f"Năm {y['year']}" for y in ys] + [f"Tổng {years} năm"]
+    w_first = 22
+    w = (100 - w_first) / (len(ys) + 1)
+    return _table(header, rows, cls="num-table tco-matrix", aligns=["left"] + ["right"] * (len(ys) + 1),
+                  widths=[f"{w_first}%"] + [f"{w:.1f}%"] * (len(ys) + 1))
+
+
 def _tco(result, best, currency) -> str:
     c = best["advisory"]["costs"]
     years, inc = c["years"], c["warrantyIncludedYears"]
-    rows = []
-    for y in c["yearly"]:
-        war = ("Trong bảo hành" if y["inWarranty"] else ("—" if y["warranty"] is None else money_short(y["warranty"], currency)))
-        rows.append([f"<b>Năm {y['year']}</b>", money_short(y["hardware"], currency) if y["hardware"] else ("—" if y["hardware"] is None else "0"),
-                     war, money_short(y["license"], currency) if y["license"] is not None else "—",
-                     f"<b>{money_short(y['total'], currency)}</b>", money_short(y["cumulative"], currency)])
-    rows.append({"style": f' style="background:{COLORS["surface2"]};font-weight:700;"',
-                 "cells": [f"Tổng {years} năm", money_short(c["hardware"], currency), money_short(c["warranty"], currency),
-                           money_short(c["license"], currency), money_short(c["tco"], currency), ""]})
-    year_tbl = _table(["Năm", "Phần cứng", "Bảo hành", "License", "Tổng năm", "Lũy kế"], rows, cls="num-table",
-                      aligns=["left", "right", "right", "right", "right", "right"])
-    leg = _legend([(COST_COLORS["hw"], "Phần cứng"), (COST_COLORS["war"], "Gia hạn bảo hành"), (COST_COLORS["lic"], "License"),
+    year_tbl = _tco_matrix_html(c, currency)
+    leg = _legend([(COST_COLORS["hw"], "Phần cứng"), (COST_COLORS["lic"], "License"), (COST_COLORS["war"], "Dịch vụ bảo hành HW"),
                    (COLORS["primary_dark"], "Lũy kế (trục phải)")])
     opts = [r for r in sorted(result["results"], key=lambda x: (x.get("suggested", False), x["rank"] or 99)) if _tco_comparable(r, result)]
     cmp_rows = []
@@ -653,9 +674,9 @@ def _tco(result, best, currency) -> str:
         cc = r["advisory"]["costs"]
         style = f' style="background:{COLORS["ok_bg"]};font-weight:700;"' if r["recommended"] else ""
         cmp_rows.append({"style": style, "cells": [esc(r["profile"]["name"]), f"{r['hostsTotal']}", money_short(cc["hardware"], currency),
-                                                   money_short(cc["warranty"], currency), money_short(cc["license"], currency),
+                                                   money_short(cc["license"], currency), money_short(cc["warranty"], currency),
                                                    f"<b>{money_short(cc['tco'], currency)}</b>", money_short(cc["perVmMonth"], currency)]})
-    cmp_tbl = _table(["Phương án", "Host", "Phần cứng", "Gia hạn BH", f"License {years} năm", f"TCO {years} năm", "/ VM / tháng"], cmp_rows,
+    cmp_tbl = _table(["Phương án", "Host", "Phần cứng", f"License {years} năm", "Dịch vụ bảo hành HW", f"TCO {years} năm", "/ VM / tháng"], cmp_rows,
                      cls="num-table", aligns=["left", "center", "right", "right", "right", "right", "right"])
     bars = svg_cost_bars([{"label": r["profile"]["name"], "hw": r["advisory"]["costs"]["hardware"], "war": r["advisory"]["costs"]["warranty"],
                            "lic": r["advisory"]["costs"]["license"], "best": r["recommended"]} for r in opts], currency, width=680)
@@ -672,7 +693,7 @@ def _tco(result, best, currency) -> str:
     <div class="section-desc">{intro}</div>
     <div class="keep"><div class="sub-h">TCO theo năm — {esc(best['profile']['name'])} × {best['hostsTotal']} host</div>{year_tbl}{miss}</div>
     <div class="chart-card keep" style="margin-top:8px;"><div class="chart-card-title">Chi phí theo năm và lũy kế</div>{svg_yearly_tco(c['yearly'], currency)}{leg}</div>
-    {"" if len(opts) < 2 else f'<div class="keep"><div class="sub-h">So sánh TCO giữa các phương án</div>{cmp_tbl}<div class="chart-card" style="margin-top:6px;">{bars}{_legend([(COST_COLORS["hw"], "Phần cứng"), (COST_COLORS["war"], "Gia hạn bảo hành"), (COST_COLORS["lic"], "License")])}</div></div>'}
+    {"" if len(opts) < 2 else f'<div class="keep"><div class="sub-h">So sánh TCO giữa các phương án</div>{cmp_tbl}<div class="chart-card" style="margin-top:6px;">{bars}{_legend([(COST_COLORS["hw"], "Phần cứng"), (COST_COLORS["lic"], "License"), (COST_COLORS["war"], "Dịch vụ bảo hành HW")])}</div></div>'}
     <div class="small-note">TCO chỉ gồm phần cứng, gia hạn bảo hành và license theo đơn giá đã nhập; chưa gồm dịch vụ triển khai, điện, không gian và chi phí vận hành.
     {"Phương án tham khảo chưa có đơn giá phần cứng nên không đưa vào so sánh TCO." if any(r.get("suggested") and not _tco_comparable(r, result) for r in result["results"]) else ""}</div>"""
 
@@ -880,6 +901,9 @@ ul.tight {{ margin:0; padding-left:14px; font-size:9px; }} ul.tight li {{ margin
 .findings-table td:first-child {{ white-space:nowrap; }}
 .plan-table td, .method-table td, .bom-table td {{ vertical-align:top; font-size:8.8px; }}
 .map-table td {{ font-size:8.2px; }}
+.tco-matrix td, .tco-matrix th {{ font-size:8.4px; }}
+.tco-matrix td:last-child, .tco-matrix th:last-child {{ background:{c['surface2']}; }}
+.tco-matrix td:first-child {{ white-space:normal; }}
 .legend {{ margin-top:4px; }}
 .leg-row {{ font-size:8.2px; margin:2px 0; white-space:nowrap; }}
 .radar-swatch {{ display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; vertical-align:middle; }}

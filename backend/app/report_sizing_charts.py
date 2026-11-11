@@ -297,7 +297,7 @@ def svg_cost_bars(rows: List[Dict[str, Any]], currency: str, width: int = 330) -
         weight = "800" if r.get("best") else "400"
         parts.append(f'<text x="{label_w - 5}" y="{y + bh / 2 + 3:.1f}" text-anchor="end" font-size="7.8" font-weight="{weight}" fill="{COLORS["ink"]}">{esc(name)}</text>')
         x = label_w
-        for key in ("hw", "war", "lic"):
+        for key in ("hw", "lic", "war"):
             w = (r.get(key) or 0) / mx * plot_w
             if w > 0:
                 parts.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="{bh}" fill="{COST_COLORS[key]}"/>')
@@ -335,7 +335,7 @@ def svg_yearly_tco(yearly: List[Dict[str, Any]], currency: str, width: int = 680
         cx = pad_l + gw * i + gw / 2
         x = cx - bw / 2
         base = pad_t + plot_h
-        for key, val in (("hw", yr.get("hardware")), ("war", yr.get("warranty")), ("lic", yr.get("license"))):
+        for key, val in (("hw", yr.get("hardware")), ("lic", yr.get("license")), ("war", yr.get("warranty"))):
             if val:
                 hgt = val / mx * plot_h
                 parts.append(f'<rect x="{x:.1f}" y="{base - hgt:.1f}" width="{bw:.1f}" height="{hgt:.1f}" fill="{COST_COLORS[key]}"/>')

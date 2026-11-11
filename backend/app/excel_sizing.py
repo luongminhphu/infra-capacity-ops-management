@@ -601,48 +601,83 @@ def _tco_sheet(wb, result, subtitle: str) -> None:
     c = best["advisory"]["costs"]
     ws = wb.create_sheet("Chi phí TCO")
     ws.sheet_properties.tabColor = AMBER
-    start = _sheet_title(ws, f"Chi phí & TCO {c['years']} năm", subtitle, 7)
+    span = max(7, len(c["yearly"]) + 2)
+    start = _sheet_title(ws, f"Chi phí & TCO {c['years']} năm", subtitle, span)
     inc = c["warrantyIncludedYears"]
     mode = "% giá host / năm" if c["warrantyMode"] == "pct" else "chi phí / host / năm"
-    ws.merge_cells(f"A{start}:G{start}")
+    ws.merge_cells(f"A{start}:{get_column_letter(span)}{start}")
     ws[f"A{start}"] = (f"Phần cứng mua năm 1, đã gồm bảo hành {inc} năm; gia hạn bảo hành các năm sau tính theo {mode}; license tính theo từng năm."
                        + (f" Chưa nhập chi phí gia hạn năm {', '.join(str(y) for y in c['warrantyMissingYears'])}." if c.get("warrantyMissingYears") else ""))
     ws[f"A{start}"].font = _font(9.5, False, MUTED, italic=True)
     ws[f"A{start}"].alignment = Alignment(wrap_text=True)
     ws.row_dimensions[start].height = 30
-    row = _section(ws, start + 2, f"TCO theo năm — {best['profile']['name']} × {best['hostsTotal']} host", 7)
+    ys = c["yearly"]
+    ncol = len(ys) + 2                      # label + years + total
+    row = _section(ws, start + 2, f"TCO theo năm — {best['profile']['name']} × {best['hostsTotal']} host", ncol)
     top = row
-    rows = []
-    for i, y in enumerate(c["yearly"]):
-        r = top + 1 + i
-        rows.append([f"Năm {y['year']}", y["hardware"] or 0, (y["warranty"] if y["warranty"] is not None else None), y["license"] or 0,
-                     f"=SUM(B{r}:D{r})", f"=E{r}" if i == 0 else f"=F{r - 1}+E{r}", "Trong bảo hành" if y["inWarranty"] else
-                     ("Gia hạn bảo hành" if y["warranty"] is not None else "Chưa nhập giá gia hạn")])
-    last = _write_rows(ws, row, ["Năm", "Phần cứng", "Bảo hành", "License", "Tổng năm", "Lũy kế", "Ghi chú"], rows,
-                       fmts={2: MONEY, 3: MONEY, 4: MONEY, 5: MONEY, 6: MONEY})
-    _table(ws, f"A{top}:G{last}", "TCOTheoNam")
-    tot = last + 1
-    ws.cell(row=tot, column=1, value=f"Tổng {c['years']} năm")
-    for col in "BCDE":
-        ws[f"{col}{tot}"] = f"=SUM({col}{top + 1}:{col}{last})"
-        ws[f"{col}{tot}"].number_format = MONEY
-    for cc in range(1, 8):
-        cell = ws.cell(row=tot, column=cc)
-        cell.font = _font(10, True)
-        cell.fill = _fill(SURFACE2)
-        cell.border = Border(top=Side(style="medium", color=NAVY))
-    # yearly chart: stacked columns + cumulative line
+    header = ["Thành phần"] + [f"Năm {y['year']}" for y in ys] + [f"Tổng {c['years']} năm"]
+    for j, h in enumerate(header, 1):
+        cell = ws.cell(row=top, column=j, value=h)
+        cell.font = _font(10, True, "FFFFFF")
+        cell.fill = _fill(NAVY)
+        cell.alignment = Alignment(horizontal="left" if j == 1 else "right", vertical="center")
+    ws.row_dimensions[top].height = 22
+    comps = [("Phần cứng", "hardware"), ("License", "license"), ("Dịch vụ bảo hành HW", "warranty")]
+    for i, (label, key) in enumerate(comps, 1):
+        r = top + i
+        ws.cell(row=r, column=1, value=label).font = _font(10, True)
+        for j, y in enumerate(ys, 2):
+            cell = ws.cell(row=r, column=j)
+            if key == "warranty" and y["inWarranty"]:
+                cell.value = 0
+                cell.number_format = '[=0]"Đã gồm";#,##0'
+                cell.font = _font(10, False, MUTED)
+            elif y[key] is None:
+                cell.value = "Chưa nhập" if key == "warranty" else None
+                cell.font = _font(10, False, WARN)
+            else:
+                cell.value = y[key]
+                cell.number_format = MONEY
+                cell.font = _font(10)
+            cell.alignment = Alignment(horizontal="right")
+        tc = ws.cell(row=r, column=ncol, value=f"=SUM(B{r}:{get_column_letter(ncol - 1)}{r})")
+        tc.number_format = MONEY
+        tc.font = _font(10, True)
+    r_hw, r_war, r_tot, r_cum = top + 1, top + 3, top + 4, top + 5
+    ws.cell(row=r_tot, column=1, value="Tổng theo năm").font = _font(10, True)
+    ws.cell(row=r_cum, column=1, value="Lũy kế").font = _font(10, False, MUTED)
+    for j in range(2, ncol + 1):
+        L = get_column_letter(j)
+        t = ws.cell(row=r_tot, column=j, value=f"=SUM({L}{r_hw}:{L}{r_war})")
+        t.number_format = MONEY
+        t.font = _font(10, True)
+        if j < ncol:
+            prev = get_column_letter(j - 1)
+            cv = ws.cell(row=r_cum, column=j, value=f"={L}{r_tot}" if j == 2 else f"={prev}{r_cum}+{L}{r_tot}")
+            cv.number_format = MONEY
+            cv.font = _font(10, False, MUTED)
+    for j in range(1, ncol + 1):
+        ws.cell(row=r_tot, column=j).fill = _fill(SURFACE2)
+        ws.cell(row=r_tot, column=j).border = Border(top=Side(style="medium", color=NAVY))
+        for rr in range(top + 1, r_cum + 1):
+            if j == ncol:
+                ws.cell(row=rr, column=j).fill = _fill(SURFACE2)
+            if rr != r_tot:
+                ws.cell(row=rr, column=j).border = Border(bottom=thin)
+    last = r_cum
+    tot = last
+    # yearly chart: components stacked per year (series = rows) + cumulative line
     bar = BarChart()
     bar.type = "col"
     bar.grouping = "stacked"
     bar.overlap = 100
-    bar.add_data(Reference(ws, min_col=2, max_col=4, min_row=top, max_row=last), titles_from_data=True)
-    bar.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=last))
+    bar.add_data(Reference(ws, min_col=1, max_col=ncol - 1, min_row=r_hw, max_row=r_war), titles_from_data=True, from_rows=True)
+    bar.set_categories(Reference(ws, min_col=2, max_col=ncol - 1, min_row=top, max_row=top))
     _style_chart(bar, "Chi phí theo năm và lũy kế")
-    _color_series(bar, [BLUE, AMBER, TEAL])
+    _color_series(bar, [BLUE, TEAL, AMBER])
     bar.y_axis.number_format = '#,##0,," tr"'
     line = LineChart()
-    line.add_data(Reference(ws, min_col=6, min_row=top, max_row=last), titles_from_data=True)
+    line.add_data(Reference(ws, min_col=1, max_col=ncol - 1, min_row=r_cum, max_row=r_cum), titles_from_data=True, from_rows=True)
     line.y_axis.axId = 200
     line.y_axis.title = "Lũy kế"
     line.y_axis.number_format = '#,##0,," tr"'
@@ -665,7 +700,9 @@ def _tco_sheet(wb, result, subtitle: str) -> None:
         _table(ws, f"A{top2}:G{last2}", "TCOPhuongAn", "TableStyleLight9")
         ws.conditional_formatting.add(f"F{top2 + 1}:F{last2}", DataBarRule(start_type="num", start_value=0, end_type="max", color=AMBER))
     ws.cell(row=last2 + 2, column=1, value="TCO chỉ gồm phần cứng, gia hạn bảo hành và license theo đơn giá đã nhập; chưa gồm dịch vụ triển khai, điện, không gian và vận hành.").font = _font(8.5, False, FAINT, italic=True)
-    _widths(ws, {"A": 30, "B": 18, "C": 18, "D": 18, "E": 18, "F": 18, "G": 22})
+    ws.column_dimensions["A"].width = 30
+    for j in range(2, max(ncol, 7) + 1):
+        ws.column_dimensions[get_column_letter(j)].width = 17
     _print_setup(ws)
 
 
