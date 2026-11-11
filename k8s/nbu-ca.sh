@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Lấy CA của NetBackup primary server và tạo/cập nhật ConfigMap `nbu-ca` cho app.
+# Lấy CA của NetBackup primary server và tạo/cập nhật ConfigMap `ico-nbu-ca` cho app.
 #
 #   ./k8s/nbu-ca.sh [nbu-host] [namespace]
 #
 # Bundle = CA gốc "nbatd" (lấy qua API /netbackup/security/cacert, không cần đăng nhập)
 #        + CA trung gian "broker" (lấy từ chuỗi chứng chỉ máy chủ trả về).
-# Sau khi chạy: kubectl -n <namespace> rollout restart deploy/vco-app
+# Sau khi chạy: kubectl -n <namespace> rollout restart deploy/ico-app
 set -euo pipefail
 HOST="${1:-nbu-primary.hsc.com.vn}"
 NS="${2:-cattle-monitoring-system}"
@@ -32,6 +32,6 @@ openssl s_client -connect "$HOST:$PORT" -CAfile "$WORK/ca.pem" -verify_hostname 
 echo "   OK — fingerprint CA gốc: $(openssl x509 -in "$WORK/root.crt" -noout -fingerprint -sha256 | cut -d= -f2)"
 echo "   Đối chiếu với lệnh trên primary: /usr/openv/netbackup/bin/nbcertcmd -displayCACertDetail"
 
-echo "4/4 Tạo/cập nhật ConfigMap nbu-ca trong namespace $NS"
-kubectl -n "$NS" create configmap nbu-ca --from-file=ca.pem="$WORK/ca.pem" --dry-run=client -o yaml | kubectl apply -f -
-echo "Xong. Áp dụng cho app: kubectl -n $NS rollout restart deploy/vco-app"
+echo "4/4 Tạo/cập nhật ConfigMap ico-nbu-ca trong namespace $NS"
+kubectl -n "$NS" create configmap ico-nbu-ca --from-file=ca.pem="$WORK/ca.pem" --dry-run=client -o yaml | kubectl apply -f -
+echo "Xong. Áp dụng cho app: kubectl -n $NS rollout restart deploy/ico-app"

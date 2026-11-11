@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vco-app
+  name: ico-app
   namespace: cattle-monitoring-system
   labels:
-    app: vco-app
+    app: ico-app
 spec:
   replicas: 1  # giữ 1 — scheduler polling vCenter chạy trong tiến trình app, tăng replicas
                # sẽ khiến nhiều pod cùng poll trùng lặp vào vCenter (không có phối hợp khoá).
   selector:
     matchLabels:
-      app: vco-app
+      app: ico-app
   template:
     metadata:
       labels:
-        app: vco-app
+        app: ico-app
     spec:
-      # Image ghcr.io/luongminhphu/vmware-capacity-ops-management-app là PUBLIC —
+      # Image ghcr.io/luongminhphu/infra-capacity-ops-management-app là PUBLIC —
       # không cần imagePullSecrets. Nếu sau này bạn chuyển package về Private (hoặc
       # GitHub tự đổi lại do "Inherit access from source repository"), thêm lại:
       #   imagePullSecrets:
@@ -26,18 +26,18 @@ spec:
       initContainers:
         - name: wait-postgres
           image: postgres:16-alpine
-          command: ["sh", "-c", "until pg_isready -h vco-postgres -p 5432 -q; do echo 'waiting for postgres'; sleep 3; done"]
+          command: ["sh", "-c", "until pg_isready -h ico-postgres -p 5432 -q; do echo 'waiting for postgres'; sleep 3; done"]
       containers:
         - name: app
           # Sửa lại đúng tên image mà workflow .github/workflows/build-push.yml đã đẩy lên,
           # xem tại: https://github.com/luongminhphu?tab=packages
-          image: ghcr.io/luongminhphu/vmware-capacity-ops-management-app:latest
+          image: ghcr.io/luongminhphu/infra-capacity-ops-management-app:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
           envFrom:
-            - configMapRef: { name: vco-config }
-            - secretRef: { name: vco-secrets }
+            - configMapRef: { name: ico-config }
+            - secretRef: { name: ico-secrets }
           readinessProbe:
             httpGet: { path: /api/health, port: 8000 }
             initialDelaySeconds: 10
@@ -46,7 +46,7 @@ spec:
             httpGet: { path: /api/health, port: 8000 }
             initialDelaySeconds: 20
             periodSeconds: 20
-          # CA của NetBackup (ConfigMap nbu-ca, tạo bằng k8s/nbu-ca.sh) cho NETBACKUP_1_CA_CERT.
+          # CA của NetBackup (ConfigMap ico-nbu-ca, tạo bằng k8s/nbu-ca.sh) cho NETBACKUP_1_CA_CERT.
           volumeMounts:
             - { name: nbu-ca, mountPath: /etc/netbackup-ca, readOnly: true }
           resources:
@@ -55,17 +55,17 @@ spec:
       volumes:
         - name: nbu-ca
           # optional: pod vẫn chạy khi chưa tạo ConfigMap (đồng bộ NetBackup sẽ báo thiếu file CA).
-          configMap: { name: nbu-ca, optional: true }
+          configMap: { name: ico-nbu-ca, optional: true }
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: vco-app
+  name: ico-app
   namespace: cattle-monitoring-system
 spec:
   type: NodePort
   selector:
-    app: vco-app
+    app: ico-app
   ports:
     - port: 80
       targetPort: 8000
