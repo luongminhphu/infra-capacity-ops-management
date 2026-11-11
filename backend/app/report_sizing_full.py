@@ -17,7 +17,7 @@ import math
 import re
 from typing import Any, Dict, List, Optional
 
-from . import sizing
+from . import platforms, sizing
 from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc, html_to_pdf_bytes,
                          svg_bar_chart, svg_donut, svg_gauge)
 from .report_planning import _planning_css
@@ -48,7 +48,7 @@ def pct(v: Optional[float], d: int = 0) -> str:
 
 
 def cap(gb: Optional[float], d: int = 1) -> str:
-    """Capacity: GB as entered (= GiB in vSphere) below 1 024, TiB above."""
+    """Capacity: GB as entered (= GiB in the hypervisor) below 1 024, TiB above."""
     if gb is None:
         return "—"
     return f"{n(gb / 1024, d)} TiB" if gb >= 1024 else f"{n(gb, 0)} GB"
@@ -83,16 +83,18 @@ DEFAULT_OUT_OF_SCOPE = [
 
 GLOSSARY = [
     ("vCPU", "CPU ảo cấp cho một VM. Một vCPU chạy trên một luồng CPU (thread) của host tại một thời điểm."),
-    ("Core", "Nhân xử lý vật lý của CPU. License VMware tính theo core (tối thiểu 16 core mỗi CPU)."),
+    ("Core", "Nhân xử lý vật lý của CPU. Nhiều nền tảng tính license theo core, thường có số core tối thiểu mỗi CPU."),
     ("Thread (luồng CPU)", "Với Hyper-Threading, mỗi core chạy 2 luồng; host 64 core có 128 thread."),
     ("Tỷ lệ chia sẻ (overcommit)", "Số vCPU (hoặc GB RAM ảo) cấp ra trên mỗi đơn vị tài nguyên vật lý. Ví dụ 2 : 1 là 2 vCPU trên 1 core."),
     ("N+1", "Có thêm 1 host dự phòng: khi 1 host hỏng hoặc bảo trì, các host còn lại vẫn chạy đủ toàn bộ VM."),
     ("Vùng an toàn", "Phần năng lực để trống trên mỗi host (ví dụ 20%) cho tải đột biến và vận hành."),
     ("Yếu tố quyết định", "Tài nguyên (CPU hoặc RAM) hết trước, quyết định số host cần mua."),
     ("NUMA", "Mỗi CPU có bộ nhớ gắn trực tiếp. VM lớn hơn một CPU phải dùng bộ nhớ của CPU kia, chậm hơn."),
-    ("vSphere HA", "Tự khởi động lại VM trên host khác khi một host hỏng. Cần lưu trữ dùng chung (vSAN hoặc SAN)."),
-    ("DRS", "Tự cân bằng tải giữa các host và áp dụng quy tắc bố trí VM (ví dụ tách 2 Domain Controller ra 2 host)."),
-    ("vSAN", "Gộp ổ đĩa trên các host thành một kho lưu trữ dùng chung, có bản sao dữ liệu giữa các host."),
+    ("Hypervisor", "Phần mềm ảo hoá chạy trực tiếp trên host, tạo và chạy các VM."),
+    ("HA (sẵn sàng cao)", "Tự khởi động lại VM trên host khác khi một host hỏng. Cần lưu trữ dùng chung (HCI hoặc SAN)."),
+    ("Cân bằng tải tự động", "Tự dàn VM giữa các host và áp dụng quy tắc bố trí (ví dụ tách 2 Domain Controller ra 2 host)."),
+    ("Di chuyển VM trực tuyến", "Chuyển VM đang chạy sang host khác không gián đoạn, dùng khi bảo trì host."),
+    ("Lưu trữ HCI", "Gộp ổ đĩa trên các host thành một kho lưu trữ dùng chung, có bản sao dữ liệu giữa các host."),
     ("TiB", "Đơn vị dung lượng nhị phân: 1 TiB = 1.024 GB (GiB). Dung lượng thô là trước khi trừ phần bảo vệ dữ liệu."),
     ("TCO", "Tổng chi phí sở hữu trong kỳ: phần cứng + license (và các chi phí khác nếu có)."),
 ]
@@ -178,7 +180,7 @@ def _cover(result, best, params, doc: Dict[str, str], logo_html: str, toc: List[
     {logo_html}
   </div>
   <div class="cv-main">
-    <div class="eyebrow">Đề xuất giải pháp · Hạ tầng ảo hoá VMware vSphere</div>
+    <div class="eyebrow">Đề xuất giải pháp · Hạ tầng ảo hoá{(" " + esc(platforms.get(params)["label"])) if getattr(params, "platform", "vmware") != "generic" else ""}</div>
     <div class="cv-title">Đề xuất cấu hình máy chủ</div>
     <div class="cv-project">{esc(" – ".join(x for x in (env, customer) if x))}</div>
     <div class="cv-sub">{esc(vn(result['recommendation']['headline'])) if best else 'Chưa có VM trong danh sách yêu cầu.'}</div>
@@ -226,19 +228,21 @@ def _scope(result, params, doc: Dict[str, Any]) -> str:
     d = result["demand"]
     wl = result["analysis"]["workload"]
     out_scope = [x for x in (doc.get("outOfScope") or []) if str(x).strip()] or DEFAULT_OUT_OF_SCOPE
+    pf = platforms.get(params)
     in_scope = ["Tính số host và cấu hình phần cứng cho cụm ảo hoá (CPU, RAM).",
-                f"Dung lượng lưu trữ cần cấp ({'vSAN trên ổ đĩa của host' if params.storage_mode == 'local' else 'SAN dùng chung'}).",
-                "Ước tính số core license VMware, kiến trúc logic và kế hoạch triển khai."]
+                f"Dung lượng lưu trữ cần cấp ({pf['hci_long'] if params.storage_mode == 'local' else 'SAN dùng chung'}).",
+                f"Ước tính license ({'theo CPU socket' if pf['license_unit'] == 'socket' else 'theo core'}), kiến trúc logic và kế hoạch triển khai."]
     rows = [
         ("Khách hàng", esc((doc.get("customer") or "—") + (f" (đầu mối: {doc['contact']})" if doc.get("contact") else ""))),
         ("Hệ thống", esc(params.environment or "—")),
+        ("Nền tảng ảo hoá", esc(pf["label"]) + ("" if params.platform != "generic" else " — tên sản phẩm cụ thể chốt khi chọn nền tảng")),
         ("Nguồn dữ liệu", esc(doc.get("inputSource") or "Danh sách máy ảo do khách hàng cung cấp")),
         ("Ngày nhận dữ liệu", esc(doc.get("inputDate") or "—")),
         ("Dữ liệu đầu vào", esc(f"{wl['groupCount']} nhóm, {n(d['vmCount'])} VM — {n(d['vcpu'])} vCPU, {n(d['ramGB'])} GB RAM, "
                                 f"{cap(d['diskGB'])} dữ liệu (Phụ lục A)")),
         ("Trong phạm vi", "<ul class='tight'>" + "".join(f"<li>{esc(x)}</li>" for x in in_scope) + "</ul>"),
         ("Ngoài phạm vi", "<ul class='tight'>" + "".join(f"<li>{esc(x)}</li>" for x in out_scope) + "</ul>"),
-        ("Quy ước", "Máy chủ vật lý chạy ESXi gọi là <b>host</b>. Số liệu dùng dấu chấm phân cách hàng nghìn, dấu phẩy thập phân. "
+        ("Quy ước", f"Máy chủ vật lý chạy hypervisor ({esc(pf['hypervisor'])}) gọi là <b>host</b>. Số liệu dùng dấu chấm phân cách hàng nghìn, dấu phẩy thập phân. "
                     "Dung lượng theo hệ nhị phân: 1 TiB = 1.024 GB. Thuật ngữ: xem Phụ lục B."),
     ]
     return _kv_table(rows, key_w="24%")
@@ -296,7 +300,7 @@ def _demand(result, params, best) -> str:
     <div class="chart-card keep" style="margin-top:8px;"><div class="chart-card-title">Từ yêu cầu đến năng lực lắp đặt — {('CPU' if key == 'cpu' else 'RAM')} (yếu tố quyết định)</div>
       <table class="inner"><tr><td style="width:340px;">{wf_svg}</td>
       <td class="muted-cell">Cột đầu là nhu cầu ban đầu; các cột giữa là phần cộng thêm cho tăng trưởng và vùng an toàn;
-      cột cuối là tổng năng lực của {best['hostsTotal'] if best else '—'} host đề xuất (gồm host dự phòng, đã trừ phần dành cho ESXi).
+      cột cuối là tổng năng lực của {best['hostsTotal'] if best else '—'} host đề xuất (gồm host dự phòng, đã trừ phần dành cho hypervisor).
       {('CPU không được vẽ vì không phải yếu tố quyết định.' if key == 'ram' else 'RAM không được vẽ vì không phải yếu tố quyết định.')}</td></tr></table>
     </div>"""
 
@@ -394,47 +398,55 @@ def _dimms(ram_gb: float, sockets: int) -> str:
 
 
 def _bom(best, params, result) -> str:
+    pf = platforms.get(params)
     prof, adv = best["profile"], best["advisory"]
     local = params.storage_mode == "local"
     nh = best["hostsTotal"]
     rows = [
         ["CPU", f"{prof['coresPerSocket']} core / CPU, thế hệ hiện hành (Intel Xeon Scalable hoặc AMD EPYC)", n(prof["sockets"]), n(prof["sockets"] * nh)],
         ["Bộ nhớ (RAM)", f"{ram(prof['ramGB'])} / host — {_dimms(prof['ramGB'], prof['sockets'])}", "1 bộ", n(nh) + " bộ"],
-        ["Ổ khởi động", "2 × M.2 / SSD 480 GB, RAID-1 (cài ESXi)", "2", n(2 * nh)],
+        ["Ổ khởi động", f"2 × M.2 / SSD 480 GB, RAID-1 (cài {pf['hypervisor']})", "2", n(2 * nh)],
     ]
     if local:
         per_host_tib = (best["storage"].get("perHostNeededGB") or 0) / 1024
         drive_tib = 3.84e12 / 1024 ** 4  # 3,84 TB (decimal, nhãn ổ đĩa) ≈ 3,49 TiB
         cnt = max(2, math.ceil(per_host_tib / drive_tib)) if per_host_tib else 0
-        rows.append(["Ổ dữ liệu vSAN", f"NVMe / SSD Enterprise, ≥ {n(per_host_tib, 1)} TiB thô / host (ví dụ {cnt} × 3,84 TB)", n(cnt), n(cnt * nh)])
-        rows.append(["Mạng", "2 card 25GbE × 2 cổng: quản lý + VM, vMotion, vSAN (VLAN tách biệt, dự phòng 2 đường)", "4 cổng", n(4 * nh) + " cổng"])
+        rows.append([f"Ổ dữ liệu {pf['hci']}", f"NVMe / SSD Enterprise, ≥ {n(per_host_tib, 1)} TiB thô / host (ví dụ {cnt} × 3,84 TB)", n(cnt), n(cnt * nh)])
+        rows.append(["Mạng", f"2 card 25GbE × 2 cổng: quản lý + VM, {pf['migration']}, {pf['hci']} (VLAN tách biệt, dự phòng 2 đường)", "4 cổng", n(4 * nh) + " cổng"])
     else:
         rows.append(["Kết nối lưu trữ", "2 × HBA FC 32Gb hoặc 2 cổng iSCSI 25GbE tới SAN (dự phòng 2 đường)", "2", n(2 * nh)])
-        rows.append(["Mạng", "2 card 25GbE × 2 cổng: quản lý + VM, vMotion (VLAN tách biệt, dự phòng 2 đường)", "4 cổng", n(4 * nh) + " cổng"])
+        rows.append(["Mạng", f"2 card 25GbE × 2 cổng: quản lý + VM, {pf['migration']} (VLAN tách biệt, dự phòng 2 đường)", "4 cổng", n(4 * nh) + " cổng"])
     rows += [
         ["Quản trị phần cứng", "Cổng quản trị từ xa (iDRAC / iLO / XCC)", "1", n(nh)],
         ["Nguồn", "2 bộ nguồn dự phòng (redundant), hot-plug", "2", n(2 * nh)],
-        ["License vSphere", f"{esc(params.license_edition)} — tính theo core, tối thiểu {params.license_min_cores_per_socket} core / CPU",
-         n(adv["license"]["coresPerHost"]) + " core", n(adv["license"]["coresTotal"]) + " core"],
+        [f"License {pf['short']}" if params.platform != "generic" else "License nền tảng",
+         esc(platforms.edition_of(params)) + (" — tính theo CPU socket" if pf["license_unit"] == "socket" else
+                                              f" — tính theo core, tối thiểu {params.license_min_cores_per_socket} core / CPU"
+                                              + (f", {pf['license_min_per_host']} core / host" if pf.get("license_min_per_host") else "")),
+         f"{n(adv['license']['coresPerHost'])} {adv['license'].get('unit', 'core')}", f"{n(adv['license']['coresTotal'])} {adv['license'].get('unit', 'core')}"],
     ]
     if local:
-        rows.append(["License vSAN", f"Dung lượng vSAN kèm theo gói license; phần vượt mua thêm theo TiB (≈ {cap(result['demand']['storageNeededGB'])} thô)", "—", "—"])
-    rows.append(["vCenter Server", "Dùng vCenter hiện hữu hoặc triển khai mới (VM trong cụm)", "—", "1"])
+        rows.append([f"License {pf['hci']}", f"{pf['hci_license']} (≈ {cap(result['demand']['storageNeededGB'])} thô)", "—", "—"])
+    rows.append([pf["manager"], "Dùng hệ thống quản trị hiện hữu hoặc triển khai mới (" + " ".join(pf["manager_note"]) + ")", "—", "1"])
     return _table(["Hạng mục", "Cấu hình tham chiếu", "SL / host", f"Tổng ({nh} host)"], rows, cls="bom-table",
                   aligns=["left", "left", "center", "center"], widths=["17%", "55%", "12%", "16%"]) + \
         ('<div class="small-note">BOM sơ bộ để ước lượng; model, thông số và số lượng cuối cùng chốt trong báo giá. '
-         'Loại và điều kiện license VMware (VVF / VCF, dung lượng vSAN kèm theo) áp dụng theo chính sách của Broadcom hiện hành tại thời điểm báo giá.</div>')
+         + esc(pf["license_note"]) + '</div>')
 
 
 def svg_architecture(best, params, result) -> str:
-    """Logical design: networks (management / vMotion / vSAN or storage / VM), hosts in the cluster,
-    shared storage, vCenter placement."""
+    """Logical design, platform-neutral: four networks (management / live migration / storage / VM),
+    hosts running the hypervisor, shared storage (HCI or SAN), central management. Product names
+    come from platforms.py, so the same picture serves vSphere, Nutanix, Hyper-V, Proxmox…"""
+    pf = platforms.get(params)
     nh = best["hostsTotal"]
     prof = best["profile"]
     local = params.storage_mode == "local"
     W, H = 680, 268
-    nets = [("Quản lý (Management)", "#074B9B"), ("vMotion", "#7c3aed"),
-            ("vSAN" if local else "Lưu trữ (iSCSI / FC)", "#0891b2"), ("Mạng VM (Production)", "#15803d")]
+    generic = params.platform == "generic"
+    nets = [("Quản lý (Management)", "#074B9B"), (pf["migration"] if not generic else "Di chuyển VM", "#7c3aed"),
+            ((f"Lưu trữ ({pf['hci_short']})" if not generic else "Lưu trữ HCI") if local else "Lưu trữ (iSCSI / FC)", "#0891b2"),
+            ("Mạng VM (Production)", "#15803d")]
     x0, x1 = 128, W - 10
     ny = [26, 44, 62, 80]
     parts = [f'<svg width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="Roboto, Noto Sans, sans-serif">']
@@ -449,7 +461,7 @@ def svg_architecture(best, params, result) -> str:
     # cluster boundary
     parts.append(f'<rect x="{x0 - 2}" y="{hy - 6}" width="{x1 - x0 + 4}" height="{hh + 20}" rx="6" fill="none" stroke="{COLORS["faint"]}" stroke-dasharray="5 3"/>')
     parts.append(f'<text x="{x1 - 4}" y="{hy + hh + 10}" text-anchor="end" font-size="7.4" font-weight="700" fill="{COLORS["muted"]}">'
-                 f'Cụm vSphere · HA · DRS · N+{best["redundancy"]}</text>')
+                 f'Cụm ảo hoá · {esc(pf["ha"] if not generic else "HA")} · {esc(pf["balancer"].split(" (")[0] if not generic else "cân bằng tải")} · N+{best["redundancy"]}</text>')
     for i in range(shown + (1 if nh > shown else 0)):
         x = hx0 + i * (hw + gap)
         cx = x + hw / 2
@@ -461,7 +473,7 @@ def svg_architecture(best, params, result) -> str:
             parts.append(f'<circle cx="{cx - 9 + nets.index((lbl, color)) * 6:.1f}" cy="{y}" r="2" fill="{color}"/>')
         parts.append(f'<rect x="{x:.1f}" y="{hy}" width="{hw:.1f}" height="{hh}" rx="4" fill="{COLORS["surface"]}" stroke="{COLORS["primary_dark"]}" stroke-width="1.2"/>')
         parts.append(f'<text x="{cx:.1f}" y="{hy + 15}" text-anchor="middle" font-size="8.4" font-weight="800" fill="{COLORS["ink"]}">Host {i + 1}</text>')
-        parts.append(f'<text x="{cx:.1f}" y="{hy + 27}" text-anchor="middle" font-size="7" fill="{COLORS["muted"]}">ESXi</text>')
+        parts.append(f'<text x="{cx:.1f}" y="{hy + 27}" text-anchor="middle" font-size="7" fill="{COLORS["muted"]}">{esc(pf["hypervisor"])}</text>')
         parts.append(f'<text x="{cx:.1f}" y="{hy + 39}" text-anchor="middle" font-size="7" fill="{COLORS["muted"]}">{prof["cores"]} core · {esc(ram(prof["ramGB"]))}</text>')
         if i == nh - 1 and best["redundancy"]:
             parts.append(f'<text x="{cx:.1f}" y="{hy + 51}" text-anchor="middle" font-size="6.8" font-weight="700" fill="{COLORS["warn"]}">năng lực dự phòng</text>')
@@ -469,7 +481,7 @@ def svg_architecture(best, params, result) -> str:
     sy = hy + hh + 26
     if local:
         parts.append(f'<rect x="{x0}" y="{sy}" width="{x1 - x0}" height="32" rx="5" fill="#e0f2fe" stroke="#0891b2"/>')
-        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 13}" text-anchor="middle" font-size="8.4" font-weight="800" fill="#075985">vSAN datastore (dùng chung) — {esc(cap(result["demand"]["storageNeededGB"]))} thô</text>')
+        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 13}" text-anchor="middle" font-size="8.4" font-weight="800" fill="#075985">{esc(pf["hci"] if not generic else "Lưu trữ HCI")} (dùng chung) — {esc(cap(result["demand"]["storageNeededGB"]))} thô</text>')
         parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 25}" text-anchor="middle" font-size="7.2" fill="#075985">Gộp ổ đĩa của {nh} host · hệ số bảo vệ ×{esc(n(params.storage_protection_factor, 2).rstrip("0").rstrip(","))}</text>')
         for i in range(shown):
             cx = hx0 + i * (hw + gap) + hw / 2
@@ -478,16 +490,26 @@ def svg_architecture(best, params, result) -> str:
         parts.append(f'<rect x="{(x0 + x1) / 2 - 150:.1f}" y="{sy}" width="300" height="32" rx="5" fill="#e0f2fe" stroke="#0891b2"/>')
         parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 13}" text-anchor="middle" font-size="8.4" font-weight="800" fill="#075985">Hệ thống lưu trữ SAN dùng chung</text>')
         parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 25}" text-anchor="middle" font-size="7.2" fill="#075985">Cấp {esc(cap(result["demand"]["storageNeededGB"]))} cho cụm</text>')
-    # vCenter
+    # central management
     parts.append(f'<rect x="0" y="{hy}" width="{x0 - 16}" height="{hh}" rx="4" fill="#fff" stroke="#074B9B" stroke-dasharray="4 2"/>')
-    parts.append(f'<text x="{(x0 - 16) / 2:.1f}" y="{hy + 18}" text-anchor="middle" font-size="8.2" font-weight="800" fill="#074B9B">vCenter Server</text>')
-    parts.append(f'<text x="{(x0 - 16) / 2:.1f}" y="{hy + 31}" text-anchor="middle" font-size="6.8" fill="{COLORS["muted"]}">VM trong cụm</text>')
-    parts.append(f'<text x="{(x0 - 16) / 2:.1f}" y="{hy + 42}" text-anchor="middle" font-size="6.8" fill="{COLORS["muted"]}">hoặc vCenter hiện hữu</text>')
-    # vCenter → management network: out of the box's right edge, up the gutter left of the network lines.
+    mgr = pf["manager"] if not generic else "Quản trị tập trung"
+    mgr_lines = [mgr] if len(mgr) <= 18 else [mgr.split(" (")[0].split(" / ")[0], ""]
+    parts.append(f'<text x="{(x0 - 16) / 2:.1f}" y="{hy + 18}" text-anchor="middle" font-size="8" font-weight="800" fill="#074B9B">{esc(mgr_lines[0])}</text>')
+    parts.append(f'<text x="{(x0 - 16) / 2:.1f}" y="{hy + 31}" text-anchor="middle" font-size="6.8" fill="{COLORS["muted"]}">{esc(pf["manager_note"][0])}</text>')
+    parts.append(f'<text x="{(x0 - 16) / 2:.1f}" y="{hy + 42}" text-anchor="middle" font-size="6.8" fill="{COLORS["muted"]}">{esc(pf["manager_note"][1])}</text>')
+    # management → management network: out of the box's right edge, up the gutter left of the network lines.
     gx = x0 - 6
     parts.append(f'<polyline points="{x0 - 16},{hy + hh / 2:.1f} {gx},{hy + hh / 2:.1f} {gx},{ny[0]} {x0},{ny[0]}" fill="none" stroke="#074B9B" stroke-width="1"/>')
     parts.append("</svg>")
     return "".join(parts)
+
+
+def _arch_note(params) -> str:
+    pf = platforms.get(params)
+    if params.platform == "generic":
+        return ("Sơ đồ trình bày theo khối chức năng, dùng chung cho các nền tảng (VMware vSphere, Nutanix AHV, Microsoft Hyper-V, "
+                "Proxmox VE…): phần mềm quản trị tập trung quản lý cụm; HA và cân bằng tải bật ở mức cụm. Tên sản phẩm tương ứng xem Phụ lục B.")
+    return f"{pf['manager']} quản lý cụm; {pf['ha']} và {pf['balancer']} bật ở mức cụm."
 
 
 def _stackbar(best, d, p) -> str:
@@ -498,7 +520,7 @@ def _stackbar(best, d, p) -> str:
     ph, prof = best["perHost"], best["profile"]
     segs_def = [("request", "Yêu cầu", "#2681FF", "#fff"), ("growth", "Dự phòng tăng trưởng", "#93c5fd", COLORS["ink"]),
                 ("free", "Còn trống", "#bbf7d0", COLORS["ink"]), ("safe", f"Vùng an toàn {n(100 - p['max_util_pct'])}%", "#fde68a", COLORS["ink"]),
-                ("red", f"Dự phòng N+{red}", "#fca5a5", COLORS["ink"]), ("esxi", "ESXi", "#cbd5e1", COLORS["ink"])]
+                ("red", f"Dự phòng N+{red}", "#fca5a5", COLORS["ink"]), ("hv", "Hypervisor", "#cbd5e1", COLORS["ink"])]
     rows_html = ""
     for label, total, usable_host, req, planned in (
         ("CPU", prof["cores"] * max(1.0, p["ht_factor"]) * p["cpu_ratio"] * n_tot, ph["logicalCpu"] * p["cpu_ratio"], d["vcpu"], d["vcpuPlanned"]),
@@ -554,7 +576,7 @@ def _design(result, best, params) -> str:
         ("Cấu hình mỗi host", f"{prof['sockets']} CPU × {prof['coresPerSocket']} core = {prof['cores']} core ({n(prof['cores'] * max(1.0, p['ht_factor']))} thread) · {ram(prof['ramGB'])} RAM"),
         ("Số host", f"{best['hostsTotal']} host = {best['hostsBase']} theo tải + {best['redundancy']} dự phòng"
                     + (f" (tối thiểu {p['min_hosts']})" if best["hostsTotal"] > best["hostsBase"] + best["redundancy"] else "")),
-        ("Năng lực khả dụng / host", f"{n(ph['usableCores'])} core · {n(ph['logicalCpu'])} thread · {ram(ph['usableRamGB'])} RAM (đã trừ phần dành cho ESXi)"),
+        ("Năng lực khả dụng / host", f"{n(ph['usableCores'])} core · {n(ph['logicalCpu'])} thread · {ram(ph['usableRamGB'])} RAM (đã trừ phần dành cho hypervisor)"),
         ("Tổng cụm", f"{n(best['totals']['cores'])} core · {ram(best['totals']['ramGB'])} RAM"),
         ("Tỷ lệ chia sẻ thực tế", f"CPU {ratio(best.get('vcpuPerCore'))} (vCPU : core vật lý) · RAM {ratio(d['ramPlannedGB'] / max(1, best['totals']['ramGB']))}"),
         ("Khi mất 1 host", f"CPU {pct(best['failure']['cpuPct'])} · RAM {pct(best['failure']['ramPct'])} — tối đa cho phép {n(p['max_util_pct'])}%"),
@@ -562,8 +584,8 @@ def _design(result, best, params) -> str:
                     else f"Chứa thêm ~{n(extra)} VM cỡ trung bình; nhận thêm ~{n(max(0, run['extraGrowthPct'] or 0))}% tải ngoài +{n(p['growth_pct'])}% đã dự phòng")),
         ("NUMA", f"{prof['coresPerSocket']} core · {ram(numa['ramPerSocketGB'])} mỗi CPU — "
                  + ("mọi VM nằm gọn trong một CPU" if numa["ok"] else f"{len(numa['wideCpu']) + len(numa['wideRam'])} nhóm VM vượt một CPU")),
-        ("License", f"{n(lic['coresTotal'])} core ({n(lic['coresPerHost'])} / host) · {params.license_edition}"),
-        ("Lưu trữ", (f"vSAN: cần {cap(usable_need)} dùng được → {cap(d['storageNeededGB'])} thô (×{n(p['storage_protection_factor'], 0 if p['storage_protection_factor'] == int(p['storage_protection_factor']) else 2)}), "
+        ("License", f"{n(lic['coresTotal'])} {lic.get('unit', 'core')} ({n(lic['coresPerHost'])} / host) · {platforms.edition_of(params)}"),
+        ("Lưu trữ", (f"{platforms.get(params)['hci']}: cần {cap(usable_need)} dùng được → {cap(d['storageNeededGB'])} thô (×{n(p['storage_protection_factor'], 0 if p['storage_protection_factor'] == int(p['storage_protection_factor']) else 2)}), "
                      f"~{cap(best['storage'].get('perHostNeededGB'))} thô / host; cấu hình {cap(prof['diskGB'])} / host"
                      if local else f"SAN dùng chung: cấp {cap(d['storageNeededGB'])} (gồm tăng trưởng và {n(p['storage_overhead_pct'])}% dự trữ)")),
     ]
@@ -583,7 +605,7 @@ def _design(result, best, params) -> str:
     {_bom(best, params, result)}
     <div class="keep"><div class="sub-h">5.3 Kiến trúc logic</div>
     <div class="chart-card">{svg_architecture(best, params, result)}
-      <div class="small-note" style="margin-top:2px;">Mỗi host nối 4 mạng tách VLAN, mỗi mạng 2 đường dự phòng. vCenter quản lý cụm; HA và DRS bật ở mức cụm.</div></div></div>
+      <div class="small-note" style="margin-top:2px;">Mỗi host nối 4 mạng tách VLAN, mỗi mạng 2 đường dự phòng. {esc(_arch_note(params))}</div></div></div>
     <div class="keep"><div class="sub-h">5.4 Phân bổ năng lực</div>
     <div class="chart-card">{_stackbar(best, d, p)}</div>
     {_gauges(best, p)}
@@ -685,7 +707,7 @@ def _method(result, best, params) -> str:
           f'<th style="width:17%;text-align:right;">CPU</th><th style="width:17%;text-align:right;">RAM</th></tr></thead><tbody>{body}</tbody></table>')
     return (f'<div class="sub-h">Bảng 9.1 – Giả định</div>{t1}'
             f'<div class="keep"><div class="sub-h">Bảng 9.2 – Cách tính (phương án {esc(prof["name"])})</div>{t2}</div>'
-            f'<div class="small-note">Dung lượng: 1 TiB = 1.024 GB. "Thô" là dung lượng trước khi trừ phần bảo vệ dữ liệu của vSAN; "dùng được" là sau khi trừ.</div>')
+            f'<div class="small-note">Dung lượng: 1 TiB = 1.024 GB. "Thô" là dung lượng trước khi trừ phần bảo vệ dữ liệu của lưu trữ HCI; "dùng được" là sau khi trừ.</div>')
 
 
 def _vm_appendix(vms: List[Dict[str, Any]], d: Dict[str, Any]) -> str:
@@ -710,8 +732,16 @@ def _vm_appendix(vms: List[Dict[str, Any]], d: Dict[str, Any]) -> str:
     return _table(header, rows, cls="appendix-table", aligns=aligns)
 
 
-def _glossary() -> str:
-    return _table(["Thuật ngữ", "Giải thích"], [[f"<b>{esc(k)}</b>", esc(v)] for k, v in GLOSSARY], cls="method-table glossary", widths=["24%", "76%"])
+def _glossary(params=None) -> str:
+    terms = _table(["Thuật ngữ", "Giải thích"], [[f"<b>{esc(k)}</b>", esc(v)] for k, v in GLOSSARY], cls="method-table glossary", widths=["24%", "76%"])
+    keys = ["vmware", "nutanix", "hyperv", "proxmox"]
+    cur = getattr(params, "platform", "vmware")
+    head = ["Khái niệm chung"] + [f"<b>{esc(platforms.PLATFORMS[k]['label'])}</b>" if k == cur else esc(platforms.PLATFORMS[k]["label"]) for k in keys]
+    rows = [[f"<b>{esc(c)}</b>"] + [esc(platforms.PLATFORMS[k][field]) for k in keys] for c, field in platforms.CONCEPTS]
+    mapping = _table(head, rows, cls="method-table glossary map-table", widths=["22%", "19.5%", "19.5%", "19.5%", "19.5%"])
+    return (terms + '<div class="keep"><div class="sub-h">Tên gọi tương ứng trên các nền tảng</div>' + mapping
+            + '<div class="small-note">Báo cáo dùng khái niệm chung; tên sản phẩm cụ thể theo nền tảng được chọn'
+            + (f' (<b>{esc(platforms.get(params)["label"])}</b>)' if cur != "generic" else '') + '.</div></div>')
 
 
 def _existing_chart(existing: List[Dict[str, Any]]) -> str:
@@ -782,6 +812,7 @@ ul.tight {{ margin:0; padding-left:14px; font-size:9px; }} ul.tight li {{ margin
 .findings-table td {{ vertical-align:top; font-size:8.8px; }}
 .findings-table td:first-child {{ white-space:nowrap; }}
 .plan-table td, .method-table td, .bom-table td {{ vertical-align:top; font-size:8.8px; }}
+.map-table td {{ font-size:8.2px; }}
 .legend {{ margin-top:4px; }}
 .leg-row {{ font-size:8.2px; margin:2px 0; white-space:nowrap; }}
 .radar-swatch {{ display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; vertical-align:middle; }}
@@ -874,7 +905,7 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
     secs.append(_section("sec-method", "9", "Giả định & cách tính", "", _method(result, best, params)))
     vm_dicts = [{"name": v.name, "qty": v.qty, "vcpu": v.vcpu, "ramGB": v.ram_gb, "diskGB": v.disk_gb, "note": v.note} for v in vms]
     secs.append(_section("app-vms", "", "Phụ lục A. Danh sách máy ảo", "Theo dữ liệu khách hàng cung cấp.", _vm_appendix(vm_dicts, result["demand"]), "appendix"))
-    secs.append(_section("app-glossary", "", "Phụ lục B. Thuật ngữ", "", _glossary()))
+    secs.append(_section("app-glossary", "", "Phụ lục B. Thuật ngữ", "", _glossary(params)))
 
     header_left = " · ".join(x for x in [doc["org"], "Đề xuất cấu hình máy chủ" + (f" – {doc['customer']}" if doc["customer"] else "")] if x)
     header_right = " · ".join(x for x in [doc["code"], f"Phiên bản {doc['version']}"] if x)

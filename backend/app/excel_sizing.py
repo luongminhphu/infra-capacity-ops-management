@@ -248,7 +248,9 @@ def _dashboard(wb, result, payload_meta, data_ws, refs) -> None:
     ws["A1"].font = _font(9, True, "9DC2F5")
     ws["A2"] = f"Đề xuất cấu hình máy chủ — {env}"
     ws["A2"].font = _font(18, True, "FFFFFF")
-    sub = ["Sizing hạ tầng ảo hoá VMware vSphere"]
+    from . import platforms
+    pf = platforms.get(p)
+    sub = ["Sizing hạ tầng ảo hoá" + ("" if p.get("platform") == "generic" else f" {pf['label']}")]
     if payload_meta.get("customerName"):
         sub.append(f"Khách hàng: {payload_meta['customerName']}")
     if payload_meta.get("preparedBy"):
@@ -297,10 +299,10 @@ def _dashboard(wb, result, payload_meta, data_ws, refs) -> None:
         ("vCPU (sau tăng trưởng)", f"{d['vcpuPlanned']:,.0f}", f"yêu cầu {d['vcpu']:,.0f} · +{p['growth_pct']:g}%", BLUE),
         ("RAM (sau tăng trưởng)", _gb(d["ramPlannedGB"]), f"yêu cầu {_gb(d['ramGB'])}", BLUE),
         ("Host đề xuất", f"{best['hostsTotal']}" if best else "—", f"{best['profile']['name']} · N+{best['redundancy']}" if best else "", OK),
-        ("Lưu trữ cần cấp", _gb(d["storageNeededGB"]), "SAN dùng chung" if p["storage_mode"] == "san" else "cục bộ / vSAN", TEAL),
-        ((f"TCO {costs.get('years')} năm" if costs.get("tco") else "License (core)"),
+        ("Lưu trữ cần cấp", _gb(d["storageNeededGB"]), "SAN dùng chung" if p["storage_mode"] == "san" else f"HCI ({pf['hci']})", TEAL),
+        ((f"TCO {costs.get('years')} năm" if costs.get("tco") else f"License ({best['advisory']['license'].get('unit', 'core') if best else 'core'})"),
          (_money_short(costs.get("tco")) if costs.get("tco") else (f"{best['advisory']['license']['coresTotal']:,}" if best else "—")),
-         ("phần cứng + license" if costs.get("tco") else "tối thiểu 16 core / CPU"), NAVY),
+         ("phần cứng + license" if costs.get("tco") else platforms.edition_of(p)), NAVY),
     ]
     col = 1
     spans = [3, 3, 3, 2, 3, 2]
@@ -508,7 +510,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
 
         cpu = segs(prof["cores"] * max(1.0, p["ht_factor"]) * p["cpu_ratio"] * n, ph["logicalCpu"] * p["cpu_ratio"], dmd["vcpu"], dmd["vcpuPlanned"])
         ram = segs(prof["ramGB"] * p["ram_ratio"] * n, ph["usableRamGB"] * p["ram_ratio"], dmd["ramGB"], dmd["ramPlannedGB"])
-        labels = ["Yêu cầu", "Dự phòng tăng trưởng", "Còn trống", f"Vùng an toàn {100 - p['max_util_pct']:g}%", f"Dự phòng N+{red}", "ESXi"]
+        labels = ["Yêu cầu", "Dự phòng tăng trưởng", "Còn trống", f"Vùng an toàn {100 - p['max_util_pct']:g}%", f"Dự phòng N+{red}", "Hypervisor"]
         top = block("Phân bổ năng lực cụm đề xuất (%)", ["Tài nguyên"] + labels, [["CPU"] + cpu, ["RAM"] + ram])
         ch = BarChart()
         ch.type = "bar"
@@ -845,5 +847,5 @@ def build_workbook(result: Dict[str, Any], vms: List[Dict[str, Any]], meta: Dict
     wb.move_sheet(data, offset=len(wb.sheetnames) - wb.sheetnames.index(data.title) - 1)
     wb.active = 0
     wb.properties.title = f"Đề xuất cấu hình máy chủ — {env}"
-    wb.properties.creator = meta.get("preparedOrg") or "VMware Capacity Ops"
+    wb.properties.creator = meta.get("preparedOrg") or "Capacity Ops"
     return wb

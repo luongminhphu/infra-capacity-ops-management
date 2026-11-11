@@ -377,6 +377,9 @@
             <h4>Giả định sizing</h4>
             <div class="sizing-params">
               <div class="field"><label for="szEnv">Tên dự án / hệ thống</label><input id="szEnv" placeholder="VD: Core Banking phase 2"></div>
+              <div class="field"><label for="szPlatform" title="Quyết định tên gọi trong báo cáo (hypervisor, HA, lưu trữ HCI, quản trị), quy tắc license và tài nguyên dành cho nền tảng. Chọn 'Trung lập' khi chưa chốt nền tảng.">Nền tảng ảo hoá</label>
+                <select id="szPlatform"><option value="vmware" selected>VMware vSphere</option><option value="nutanix">Nutanix AHV</option><option value="hyperv">Microsoft Hyper-V</option><option value="proxmox">Proxmox VE</option><option value="generic">Trung lập (chưa chốt nền tảng)</option></select>
+                <span class="logo-upload-hint" id="szPlatformHint"></span></div>
               <div class="field"><label for="szCpuRatio" title="Số vCPU cấp phát trên mỗi pCPU logic. Prod thường 2–4x, Dev/Test 4–8x.">Overcommit CPU mục tiêu (vCPU : pCPU logic)</label><input id="szCpuRatio" value="3"></div>
               <div class="field"><label for="szHt">Hệ số Hyperthreading</label><input id="szHt" value="2"></div>
               <div class="field"><label for="szRamRatio" title="1.0 = không overcommit RAM (khuyến nghị cho Prod)">Overcommit RAM mục tiêu</label><input id="szRamRatio" value="1.0"></div>
@@ -385,10 +388,10 @@
               <div class="field"><label for="szRedundancy">Dự phòng hỏng hóc (N + x)</label>
                 <select id="szRedundancy"><option value="0">N (không dự phòng)</option><option value="1" selected>N + 1</option><option value="2">N + 2</option></select></div>
               <div class="field"><label for="szMinHosts">Số host tối thiểu / cluster</label><input id="szMinHosts" value="2"></div>
-              <div class="field"><label for="szReserveCores" title="ESXi và các dịch vụ hệ thống chiếm một phần CPU/RAM mỗi host.">ESXi chiếm: cores / host</label><input id="szReserveCores" value="2"></div>
-              <div class="field"><label for="szReserveRam">ESXi chiếm: RAM GB / host</label><input id="szReserveRam" value="16"></div>
+              <div class="field"><label for="szReserveCores" title="Hypervisor và các dịch vụ nền tảng (VD: Nutanix CVM, Ceph) chiếm một phần CPU/RAM mỗi host.">Hypervisor chiếm: cores / host</label><input id="szReserveCores" value="2"></div>
+              <div class="field"><label for="szReserveRam">Hypervisor chiếm: RAM GB / host</label><input id="szReserveRam" value="16"></div>
               <div class="field"><label for="szStorageMode">Lưu trữ</label>
-                <select id="szStorageMode"><option value="san" selected>SAN dùng chung (Pure / NetApp)</option><option value="local">Đĩa cục bộ / vSAN trên host</option></select></div>
+                <select id="szStorageMode"><option value="san" selected>SAN dùng chung (Pure / NetApp)</option><option value="local">HCI trên ổ đĩa của host (vSAN / Nutanix / S2D / Ceph)</option></select></div>
               <div class="field"><label for="szStorageOverhead" title="Snapshot, swap, tăng trưởng vmdk, mức trống tối thiểu của datastore.">Overhead lưu trữ (%)</label><input id="szStorageOverhead" value="25"></div>
               <div class="field hidden" id="szProtectionField"><label for="szProtection" title="vSAN FTT=1 mirror = 2.0; RAID-5 = 1.33; RAID-6 = 1.5">Hệ số bảo vệ dữ liệu (×)</label><input id="szProtection" value="2.0"></div>
             </div>
@@ -399,9 +402,9 @@
               <div class="field"><label for="szAnnualGrowth" title="Tăng trưởng tự nhiên mỗi năm, dùng cho biểu đồ dự báo nhiều năm.">Tăng trưởng hằng năm (%)</label><input id="szAnnualGrowth" value="15"></div>
               <div class="field"><label for="szHorizon" title="Số năm dự báo và số năm tính TCO (license).">Kỳ dự báo / TCO (năm)</label><input id="szHorizon" value="3"></div>
               <div class="field"><label for="szLicPrice" title="Đơn giá license theo core mỗi năm (VD: VMware VCF/VVF). Để trống nếu chưa có báo giá.">Đơn giá license / core / năm (tuỳ chọn)</label><input id="szLicPrice" placeholder="VND"></div>
-              <div class="field"><label for="szLicMin" title="VMware tính license tối thiểu 16 core cho mỗi CPU socket.">License tối thiểu (core / socket)</label><input id="szLicMin" value="16"></div>
-              <div class="field"><label for="szLicEdition" title="Ghi trên báo cáo; điều kiện cuối cùng theo chính sách Broadcom tại thời điểm báo giá.">Loại license VMware</label>
-                <select id="szLicEdition"><option>VMware vSphere Foundation (VVF)</option><option>VMware Cloud Foundation (VCF)</option><option>VMware vSphere Standard (VVS)</option><option>VMware vSphere Enterprise Plus</option></select></div>
+              <div class="field"><label for="szLicMin" title="Số core tối thiểu tính license cho mỗi CPU (VMware 16, Windows Server 8). 0 = không áp dụng.">License tối thiểu (core / CPU)</label><input id="szLicMin" value="16"></div>
+              <div class="field"><label for="szLicEdition" title="Ghi trên báo cáo; điều kiện cuối cùng theo chính sách của hãng tại thời điểm báo giá.">Loại license</label>
+                <select id="szLicEdition"></select></div>
             </div>
             <details class="sz-adv-thresholds" id="szAdvDetails">
               <summary><h4>Ngưỡng tư vấn (nâng cao)</h4></summary>

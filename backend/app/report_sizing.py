@@ -5,7 +5,7 @@ assumptions, with the requested VM list and the existing-cluster absorption
 check as appendices. Meant to be attached to a procurement proposal."""
 from typing import Any, Dict, List, Optional
 
-from . import sizing
+from . import platforms, sizing
 from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
                          fmt_num, fmt_pct, html_to_pdf_bytes)
 from .report_planning import _planning_css
@@ -84,7 +84,7 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
                           "decision": "Duyệt cấp dung lượng lưu trữ", "time": "Cùng đợt lắp host"})
         else:
             st = best["storage"]
-            items.append({"pri": "tb", "title": f"vSAN: ~{_gb(st.get('perHostNeededGB'))} thô / host (tổng {_gb(d['storageNeededGB'])}, hệ số bảo vệ ×{p['storage_protection_factor']:g})",
+            items.append({"pri": "tb", "title": f"{platforms.get(p)['hci']}: ~{_gb(st.get('perHostNeededGB'))} thô / host (tổng {_gb(d['storageNeededGB'])}, hệ số bảo vệ ×{p['storage_protection_factor']:g})",
                           "decision": "Đạt với cấu hình đề xuất" if st.get("ok") else "Cần tăng đĩa cục bộ mỗi host", "time": "Trong cấu hình host"})
             if st.get("ok") is False:
                 status_cls = "warn"
@@ -124,7 +124,7 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
         {"label": "RAM (GB)", "value": f"{fmt_int(d['ramGB'])} → {fmt_int(d['ramPlannedGB'])}", "sub": f"sau tăng trưởng · tỷ lệ chia sẻ {p['ram_ratio']:g} : 1", "cls": "na"},
         {"label": "Host đề xuất", "value": f"{best['hostsTotal']} host" if best else "—",
          "sub": (f"{best['profile']['name']} · N+{best['redundancy']}" if best else ""), "cls": "ok" if best else "na"},
-        {"label": "SAN cần cấp" if p["storage_mode"] == "san" else "vSAN (dung lượng thô)", "value": _gb(d["storageNeededGB"]),
+        {"label": "SAN cần cấp" if p["storage_mode"] == "san" else f"{platforms.get(p)['hci']} (thô)", "value": _gb(d["storageNeededGB"]),
          "sub": f"từ {_gb(d['diskGB'])} dữ liệu", "cls": "na"},
     ]
     if best and best["failure"].get("atLimit"):

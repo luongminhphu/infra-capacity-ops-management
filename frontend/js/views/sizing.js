@@ -16,7 +16,7 @@ const SIZING_DEFAULT_PARAMS = {
   redundancy: 1, min_hosts: 2, reserve_cores: 2, reserve_ram_gb: 16,
   storage_mode: 'san', storage_overhead_pct: 25, storage_protection_factor: 2.0,
   optimize_for: 'hosts', annual_growth_pct: 15, horizon_years: 3, license_price_per_core: null, license_min_cores_per_socket: 16,
-  license_edition: 'VMware vSphere Foundation (VVF)',
+  license_edition: 'VMware vSphere Foundation (VVF)', platform: 'vmware',
 };
 // Advisory thresholds — mirror of backend sizing_advisory.AdvisoryThresholds / THRESHOLD_META.
 const SIZING_DEFAULT_ADVISORY = {
@@ -39,7 +39,7 @@ const SIZING_ADVISORY_META = [
   ['low_runway_pct', 'Cảnh báo dư địa tăng trưởng <', '%'],
   ['failover_comfort_pct', 'Tải khi mất host được điểm tối đa ≤', '%'],
   ['failover_margin_pct', 'Sát ngưỡng khi tải lúc mất host cách mức tối đa ≤', 'điểm %'],
-  ['vsan_free_min_pct', 'Dung lượng trống khuyến nghị cho vSAN ≥', '%'],
+  ['vsan_free_min_pct', 'Dung lượng trống khuyến nghị cho lưu trữ HCI ≥', '%'],
   ['cheaper_alt_pct', 'Nêu phương án rẻ hơn khi TCO thấp hơn ≥', '%'],
   ['cluster_info_hosts', 'Gợi ý chia cụm khi số host >', 'host'],
   ['cluster_warn_hosts', 'Cảnh báo cụm quá lớn khi số host >', 'host'],
@@ -47,6 +47,44 @@ const SIZING_ADVISORY_META = [
   ['dc_keywords', 'Từ khoá nhận diện Domain Controller', ''],
   ['backup_keywords', 'Từ khoá nhận diện máy chủ backup', ''],
 ];
+// Mirror of backend platforms.py (labels, licence rules, default reserves).
+const SIZING_PLATFORMS = {
+  vmware: { editions: ['VMware vSphere Foundation (VVF)', 'VMware Cloud Foundation (VCF)', 'VMware vSphere Standard (VVS)', 'VMware vSphere Enterprise Plus'],
+    licMin: 16, reserve: [2, 16], hint: 'ESXi · vCenter · vSphere HA / DRS · vSAN. License theo core (tối thiểu 16 core / CPU).' },
+  nutanix: { editions: ['Nutanix Cloud Infrastructure (NCI) Pro', 'Nutanix Cloud Infrastructure (NCI) Ultimate', 'Nutanix Cloud Platform (NCP)'],
+    licMin: 0, reserve: [4, 48], hint: 'AHV · Prism · AOS. Mỗi host có Controller VM (CVM) ~8–12 vCPU, 32–48 GB RAM — đã đặt vào phần hypervisor chiếm.' },
+  hyperv: { editions: ['Windows Server Datacenter', 'Windows Server Standard', 'Azure Stack HCI / Azure Local'],
+    licMin: 8, reserve: [2, 16], hint: 'Hyper-V · Failover Clustering · S2D. License Windows Server theo core (tối thiểu 8 core / CPU, 16 core / host).' },
+  proxmox: { editions: ['Proxmox VE Subscription Basic', 'Proxmox VE Subscription Standard', 'Proxmox VE Subscription Premium', 'Proxmox VE Community'],
+    licMin: 0, reserve: [4, 32], hint: 'KVM · Proxmox HA · Ceph. Subscription theo CPU socket; Ceph cần thêm RAM/CPU trên mỗi host.' },
+  generic: { editions: ['Theo nền tảng được chọn'], licMin: 16, reserve: [2, 16],
+    hint: 'Báo cáo dùng khái niệm chung (hypervisor, HA, lưu trữ HCI…), phụ lục có bảng tên gọi tương ứng các nền tảng.' },
+};
+
+function sizingFillEditions(platform, keep) {
+  const sel = $('#szLicEdition');
+  if (!sel) return;
+  const pf = SIZING_PLATFORMS[platform] || SIZING_PLATFORMS.vmware;
+  sel.innerHTML = pf.editions.map(e => `<option>${esc(e)}</option>`).join('');
+  if (keep && pf.editions.includes(keep)) sel.value = keep;
+  const hint = $('#szPlatformHint');
+  if (hint) hint.textContent = pf.hint;
+}
+
+/* Switching platform applies its licence rule, edition list and typical hypervisor reserve. */
+function sizingApplyPlatform(platform) {
+  const pf = SIZING_PLATFORMS[platform] || SIZING_PLATFORMS.vmware;
+  const p = sizingState().params;
+  p.platform = platform;
+  p.license_min_cores_per_socket = pf.licMin;
+  p.reserve_cores = pf.reserve[0];
+  p.reserve_ram_gb = pf.reserve[1];
+  p.license_edition = pf.editions[0];
+  sizingFillEditions(platform, p.license_edition);
+  ['szLicMin', 'szReserveCores', 'szReserveRam'].forEach(id => { const el = document.getElementById(id); if (el) el.value = { szLicMin: pf.licMin, szReserveCores: pf.reserve[0], szReserveRam: pf.reserve[1] }[id]; });
+  persistSizing();
+}
+
 const SIZING_DEFAULT_DOC = { customerName: '', customerContact: '', preparedOrg: '', preparedBy: '', approvedBy: '', documentCode: '',
   version: '1.0', versionNote: '', inputSource: '', inputDate: '', outOfScope: '' };
 const SZ_SERIES = ['#2681FF', '#0891b2', '#7c3aed', '#ca8a04', '#db2777', '#15803d', '#ea580c', '#475467'];
@@ -101,6 +139,7 @@ const SIZING_PARAM_FIELDS = {
   reserve_ram_gb: 'szReserveRam', storage_mode: 'szStorageMode', storage_overhead_pct: 'szStorageOverhead',
   storage_protection_factor: 'szProtection', optimize_for: 'szOptimize', annual_growth_pct: 'szAnnualGrowth',
   horizon_years: 'szHorizon', license_price_per_core: 'szLicPrice', license_min_cores_per_socket: 'szLicMin', license_edition: 'szLicEdition',
+  platform: 'szPlatform',
 };
 const SIZING_DOC_FIELDS = { customerName: 'szCustomer', customerContact: 'szContact', preparedOrg: 'szPreparedOrg', preparedBy: 'szPreparedBy',
   approvedBy: 'szApprovedBy', documentCode: 'szDocCode', version: 'szVersion', versionNote: 'szVersionNote',
@@ -108,6 +147,7 @@ const SIZING_DOC_FIELDS = { customerName: 'szCustomer', customerContact: 'szCont
 
 function sizingParamsToDom() {
   const p = sizingState().params;
+  sizingFillEditions(p.platform || 'vmware', p.license_edition);
   Object.entries(SIZING_PARAM_FIELDS).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (el) el.value = p[key] ?? '';
@@ -122,7 +162,7 @@ function sizingParamsFromDom() {
   Object.entries(SIZING_PARAM_FIELDS).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (key === 'environment' || key === 'storage_mode' || key === 'optimize_for' || key === 'license_edition') p[key] = el.value.trim();
+    if (key === 'environment' || key === 'storage_mode' || key === 'optimize_for' || key === 'license_edition' || key === 'platform') p[key] = el.value.trim();
     else if (key === 'license_price_per_core') p[key] = szOptNum(el.value);
     else if (key === 'redundancy' || key === 'min_hosts' || key === 'license_min_cores_per_socket') p[key] = Math.max(0, Math.round(cleanNum(el.value)));
     else if (key === 'horizon_years') p[key] = Math.min(10, Math.max(1, Math.round(cleanNum(el.value)) || 3));
@@ -445,7 +485,7 @@ function sizingCapacitySegments(best, d, p) {
   const ph = best.perHost, prof = best.profile;
   const mk = (total, usableHost, req, planned) => [
     ['Yêu cầu dự án', req], ['Dự phòng tăng trưởng', planned - req], ['Còn trống', Math.max(0, usableHost * nFail * util - planned)],
-    [`Headroom ${100 - p.max_util_pct}%`, usableHost * nFail * (1 - util)], [`Dự phòng N+${red}`, usableHost * red], ['ESXi', Math.max(0, total - usableHost * n)],
+    [`Vùng an toàn ${100 - p.max_util_pct}%`, usableHost * nFail * (1 - util)], [`Dự phòng N+${red}`, usableHost * red], ['Hypervisor', Math.max(0, total - usableHost * n)],
   ];
   return {
     cpu: mk(prof.cores * Math.max(1, p.ht_factor) * p.cpu_ratio * n, ph.logicalCpu * p.cpu_ratio, d.vcpu, d.vcpuPlanned),
@@ -836,6 +876,7 @@ function bindSizingView() {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('change', () => {
+      if (id === 'szPlatform') sizingApplyPlatform(el.value);
       sizingParamsFromDom();
       if (id === 'szStorageMode') renderSizingProfiles();
     });
