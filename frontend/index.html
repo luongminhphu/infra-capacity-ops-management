@@ -400,6 +400,8 @@
               <div class="field"><label for="szHorizon" title="Số năm dự báo và số năm tính TCO (license).">Kỳ dự báo / TCO (năm)</label><input id="szHorizon" value="3"></div>
               <div class="field"><label for="szLicPrice" title="Đơn giá license theo core mỗi năm (VD: VMware VCF/VVF). Để trống nếu chưa có báo giá.">Đơn giá license / core / năm (tuỳ chọn)</label><input id="szLicPrice" placeholder="VND"></div>
               <div class="field"><label for="szLicMin" title="VMware tính license tối thiểu 16 core cho mỗi CPU socket.">License tối thiểu (core / socket)</label><input id="szLicMin" value="16"></div>
+              <div class="field"><label for="szLicEdition" title="Ghi trên báo cáo; điều kiện cuối cùng theo chính sách Broadcom tại thời điểm báo giá.">Loại license VMware</label>
+                <select id="szLicEdition"><option>VMware vSphere Foundation (VVF)</option><option>VMware Cloud Foundation (VCF)</option><option>VMware vSphere Standard (VVS)</option><option>VMware vSphere Enterprise Plus</option></select></div>
             </div>
             <details class="sz-adv-thresholds" id="szAdvDetails">
               <summary><h4>Ngưỡng tư vấn (nâng cao)</h4></summary>
@@ -438,11 +440,26 @@
                       <label class="sz-check"><input type="checkbox" id="szPdfIncludeNew" checked> Kèm phương án B — trang bị mới để đối chiếu</label>
                     </div>
                     <div class="planning-panel-title">Thông tin tài liệu (white-label)</div>
-                    <label class="planning-field">Khách hàng / đơn vị nhận<input id="szCustomer" placeholder="VD: Ngân hàng ABC"></label>
-                    <label class="planning-field">Đơn vị tư vấn (hiển thị trên bìa)<input id="szPreparedOrg" placeholder="VD: Phòng Hạ tầng / tên đối tác"></label>
+                    <div class="sz-two">
+                      <label class="planning-field">Khách hàng<input id="szCustomer" placeholder="VD: CMC"></label>
+                      <label class="planning-field">Đầu mối khách hàng<input id="szContact" placeholder="VD: Ms. Hung"></label>
+                    </div>
+                    <label class="planning-field">Đơn vị tư vấn (bìa &amp; đầu trang)<input id="szPreparedOrg" placeholder="VD: ioBox Solutions"></label>
                     <div class="sz-two">
                       <label class="planning-field">Người lập<input id="szPreparedBy" placeholder="Họ tên"></label>
-                      <label class="planning-field">Mã tài liệu<input id="szDocCode" placeholder="VD: SZ-2026-001"></label>
+                      <label class="planning-field">Người duyệt<input id="szApprovedBy" placeholder="Họ tên"></label>
+                    </div>
+                    <div class="sz-two">
+                      <label class="planning-field">Mã tài liệu<input id="szDocCode" placeholder="VD: IOB-SZ-2026-011"></label>
+                      <label class="planning-field">Phiên bản<input id="szVersion" placeholder="1.0"></label>
+                    </div>
+                    <label class="planning-field">Nội dung phiên bản<input id="szVersionNote" placeholder="VD: Phát hành lần đầu"></label>
+                    <div class="planning-panel-title">Phạm vi &amp; dữ liệu đầu vào</div>
+                    <div class="sz-two">
+                      <label class="planning-field">Nguồn dữ liệu<input id="szInputSource" placeholder="VD: File Excel do khách hàng gửi"></label>
+                      <label class="planning-field">Ngày nhận dữ liệu<input id="szInputDate" placeholder="dd/mm/yyyy"></label>
+                    </div>
+                    <label class="planning-field">Ngoài phạm vi (mỗi dòng một mục; để trống = danh sách mặc định)<textarea id="szOutOfScope" rows="3" placeholder="VD: Thiết bị mạng vật lý"></textarea></label>
                     </div>
                     <div class="planning-panel-title">Logo trên báo cáo</div>
                     <div class="sz-logo-row">

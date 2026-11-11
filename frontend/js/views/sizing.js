@@ -16,31 +16,39 @@ const SIZING_DEFAULT_PARAMS = {
   redundancy: 1, min_hosts: 2, reserve_cores: 2, reserve_ram_gb: 16,
   storage_mode: 'san', storage_overhead_pct: 25, storage_protection_factor: 2.0,
   optimize_for: 'hosts', annual_growth_pct: 15, horizon_years: 3, license_price_per_core: null, license_min_cores_per_socket: 16,
+  license_edition: 'VMware vSphere Foundation (VVF)',
 };
 // Advisory thresholds — mirror of backend sizing_advisory.AdvisoryThresholds / THRESHOLD_META.
 const SIZING_DEFAULT_ADVISORY = {
   compute_max_gb_per_vcpu: 3, memory_min_gb_per_vcpu: 6, stranded_warn_pct: 35, balance_ok_gap_pct: 15, balance_min_load_pct: 40,
-  db_cpu_ratio_max: 2, high_cpu_ratio_warn: 5, ram_ratio_warn: 1, low_runway_pct: 10, failover_comfort_pct: 60, cheaper_alt_pct: 3,
-  cluster_info_hosts: 32, cluster_warn_hosts: 64,
-  db_keywords: 'db, database, sql, mssql, mysql, postgres, postgresql, oracle, mongo, mongodb, redis, kafka, elastic, elasticsearch, sap, hana, cassandra',
+  db_cpu_per_core_max: 4, high_cpu_per_core_warn: 6, ram_ratio_warn: 1, low_runway_pct: 10, failover_comfort_pct: 60, failover_margin_pct: 2,
+  vsan_free_min_pct: 25, cheaper_alt_pct: 3, cluster_info_hosts: 32, cluster_warn_hosts: 64,
+  db_keywords: 'db, database, sql, mssql, mysql, postgres, postgresql, oracle, mongo, mongodb, redis, kafka, elastic, elasticsearch, sap, hana, cassandra, pi data archive, pi archive, data archive, piarchive, historian, osisoft, aveva',
+  dc_keywords: 'dc, domain controller, active directory, ad ds, addc',
+  backup_keywords: 'backup, veeam, commvault, netbackup, veritas, avamar, networker, rubrik, cohesity',
 };
 const SIZING_ADVISORY_META = [
   ['compute_max_gb_per_vcpu', 'Workload thiên CPU khi RAM/vCPU ≤', 'GB'],
   ['memory_min_gb_per_vcpu', 'Workload thiên RAM khi RAM/vCPU >', 'GB'],
-  ['stranded_warn_pct', 'Cảnh báo tài nguyên thừa khi ≥', '%'],
-  ['balance_ok_gap_pct', 'Coi là cân bằng khi chênh CPU/RAM <', '%'],
-  ['balance_min_load_pct', 'Chỉ xét cân bằng khi tải ràng buộc ≥', '%'],
-  ['db_cpu_ratio_max', 'Overcommit CPU tối đa cho CSDL', 'x'],
-  ['high_cpu_ratio_warn', 'Cảnh báo overcommit CPU mục tiêu ≥', 'x'],
-  ['ram_ratio_warn', 'Cảnh báo overcommit RAM >', 'x'],
+  ['stranded_warn_pct', 'Cảnh báo tài nguyên dư khi ≥', '%'],
+  ['balance_ok_gap_pct', 'Coi là cân đối khi CPU và RAM chênh <', '%'],
+  ['balance_min_load_pct', 'Chỉ xét cân đối khi tải yếu tố quyết định ≥', '%'],
+  ['db_cpu_per_core_max', 'Tỷ lệ chia sẻ CPU tối đa cho CSDL', 'vCPU/core'],
+  ['high_cpu_per_core_warn', 'Cảnh báo tỷ lệ chia sẻ CPU >', 'vCPU/core'],
+  ['ram_ratio_warn', 'Cảnh báo tỷ lệ chia sẻ RAM >', 'x'],
   ['low_runway_pct', 'Cảnh báo dư địa tăng trưởng <', '%'],
-  ['failover_comfort_pct', 'Tải khi mất host đạt điểm tối đa ≤', '%'],
-  ['cheaper_alt_pct', 'Gợi ý phương án rẻ hơn khi TCO thấp hơn ≥', '%'],
-  ['cluster_info_hosts', 'Gợi ý chia cluster khi số host >', 'host'],
-  ['cluster_warn_hosts', 'Cảnh báo cluster quá lớn khi số host >', 'host'],
+  ['failover_comfort_pct', 'Tải khi mất host được điểm tối đa ≤', '%'],
+  ['failover_margin_pct', 'Sát ngưỡng khi tải lúc mất host cách mức tối đa ≤', 'điểm %'],
+  ['vsan_free_min_pct', 'Dung lượng trống khuyến nghị cho vSAN ≥', '%'],
+  ['cheaper_alt_pct', 'Nêu phương án rẻ hơn khi TCO thấp hơn ≥', '%'],
+  ['cluster_info_hosts', 'Gợi ý chia cụm khi số host >', 'host'],
+  ['cluster_warn_hosts', 'Cảnh báo cụm quá lớn khi số host >', 'host'],
   ['db_keywords', 'Từ khoá nhận diện VM CSDL / middleware (phân cách bằng dấu phẩy)', ''],
+  ['dc_keywords', 'Từ khoá nhận diện Domain Controller', ''],
+  ['backup_keywords', 'Từ khoá nhận diện máy chủ backup', ''],
 ];
-const SIZING_DEFAULT_DOC = { customerName: '', preparedOrg: '', preparedBy: '', documentCode: '' };
+const SIZING_DEFAULT_DOC = { customerName: '', customerContact: '', preparedOrg: '', preparedBy: '', approvedBy: '', documentCode: '',
+  version: '1.0', versionNote: '', inputSource: '', inputDate: '', outOfScope: '' };
 const SZ_SERIES = ['#2681FF', '#0891b2', '#7c3aed', '#ca8a04', '#db2777', '#15803d', '#ea580c', '#475467'];
 const SIZING_DEFAULT_PROFILES = [
   { name: '2×16C / 512 GB', sockets: 2, coresPerSocket: 16, ramGB: 512, diskGB: 0, unitPrice: null },
@@ -92,9 +100,11 @@ const SIZING_PARAM_FIELDS = {
   growth_pct: 'szGrowth', redundancy: 'szRedundancy', min_hosts: 'szMinHosts', reserve_cores: 'szReserveCores',
   reserve_ram_gb: 'szReserveRam', storage_mode: 'szStorageMode', storage_overhead_pct: 'szStorageOverhead',
   storage_protection_factor: 'szProtection', optimize_for: 'szOptimize', annual_growth_pct: 'szAnnualGrowth',
-  horizon_years: 'szHorizon', license_price_per_core: 'szLicPrice', license_min_cores_per_socket: 'szLicMin',
+  horizon_years: 'szHorizon', license_price_per_core: 'szLicPrice', license_min_cores_per_socket: 'szLicMin', license_edition: 'szLicEdition',
 };
-const SIZING_DOC_FIELDS = { customerName: 'szCustomer', preparedOrg: 'szPreparedOrg', preparedBy: 'szPreparedBy', documentCode: 'szDocCode' };
+const SIZING_DOC_FIELDS = { customerName: 'szCustomer', customerContact: 'szContact', preparedOrg: 'szPreparedOrg', preparedBy: 'szPreparedBy',
+  approvedBy: 'szApprovedBy', documentCode: 'szDocCode', version: 'szVersion', versionNote: 'szVersionNote',
+  inputSource: 'szInputSource', inputDate: 'szInputDate', outOfScope: 'szOutOfScope' };
 
 function sizingParamsToDom() {
   const p = sizingState().params;
@@ -112,7 +122,7 @@ function sizingParamsFromDom() {
   Object.entries(SIZING_PARAM_FIELDS).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (key === 'environment' || key === 'storage_mode' || key === 'optimize_for') p[key] = el.value.trim();
+    if (key === 'environment' || key === 'storage_mode' || key === 'optimize_for' || key === 'license_edition') p[key] = el.value.trim();
     else if (key === 'license_price_per_core') p[key] = szOptNum(el.value);
     else if (key === 'redundancy' || key === 'min_hosts' || key === 'license_min_cores_per_socket') p[key] = Math.max(0, Math.round(cleanNum(el.value)));
     else if (key === 'horizon_years') p[key] = Math.min(10, Math.max(1, Math.round(cleanNum(el.value)) || 3));
@@ -348,12 +358,15 @@ function renderSizingResult(result, payload, scroll = true) {
   const cmpRows = rows.map(r => {
     const pr = r.profile;
     const failTxt = r.failure.hostsLeft ? `${szNum(r.failure.cpuPct)}% / ${szNum(r.failure.ramPct)}%` : '—';
-    const failPill = r.redundancy === 0 ? '<span class="pill na">N</span>' : (r.failure.ok ? `<span class="pill ok">Đạt N+${r.redundancy}</span>` : `<span class="pill crit">Chưa đạt</span>`);
+    const failPill = r.redundancy === 0 ? '<span class="pill na">N</span>'
+      : (!r.failure.ok ? '<span class="pill crit">Chưa đạt</span>' : (r.failure.atLimit ? '<span class="pill warn">Sát ngưỡng</span>' : `<span class="pill ok">Đạt N+${r.redundancy}</span>`));
+    const status = r.suggested ? '<span class="pill na" title="Phương án tham khảo do hệ thống gợi ý">Tham khảo</span>'
+      : (r.recommended ? '<span class="pill ok">Đề xuất</span>' : (r.tight ? '<span class="pill warn">Sát ngưỡng</span>' : `<span class="muted-sub">#${r.rank}</span>`));
     const storageCell = local
       ? `${szGB(r.storage.perHostNeededGB)}/host ${r.storage.ok === false ? '<span class="pill crit">thiếu đĩa</span>' : ''}`
       : '';
     return `
-      <tr class="${r.recommended ? 'sz-best' : ''}">
+      <tr class="${r.recommended ? 'sz-best' : ''}${r.suggested ? ' sz-suggested' : ''}">
         <td><b>${esc(pr.name)}</b><div class="muted-sub">${pr.sockets}×${pr.coresPerSocket}C = ${pr.cores} cores · ${szGB(pr.ramGB)} RAM${local ? ` · ${szGB(pr.diskGB)} đĩa` : ''}</div></td>
         <td class="num">${r.hostsForCpu}</td>
         <td class="num">${r.hostsForRam}</td>
@@ -361,12 +374,12 @@ function renderSizingResult(result, payload, scroll = true) {
         <td class="num sz-hosts"><b>${r.hostsTotal}</b></td>
         <td>${esc(r.binding)}</td>
         <td class="num">${szNum(r.totals.cores)} / ${szGB(r.totals.ramGB)}</td>
-        <td class="num">${szNum(r.after.cpuOvercommit, 2)}x / ${szNum(r.after.ramOvercommit, 2)}x</td>
+        <td class="num">${r.vcpuPerCore == null ? '—' : szNum(r.vcpuPerCore, 2) + ' : 1'}</td>
         <td class="num">${failTxt} ${failPill}</td>
-        <td class="num">${r.spare.extraAvgVms == null ? '—' : '~' + szNum(r.spare.extraAvgVms)}</td>
+        <td class="num">${r.spare.extraAvgVms == null ? '—' : (r.spare.extraAvgVms <= 0 ? '0' : '~' + szNum(r.spare.extraAvgVms))}</td>
         ${local ? `<td>${storageCell}</td>` : ''}
         ${anyPrice ? `<td class="num">${r.budget == null ? '—' : szMoney(r.budget)}</td>` : ''}
-        <td>${r.recommended ? '<span class="pill ok">Đề xuất</span>' : `<span class="muted-sub">#${r.rank}</span>`}</td>
+        <td>${status}</td>
       </tr>`;
   }).join('');
 
@@ -395,14 +408,14 @@ function renderSizingResult(result, payload, scroll = true) {
   }
 
   area.innerHTML = `
-    <div class="panel-head"><div><div class="panel-title">Kết quả sizing${p.environment ? ` — ${esc(p.environment)}` : ''}</div><p class="panel-sub">Số host vật lý cần cho ${szNum(d.vmCount)} VM theo từng cấu hình ứng viên; phương án đề xuất là ít host nhất, rồi đến ngân sách thấp nhất.</p></div></div>
-    ${best ? `<div class="insight-box sz-headline"><strong>${esc(result.recommendation.headline)}</strong><div class="sz-detail">${esc(result.recommendation.detail)}</div></div>` : ''}
+    <div class="panel-head"><div><div class="panel-title">Kết quả sizing${p.environment ? ` — ${esc(p.environment)}` : ''}</div><p class="panel-sub">Số host vật lý cần cho ${szNum(d.vmCount)} VM theo từng cấu hình ứng viên; phương án đề xuất: ít host nhất → chi phí thấp nhất → không sát ngưỡng → điểm tổng hợp cao nhất. Dòng in nghiêng là phương án tham khảo do hệ thống gợi ý.</p></div></div>
+    ${best ? `<div class="insight-box sz-headline"><strong>${esc(result.recommendation.headline)}</strong><div class="sz-detail">${esc(result.recommendation.detail)}</div>${result.recommendation.why ? `<div class="sz-detail"><b>${esc(result.recommendation.why)}</b></div>` : ''}</div>` : ''}
     ${tiles}
     <div class="sz-section-title">So sánh cấu hình host</div>
     <div class="table-scroll"><table class="data-table sz-compare">
       <thead><tr>
-        <th>Cấu hình</th><th title="Số host cần để đáp ứng vCPU ở overcommit mục tiêu và mức dùng tối đa">Host theo CPU</th><th title="Số host cần để đáp ứng RAM">Host theo RAM</th><th>Dự phòng</th><th>Tổng host</th><th>Ràng buộc</th>
-        <th>Tổng cores / RAM</th><th title="Overcommit thực tế sau khi lắp đủ số host (trên phần năng lực khả dụng sau khi trừ ESXi)">OC CPU / RAM sau</th><th title="% năng lực mục tiêu đang dùng khi mất đúng số host dự phòng">Khi mất host (CPU / RAM)</th><th title="Số VM cỡ trung bình của dự án còn thêm được mà vẫn giữ dự phòng">Thêm được</th>
+        <th>Cấu hình</th><th title="Số host cần để đáp ứng vCPU ở overcommit mục tiêu và mức dùng tối đa">Host theo CPU</th><th title="Số host cần để đáp ứng RAM">Host theo RAM</th><th>Dự phòng</th><th>Tổng host</th><th>Yếu tố quyết định</th>
+        <th>Tổng cores / RAM</th><th title="Số vCPU (sau tăng trưởng) trên mỗi core vật lý của cụm">vCPU : core</th><th title="% năng lực mục tiêu đang dùng khi mất đúng số host dự phòng">Khi mất host (CPU / RAM)</th><th title="Số VM cỡ trung bình của dự án còn chứa thêm được mà vẫn giữ dự phòng">Chứa thêm (VM)</th>
         ${local ? '<th>Đĩa cục bộ</th>' : ''}${anyPrice ? '<th>Ngân sách ước tính</th>' : ''}<th></th>
       </tr></thead>
       <tbody>${cmpRows}</tbody>
@@ -654,11 +667,20 @@ function sizingExistingPayload() {
   const includeNewOption = $('#szPdfIncludeNew') ? $('#szPdfIncludeNew').checked : true;
   const includeExisting = $('#szPdfIncludeExisting') ? $('#szPdfIncludeExisting').checked : true;
   const detail = (document.querySelector('input[name="szPdfDetail"]:checked') || {}).value === 'brief' ? 'brief' : 'full';
+  return { ...payload, existing, policyText, mode, targetCluster, includeNewOption, includeExisting, detail, ...sizingDocPayload() };
+}
+
+/* Document control / scope fields shared by the PDF and Excel exports. */
+function sizingDocPayload() {
   const doc = sizingState().doc;
   const logo = sizingLogoOverride();
-  return { ...payload, existing, policyText, mode, targetCluster, includeNewOption, includeExisting, detail,
-    logoDataUrl: logo ? logo.dataUrl : null,
-    customerName: doc.customerName || '', preparedOrg: doc.preparedOrg || '', preparedBy: doc.preparedBy || '', documentCode: doc.documentCode || '' };
+  const lines = String(doc.outOfScope || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 20);
+  return {
+    customerName: doc.customerName || '', customerContact: doc.customerContact || '', preparedOrg: doc.preparedOrg || '',
+    preparedBy: doc.preparedBy || '', approvedBy: doc.approvedBy || '', documentCode: doc.documentCode || '',
+    version: doc.version || '1.0', versionNote: doc.versionNote || '', inputSource: doc.inputSource || '', inputDate: doc.inputDate || '',
+    outOfScope: lines.length ? lines : null, logoDataUrl: logo ? logo.dataUrl : null,
+  };
 }
 
 /* Fill the "cluster tiếp nhận" select and toggle option rows for the chosen PDF content. */
@@ -753,10 +775,7 @@ async function exportSizingPdf(btn) {
 }
 
 async function exportSizingXlsx(btn) {
-  const doc = sizingState().doc;
-  const logo = sizingLogoOverride();
-  const payload = { ...sizingPayload(), customerName: doc.customerName || '', preparedOrg: doc.preparedOrg || '',
-    preparedBy: doc.preparedBy || '', documentCode: doc.documentCode || '', logoDataUrl: logo ? logo.dataUrl : null };
+  const payload = { ...sizingPayload(), ...sizingDocPayload() };
   if (!payload.vms.length) { showValidationBanner(['Danh sách VM trống — chưa có gì để xuất.'], []); return; }
   const label = btn.textContent;
   btn.disabled = true; btn.textContent = 'Đang tạo Excel…';

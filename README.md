@@ -162,13 +162,22 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
 - **Giọng văn báo cáo đầy đủ**: viết theo góc nhìn đơn vị tư vấn tích hợp giải pháp (SI) gửi khách hàng — "chúng tôi
   khuyến nghị / triển khai", "Quý khách phê duyệt", hạn chế thuật ngữ và giải thích ngắn khi cần. Tờ trình tóm tắt
   (`detail=brief`) giữ văn phong nội bộ.
-- **Báo cáo tư vấn đầy đủ** (mặc định, `detail=full`): trang bìa white-label (khách hàng `customerName`, đơn vị
-  tư vấn `preparedOrg`, người lập `preparedBy`, mã tài liệu `documentCode`, logo báo cáo), mục lục có số trang,
-  và các chương: Tóm tắt điều hành (+ đồng hồ mức dùng CPU/RAM khi vận hành và khi mất host) → (Hạ tầng hiện
-  hữu, chế độ tận dụng) → Phân tích workload → So sánh phương án (biểu đồ số host, radar, bảng điểm, TCO, chi
-  phí đơn vị) → Thiết kế đề xuất chi tiết (thông số, phân bổ năng lực, cân bằng CPU/RAM) → Độ nhạy & dự báo →
-  Rủi ro & khuyến nghị → Lộ trình triển khai → Giả định & phương pháp → Phụ lục VM. Biểu đồ là SVG nội tuyến
-  (`backend/app/report_sizing_charts.py`) nên PDF không phụ thuộc mạng. `detail=brief` giữ tờ trình ngắn bên dưới.
+- **Báo cáo đầy đủ** (mặc định, `detail=full`, `backend/app/report_sizing_full.py`): trang bìa (thông tin tài liệu — khách hàng,
+  đầu mối, dự án, mã tài liệu, phiên bản, ngày lập, người lập, người duyệt — mục lục có số trang, lịch sử phiên bản, ký duyệt), rồi
+  1 Tóm tắt (một bộ KPI duy nhất, lý do chọn phương án) · 2 Phạm vi & dữ liệu đầu vào (nguồn, ngày nhận, trong/ngoài phạm vi, quy ước) ·
+  3 Nhu cầu tài nguyên · 4 So sánh phương án (bảng điểm, không dùng radar) · 5 Cấu hình đề xuất (thông số cụm, BOM sơ bộ, kiến trúc
+  logic, phân bổ năng lực) · 6 Khả năng mở rộng · 7 Rủi ro & khuyến nghị · 8 Kế hoạch triển khai · 9 Giả định & cách tính (bảng giả
+  định + bảng tính từng bước) · Phụ lục A Danh sách máy ảo · B Ngưỡng đánh giá · C Thuật ngữ. Đầu trang:
+  "<đơn vị tư vấn> · Đề xuất cấu hình máy chủ – <khách hàng>"; một lề duy nhất khai báo trong `@page`; số theo định dạng Việt Nam;
+  dung lượng theo TiB (1 TiB = 1.024 GB). Trường mới của payload: `customerContact`, `version`, `versionNote`, `approvedBy`,
+  `inputSource`, `inputDate`, `outOfScope`; tham số `license_edition`, `suggest_variants`.
+- **Quy tắc chọn phương án**: ít host nhất → chi phí thấp nhất (TCO nếu mọi phương án có giá, nếu không thì ngân sách phần cứng, nếu
+  không thì số core license) → không sát ngưỡng (mất host vẫn dưới mức tối đa, còn dư địa) → điểm tổng hợp cao nhất. Phương án đạt
+  N+1 nhưng tải khi mất host chạm mức tối đa được đánh dấu "Sát ngưỡng". Hệ thống tự thêm **phương án tham khảo** (không tham gia
+  xếp hạng): ít core hơn khi CPU dư nhiều (giảm license), thêm RAM khi phương án được chọn sát ngưỡng.
+- **Nhận định theo đặc thù workload**: nhận diện CSDL (gồm PI Data Archive / historian), Domain Controller (quy tắc tách host),
+  máy chủ backup chạy chung cụm, rủi ro vSAN 3 host / dự trữ thấp / HA cần lưu trữ dùng chung; tỷ lệ chia sẻ CPU trình bày theo
+  vCPU : core vật lý; ngưỡng CPU tính theo vCPU/core (`db_cpu_per_core_max`, `high_cpu_per_core_warn`).
 - **Hướng tới dịch vụ độc lập**: `sizing.py` + `sizing_advisory.py` là Python thuần (không DB, không I/O),
   `report_sizing*.py` chỉ cần WeasyPrint — có thể tách thành micro-service/CLI riêng cho đối tác, khách hàng
   mà giữ nguyên API (`/calc`, `/pdf`, `/export`). Test: `cd backend && python -m pytest tests`.

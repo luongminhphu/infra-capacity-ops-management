@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, DoughnutChart, LineChart, Reference
 from openpyxl.chart.label import DataLabelList
-from openpyxl.chart.series import SeriesLabel
 from openpyxl.formatting.rule import CellIsRule, ColorScaleRule, DataBarRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -68,7 +67,7 @@ def _font(size=10, bold=False, color=INK, italic=False) -> Font:
 def _gb(v: Optional[float]) -> str:
     if v is None:
         return "—"
-    return f"{v / 1024:,.1f} TB" if v >= 1024 else f"{v:,.0f} GB"
+    return f"{v / 1024:,.1f} TiB" if v >= 1024 else f"{v:,.0f} GB"
 
 
 def _money_short(v: Optional[float]) -> str:
@@ -297,7 +296,7 @@ def _dashboard(wb, result, payload_meta, data_ws, refs) -> None:
         ("Máy ảo yêu cầu", f"{d['vmCount']:,}", f"TB {d['avgVcpu']:.1f} vCPU · {_gb(d['avgRamGB'])} / VM", BLUE),
         ("vCPU (sau tăng trưởng)", f"{d['vcpuPlanned']:,.0f}", f"yêu cầu {d['vcpu']:,.0f} · +{p['growth_pct']:g}%", BLUE),
         ("RAM (sau tăng trưởng)", _gb(d["ramPlannedGB"]), f"yêu cầu {_gb(d['ramGB'])}", BLUE),
-        ("Máy chủ đề xuất", f"{best['hostsTotal']}" if best else "—", f"{best['profile']['name']} · N+{best['redundancy']}" if best else "", OK),
+        ("Host đề xuất", f"{best['hostsTotal']}" if best else "—", f"{best['profile']['name']} · N+{best['redundancy']}" if best else "", OK),
         ("Lưu trữ cần cấp", _gb(d["storageNeededGB"]), "SAN dùng chung" if p["storage_mode"] == "san" else "cục bộ / vSAN", TEAL),
         ((f"TCO {costs.get('years')} năm" if costs.get("tco") else "License (core)"),
          (_money_short(costs.get("tco")) if costs.get("tco") else (f"{best['advisory']['license']['coresTotal']:,}" if best else "—")),
@@ -312,10 +311,10 @@ def _dashboard(wb, result, payload_meta, data_ws, refs) -> None:
     # Key conclusions (rows 12–17)
     row = _section(ws, 12, "Kết luận chính", DASH_COLS)
     lines: List[str] = [result["recommendation"]["detail"]]
-    proj = a.get("projection")
-    if proj:
-        lines.append(f"Tăng trưởng {proj['annualGrowthPct']:g}%/năm: " + (f"cần mở rộng vào năm thứ {proj['expandYear']}." if proj["expandYear"] is not None
-                                                                     else f"giải pháp đáp ứng đủ trong {proj['years']} năm."))
+    if result["recommendation"].get("why"):
+        lines.append(result["recommendation"]["why"])
+    if a.get("expandText"):
+        lines.append(a["expandText"])
     if best and best["advisory"]["costs"].get("perVmMonth"):
         c = best["advisory"]["costs"]
         lines.append(f"Chi phí bình quân {_money_short(c['perVmMonth'])} / máy ảo / tháng (TCO {c['years']} năm {_money_short(c['tco'])}).")
@@ -425,7 +424,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
     ws = wb.create_sheet("Dữ liệu biểu đồ")
     ws.sheet_properties.tabColor = FAINT
     a = result.get("analysis") or {}
-    rows_sorted = sorted(result["results"], key=lambda r: r["rank"] or 99)
+    rows_sorted = sorted(result["results"], key=lambda r: (r.get("suggested", False), r["rank"] or 99))
     best = result["results"][result["recommendedIndex"]] if result["recommendedIndex"] is not None else None
     refs: Dict[str, Any] = {}
     row = 1
@@ -447,7 +446,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
 
     # 1. Hosts per option
     if rows_sorted:
-        top = block("Số máy chủ theo phương án", ["Cấu hình", "Theo CPU", "Theo RAM", "Tổng (gồm dự phòng)"],
+        top = block("Số host theo phương án", ["Cấu hình", "Theo CPU", "Theo RAM", "Tổng (gồm dự phòng)"],
                     [[r["profile"]["name"] + (" ★" if r["recommended"] else ""), r["hostsForCpu"], r["hostsForRam"], r["hostsTotal"]] for r in rows_sorted])
         n = len(rows_sorted)
         ch = BarChart()
@@ -455,7 +454,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
         ch.grouping = "clustered"
         ch.add_data(Reference(ws, min_col=2, max_col=4, min_row=top, max_row=top + n), titles_from_data=True)
         ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + n))
-        _style_chart(ch, "Số máy chủ theo từng phương án", "máy chủ")
+        _style_chart(ch, "Số host theo từng phương án", "host")
         _color_series(ch, [BLUE, TEAL, NAVY])
         ch.dataLabels = _labels()
         refs["hosts"] = ch
@@ -525,12 +524,12 @@ def _chart_data(wb, result) -> Dict[str, Any]:
     proj = a.get("projection")
     if proj:
         pts = proj["points"]
-        top = block("Dự báo số máy chủ theo năm", ["Năm", "Máy chủ cần", "Đã đề xuất"],
+        top = block("Dự báo số host theo năm", ["Năm", "Host cần", "Đã đề xuất"],
                     [["Hiện tại" if pt["year"] == 0 else f"Năm {pt['year']}", pt["hosts"], proj["installed"]] for pt in pts])
         bar = BarChart()
         bar.add_data(Reference(ws, min_col=2, min_row=top, max_row=top + len(pts)), titles_from_data=True)
         bar.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(pts)))
-        _style_chart(bar, f"Dự báo số máy chủ (tăng trưởng {proj['annualGrowthPct']:g}%/năm)", "máy chủ")
+        _style_chart(bar, f"Dự báo số host (tăng trưởng {proj['annualGrowthPct']:g}%/năm)", "host")
         _color_series(bar, [BLUE])
         bar.dataLabels = _labels()
         line = LineChart()
@@ -546,12 +545,12 @@ def _chart_data(wb, result) -> Dict[str, Any]:
     if sens:
         xs = sens["x"]
         hdr = ["Dự phòng tăng trưởng"] + [s["name"] for s in sens["series"]]
-        top = block("Độ nhạy — số máy chủ theo mức dự phòng tăng trưởng", hdr,
+        top = block("Độ nhạy — số host theo mức dự phòng tăng trưởng", hdr,
                     [[f"{x:g}%"] + [s["hosts"][i] for s in sens["series"]] for i, x in enumerate(xs)])
         ch = LineChart()
         ch.add_data(Reference(ws, min_col=2, max_col=1 + len(sens["series"]), min_row=top, max_row=top + len(xs)), titles_from_data=True)
         ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(xs)))
-        _style_chart(ch, "Số máy chủ theo mức dự phòng tăng trưởng", "máy chủ")
+        _style_chart(ch, "Số host theo mức dự phòng tăng trưởng", "host")
         for s, c in zip(ch.series, SERIES):
             s.graphicalProperties.line.solidFill = c
             s.graphicalProperties.line.width = 22000
@@ -589,24 +588,24 @@ def _options_sheet(wb, result, subtitle: str) -> None:
     ws.sheet_properties.tabColor = BLUE
     p = result["params"]
     years = p.get("horizon_years", 3)
-    header = ["Hạng", "Cấu hình máy chủ", "CPU × core", "RAM / máy (GB)", "Máy chủ theo CPU", "Máy chủ theo RAM", "Dự phòng",
-              "Tổng máy chủ", "Yếu tố quyết định", "Tổng core", "Tổng RAM (GB)", "CPU khi mất máy (%)", "RAM khi mất máy (%)",
-              "Đạt dự phòng", "Thêm được ~VM", "Đơn giá máy chủ", "Chi phí phần cứng", "Core license", "License / năm",
+    header = ["Hạng", "Cấu hình host", "CPU × core", "RAM / host (GB)", "Host theo CPU", "Host theo RAM", "Dự phòng",
+              "Tổng host", "Yếu tố quyết định", "Tổng core", "Tổng RAM (GB)", "CPU khi mất 1 host (%)", "RAM khi mất 1 host (%)",
+              "Đạt dự phòng", "Chứa thêm (VM)", "Đơn giá / host", "Chi phí phần cứng", "Core license", "License / năm",
               f"TCO {years} năm", "Chi phí / VM / tháng", "Dư địa tăng trưởng (%)", "Điểm tổng hợp", "Đề xuất"]
     rows = []
-    for r in sorted(result["results"], key=lambda x: x["rank"] or 99):
+    for r in sorted(result["results"], key=lambda x: (x.get("suggested", False), x["rank"] or 99)):
         pr, adv = r["profile"], r["advisory"]
-        rows.append([r["rank"], pr["name"], f"{pr['sockets']}×{pr['coresPerSocket']}", pr["ramGB"], r["hostsForCpu"], r["hostsForRam"],
+        rows.append([r["rank"] if r["rank"] is not None else "Tham khảo", pr["name"], f"{pr['sockets']}×{pr['coresPerSocket']}", pr["ramGB"], r["hostsForCpu"], r["hostsForRam"],
                      f"N+{r['redundancy']}", r["hostsTotal"], r["binding"], r["totals"]["cores"], r["totals"]["ramGB"],
-                     _r(r["failure"]["cpuPct"]), _r(r["failure"]["ramPct"]), "Đạt" if r["failure"]["ok"] else "Chưa đạt",
+                     _r(r["failure"]["cpuPct"]), _r(r["failure"]["ramPct"]), ("Sát ngưỡng" if r["failure"].get("atLimit") else "Đạt") if r["failure"]["ok"] else "Chưa đạt",
                      r["spare"]["extraAvgVms"], pr["unitPrice"], r["budget"], adv["license"]["coresTotal"], adv["license"]["yearlyCost"],
                      adv["costs"]["tco"], _r(adv["costs"]["perVmMonth"], 0), _r(adv["runway"]["extraGrowthPct"]),
-                     _r(adv.get("scoreTotal"), 0), "★ Đề xuất" if r["recommended"] else ""])
+                     _r(adv.get("scoreTotal"), 0), "★ Đề xuất" if r["recommended"] else ("Gợi ý" if r.get("suggested") else "")])
     start = _sheet_title(ws, "So sánh phương án cấu hình", subtitle, len(header))
     last = _write_rows(ws, start, header, rows, fmts={4: NUM, 10: NUM, 11: NUM, 12: NUM1, 13: NUM1, 16: MONEY, 17: MONEY, 18: NUM,
                                                        19: MONEY, 20: MONEY, 21: MONEY, 22: NUM1, 23: NUM})
     _table(ws, f"A{start}:{get_column_letter(len(header))}{last}", "SoSanhPhuongAn")
-    for i, r in enumerate(sorted(result["results"], key=lambda x: x["rank"] or 99)):
+    for i, r in enumerate(sorted(result["results"], key=lambda x: (x.get("suggested", False), x["rank"] or 99))):
         if r["recommended"]:
             for c in range(1, len(header) + 1):
                 cell = ws.cell(row=start + 1 + i, column=c)
@@ -631,7 +630,7 @@ def _options_sheet(wb, result, subtitle: str) -> None:
         row = _section(ws, row, "Bảng điểm đa tiêu chí (0–100, cao = tốt)", 2 + len(axes))
         hdr = ["Cấu hình", ""] + [ax["label"] for ax in axes]
         srows = []
-        for r in sorted(result["results"], key=lambda x: x["rank"] or 99):
+        for r in sorted(result["results"], key=lambda x: (x.get("suggested", False), x["rank"] or 99)):
             sc = r["advisory"].get("scores") or {}
             srows.append([r["profile"]["name"], "★" if r["recommended"] else ""] + [_r(sc.get(ax["key"]), 0) for ax in axes])
         top = row
@@ -729,13 +728,13 @@ def _sensitivity_sheet(wb, result, subtitle: str) -> None:
     names = [s["name"] for s in (sens.get("growth") or {}).get("series", [])]
     start = _sheet_title(ws, "Độ nhạy & dự báo tăng trưởng", subtitle, max(4, 1 + len(names)))
     row = start
-    titles = {"growth": "Dự phòng tăng trưởng (%)", "cpuRatio": "Tỷ lệ chia sẻ CPU (x)", "maxUtil": "Mức sử dụng tối đa / máy chủ (%)"}
+    titles = {"growth": "Dự phòng tăng trưởng (%)", "cpuRatio": "Tỷ lệ chia sẻ CPU (vCPU/thread)", "maxUtil": "Mức dùng tối đa / host (%)"}
     tno = 0
     for key, title in titles.items():
         sw = sens.get(key)
         if not sw:
             continue
-        row = _section(ws, row, f"Số máy chủ theo {title.lower()}", 1 + len(sw["series"]))
+        row = _section(ws, row, f"Số host theo {title.lower()}", 1 + len(sw["series"]))
         top = row
         rows = [[(f"{x:g}x" if key == "cpuRatio" else f"{x:g}%") + (" (hiện tại)" if x == sw["current"] else "")]
                 + [s["hosts"][i] for s in sw["series"]] for i, x in enumerate(sw["x"])]
@@ -751,9 +750,9 @@ def _sensitivity_sheet(wb, result, subtitle: str) -> None:
         row = lst + 2
     proj = a.get("projection")
     if proj:
-        row = _section(ws, row, f"Dự báo theo năm — tăng trưởng {proj['annualGrowthPct']:g}%/năm, đề xuất {proj['installed']} máy chủ", 4)
+        row = _section(ws, row, f"Dự báo theo năm — tăng trưởng {proj['annualGrowthPct']:g}%/năm, đề xuất {proj['installed']} host", 4)
         top = row
-        lst = _write_rows(ws, row, ["Năm", "Tăng trưởng lũy kế (%)", "Máy chủ cần", "Đánh giá"],
+        lst = _write_rows(ws, row, ["Năm", "Tăng trưởng lũy kế (%)", "Host cần", "Đánh giá"],
                           [["Hiện tại" if pt["year"] == 0 else f"Năm {pt['year']}", _r(pt["growthPct"]), pt["hosts"],
                             "Đáp ứng" if pt["hosts"] <= proj["installed"] else "Cần mở rộng"] for pt in proj["points"]],
                           fmts={2: NUM1, 3: NUM})
