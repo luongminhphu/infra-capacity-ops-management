@@ -16,9 +16,22 @@ def ensure_schema() -> None:
     the first release (SQLAlchemy's create_all never alters existing tables).
     Safe to call on every start — each ALTER runs only when the column is
     missing, on both SQLite and PostgreSQL."""
-    from sqlalchemy import inspect, text
+    import time
 
-    Base.metadata.create_all(bind=engine)
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import IntegrityError, ProgrammingError
+
+    # Two app processes starting at once on an empty database (e.g. old and new pod
+    # during a rollout) race on CREATE TABLE; the loser sees "already exists" —
+    # wait briefly and retry: create_all skips tables that now exist.
+    for attempt in range(5):
+        try:
+            Base.metadata.create_all(bind=engine)
+            break
+        except (IntegrityError, ProgrammingError):
+            if attempt == 4:
+                raise
+            time.sleep(2)
     additive = {
         "vm_snapshots": [
             ("instance_uuid", "VARCHAR(64)"),

@@ -300,3 +300,22 @@ def test_scope_api_roundtrip():
         assert c.put("/api/backup/scope", json={"rules": [{"vcenterKey": "vc1", "host": "esx1"}]}).status_code == 400
         assert c.get("/api/backup/scope").json()["rules"] == out["rules"]
         assert c.put("/api/backup/scope", json={"rules": []}).json()["rules"] == []
+
+
+def test_ensure_schema_retries_concurrent_create(monkeypatch):
+    """Old and new pod starting together on an empty DB: the second CREATE TABLE fails once."""
+    from sqlalchemy.exc import IntegrityError
+    from app import database
+    calls = {"n": 0}
+    real = database.Base.metadata.create_all
+
+    def flaky(**kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise IntegrityError("CREATE TABLE users", {}, Exception("duplicate key pg_type_typname_nsp_index"))
+        return real(**kw)
+
+    monkeypatch.setattr(database.Base.metadata, "create_all", flaky)
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    database.ensure_schema()
+    assert calls["n"] == 2

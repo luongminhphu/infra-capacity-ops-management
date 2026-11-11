@@ -8,6 +8,10 @@ metadata:
 spec:
   replicas: 1  # giữ 1 — scheduler polling vCenter chạy trong tiến trình app, tăng replicas
                # sẽ khiến nhiều pod cùng poll trùng lặp vào vCenter (không có phối hợp khoá).
+  # Recreate: tắt pod cũ rồi mới bật pod mới — không có lúc hai pod cùng poll vCenter / NetBackup
+  # hay cùng tạo bảng trên DB trống.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: ico-app
