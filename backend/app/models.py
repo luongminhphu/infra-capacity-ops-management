@@ -1,7 +1,7 @@
 import datetime as dt
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+    BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -252,3 +252,93 @@ class LicenseAssessment(Base):
     inputs_json = Column(Text, nullable=False)
     result_json = Column(Text, nullable=False)
     result_hash = Column(String(64), nullable=True)
+
+
+# =====================================================================
+# Backup monitoring module (Veritas NetBackup, read-only REST API)
+# =====================================================================
+
+class BackupSyncRun(Base):
+    """One poll of a NetBackup primary server (jobs are upserted, policies and
+    storage are captured as a snapshot of this run)."""
+    __tablename__ = "backup_sync_runs"
+
+    id = Column(Integer, primary_key=True)
+    nbu_key = Column(String(64), nullable=False, index=True)
+    source = Column(String(16), nullable=False, default="live")  # live | demo
+    status = Column(String(16), nullable=False, default="ok")    # ok | error
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime, default=utcnow, index=True)
+    finished_at = Column(DateTime, nullable=True)
+    jobs_fetched = Column(Integer, default=0)
+    policy_count = Column(Integer, default=0)
+    pool_count = Column(Integer, default=0)
+
+    policies = relationship("BackupPolicySnapshot", back_populates="run", cascade="all, delete-orphan")
+    storage = relationship("BackupStorageSnapshot", back_populates="run", cascade="all, delete-orphan")
+
+
+class BackupJob(Base):
+    """A NetBackup job (activity monitor row). Upserted by (primary server, jobId):
+    a job seen ACTIVE in one poll is updated with its final status in the next."""
+    __tablename__ = "backup_jobs"
+    __table_args__ = (UniqueConstraint("nbu_key", "job_id", name="uq_backup_job"),)
+
+    id = Column(Integer, primary_key=True)
+    nbu_key = Column(String(64), nullable=False, index=True)
+    job_id = Column(BigInteger, nullable=False)
+    parent_job_id = Column(BigInteger, nullable=True)
+    job_type = Column(String(32), nullable=True)
+    category = Column(String(16), nullable=False, default="other")  # backup | copy | restore | other
+    policy_name = Column(String(255), nullable=True, index=True)
+    policy_type = Column(String(64), nullable=True)
+    schedule_name = Column(String(255), nullable=True)
+    schedule_type = Column(String(64), nullable=True)
+    client_name = Column(String(255), nullable=True)
+    client_key = Column(String(255), nullable=True, index=True)  # normalised short host name
+    state = Column(String(16), nullable=True)                    # QUEUED | ACTIVE | DONE | ...
+    status = Column(Integer, nullable=True)                      # NetBackup status code (0 ok, 1 partial)
+    start_time = Column(DateTime, nullable=True, index=True)
+    end_time = Column(DateTime, nullable=True)
+    elapsed_sec = Column(Float, nullable=True)
+    kbytes = Column(Float, nullable=True)
+    files = Column(BigInteger, nullable=True)
+    storage_unit = Column(String(255), nullable=True)
+    media_server = Column(String(255), nullable=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class BackupPolicySnapshot(Base):
+    __tablename__ = "backup_policy_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("backup_sync_runs.id"), nullable=False, index=True)
+    nbu_key = Column(String(64), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    policy_type = Column(String(64), nullable=True)
+    active = Column(Boolean, nullable=True)
+    clients_json = Column(Text, nullable=True)     # JSON list of client host names
+    schedules_json = Column(Text, nullable=True)   # JSON list of {name, type, frequencySec, retention}
+    storage = Column(String(255), nullable=True)
+    selection = Column(Text, nullable=True)        # backup selections / VMware query (shortened)
+    captured_at = Column(DateTime, default=utcnow, index=True)
+
+    run = relationship("BackupSyncRun", back_populates="policies")
+
+
+class BackupStorageSnapshot(Base):
+    __tablename__ = "backup_storage_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("backup_sync_runs.id"), nullable=False, index=True)
+    nbu_key = Column(String(64), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    storage_type = Column(String(64), nullable=True)   # PureDisk (MSDP), AdvancedDisk, DataDomain…
+    total_bytes = Column(Float, nullable=True)
+    used_bytes = Column(Float, nullable=True)
+    free_bytes = Column(Float, nullable=True)
+    high_water_pct = Column(Float, nullable=True)
+    state = Column(String(32), nullable=True)          # UP | DOWN
+    captured_at = Column(DateTime, default=utcnow, index=True)
+
+    run = relationship("BackupSyncRun", back_populates="storage")

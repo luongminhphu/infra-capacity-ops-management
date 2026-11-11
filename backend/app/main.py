@@ -12,7 +12,7 @@ import hashlib
 from .collectors.scheduler import scheduler_loop
 from .config import get_settings
 from .database import SessionLocal, ensure_schema
-from .routers import auth, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, vcenters
+from .routers import auth, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, vcenters
 from .security import ensure_bootstrap_admin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     global _scheduler_task
     if settings.enable_scheduler:
         _scheduler_task = asyncio.create_task(scheduler_loop(settings))
-        logger.info("Background vCenter poll scheduler started (interval=%s min)", settings.poll_interval_minutes)
+        logger.info("Background vCenter/NetBackup poll scheduler started (interval=%s min)", settings.poll_interval_minutes)
     else:
         logger.info("Background scheduler disabled (ENABLE_SCHEDULER=false)")
 
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
         _scheduler_task.cancel()
 
 
-app = FastAPI(title="VMware Capacity Ops Management API", lifespan=lifespan)
+app = FastAPI(title="Infra Capacity Ops Management API", lifespan=lifespan)
 
 settings = get_settings()
 app.add_middleware(
@@ -69,11 +69,12 @@ app.include_router(reports.router)
 app.include_router(settings_router.router)
 app.include_router(sizing.router)
 app.include_router(licensing.router)
+app.include_router(backup.router)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "VMware Capacity Ops Management"}
+    return {"status": "ok", "app": "Infra Capacity Ops Management"}
 
 
 def _asset_version() -> str:

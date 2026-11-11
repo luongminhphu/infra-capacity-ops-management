@@ -1,7 +1,7 @@
-# VMware Capacity Ops Management
+# Infra Capacity Ops Management
 
-Ứng dụng theo dõi capacity, compliance và mô phỏng what-if cho hạ tầng VMware, hỗ trợ **truy vấn
-live tới 4 vCenter (đọc chỉ đọc)** song song với import CSV/JSON thủ công, lưu lịch sử theo thời
+Ứng dụng theo dõi capacity, compliance, mô phỏng what-if cho hạ tầng ảo hoá và **giám sát backup
+Veritas NetBackup**, hỗ trợ **truy vấn live tới 4 vCenter và 4 NetBackup primary server (tài khoản chỉ đọc)** song song với import CSV/JSON thủ công, lưu lịch sử theo thời
 gian bằng PostgreSQL, và giao diện **điều hướng theo luồng công việc** (sidebar trái, HSC design system).
 
 ### Cấu trúc giao diện (information architecture)
@@ -20,7 +20,8 @@ mà trang đó dùng (vCenter / cluster / host).
 | | **ESXi & phần cứng**, **Hệ điều hành guest** | Hai tab đầu của License & Inventory cũ; bảng VM có cột IP address (guest.ipAddress, IP chính do VMware Tools báo về) và hostname guest trong tooltip / file Excel. |
 | Quy hoạch | **What-if capacity**, **Sizing máy chủ**, **Quy hoạch tài nguyên** | What-if simulation; sizing host vật lý; form giả định + PDF quy hoạch (trước là dropdown trong header). |
 | License | **Đánh giá license**, **What-if license**, **Snapshot license** | Ba tab còn lại của License & Inventory cũ, kèm thanh chọn phạm vi cluster cho đợt mua. |
-| Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi nút xuất: PDF Vận hành / Kỹ thuật / Quy hoạch / Tổng quan license, CSV, Excel; phạm vi cluster-host của PDF, loại finding, logo (trước rải rác ở 5 dropdown trong header). |
+| Backup | **Tổng quan backup**, **Client & RPO**, **Job backup**, **Độ phủ VM**, **Storage & policy**, **Nguồn & ngưỡng** | Giám sát Veritas NetBackup qua REST API chỉ đọc — xem mục *Backup* bên dưới. |
+| Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi nút xuất: PDF Vận hành / Kỹ thuật / Quy hoạch / Tổng quan license / Hiện trạng Backup, CSV, Excel; phạm vi cluster-host của PDF, loại finding, logo (trước rải rác ở 5 dropdown trong header). |
 | | **Cài đặt** | Tiêu chí đánh giá (Storage), ngưỡng (idle, overcommit, HT) có nút **Lưu ngưỡng** lên server, trạng thái vCenter, import CSV/JSON, sample data, reset. |
 
 Giao diện dùng HSC design system: dark theme mặc định (nền đen, bề mặt `#14171A`, brand `#2681FF`),
@@ -284,6 +285,60 @@ bộ lọc và thời điểm xuất. Backend tạo file bằng `openpyxl` tại
 > no-cache`, nên sau mỗi lần deploy image mới trình duyệt tự tải JS/CSS mới — không còn tình
 > trạng giao diện mới nhưng logic cũ (ví dụ dropdown cluster trống).
 
+### Backup — giám sát & báo cáo Veritas NetBackup
+
+Nhóm trang **Backup** theo dõi hiện trạng backup qua **NetBackup REST API bằng tài khoản chỉ đọc**,
+lưu lịch sử vào cùng database và làm báo cáo thống kê theo cùng cách với phần tài nguyên ảo hoá
+(đồng bộ theo lịch + thủ công, mỗi nguồn báo lỗi độc lập, PDF A4 và Excel).
+
+| Trang | Nội dung |
+|---|---|
+| **Tổng quan backup** | Kết luận (Đạt / Cần theo dõi / Cần xử lý), 6 KPI, biểu đồ job theo ngày (thành công / một phần / lỗi + TB), nguyên nhân lỗi, client cần xử lý, phát hiện & khuyến nghị. |
+| **Client & RPO** | Mỗi client: job gần nhất, lần thành công gần nhất, số giờ đã qua, số lần lỗi liên tiếp, đánh giá RPO. |
+| **Job backup** | Activity monitor đã lưu: lọc theo kết quả, loại job (backup / nhân bản DR / restore), client, policy, mã lỗi. |
+| **Độ phủ VM** | Đối chiếu VM đang chạy trong inventory vCenter với client NetBackup (tên VM, hostname guest, IP): VM chưa có backup / có job nhưng lỗi, theo cluster. |
+| **Storage & policy** | Disk pool: % dùng, xu hướng 30 ngày, số ngày tới ngưỡng high-water; policy: bật/tắt, lần chạy gần nhất, tỷ lệ thành công. |
+| **Nguồn & ngưỡng** | Trạng thái kết nối từng primary server, hướng dẫn tài khoản chỉ đọc, ngưỡng giám sát (lưu server, dùng chung). |
+
+Thanh đầu trang chọn **NetBackup server** và **kỳ thống kê** (24 giờ … 90 ngày), có nút
+*Đồng bộ NetBackup*, *Xuất Excel* và *Báo cáo PDF*. Trung tâm báo cáo cũng có thẻ **Hiện trạng Backup**.
+
+**Tiêu chí đánh giá (ngưỡng chỉnh được ở trang Nguồn & ngưỡng):**
+
+1. **Tỷ lệ backup thành công** = (status 0 + status 1) / job đã kết thúc; mục tiêu 95 %, nghiêm trọng
+   dưới 85 %. Chỉ đếm job ở cấp thực thi: job cha (discovery của VMware policy, multistream) không đếm
+   trùng với job con; snapshot thành công đi kèm job backup con cũng không đếm hai lần.
+2. **RPO theo client** — thời gian từ bản backup thành công gần nhất: cảnh báo > 26 giờ, nghiêm trọng
+   > 72 giờ hoặc lỗi liên tiếp ≥ 2 lần; client có trong policy đang bật mà không có job → nghiêm trọng.
+3. **Nguyên nhân lỗi** — mã lỗi NetBackup gom theo đầu mối xử lý: kết nối client / mạng, dữ liệu trên
+   client, storage / media, snapshot / ảo hoá, cửa sổ backup / huỷ job, cấu hình policy (kèm hướng xử lý).
+4. **Policy** — đang bật nhưng không chạy trong 48 giờ, tỷ lệ lỗi cao, policy đang tắt.
+5. **Disk pool** — cảnh báo 80 %, nghiêm trọng 90 %, hoặc dự kiến chạm high-water trong 30 ngày
+   (hồi quy tuyến tính 30 ngày lịch sử); volume DOWN → nghiêm trọng.
+6. **Job chạy / chờ quá lâu** (12 giờ / 4 giờ), **tràn cửa sổ backup** (job đêm kết thúc sau 7:00).
+7. **Bản sao DR** — tỷ lệ thành công job duplication / replication (SLP).
+8. **Độ phủ VM** — VM đang chạy có bản backup thành công trong 7 ngày; loại trừ theo từ khoá tên
+   (mặc định `vCLS,template,tmpl`), VM tắt không tính.
+
+**Báo cáo PDF “Hiện trạng Backup”**: tóm tắt điều hành → 1 kết quả theo ngày → 2 nguyên nhân lỗi →
+3 client cần xử lý → 4 độ phủ VM → 5 dung lượng lưu trữ → 6 policy → 7 phát hiện & khuyến nghị →
+8 tiêu chí & nguồn dữ liệu → Phụ lục A job lỗi, Phụ lục B VM chưa backup.
+**Excel “Thống kê backup”**: Tổng quan · Theo ngày (biểu đồ) · Nguyên nhân lỗi · Client & RPO · Policy ·
+Storage · Độ phủ VM · Job (toàn bộ job trong kỳ) — mỗi bảng là Excel Table để lọc / pivot.
+
+**Thu thập dữ liệu** (`backend/app/backup/`): mỗi lần đồng bộ đọc job từ lần trước trừ 48 giờ chồng
+lấn (và từ job cũ nhất còn đang chạy) rồi **upsert theo (server, jobId)** — job thấy ACTIVE ở lần này sẽ
+được cập nhật kết quả cuối ở lần sau; policy và disk pool lưu thành snapshot theo lần đồng bộ (đủ cho
+xu hướng dung lượng). Lần đầu lấy `BACKUP_INITIAL_DAYS` ngày (mặc định 14); job cũ hơn
+`BACKUP_RETENTION_DAYS` (400) bị dọn. API được gọi (chỉ GET):
+`/netbackup/admin/jobs`, `/netbackup/config/policies` (+ chi tiết từng policy),
+`/netbackup/storage/disk-pools`. Thiếu quyền Policy/Storage chỉ làm mất phần tương ứng (ghi cảnh báo),
+không làm hỏng cả lần đồng bộ.
+
+API backend: `GET /api/backup/servers`, `POST /api/backup/servers/{key}/sync`, `POST /api/backup/sync-all`,
+`GET /api/backup/summary?server=&days=`, `GET /api/backup/jobs`, `GET|PUT /api/backup/thresholds`,
+`GET /api/backup/report/pdf`, `GET /api/backup/report/xlsx`.
+
 ### Mã đối soát (ticket code) — dẫn chứng cho từng khuyến nghị
 
 Mỗi compliance finding có một **mã đối soát ổn định** dạng `HRAM-C4C34`, `IDLE-F916A`… (tiền tố
@@ -394,7 +449,9 @@ vmware-capacity-ops/
 │   │   ├── capacity.py        capacity model + compliance checks (Python port của core.js)
 │   │   ├── vcenter/client.py  pyVmomi client — đọc host/VM/cluster/datastore qua vSphere API
 │   │   ├── vcenter/demo_generator.py  sinh dữ liệu giả lập khi DEMO=true (không cần vCenter thật)
-│   │   ├── collectors/scheduler.py    poll định kỳ + lưu SnapshotRun lịch sử
+│   │   ├── collectors/scheduler.py    poll định kỳ vCenter + NetBackup, lưu lịch sử
+│   │   ├── backup/            module Backup: NetBackup REST client, demo, collector, mã lỗi, phân tích
+│   │   ├── report_backup.py / excel_backup.py   báo cáo PDF / Excel hiện trạng backup
 │   │   ├── data_access.py     query lớp dữ liệu mới nhất / theo vCenter / lịch sử trend
 │   │   ├── routers/           auth, vcenters, data, dashboard, compliance, imports, export, settings
 │   │   └── seed.py            CLI tạo/đổi mật khẩu user đăng nhập
@@ -467,6 +524,31 @@ Sau khi cấu hình xong, kiểm tra nhanh bằng nút **"Đồng bộ ngay"** t
 phải danh sách vCenter) — nếu có lỗi kết nối/permission, thông báo lỗi cụ thể sẽ hiện ngay tại chip
 vCenter tương ứng.
 
+## Tài khoản read-only cho NetBackup (module Backup)
+
+App chỉ **đọc** (GET) — không khởi chạy, huỷ hay sửa job/policy. Các bước trên NetBackup 9.x / 10.x
+(Web UI, tên menu có thể khác đôi chút theo phiên bản):
+
+1. Tạo user dịch vụ (local hoặc AD/LDAP), ví dụ `svc_nbu_ro`.
+2. **Security → RBAC → Add role**: tạo role tuỳ chỉnh (ví dụ `Infra-ReadOnly`) chỉ gồm quyền **View**
+   cho: *Jobs*, *NetBackup policies* (Protection → Policies), *Storage* (disk pools, storage units).
+   Không cấp quyền Create / Update / Delete / Manage / Restore. Gán role cho user ở bước 1.
+3. **Security → API keys**: tạo API key cho user này (đặt hạn dùng theo chính sách) → điền vào
+   `NETBACKUP_i_API_KEY` (Secret). Không dùng API key thì khai báo `NETBACKUP_i_USERNAME` /
+   `NETBACKUP_i_PASSWORD` (`DOMAIN_TYPE`: `unixpwd`, `vx`, `NT`…; `DOMAIN_NAME` theo domain của user) —
+   app đăng nhập `/netbackup/login`, lấy token, đọc dữ liệu rồi `/logout`.
+4. Mở firewall từ app (pod / host chạy Docker) tới primary server cổng **1556/TCP** (HTTPS).
+5. `NETBACKUP_i_VERIFY_SSL=false` khi primary server dùng chứng chỉ NetBackup CA tự ký (kết nối vẫn mã
+   hoá); đặt `true` nếu chứng chỉ được CA nội bộ tin cậy cấp.
+6. `NETBACKUP_i_API_VERSION`: phiên bản API (media type `application/vnd.netbackup+json;version=…`).
+   Mặc định `8.0` (NetBackup 10.0); NetBackup mới hơn vẫn nhận phiên bản cũ. Lỗi **406** → chỉnh giá trị
+   này theo bảng phiên bản API của hãng.
+
+Sau khi cấu hình: vào **Backup → Nguồn & ngưỡng**, bấm **Đồng bộ** — lỗi xác thực (401), thiếu quyền
+(403), sai phiên bản API (406) hay không kết nối được sẽ hiện ngay ở cột Trạng thái. Chạy thử không cần
+NetBackup thật: `NETBACKUP_1_DEMO=true` (dữ liệu giả lập; độ phủ VM đối chiếu với inventory vCenter
+đã đồng bộ).
+
 ## Triển khai trên Kubernetes / KubeSphere
 
 Ngoài Docker Compose, thư mục `k8s/` chứa manifest sẵn sàng áp dụng lên cụm KubeSphere
@@ -536,7 +618,7 @@ kubectl create secret docker-registry ghcr-pull-secret \
 
 ### Lưu ý khi chạy trên Kubernetes
 
-- **Giữ `replicas: 1`** cho `vco-app` — bộ đếm polling vCenter chạy trong tiến trình app,
+- **Giữ `replicas: 1`** cho `vco-app` — bộ đếm polling vCenter / NetBackup chạy trong tiến trình app,
   không có khoá phối hợp giữa nhiều pod; scale ngang sẽ gây polling trùng lặp vào vCenter.
 - Áp dụng đúng thứ tự (Secret + ConfigMap trước Deployment) — nếu sửa
   ConfigMap/Secret sau khi Pod đã chạy, phải `kubectl rollout restart deployment/vco-app -n infra-ops`
@@ -577,6 +659,8 @@ kubectl create secret docker-registry ghcr-pull-secret \
   `.gitignore`), không commit vào Git.
 - Tài khoản vCenter chỉ cần quyền **Read-Only** — không có rủi ro ứng dụng vô tình thay đổi cấu
   hình hạ tầng.
+- Tài khoản NetBackup chỉ cần role **View** (Jobs, Policies, Storage); API key / mật khẩu chỉ nằm
+  trong `.env` / Secret, app chỉ gọi API GET (cộng `/login`, `/logout` khi không dùng API key).
 
 ## Kiểm thử đã thực hiện trong quá trình phát triển
 
@@ -586,6 +670,12 @@ sandbox phát triển không truy cập được vCenter thật của bạn) —
 4 "vCenter" demo (52 host / 406 VM tổng cộng), cả hai góc nhìn Executive/Technical render đúng số
 liệu và biểu đồ, chuyển tab Dashboard/Compliance/Inventory/What-if hoạt động, chạy thử what-if
 "Add Host" cho ra kết quả before/after chính xác.
+
+Module Backup được kiểm thử với NetBackup **chế độ DEMO** (payload giả lập đúng cấu trúc REST API,
+đi qua cùng bộ parser) và một nguồn trỏ tới địa chỉ không kết nối được để kiểm tra hiển thị lỗi;
+`backend/tests/test_backup.py` kiểm tra parser, tiêu chí đánh giá, đồng bộ lặp không nhân bản job và
+các API/báo cáo. Kết nối tới NetBackup thật (API key, RBAC, phiên bản API) cần xác nhận trên môi
+trường của bạn.
 
 **Chưa kiểm thử được** (cần môi trường thật của bạn để xác nhận): kết nối tới 4 vCenter 8.x thật
 qua pyVmomi với tài khoản `infra.mon@vsphere.local`, chạy bằng `docker compose up` thật sự (viết

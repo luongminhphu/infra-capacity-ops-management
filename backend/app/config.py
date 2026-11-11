@@ -1,5 +1,5 @@
 """
-Central configuration for VMware Capacity Ops backend.
+Central configuration for Infra Capacity Ops backend.
 
 All secrets (vCenter passwords, JWT secret, admin bootstrap password) come from
 environment variables / .env — never hardcoded and never committed to git.
@@ -34,10 +34,33 @@ class VCenterConfig:
         self.demo = demo
 
 
+class NetBackupConfig:
+    """One NetBackup primary (master) server reached over its REST API with a
+    read-only identity — an API key (preferred, NetBackup 9.x+) or a
+    username/password of a user that only holds a view-only RBAC role."""
+
+    def __init__(self, key: str, name: str, host: str, port: int, api_key: str, username: str, password: str,
+                 domain_type: str, domain_name: str, verify_ssl: bool, api_version: str, demo: bool = False,
+                 timeout: int = 60):
+        self.key = key
+        self.name = name
+        self.host = host
+        self.port = port
+        self.api_key = api_key
+        self.username = username
+        self.password = password
+        self.domain_type = domain_type
+        self.domain_name = domain_name
+        self.verify_ssl = verify_ssl
+        self.api_version = api_version
+        self.demo = demo
+        self.timeout = timeout
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_name: str = "VMware Capacity Ops Management"
+    app_name: str = "Infra Capacity Ops Management"
     environment: str = Field(default="production")
 
     database_url: str = Field(default="postgresql+psycopg2://vmware_app:devpassword@localhost:5432/vmware_capacity_ops")
@@ -67,6 +90,13 @@ class Settings(BaseSettings):
     # Up to 4 vCenters configured via env vars VCENTER_1_* .. VCENTER_4_*
     vcenter_count: int = Field(default=4)
 
+    # Up to 4 NetBackup primary servers via NETBACKUP_1_* .. NETBACKUP_4_*
+    netbackup_count: int = Field(default=4)
+    # First sync pulls this many days of job history; later syncs are incremental.
+    backup_initial_days: int = Field(default=14)
+    # Job rows older than this are purged after each sync (keeps the table bounded).
+    backup_retention_days: int = Field(default=400)
+
     cors_origins: str = Field(default="*")
 
     def cors_origin_list(self) -> List[str]:
@@ -91,6 +121,33 @@ class Settings(BaseSettings):
                 password=os.environ.get(prefix + "PASSWORD", ""),
                 verify_ssl=os.environ.get(prefix + "VERIFY_SSL", "false").lower() in ("1", "true", "yes"),
                 demo=demo,
+            ))
+        return result
+
+
+    def netbackups(self) -> List[NetBackupConfig]:
+        result = []
+        for i in range(1, self.netbackup_count + 1):
+            prefix = f"NETBACKUP_{i}_"
+            env = lambda k, d="": os.environ.get(prefix + k, d)  # noqa: E731
+            host = env("HOST")
+            demo = env("DEMO", "false").lower() in ("1", "true", "yes")
+            if not host and not demo:
+                continue
+            result.append(NetBackupConfig(
+                key=env("KEY", f"nbu{i}"),
+                name=env("NAME", host or f"NetBackup demo {i}"),
+                host=host or f"nbu-demo-{i}.local",
+                port=int(env("PORT", "1556") or 1556),
+                api_key=env("API_KEY"),
+                username=env("USERNAME"),
+                password=env("PASSWORD"),
+                domain_type=env("DOMAIN_TYPE", "unixpwd") or "unixpwd",
+                domain_name=env("DOMAIN_NAME"),
+                verify_ssl=env("VERIFY_SSL", "false").lower() in ("1", "true", "yes"),
+                api_version=env("API_VERSION", "8.0") or "8.0",
+                demo=demo,
+                timeout=int(env("TIMEOUT", "60") or 60),
             ))
         return result
 

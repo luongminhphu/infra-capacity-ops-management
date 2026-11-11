@@ -192,8 +192,18 @@ def _sync_vcenter_in_thread(
         db.close()
 
 
+def _sync_netbackup_in_thread(cfg, app_settings: Settings) -> None:
+    from ..backup.collector import sync_netbackup
+    db = SessionLocal()
+    try:
+        sync_netbackup(db, cfg, app_settings)
+    finally:
+        db.close()
+
+
 async def scheduler_loop(app_settings: Settings):
-    """Poll vCenters sequentially without blocking the API event loop."""
+    """Poll vCenters, then NetBackup primary servers, sequentially without
+    blocking the API event loop."""
     interval = max(5, app_settings.poll_interval_minutes) * 60
 
     while True:
@@ -216,5 +226,13 @@ async def scheduler_loop(app_settings: Settings):
                     "will retry next cycle",
                     cfg.key,
                 )
+
+        for nbu in app_settings.netbackups():
+            try:
+                await asyncio.to_thread(_sync_netbackup_in_thread, nbu, app_settings)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Scheduled NetBackup sync failed for %s; will retry next cycle", nbu.key)
 
         await asyncio.sleep(interval)

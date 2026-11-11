@@ -211,6 +211,17 @@ const api = {
   licSnapshotDelete: (id) => apiRequest(`/licensing/assessments/${id}`, { method: 'DELETE' }),
   licWhatif: (payload) => apiRequest('/licensing/whatif', { method: 'POST', body: JSON.stringify(payload) }),
 
+  // ---- Backup (NetBackup) ----
+  bkServers: () => apiRequest('/backup/servers'),
+  bkSync: (key) => apiRequest(`/backup/servers/${encodeURIComponent(key)}/sync`, { method: 'POST' }),
+  bkSyncAll: () => apiRequest('/backup/sync-all', { method: 'POST' }),
+  bkSummary: (server, days) => apiRequest(`/backup/summary?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`),
+  bkJobs: (params) => { const qs = new URLSearchParams(); Object.entries(params || {}).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) qs.set(k, v); }); return apiRequest(`/backup/jobs?${qs}`); },
+  bkThresholds: () => apiRequest('/backup/thresholds'),
+  bkThresholdsSave: (payload) => apiRequest('/backup/thresholds', { method: 'PUT', body: JSON.stringify(payload) }),
+  bkReportPdf: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'Bao_cao_backup.pdf'),
+  bkReportXlsx: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/xlsx?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'Thong_ke_backup.xlsx'),
+
   getLogo: () => apiRequest('/settings/logo'),
   saveLogo: (dataUrl, filename) => apiRequest('/settings/logo', { method: 'PUT', body: JSON.stringify({ data_url: dataUrl, filename }) }),
   deleteLogo: () => apiRequest('/settings/logo', { method: 'DELETE' }),
