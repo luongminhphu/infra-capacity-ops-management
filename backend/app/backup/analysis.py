@@ -481,7 +481,8 @@ def scope_label(rules: Optional[List[Dict[str, Any]]], limit: int = 6) -> str:
 def _coverage(vms: Optional[List[Dict[str, Any]]], backup_all: List[Dict[str, Any]], policies: List[Dict[str, Any]],
               th: BackupThresholds, now: dt.datetime, scope: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     if not vms:
-        return {"available": False}
+        return {"available": False, "scopeActive": bool(scope), "scopeLabel": scope_label(scope), "scopeRules": scope or [],
+                "outOfScope": 0}
     excl = [x.strip().lower() for x in (th.coverage_exclude or "").split(",") if x.strip()]
     since = now - dt.timedelta(days=th.coverage_days)
     seen: Dict[str, str] = {}  # client key → best outcome ('ok' beats 'fail')

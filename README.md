@@ -779,12 +779,16 @@ kubectl diff -k k8s/
 - PVC Postgres `Pending`: cụm không có StorageClass mặc định — `03-postgres.yaml` chỉ định `longhorn`.
   Nếu đổi sang StorageClass khác: `kubectl get storageclass`, sửa `storageClassName`, xoá StatefulSet và PVC
   đang Pending rồi áp dụng lại (trường này không sửa được trên PVC đã tạo).
-- Image GHCR bị chuyển về Private (`ImagePullBackOff` / `401`): đặt lại Public trong Package Settings
-  (tắt "Inherit access from source repository"), hoặc tạo Image Pull Secret:
+- **Repo và package GHCR private:** cụm kéo image bằng Secret `ghcr-pull-secret` (đã khai báo trong
+  `04-app.yaml`). Tạo PAT **classic** chỉ có quyền `read:packages` (GitHub → Settings → Developer settings →
+  Personal access tokens → Tokens (classic)), rồi:
   ```bash
-  kubectl -n $NS create secret docker-registry ghcr-pull-secret --docker-server=ghcr.io --docker-username=luongminhphu --docker-password='<PAT read:packages>'
+  read -s -p "GHCR token: " T; echo
   ```
-  rồi thêm `imagePullSecrets: [{name: ghcr-pull-secret}]` vào `spec.template.spec` trong `04-app.yaml`.
+  ```bash
+  kubectl -n $NS create secret docker-registry ghcr-pull-secret --docker-server=ghcr.io --docker-username=luongminhphu --docker-password="$T" --dry-run=client -o yaml | kubectl apply -f - && unset T
+  ```
+  Token hết hạn → pod mới báo `ImagePullBackOff`: tạo token mới và chạy lại hai lệnh trên.
 
 ## Lưu ý về dữ liệu lịch sử & polling
 
