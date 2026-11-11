@@ -4,7 +4,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vco-config
-  namespace: infra-ops
+  namespace: cattle-monitoring-system
 data:
   ADMIN_USERNAME: "admin"
   COOKIE_SECURE: "false"          # đặt "true" nếu Ingress/NodePort của bạn phục vụ qua HTTPS
@@ -47,17 +47,20 @@ data:
   VCENTER_4_VERIFY_SSL: "false"
   VCENTER_4_DEMO: "false"
 
-  # ---- Veritas NetBackup #1..#4 (module Backup) — phần KHÔNG nhạy cảm ----
-  # API key / mật khẩu đặt trong Secret (NETBACKUP_i_API_KEY hoặc NETBACKUP_i_PASSWORD).
-  # NETBACKUP_i_DEMO=true để chạy thử với dữ liệu giả lập.
+  # ---- Veritas NetBackup (module Backup) — phần KHÔNG nhạy cảm ----
+  # User / mật khẩu (hoặc API key) nằm trong Secret vco-secrets.
+  # TLS: xác thực bằng CA của NetBackup (root "nbatd" + trung gian "broker"), lấy bằng
+  # k8s/nbu-ca.sh vào ConfigMap nbu-ca, mount tại /etc/netbackup-ca (xem 04-app.yaml).
+  # KEY không đổi sau khi đã chạy (lịch sử job lưu theo KEY).
   BACKUP_INITIAL_DAYS: "14"
   BACKUP_RETENTION_DAYS: "400"
-  NETBACKUP_1_KEY: "nbu-hcm"
-  NETBACKUP_1_NAME: "NetBackup HCM"
-  NETBACKUP_1_HOST: "nbu-primary01.yourcompany.local"
+  NETBACKUP_1_KEY: "nbu-hsc"
+  NETBACKUP_1_NAME: "NetBackup HSC"
+  NETBACKUP_1_HOST: "nbu-primary.hsc.com.vn"   # FQDN trùng tên trong chứng chỉ, không dùng IP
   NETBACKUP_1_PORT: "1556"
-  NETBACKUP_1_VERIFY_SSL: "false"
-  # Bật VERIFY_SSL="true" thì mount CA NetBackup vào pod (xem k8s/04-app.yaml) và trỏ tới file:
-  # NETBACKUP_1_CA_CERT: "/etc/netbackup-ca/ca.pem"
+  NETBACKUP_1_VERIFY_SSL: "true"
+  NETBACKUP_1_CA_CERT: "/etc/netbackup-ca/ca.pem"
   NETBACKUP_1_API_VERSION: "8.0"
+  NETBACKUP_1_DOMAIN_TYPE: "unixpwd"           # user AD: "NT" + DOMAIN_NAME là domain AD
+  NETBACKUP_1_DOMAIN_NAME: "nbu-primary.hsc.com.vn"
   NETBACKUP_1_DEMO: "false"

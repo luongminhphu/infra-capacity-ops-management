@@ -547,12 +547,14 @@ App chỉ **đọc** (GET) — không khởi chạy, huỷ hay sửa job/policy.
 5. **TLS.** `NETBACKUP_i_VERIFY_SSL=false`: kết nối vẫn mã hoá nhưng không xác thực chứng chỉ.
    Nên bật `true` và khai báo CA của NetBackup ở `NETBACKUP_i_CA_CERT` (file PEM; hoặc
    `NETBACKUP_CA_CERT` dùng chung cho mọi server):
-   - Lấy CA trên primary server (Linux): file `/usr/openv/var/webtruststore/cacert.pem`; đối chiếu
-     fingerprint với `/usr/openv/netbackup/bin/nbcertcmd -displayCACertDetail`.
+   - Lấy CA: chạy `./k8s/nbu-ca.sh <nbu-host> <namespace>` — script lấy CA gốc `nbatd` qua
+     `/netbackup/security/cacert` (không cần đăng nhập) và CA trung gian `broker` từ chuỗi chứng chỉ,
+     kiểm tra cả hostname, rồi tạo/cập nhật ConfigMap `nbu-ca`. Đối chiếu fingerprint CA gốc in ra với
+     `/usr/openv/netbackup/bin/nbcertcmd -displayCACertDetail` trên primary.
    - `NETBACKUP_i_HOST` phải trùng tên trong chứng chỉ của primary server (thường là FQDN), không dùng IP.
    - Docker Compose: mount file vào container (ví dụ `./certs/nbu-ca.pem:/etc/netbackup-ca/ca.pem:ro`)
-     rồi đặt `NETBACKUP_1_CA_CERT=/etc/netbackup-ca/ca.pem`. Kubernetes: tạo ConfigMap từ file CA và
-     mount theo mẫu đã comment sẵn trong `k8s/04-app.yaml`.
+     rồi đặt `NETBACKUP_1_CA_CERT=/etc/netbackup-ca/ca.pem`. Kubernetes: `k8s/04-app.yaml` đã mount
+     ConfigMap `nbu-ca` tại `/etc/netbackup-ca` (xem mục Triển khai trên Kubernetes).
    - CA nội bộ của NetBackup không có extension *keyUsage*; Python 3.13 mặc định bật chế độ X.509
      strict và từ chối CA này (`CA cert does not include key usage extension`). App dùng một SSL
      context riêng cho NetBackup (`nbu_ssl_context`) bỏ cờ strict nhưng vẫn kiểm tra chuỗi chứng chỉ
@@ -566,89 +568,123 @@ Sau khi cấu hình: vào **Backup → Nguồn & ngưỡng**, bấm **Đồng b�
 NetBackup thật: `NETBACKUP_1_DEMO=true` (dữ liệu giả lập; độ phủ VM đối chiếu với inventory vCenter
 đã đồng bộ).
 
-## Triển khai trên Kubernetes / KubeSphere
+## Triển khai trên Kubernetes (Rancher / RKE)
 
-Ngoài Docker Compose, thư mục `k8s/` chứa manifest sẵn sàng áp dụng lên cụm KubeSphere
-(hoặc bất kỳ cụm Kubernetes chuẩn nào, vì KubeSphere chạy trên Kubernetes gốc). Image
-ứng dụng được build và đẩy tự động lên **GitHub Container Registry (GHCR)** qua GitHub
-Action `.github/workflows/build-push.yml` mỗi khi push lên nhánh `main`, thành
-`ghcr.io/luongminhphu/vmware-capacity-ops-management-app:latest`. Package này hiện đã
-**Public** — cụm có thể pull thẳng, không cần Image Pull Secret. Ứng dụng expose ra
-ngoài qua **Service NodePort** (không cần Ingress/domain).
+Hệ thống đang chạy trên cụm **Rancher (RKE)**, namespace **`cattle-monitoring-system`** (namespace có
+sẵn của cụm — manifest không tạo namespace). Thư mục `k8s/` khớp với triển khai này:
 
-### Bước 1 — Tạo Secret chứa thông tin nhạy cảm
+| File | Nội dung |
+|---|---|
+| `01-configmap.yaml` | `vco-config` — biến không nhạy cảm: polling, vCenter, NetBackup (`NETBACKUP_1_*` đã cấu hình). |
+| `02-secret.example.yaml` | Mẫu `vco-secrets` — Postgres, JWT, admin, mật khẩu vCenter, user/mật khẩu NetBackup. Bản thật `02-secret.yaml` nằm trong `.gitignore`. |
+| `03-postgres.yaml` | StatefulSet + Service headless `vco-postgres` (PVC 10Gi, StorageClass mặc định của cụm). |
+| `04-app.yaml` | Deployment `vco-app` (init `wait-postgres`, mount CA NetBackup từ ConfigMap `nbu-ca`) + Service NodePort `30080`. |
+| `nbu-ca.sh` | Lấy CA của NetBackup (gốc `nbatd` + trung gian `broker`), kiểm tra, tạo/cập nhật ConfigMap `nbu-ca`. |
+| `kustomization.yaml` | Áp dụng 01–04 vào `cattle-monitoring-system`. |
 
-```bash
-cp k8s/02-secret.example.yaml k8s/02-secret.yaml
-# Sửa k8s/02-secret.yaml: mật khẩu Postgres, JWT_SECRET, ADMIN_PASSWORD,
-# mật khẩu infra.mon@vsphere.local cho từng vCenter. File này đã có trong
-# .gitignore — sẽ không bị commit.
-```
+Image được GitHub Action `.github/workflows/build-push.yml` build và đẩy lên GHCR mỗi khi push lên
+`main`: `ghcr.io/luongminhphu/vmware-capacity-ops-management-app:latest` (package **Public**, không cần
+Image Pull Secret). Deployment dùng `imagePullPolicy: Always`, nên `rollout restart` là kéo bản mới nhất.
 
-### Bước 2 — Sửa `k8s/01-configmap.yaml`
-
-Điền đúng `VCENTER_i_HOST`/`VCENTER_i_NAME`/`VCENTER_i_KEY` cho 4 vCenter thật của bạn
-(hoặc để `VCENTER_i_DEMO: "true"` để chạy thử trước với dữ liệu giả lập).
-
-### Bước 3 — Áp dụng lên cụm
-
-Nếu namespace `infra-ops` đã có sẵn (tạo qua KubeSphere Console — Project infra-ops),
-**không cần áp dụng `k8s/00-namespace.yaml`**:
+Các lệnh dưới đây chạy trên máy có `kubectl` trỏ vào cụm (ví dụ `infra-rke-cp01`) hoặc **Kubectl Shell**
+trong Rancher UI.
 
 ```bash
-kubectl apply -k k8s/
-# hoặc áp dụng từng file theo thứ tự nếu không dùng kustomize:
-# kubectl apply -f k8s/01-configmap.yaml \
-#   -f k8s/02-secret.yaml -f k8s/03-postgres.yaml -f k8s/04-app.yaml
-
-kubectl -n infra-ops get pods -w
+NS=cattle-monitoring-system
 ```
 
-Khi Pod `vco-app` ở trạng thái `Running`/`Ready`, truy cập
-`http://<IP-bất-kỳ-của-node-trong-cụm>:30080` (đổi `30080` nếu bạn đã sửa `nodePort`
-trong `k8s/04-app.yaml`).
+### Cập nhật phiên bản mới (thao tác thường dùng)
 
-### Nếu package GHCR bị chuyển lại về Private
+1. Merge vào `main`, đợi workflow **Build and push image to GHCR** chạy xong (tab Actions).
+2. Lưu digest image đang chạy để rollback và backup DB:
+   ```bash
+   kubectl -n $NS get pod -l app=vco-app -o jsonpath='{.items[0].status.containerStatuses[0].imageID}{"\n"}' > ~/vco-app-old-digest.txt
+   ```
+   ```bash
+   kubectl -n $NS exec sts/vco-postgres -- sh -c 'pg_dumpall -U "$POSTGRES_USER"' > ~/vco-db-backup-$(date +%F).sql
+   ```
+3. Kéo image mới và đợi pod sẵn sàng:
+   ```bash
+   kubectl -n $NS rollout restart deploy/vco-app && kubectl -n $NS rollout status deploy/vco-app
+   ```
+4. Rollback nếu cần:
+   ```bash
+   kubectl -n $NS set image deploy/vco-app app=$(cat ~/vco-app-old-digest.txt)
+   ```
 
-GitHub có tuỳ chọn "Inherit access from source repository" đôi khi tự đưa package
-Private trở lại sau mỗi lần build (vì repo nguồn là Private). Nếu gặp lỗi
-`ImagePullBackOff` / `401 Unauthorized` khi pull, quay lại **Public** trong Package
-Settings (nhớ tắt "Inherit access from source repository" nếu có), hoặc dùng Image
-Pull Secret làm phương án chắc chắn:
+Bảng mới / cột mới trong DB được tạo tự động khi app khởi động (`ensure_schema`) — không có bước migrate riêng.
 
+### Triển khai lại từ đầu (cụm mới hoặc khôi phục)
+
+1. **Secret** — tạo từ mẫu rồi điền giá trị thật (mật khẩu Postgres, `JWT_SECRET`, `ADMIN_PASSWORD`,
+   mật khẩu vCenter, mật khẩu `ita_collector_user` NetBackup):
+   ```bash
+   cp k8s/02-secret.example.yaml k8s/02-secret.yaml
+   ```
+   `DATABASE_URL` phải khớp đúng `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`.
+2. **ConfigMap** — `k8s/01-configmap.yaml` đã có giá trị NetBackup đang dùng; kiểm tra lại khối vCenter
+   (`VCENTER_i_KEY` / `NAME` / `HOST`) cho đúng môi trường.
+3. **CA của NetBackup** (cần `openssl`, `curl`, `python3`; chạy từ máy kết nối được `nbu-primary.hsc.com.vn:1556`):
+   ```bash
+   ./k8s/nbu-ca.sh nbu-primary.hsc.com.vn cattle-monitoring-system
+   ```
+4. **Áp dụng** và theo dõi:
+   ```bash
+   kubectl apply -k k8s/
+   ```
+   ```bash
+   kubectl -n $NS get pods -l 'app in (vco-app,vco-postgres)' -w
+   ```
+5. Truy cập `http://<IP-node>:30080`, đăng nhập `admin`, bấm **Đồng bộ ngay** (vCenter) và
+   **Backup → Nguồn & ngưỡng → Đồng bộ** (NetBackup). Khôi phục dữ liệu cũ nếu cần:
+   ```bash
+   kubectl -n $NS exec -i sts/vco-postgres -- sh -c 'psql -U "$POSTGRES_USER" -d postgres' < ~/vco-db-backup-<ngày>.sql
+   ```
+
+Trước khi `kubectl apply -k` lên cụm đang chạy, xem trước khác biệt so với cấu hình thật để không ghi
+đè giá trị đã chỉnh tay:
 ```bash
-kubectl create secret docker-registry ghcr-pull-secret \
-  -n infra-ops \
-  --docker-server=ghcr.io \
-  --docker-username=luongminhphu \
-  --docker-password='<PAT có quyền read:packages>' \
-  --docker-email='luongminhphu@gmail.com'
+kubectl diff -k k8s/
 ```
 
-... rồi thêm lại vào `k8s/04-app.yaml` (trong `spec.template.spec`, trước
-`containers:`):
+### NetBackup trên cụm này
 
-```yaml
-      imagePullSecrets:
-        - name: ghcr-pull-secret
-```
+- Biến đang dùng: `NETBACKUP_1_HOST=nbu-primary.hsc.com.vn`, `PORT=1556`, `VERIFY_SSL=true`,
+  `CA_CERT=/etc/netbackup-ca/ca.pem`, `API_VERSION=8.0`, đăng nhập bằng user `ita_collector_user`
+  (`DOMAIN_TYPE` / `DOMAIN_NAME` trong ConfigMap, mật khẩu trong Secret). Chỉ dùng tên biến **có số**
+  (`NETBACKUP_1_*`) — biến không số bị bỏ qua.
+- Chứng chỉ NetBackup: leaf `nbu-primary.hsc.com.vn` ← trung gian `broker` ← gốc `nbatd` (hết hạn 2045).
+  Khi NetBackup cấp lại CA, chạy lại `./k8s/nbu-ca.sh` rồi `rollout restart`.
+- Đổi mật khẩu NetBackup (không lưu vào lịch sử shell):
+  ```bash
+  read -s -p "Mat khau ita_collector_user: " P; echo
+  ```
+  ```bash
+  kubectl -n $NS patch secret vco-secrets --type merge -p "{\"stringData\":{\"NETBACKUP_1_PASSWORD\":\"$P\"}}" && unset P && kubectl -n $NS rollout restart deploy/vco-app
+  ```
+- Kiểm tra mạng tới NetBackup từ từng node (firewall nhìn IP node, không phải IP pod) — kết quả `401` là đạt:
+  ```bash
+  kubectl -n $NS run nbu-test --rm -i --restart=Never --image=curlimages/curl --overrides='{"spec":{"nodeName":"<node>"}}' -- curl -sk -o /dev/null -w "%{http_code}\n" --max-time 10 https://nbu-primary.hsc.com.vn:1556/netbackup/
+  ```
+- Không truyền mật khẩu qua `kubectl run` (lệnh và output được ghi vào log container).
 
-### Lưu ý khi chạy trên Kubernetes
+### Lưu ý
 
-- **Giữ `replicas: 1`** cho `vco-app` — bộ đếm polling vCenter / NetBackup chạy trong tiến trình app,
-  không có khoá phối hợp giữa nhiều pod; scale ngang sẽ gây polling trùng lặp vào vCenter.
-- Áp dụng đúng thứ tự (Secret + ConfigMap trước Deployment) — nếu sửa
-  ConfigMap/Secret sau khi Pod đã chạy, phải `kubectl rollout restart deployment/vco-app -n infra-ops`
-  để Pod đọc giá trị mới (Kubernetes không tự nạp lại env khi ConfigMap/Secret đổi).
-- Có thể dùng KubeSphere Console (giao diện Workloads → Deployments/StatefulSets) để
-  theo dõi/log/scale thay cho `kubectl` — cụm chỉ cần các manifest trên được áp dụng
-  trước, sau đó quản lý bằng UI như bình thường.
-- Dùng `kubectl get storageclass` để xem StorageClass khả dụng trên cụm của bạn nếu
-  PVC của Postgres (`k8s/03-postgres.yaml`) không tự bind (Pending) — thêm
-  `storageClassName` tương ứng vào `volumeClaimTemplates`.
-- Đây là manifest chưa được kiểm thử trên cụm KubeSphere thật (sandbox phát triển không
-  có Kubernetes) — đã kiểm tra kỹ về logic/cấu trúc YAML nhưng bạn nên áp dụng từng bước
-  và theo dõi `kubectl describe pod`/`kubectl logs` nếu có sự cố.
+- **Giữ `replicas: 1`** cho `vco-app` — polling vCenter / NetBackup chạy trong tiến trình app, không có
+  khoá phối hợp giữa nhiều pod.
+- Sửa ConfigMap / Secret xong phải `kubectl -n $NS rollout restart deploy/vco-app` (env không tự nạp lại).
+- `cattle-monitoring-system` là namespace của Rancher Monitoring: **không gỡ / cài lại Rancher Monitoring**
+  khi chưa backup DB, vì thao tác đó có thể xoá cả namespace. Khi chuyển app sang namespace riêng, đổi
+  `namespace:` trong `kustomization.yaml` và các file 01–04, tạo lại Secret / `nbu-ca` ở namespace mới,
+  khôi phục DB từ bản `pg_dumpall`.
+- PVC Postgres `Pending`: kiểm tra `kubectl get storageclass` và thêm `storageClassName` vào
+  `volumeClaimTemplates` trong `03-postgres.yaml`.
+- Image GHCR bị chuyển về Private (`ImagePullBackOff` / `401`): đặt lại Public trong Package Settings
+  (tắt "Inherit access from source repository"), hoặc tạo Image Pull Secret:
+  ```bash
+  kubectl -n $NS create secret docker-registry ghcr-pull-secret --docker-server=ghcr.io --docker-username=luongminhphu --docker-password='<PAT read:packages>'
+  ```
+  rồi thêm `imagePullSecrets: [{name: ghcr-pull-secret}]` vào `spec.template.spec` trong `04-app.yaml`.
 
 ## Lưu ý về dữ liệu lịch sử & polling
 

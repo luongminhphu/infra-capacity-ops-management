@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: vco-postgres
-  namespace: infra-ops
+  namespace: cattle-monitoring-system
 spec:
   clusterIP: None          # headless — StatefulSet cần Service headless để cấp DNS ổn định
   selector:
@@ -15,7 +15,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: vco-postgres
-  namespace: infra-ops
+  namespace: cattle-monitoring-system
 spec:
   serviceName: vco-postgres
   replicas: 1
@@ -62,9 +62,9 @@ spec:
         name: pgdata
       spec:
         accessModes: ["ReadWriteOnce"]
-        # Bỏ trống storageClassName để dùng StorageClass mặc định của cụm KubeSphere.
+        # Bỏ trống storageClassName để dùng StorageClass mặc định của cụm.
         # Kiểm tra các lựa chọn hiện có bằng: kubectl get storageclass
-        # Nếu cần chỉ định rõ, thêm ví dụ: storageClassName: "csi-qingcloud" / "local" / "nfs-client"...
+        # Nếu cần chỉ định rõ, thêm ví dụ: storageClassName: "local-path" / "longhorn" / "nfs-client"...
         resources:
           requests:
             storage: 10Gi
