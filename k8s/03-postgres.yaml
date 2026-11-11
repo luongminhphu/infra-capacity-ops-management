@@ -62,9 +62,8 @@ spec:
         name: pgdata
       spec:
         accessModes: ["ReadWriteOnce"]
-        # Bỏ trống storageClassName để dùng StorageClass mặc định của cụm.
-        # Kiểm tra các lựa chọn hiện có bằng: kubectl get storageclass
-        # Nếu cần chỉ định rõ, thêm ví dụ: storageClassName: "local-path" / "longhorn" / "nfs-client"...
+        # Cụm không có StorageClass mặc định — phải chỉ định rõ (giống PVC của hệ cũ).
+        storageClassName: longhorn
         resources:
           requests:
-            storage: 10Gi
+            storage: 20Gi

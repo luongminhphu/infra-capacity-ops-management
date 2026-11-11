@@ -577,7 +577,7 @@ sẵn của cụm — manifest không tạo namespace). Thư mục `k8s/` khớp
 |---|---|
 | `01-configmap.yaml` | `ico-config` — biến không nhạy cảm: polling, vCenter, NetBackup (`NETBACKUP_1_*` đã cấu hình). |
 | `02-secret.example.yaml` | Mẫu `ico-secrets` — Postgres, JWT, admin, mật khẩu vCenter, user/mật khẩu NetBackup. Bản thật `02-secret.yaml` nằm trong `.gitignore`. |
-| `03-postgres.yaml` | StatefulSet + Service headless `ico-postgres` (PVC 10Gi, StorageClass mặc định của cụm). |
+| `03-postgres.yaml` | StatefulSet + Service headless `ico-postgres` (PVC 20Gi, StorageClass `longhorn` — cụm không có StorageClass mặc định). |
 | `04-app.yaml` | Deployment `ico-app` (init `wait-postgres`, mount CA NetBackup từ ConfigMap `ico-nbu-ca`) + Service NodePort `30080`. |
 | `nbu-ca.sh` | Lấy CA của NetBackup (gốc `nbatd` + trung gian `broker`), kiểm tra, tạo/cập nhật ConfigMap `ico-nbu-ca`. |
 | `kustomization.yaml` | Áp dụng 01–04 vào `cattle-monitoring-system`. |
@@ -776,8 +776,9 @@ kubectl diff -k k8s/
   khi chưa backup DB, vì thao tác đó có thể xoá cả namespace. Khi chuyển app sang namespace riêng, đổi
   `namespace:` trong `kustomization.yaml` và các file 01–04, tạo lại Secret / `ico-nbu-ca` ở namespace mới,
   khôi phục DB từ bản `pg_dumpall`.
-- PVC Postgres `Pending`: kiểm tra `kubectl get storageclass` và thêm `storageClassName` vào
-  `volumeClaimTemplates` trong `03-postgres.yaml`.
+- PVC Postgres `Pending`: cụm không có StorageClass mặc định — `03-postgres.yaml` chỉ định `longhorn`.
+  Nếu đổi sang StorageClass khác: `kubectl get storageclass`, sửa `storageClassName`, xoá StatefulSet và PVC
+  đang Pending rồi áp dụng lại (trường này không sửa được trên PVC đã tạo).
 - Image GHCR bị chuyển về Private (`ImagePullBackOff` / `401`): đặt lại Public trong Package Settings
   (tắt "Inherit access from source repository"), hoặc tạo Image Pull Secret:
   ```bash
