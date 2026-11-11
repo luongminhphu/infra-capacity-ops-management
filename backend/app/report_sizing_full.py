@@ -109,6 +109,29 @@ def _legend(items: List[tuple]) -> str:
         f'<span><span class="dot" style="background:{c};"></span>{esc(t)}</span>' for c, t in items) + "</div>"
 
 
+def _brief_head(result, best, params, doc: Dict[str, str], logo_html: str) -> str:
+    """Title block of the short report (page 1, no separate cover page)."""
+    a = result["analysis"]
+    cls, txt = READINESS_TXT.get(a.get("readiness") or "ok")
+    fg, bg = STATUS_COLOR[cls]
+    env = params.environment.strip()
+    pf_label = platforms.get(params)["label"] if getattr(params, "platform", "vmware") != "generic" else ""
+    meta = [("Khách hàng", doc.get("customer") or "—"), ("Đầu mối", doc.get("contact") or "—"), ("Dự án / hệ thống", env or "—"),
+            ("Mã tài liệu", doc.get("code") or "—"), ("Phiên bản", doc.get("version") or "1.0"), ("Ngày lập", doc.get("date") or "—"),
+            ("Người lập", doc.get("preparedBy") or "—"), ("Người duyệt", doc.get("approvedBy") or "—"), ("Đơn vị tư vấn", doc.get("org") or "—")]
+    cells = "".join(f'<td><div class="bh-k">{esc(k)}</div><div class="bh-v">{esc(v)}</div></td>' + ("</tr><tr>" if i % 3 == 2 and i < len(meta) - 1 else "")
+                    for i, (k, v) in enumerate(meta))
+    return f"""
+<div class="brief-head">
+  <div class="cv-top"><div class="cv-brand">{esc(doc.get("org") or "")}</div>{logo_html}</div>
+  <div class="eyebrow" style="margin-top:10px;">Báo cáo tư vấn rút gọn · Hạ tầng ảo hoá{(" " + esc(pf_label)) if pf_label else ""}</div>
+  <div class="bh-title">Đề xuất cấu hình máy chủ</div>
+  <div class="cv-project" style="margin-bottom:6px;">{esc(" – ".join(x for x in (env, doc.get("customer") or "") if x))}</div>
+  <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{txt}</span>
+  <table class="bh-meta"><tr>{cells}</tr></table>
+</div>"""
+
+
 def _section(sec_id: str, num: str, title: str, sub: str, body: str, cls: str = "") -> str:
     sub_html = f'<div class="section-desc">{sub}</div>' if sub else ""
     num_html = f'<span class="sec-num">{esc(num)}</span>' if num else ""
@@ -217,6 +240,8 @@ def _summary(result, best, existing, currency, mode, target, include_new, includ
     why_html = f'<div class="callout" style="margin-top:8px;"><b>Lý do chọn phương án.</b> {esc(vn(why[len("Lý do chọn: "):] if why.startswith("Lý do chọn: ") else why))}</div>' if why else ""
     risk_line = (f'<div class="note-line">Rủi ro &amp; lưu ý: <b>{fc.get("critical", 0)} nghiêm trọng</b> · <b>{fc.get("warning", 0)} cảnh báo</b> · '
                  f'{fc.get("info", 0)} lưu ý' + (f' — chi tiết tại mục {opts["risksNum"]}.' if opts.get("risksNum") else '.') + '</div>')
+    if opts.get("compact") and (result["analysis"].get("expandText")):
+        why_html += f'<div class="note-line"><b>Mở rộng:</b> {esc(vn(result["analysis"]["expandText"]))}</div>'
     note = (opts.get("note") or "").strip()
     note_html = ("<div class=\"callout note\" style=\"margin-top:8px;\"><b>Ghi chú của người lập.</b> "
                  + "<br/>".join(esc(x) for x in note.splitlines() if x.strip()) + "</div>") if note else ""
@@ -381,9 +406,11 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
     score_html = (f'''<div class="keep" style="margin-top:8px;"><div class="sub-h">Bảng điểm (0–100, cao = tốt)</div>{score_tbl}</div>
     <div class="small-note">Số host, Chi phí: so với phương án tốt nhất (chi phí theo {basis_txt}). Hiệu suất: mức dùng của yếu tố quyết định khi mất host.
     Cân đối: độ chênh giữa mức dùng CPU và RAM. Chịu lỗi: mức tải khi mất host. Mở rộng: dư địa tăng trưởng. NUMA: tỷ lệ VM nằm gọn trong một CPU.</div>''')
+    chart_html = (f"""<div class="chart-card keep"><div class="chart-card-title">Số host cần theo từng phương án</div>{hosts_chart}
+      {_legend([(COLORS['primary'], 'Theo CPU'), (COLORS['accent'], 'Theo RAM'), (COLORS['primary_dark'], 'Tổng (gồm dự phòng)')])}</div>"""
+                  if show.get("chart", True) else "")
     return f"""
-    <div class="chart-card keep"><div class="chart-card-title">Số host cần theo từng phương án</div>{hosts_chart}
-      {_legend([(COLORS['primary'], 'Theo CPU'), (COLORS['accent'], 'Theo RAM'), (COLORS['primary_dark'], 'Tổng (gồm dự phòng)')])}</div>
+    {chart_html}
     <div class="keep" style="margin-top:8px;">{cmp_tbl}</div>
     <div class="small-note">Quy tắc chọn: ít host nhất → không sát ngưỡng (còn dư địa) → {basis_txt} thấp nhất → điểm tổng hợp cao nhất.
     “Mất 1 host” là mức dùng trên phần năng lực khả dụng của các host còn lại; tối đa cho phép {n(p['max_util_pct'])}%.
@@ -400,20 +427,65 @@ def _dimms(ram_gb: float, sockets: int) -> str:
     return f"{n(ram_gb)} GB DDR5 RDIMM (chia đều các kênh nhớ)"
 
 
+def _bom_data(best, params) -> Dict[str, Any]:
+    """Quantities behind the BOM table and its conclusion."""
+    prof = best["profile"]
+    nh = best["hostsTotal"]
+    per_host_tib = (best["storage"].get("perHostNeededGB") or 0) / 1024
+    drive_tib = 3.84e12 / 1024 ** 4  # 3,84 TB (decimal, nhãn ổ đĩa) ≈ 3,49 TiB
+    drives = (max(2, math.ceil(per_host_tib / drive_tib)) if per_host_tib else 0) if params.storage_mode == "local" else 0
+    return {"hosts": nh, "cpus": prof["sockets"] * nh, "cores": prof["cores"] * nh, "ramGB": prof["ramGB"] * nh,
+            "drivesPerHost": drives, "drives": drives * nh, "rawTiB": drives * drive_tib * nh, "perHostTiB": per_host_tib,
+            "ports": 4 * nh, "bootDrives": 2 * nh, "psus": 2 * nh}
+
+
+def _bom_summary(best, params, result) -> str:
+    """"Kết luận BOM": the BOM in a few sentences a buyer can approve against."""
+    pf = platforms.get(params)
+    prof, adv, f = best["profile"], best["advisory"], best["failure"]
+    b = _bom_data(best, params)
+    lic = adv["license"]
+    c = adv["costs"]
+    p = result["params"]
+    d = result["demand"]
+    lines = [
+        f"Trang bị <b>{b['hosts']} host {esc(prof['name'])}</b>: tổng {n(b['cpus'])} CPU / {n(b['cores'])} core, {esc(ram(b['ramGB']))} RAM; "
+        f"mỗi host 2 ổ khởi động RAID-1, 4 cổng 25GbE, nguồn dự phòng và cổng quản trị từ xa.",
+    ]
+    if params.storage_mode == "local":
+        lines.append(f"Lưu trữ {esc(pf['hci'])}: {n(b['drives'])} ổ dữ liệu ({n(b['drivesPerHost'])} ổ / host, ≈ {n(b['rawTiB'], 1)} TiB thô) "
+                     f"cho nhu cầu {esc(cap(d['storageNeededGB']))} thô.")
+    else:
+        lines.append(f"Lưu trữ: kết nối SAN 2 đường mỗi host; cấp {esc(cap(d['storageNeededGB']))} trên SAN dùng chung.")
+    lines.append(f"License: {n(lic['coresTotal'])} {lic.get('unit', 'core')} {esc(platforms.edition_of(params))}; "
+                 f"bảo hành phần cứng {c.get('warrantyIncludedYears', 3)} năm kèm theo"
+                 + (f", gia hạn đến năm {c['years']}." if c.get("years", 0) > c.get("warrantyIncludedYears", 3) else "."))
+    if f["cpuPct"] is not None and best["redundancy"]:
+        extra = best["spare"]["extraAvgVms"]
+        lines.append(f"Đáp ứng {n(d['vmCount'])} VM ({n(d['vcpuPlanned'])} vCPU · {n(d['ramPlannedGB'])} GB RAM sau tăng trưởng); "
+                     f"khi mất {best['redundancy']} host dùng CPU {pct(f['cpuPct'])} · RAM {pct(f['ramPct'])} (tối đa {n(p['max_util_pct'])}%)"
+                     + ("; không còn dư địa." if extra is not None and extra <= 0 else (f"; chứa thêm ~{n(extra)} VM." if extra is not None else ".")))
+    if c.get("tco"):
+        lines.append(f"Ước tính TCO {c['years']} năm: <b>{esc(money_short(c['tco']))}</b> (phần cứng {esc(money_short(c['hardware']))} · "
+                     f"license {esc(money_short(c['license']))} · bảo hành {esc(money_short(c['warranty'] or 0))}).")
+    lines.append("BOM là cấu hình tham chiếu; model, thông số và giá cuối cùng chốt trong báo giá.")
+    return ('<div class="callout bom-summary keep" style="margin-top:6px;"><b>Kết luận BOM.</b><ul class="tight" style="margin-top:3px;">'
+            + "".join(f"<li>{vn(x)}</li>" for x in lines) + "</ul></div>")
+
+
 def _bom(best, params, result) -> str:
     pf = platforms.get(params)
     prof, adv = best["profile"], best["advisory"]
     local = params.storage_mode == "local"
     nh = best["hostsTotal"]
+    bd = _bom_data(best, params)
     rows = [
         ["CPU", f"{prof['coresPerSocket']} core / CPU, thế hệ hiện hành (Intel Xeon Scalable hoặc AMD EPYC)", n(prof["sockets"]), n(prof["sockets"] * nh)],
         ["Bộ nhớ (RAM)", f"{ram(prof['ramGB'])} / host — {_dimms(prof['ramGB'], prof['sockets'])}", "1 bộ", n(nh) + " bộ"],
         ["Ổ khởi động", f"2 × M.2 / SSD 480 GB, RAID-1 (cài {pf['hypervisor']})", "2", n(2 * nh)],
     ]
     if local:
-        per_host_tib = (best["storage"].get("perHostNeededGB") or 0) / 1024
-        drive_tib = 3.84e12 / 1024 ** 4  # 3,84 TB (decimal, nhãn ổ đĩa) ≈ 3,49 TiB
-        cnt = max(2, math.ceil(per_host_tib / drive_tib)) if per_host_tib else 0
+        per_host_tib, cnt = bd["perHostTiB"], bd["drivesPerHost"]
         rows.append([f"Ổ dữ liệu {pf['hci']}", f"NVMe / SSD Enterprise, ≥ {n(per_host_tib, 1)} TiB thô / host (ví dụ {cnt} × 3,84 TB)", n(cnt), n(cnt * nh)])
         rows.append(["Mạng", f"2 card 25GbE × 2 cổng: quản lý + VM, {pf['migration']}, {pf['hci']} (VLAN tách biệt, dự phòng 2 đường)", "4 cổng", n(4 * nh) + " cổng"])
     else:
@@ -606,10 +678,14 @@ def _design(result, best, params, num: str = "5", show: Optional[Dict[str, bool]
         bal_txt = f"CPU quyết định số host; khoảng {n(bal['strandedRamPct'])}% RAM còn trống khi CPU chạm mức tối đa."
     else:
         bal_txt = f"CPU ({pct(bal['cpuUtilPct'])}) và RAM ({pct(bal['ramUtilPct'])}) được dùng cân đối."
+    if show.get("specCompact"):
+        keep = {"Cấu hình mỗi host", "Số host", "Tổng cụm", "Tỷ lệ chia sẻ thực tế", "Khi mất 1 host", "Dư địa", "Lưu trữ"}
+        spec_html = _kv_table([(k_, esc(v)) for k_, v in spec if k_ in keep], key_w="26%")
     parts = [f'<div class="sub-h">{num}.1 Thông số cụm</div>{spec_html}']
     k = 2
     if show.get("bom", True):
-        parts.append(f'<div class="sub-h">{num}.{k} Cấu hình phần cứng tham chiếu (BOM sơ bộ)</div>{_bom(best, params, result)}')
+        parts.append(f'<div class="sub-h">{num}.{k} Cấu hình phần cứng tham chiếu (BOM sơ bộ)</div>{_bom(best, params, result)}'
+                     + (_bom_summary(best, params, result) if show.get("bomSummary", True) else ""))
         k += 1
     if show.get("arch", True):
         parts.append(f'<div class="keep"><div class="sub-h">{num}.{k} Kiến trúc logic</div><div class="chart-card">{svg_architecture(best, params, result)}'
@@ -662,7 +738,7 @@ def _tco_matrix_html(c, currency) -> str:
                   widths=[f"{w_first}%"] + [f"{w:.1f}%"] * (len(ys) + 1))
 
 
-def _tco(result, best, currency) -> str:
+def _tco(result, best, currency, compact: bool = False) -> str:
     c = best["advisory"]["costs"]
     years, inc = c["years"], c["warrantyIncludedYears"]
     year_tbl = _tco_matrix_html(c, currency)
@@ -689,6 +765,11 @@ def _tco(result, best, currency) -> str:
     if c.get("warrantyMissingYears"):
         miss = (f'<div class="callout" style="margin-top:6px;border-left-color:{COLORS["warn"]};"><b>Chưa đủ dữ liệu.</b> Chưa nhập chi phí gia hạn bảo hành năm '
                 f'{", ".join(str(y) for y in c["warrantyMissingYears"])} — TCO chưa gồm khoản này.</div>')
+    if compact:
+        return f"""
+    <div class="section-desc">{intro}</div>
+    <div class="keep"><div class="sub-h">TCO theo năm — {esc(best['profile']['name'])} × {best['hostsTotal']} host</div>{year_tbl}{miss}</div>
+    {"" if len(opts) < 2 else f'<div class="keep"><div class="sub-h">So sánh TCO giữa các phương án</div>{cmp_tbl}</div>'}"""
     return f"""
     <div class="section-desc">{intro}</div>
     <div class="keep"><div class="sub-h">TCO theo năm — {esc(best['profile']['name'])} × {best['hostsTotal']} host</div>{year_tbl}{miss}</div>
@@ -755,9 +836,11 @@ def _plan(steps) -> str:
     return _table(["Giai đoạn", "Thời điểm", "Nội dung"], rows, cls="plan-table", widths=["24%", "18%", "58%"])
 
 
-def _method(result, best, params, num: str = "9") -> str:
+def _method(result, best, params, num: str = "9", compact: bool = False) -> str:
     rows = [[esc(k), esc(vn(v)), esc(vn(m))] for k, v, m in sizing.assumption_rows(params)]
     t1 = _table(["Hạng mục", "Giá trị", "Ý nghĩa"], rows, cls="method-table", widths=["24%", "32%", "44%"])
+    if compact:
+        return t1
     if not best:
         return f'<div class="sub-h">Bảng {num}.1 – Giả định</div>' + t1
     d, p = result["demand"], result["params"]
@@ -914,6 +997,13 @@ table.stackbar {{ width:100%; table-layout:fixed; border-collapse:collapse; bord
 table.stackbar td.seg {{ padding:0; height:18px; overflow:hidden; white-space:nowrap; font-size:8px; font-weight:700; text-align:center; border:none; }}
 .gauge-card {{ padding:6px 2px 2px; }}
 /* cover */
+.brief-head {{ margin-bottom:6px; }}
+.bh-title {{ font-size:22px; font-weight:800; color:{c['primary_dark']}; line-height:1.2; margin:2px 0 2px; }}
+table.bh-meta {{ margin-top:8px; border-collapse:collapse; border:1px solid {c['border']}; }}
+table.bh-meta td {{ width:33.3%; border:1px solid {c['divider']}; padding:4px 7px; vertical-align:top; background:{c['surface']}; }}
+.bh-k {{ font-size:7.4px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:{c['muted']}; }}
+.bh-v {{ font-size:9px; font-weight:700; color:{c['ink']}; }}
+.bom-summary ul {{ font-size:9px; }}
 .cover-page {{ page:cover; position:relative; height:262mm; page-break-after:always; }}
 .cv-top {{ display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid {c['primary_dark']}; padding-bottom:8px; min-height:44px; }}
 .cv-top .cover-logo {{ max-height:46px; max-width:170px; }}
@@ -977,10 +1067,15 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
                      customer_name: str = "", prepared_org: str = "", document_code: str = "",
                      version: str = "", approved_by: str = "", customer_contact: str = "", version_note: str = "",
                      input_source: str = "", input_date: str = "", out_of_scope: Optional[List[str]] = None,
-                     report_options: Optional[Dict[str, Any]] = None, **_ignored) -> str:
+                     report_options: Optional[Dict[str, Any]] = None, compact: bool = False, **_ignored) -> str:
+    """Full consulting report, or (compact=True) the short consulting report "Báo cáo tư vấn rút gọn":
+    same page format and vocabulary, a title block instead of a cover page, and only the decision
+    sections — summary, options, configuration & basic BOM (with its conclusion), TCO, main risks,
+    assumptions — plus the VM list. Section toggles from the customisation panel apply to both."""
     opts = dict(report_options or {})
     sections = opts.get("sections") or {}
-    on = lambda k: sections.get(k, True) is not False  # noqa: E731  — every section is on unless explicitly turned off
+    compact_off = {"scope", "demand", "scale", "plan", "glossary", "scores", "arch", "alloc"} if compact else set()
+    on = lambda k: sections.get(k, k not in compact_off) is not False  # noqa: E731
 
     result = sizing.build_sizing(vms, params, profiles)
     _apply_report_options(result, opts)
@@ -1016,23 +1111,36 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
         plan.append(("sec-demand", "Nhu cầu tài nguyên", "", lambda num: _demand(result, params, best), "", True))
     if has_new and on("options"):
         plan.append(("sec-options", "So sánh phương án" + (" (trang bị mới)" if mode == "reuse" else ""), "",
-                     lambda num: _options(result, currency, {"scores": on("scores")})
+                     lambda num: _options(result, currency, {"scores": on("scores"), "chart": not compact})
                      + f'<div class="callout" style="margin-top:8px;"><b>Phương án đề xuất.</b> {esc(vn(result["recommendation"]["detail"]))}</div>', "", True))
     if has_new and on("design"):
-        plan.append(("sec-design", "Cấu hình đề xuất", esc(best["profile"]["name"]) + f" × {best['hostsTotal']} host",
-                     lambda num: _design(result, best, params, num, {"bom": on("bom"), "arch": on("arch"), "alloc": on("alloc")}), "", True))
+        plan.append(("sec-design", "Cấu hình đề xuất & BOM cơ bản" if compact else "Cấu hình đề xuất",
+                     esc(best["profile"]["name"]) + f" × {best['hostsTotal']} host",
+                     lambda num: _design(result, best, params, num, {"bom": on("bom"), "arch": on("arch"), "alloc": on("alloc"),
+                                                                     "specCompact": compact}), "", True))
     if has_new and on("tco") and best["advisory"]["costs"].get("tco"):
-        plan.append(("sec-tco", f"Chi phí & TCO {best['advisory']['costs']['years']} năm", "", lambda num: _tco(result, best, currency), "", True))
+        plan.append(("sec-tco", f"Chi phí & TCO {best['advisory']['costs']['years']} năm", "", lambda num: _tco(result, best, currency, compact), "", True))
     if has_new and on("scale"):
         plan.append(("sec-scale", "Khả năng mở rộng", "", lambda num: _scale(result, best_idx, params), "", True))
     if on("risks"):
-        plan.append(("sec-risks", "Rủi ro & khuyến nghị",
-                     f"{fc.get('critical', 0)} nghiêm trọng · {fc.get('warning', 0)} cảnh báo · {fc.get('info', 0)} lưu ý · {fc.get('ok', 0)} đạt",
-                     lambda num: _findings(a["findings"]) if a["findings"] else '<div class="small-note">Không có nhận định.</div>', "", True))
+        if compact:
+            main = [f for f in a["findings"] if f["severity"] in ("critical", "warning") or f.get("custom")]
+            def _risks_body(num):
+                if not main:
+                    return '<div class="small-note">Không có rủi ro nghiêm trọng hay cảnh báo.</div>'
+                return _findings(main) + (f'<div class="small-note">Còn {fc.get("info", 0)} lưu ý và {fc.get("ok", 0)} mục đạt — xem báo cáo đầy đủ.</div>'
+                                          if fc.get("info", 0) or fc.get("ok", 0) else "")
+            plan.append(("sec-risks", "Rủi ro & khuyến nghị chính",
+                         f"{fc.get('critical', 0)} nghiêm trọng · {fc.get('warning', 0)} cảnh báo", _risks_body, "", True))
+        else:
+            plan.append(("sec-risks", "Rủi ro & khuyến nghị",
+                         f"{fc.get('critical', 0)} nghiêm trọng · {fc.get('warning', 0)} cảnh báo · {fc.get('info', 0)} lưu ý · {fc.get('ok', 0)} đạt",
+                         lambda num: _findings(a["findings"]) if a["findings"] else '<div class="small-note">Không có nhận định.</div>', "", True))
     if on("plan"):
         plan.append(("sec-plan", "Kế hoạch triển khai", "", lambda num: _plan(a["nextSteps"]), "", True))
     if on("method"):
-        plan.append(("sec-method", "Giả định & cách tính", "", lambda num: _method(result, best, params, num), "", True))
+        plan.append(("sec-method", "Giả định chính" if compact else "Giả định & cách tính", "",
+                     lambda num: _method(result, best, params, num, compact), "", True))
     vm_dicts = [{"name": v.name, "qty": v.qty, "vcpu": v.vcpu, "ramGB": v.ram_gb, "diskGB": v.disk_gb, "note": v.note} for v in vms]
     appendices = []
     if on("vms"):
@@ -1050,23 +1158,25 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
 
     toc = [(sid, nm, t) for nm, sid, t, *_ in numbered] + [(sid, ltr, title) for ltr, sid, title, _, _ in app_items]
     logo_html = f'<img class="cover-logo" src="{logo_data_url}" alt="logo"/>' if logo_data_url else ""
-    cover = _cover(result, best, params, doc, logo_html, toc)
+    cover = _brief_head(result, best, params, doc, logo_html) if compact else _cover(result, best, params, doc, logo_html, toc)
 
     secs = []
     for nm, sid, title, sub, fn, cls, _ in numbered:
         if sid == "sec-summary":
             body = _summary(result, best, existing, currency, mode, target, include_new, include_existing, project,
-                            {**opts, "risksNum": risks_num})
+                            {**opts, "risksNum": risks_num, "compact": compact})
         else:
             body = fn(nm)
         if sid == "sec-scope" and glossary_letter != "B":
             body = body.replace("Thuật ngữ: xem Phụ lục B.", f"Thuật ngữ: xem Phụ lục {glossary_letter}." if glossary_letter else "")
         secs.append(_section(sid, nm, title, sub, body, cls))
     for i, (ltr, sid, title, sub, fn) in enumerate(app_items):
+        if compact and len(app_items) == 1:
+            title = title.replace(f"Phụ lục {ltr}. ", "Phụ lục. ")
         secs.append(_section(sid, "", title, sub, fn(ltr), "appendix" if i == 0 else ""))
 
     header_left = " · ".join(x for x in [doc["org"], "Đề xuất cấu hình máy chủ" + (f" – {doc['customer']}" if doc["customer"] else "")] if x)
-    header_right = " · ".join(x for x in [doc["code"], f"Phiên bản {doc['version']}"] if x)
+    header_right = " · ".join(x for x in [("Báo cáo rút gọn" if compact else ""), doc["code"], f"Phiên bản {doc['version']}"] if x)
     css = _base_css("Đề xuất cấu hình máy chủ", date_txt) + _exec_visual_css() + _planning_css() + _css(header_left, header_right, date_txt)
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Đề xuất cấu hình máy chủ</title><style>{css}</style></head>
 <body>{cover}{''.join(secs)}</body></html>"""

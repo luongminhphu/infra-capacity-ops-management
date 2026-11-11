@@ -319,3 +319,26 @@ def test_safety_before_price_when_priced():
     r = _pi_case(license_price_per_core=3.5e6, warranty_ext_values=[30e6, 35e6])
     best = r["results"][r["recommendedIndex"]]
     assert best["profile"]["name"] == "2×32C / 512 GB"
+
+
+def test_compact_report_same_template_with_bom_conclusion():
+    from app import report_sizing
+    vms = [sizing.VmSpec(name="APP", qty=10, vcpu=8, ram_gb=32, disk_gb=200)]
+    prof = [sizing.HostProfile(name="2×16C / 512 GB", sockets=2, cores_per_socket=16, ram_gb=512, unit_price=500e6)]
+    p = sizing.SizingParams(license_price_per_core=3.5e6, warranty_ext_values=[20e6, 25e6])
+    brief = report_sizing.render_sizing_html(vms, p, prof, detail="brief", customer_name="CMC", prepared_org="ioBox Solutions")
+    full = report_sizing.render_sizing_html(vms, p, prof, detail="full", customer_name="CMC", prepared_org="ioBox Solutions")
+    # same page format (header text, @page margins) in both
+    for html in (brief, full):
+        assert "ioBox Solutions · Đề xuất cấu hình máy chủ – CMC" in html and "margin: 18mm 15mm 16mm 15mm" in html
+        assert "Kết luận BOM." in html
+    assert "Báo cáo tư vấn rút gọn" in brief and 'class="cover-page"' not in brief and 'class="brief-head"' in brief
+    assert 'id="sec-scope"' not in brief and 'id="app-glossary"' not in brief and 'id="sec-tco"' in brief
+    assert "Cấu hình đề xuất &amp; BOM cơ bản" in brief or "Cấu hình đề xuất & BOM cơ bản" in brief
+    assert "Phụ lục. Danh sách máy ảo" in brief
+    assert 'class="cover-page"' in full and 'id="sec-scope"' in full
+    # numbers in Vietnamese format, no double conversion of money
+    assert "1,000,000,000" not in brief and "1.000.000.000 VND" in brief
+    # toggles still apply to the compact report
+    t = report_sizing.render_sizing_html(vms, p, prof, detail="brief", report_options={"sections": {"tco": False, "glossary": True}})
+    assert 'id="sec-tco"' not in t and 'id="app-glossary"' in t

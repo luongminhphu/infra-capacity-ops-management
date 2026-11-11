@@ -1,14 +1,13 @@
-"""PDF renderer for the host-sizing proposal ("Đề xuất cấu hình máy chủ"):
-management layout shared with the Operations report — summary box with the
-decision requested first, then the candidate comparison table, then the
-assumptions, with the requested VM list and the existing-cluster absorption
-check as appendices. Meant to be attached to a procurement proposal."""
+"""Host-sizing PDF ("Đề xuất cấu hình máy chủ") — shared building blocks and the entry point.
+
+Both report variants are rendered by report_sizing_full.render_full_html:
+detail='full' → báo cáo tư vấn đầy đủ, detail='brief' → báo cáo tư vấn rút gọn (same page format,
+compact content). This module keeps the summary / decision boxes and the existing-cluster blocks
+used by that template."""
 from typing import Any, Dict, List, Optional
 
-from . import platforms, sizing
-from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
-                         fmt_num, fmt_pct, html_to_pdf_bytes)
-from .report_planning import _planning_css
+from . import platforms
+from .report_pdf import COLORS, STATUS_COLOR, _stat_tiles_html, esc, fmt_int, fmt_num, fmt_pct, html_to_pdf_bytes
 
 PRIORITY_CSS = {"cao": "priority-cao", "tb": "priority-tb", "thap": "priority-thap", "info": "priority-info"}
 PRIORITY_TXT = {"cao": "Quyết định chính", "tb": "Kèm theo", "thap": "Tuỳ chọn", "info": "Thông tin"}
@@ -58,7 +57,8 @@ def _gb(v: Optional[float]) -> str:
 def _money(v: Optional[float], currency: str) -> str:
     if v is None:
         return "—"
-    s = f"{int(round(v)):,}".replace(",", ".")
+    # English grouping here; the report converts every number to Vietnamese format (1.950.000.000) in one pass.
+    s = f"{int(round(v)):,}"
     return f"{s} {currency}".strip()
 
 
@@ -141,69 +141,6 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
       <ol class="rec-sum">{li}</ol>
       <div class="stat-row" style="margin-bottom:0;">{_stat_tiles_html(stats)}</div>
     </div>"""
-
-
-def _comparison_table(result: Dict[str, Any], currency: str) -> str:
-    rows = [r for r in result["results"] if not r.get("suggested")]
-    local = result["params"]["storage_mode"] == "local"
-    any_price = any(r["budget"] is not None for r in rows)
-    body = ""
-    for r in sorted(rows, key=lambda x: x["rank"] or 99):
-        pr = r["profile"]
-        f = r["failure"]
-        fail_txt = f"{fmt_pct(f['cpuPct'], 0)} / {fmt_pct(f['ramPct'], 0)}" if f["hostsLeft"] else "—"
-        fail_pill = _pill("N", "na") if r["redundancy"] == 0 else (_pill(f"Đạt N+{r['redundancy']}", "ok") if f["ok"] else _pill("Chưa đạt", "crit"))
-        style = f' style="background:{COLORS["ok_bg"]};"' if r["recommended"] else ""
-        tag = _pill("Đề xuất", "ok") if r["recommended"] else f'<span style="color:{COLORS["muted"]};">#{r["rank"]}</span>'
-        storage_td = ""
-        if local:
-            st = r["storage"]
-            storage_td = f"<td>{_gb(st.get('perHostNeededGB'))}/host {'' if st.get('ok') else _pill('thiếu đĩa', 'crit')}</td>"
-        price_td = f"<td style=\"text-align:right;white-space:nowrap;\">{_money(r['budget'], currency)}</td>" if any_price else ""
-        body += (f'<tr{style}><td style="white-space:nowrap;"><b>{esc(pr["name"])}</b><div style="color:{COLORS["muted"]};font-size:7.6px;">{pr["sockets"]}×{pr["coresPerSocket"]}C = {pr["cores"]} cores · {_gb(pr["ramGB"])} RAM</div></td>'
-                 f'<td style="text-align:center;">{r["hostsForCpu"]} / {r["hostsForRam"]}</td>'
-                 f'<td style="text-align:center;">+{r["redundancy"]}</td>'
-                 f'<td style="text-align:center;font-size:11px;font-weight:700;">{r["hostsTotal"]}</td>'
-                 f'<td>{esc(r["binding"])}</td>'
-                 f'<td style="white-space:nowrap;">{fmt_int(r["totals"]["cores"])} / {_gb(r["totals"]["ramGB"])}</td>'
-                 f'<td>{fmt_num(r["after"]["cpuOvercommit"], 2, "x")} / {fmt_num(r["after"]["ramOvercommit"], 2, "x")}</td>'
-                 f'<td style="white-space:nowrap;">{fail_txt} {fail_pill}</td>'
-                 f'<td style="text-align:center;">{"—" if r["spare"]["extraAvgVms"] is None else "~" + fmt_int(r["spare"]["extraAvgVms"])}</td>'
-                 f'{storage_td}{price_td}<td>{tag}</td></tr>')
-    return f"""<table class="decision-table">
-      <thead><tr><th>Cấu hình host</th><th>Host CPU / RAM</th><th>Dự phòng</th><th>Tổng host</th><th>Ràng buộc</th>
-      <th>Tổng cores / RAM</th><th>Overcommit sau CPU / RAM</th><th>Mất host: CPU / RAM</th><th>Thêm ~VM</th>
-      {'<th>Đĩa cục bộ</th>' if local else ''}{'<th style="text-align:right;">Ngân sách ước tính</th>' if any_price else ''}<th></th></tr></thead>
-      <tbody>{body}</tbody></table>"""
-
-
-def _assumptions_html(result: Dict[str, Any]) -> str:
-    p = result["params"]
-    lines = "".join(f"<div>• {esc(x)}</div>" for x in result["assumptions"])
-    return f"""<div class="chart-card soft" style="font-size:8.6px;line-height:1.55;">
-      <div class="chart-card-title">Giả định sizing</div>
-      {lines}
-      <div class="small-note" style="margin-top:4px;">Cách tính: số host = max(host theo CPU, host theo RAM) + dự phòng N+{p['redundancy']}, tối thiểu {p['min_hosts']} host.
-      Host theo CPU = vCPU yêu cầu (sau tăng trưởng) ÷ [(cores − {p['reserve_cores']:g}) × HT {p['ht_factor']:g} × {p['cpu_ratio']:g}x × {p['max_util_pct']:g}%];
-      host theo RAM = RAM yêu cầu ÷ [(RAM host − {p['reserve_ram_gb']:g} GB) × {p['ram_ratio']:g}x × {p['max_util_pct']:g}%].
-      Phương án đề xuất: ít host nhất → không sát ngưỡng → chi phí thấp nhất (TCO, ngân sách hoặc số core license) → điểm tổng hợp cao nhất. Overcommit thực tế sau khi lắp luôn thấp hơn mục tiêu vì đã trừ vùng an toàn và dự phòng.</div>
-    </div>"""
-
-
-def _vm_table(vms: List[Dict[str, Any]], demand: Dict[str, Any]) -> str:
-    rows = ""
-    for v in vms:
-        q = v["qty"]
-        rows += (f'<tr><td>{esc(v["name"])}</td><td style="text-align:center;">{fmt_int(q)}</td><td style="text-align:right;">{fmt_num(v["vcpu"], 0)}</td>'
-                 f'<td style="text-align:right;">{fmt_num(v["ramGB"], 0)}</td><td style="text-align:right;">{fmt_num(v["diskGB"], 0)}</td>'
-                 f'<td style="text-align:right;">{fmt_num(q * v["vcpu"], 0)}</td><td style="text-align:right;">{fmt_num(q * v["ramGB"], 0)}</td>'
-                 f'<td style="text-align:right;">{fmt_num(q * v["diskGB"], 0)}</td><td style="color:{COLORS["muted"]};">{esc(v.get("note") or "")}</td></tr>')
-    rows += (f'<tr style="font-weight:700;background:{COLORS["surface2"]};"><td>Tổng</td><td style="text-align:center;">{fmt_int(demand["vmCount"])}</td><td></td><td></td><td></td>'
-             f'<td style="text-align:right;">{fmt_int(demand["vcpu"])}</td><td style="text-align:right;">{fmt_int(demand["ramGB"])}</td><td style="text-align:right;">{fmt_int(demand["diskGB"])}</td><td></td></tr>')
-    return f"""<table class="appendix-table">
-      <thead><tr><th>Tên VM / nhóm</th><th>Số lượng</th><th style="text-align:right;">vCPU / VM</th><th style="text-align:right;">RAM GB / VM</th><th style="text-align:right;">Disk GB / VM</th>
-      <th style="text-align:right;">Tổng vCPU</th><th style="text-align:right;">Tổng RAM GB</th><th style="text-align:right;">Tổng Disk GB</th><th>Ghi chú</th></tr></thead>
-      <tbody>{rows}</tbody></table>"""
 
 
 def _feasible(e: Dict[str, Any]) -> bool:
@@ -358,89 +295,10 @@ def _target_detail(target: Dict[str, Any], d: Dict[str, Any]) -> str:
     return f'<div class="insight-box" style="margin-top:8px;">{" ".join(parts)}</div>'
 
 
-def render_brief_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, profiles: List[sizing.HostProfile],
-                      existing: Optional[List[Dict[str, Any]]] = None, policy_txt: str = "", currency: str = "VND",
-                      logo_data_url: Optional[str] = None, prepared_by: str = "", mode: str = "new",
-                      target_cluster: Optional[str] = None, include_new: bool = True, include_existing: bool = True,
-                      **_ignored) -> str:
-    """Short decision memo (summary · comparison · assumptions · VM appendix)."""
-    result = sizing.build_sizing(vms, params, profiles)
-    best = result["results"][result["recommendedIndex"]] if result["recommendedIndex"] is not None else None
-    existing = existing or []
-    generated_at = _now_str()
-    env_name = params.environment.strip()
-    project = env_name or "dự án mới"          # used inside sentences ("… VM của dự án mới …")
-    title = "Đề xuất cấu hình máy chủ" + (f" — {esc(env_name)}" if env_name else "")
-    eyebrow_project = f" · {esc(env_name)}" if env_name else ""
-    logo_html = f'<img class="cover-logo" src="{logo_data_url}" alt="logo"/>' if logo_data_url else ""
-    vm_dicts = [{"name": v.name, "qty": v.qty, "vcpu": v.vcpu, "ramGB": v.ram_gb, "diskGB": v.disk_gb, "note": v.note} for v in vms]
-    appendix_break = "breakable" if len(vm_dicts) > 12 else ""
-    comparison_html = f"""
-  <div class="section">
-    <div class="section-title">{'Phương án B — trang bị mới (đối chiếu)' if mode == 'reuse' else 'So sánh cấu hình host ứng viên'}</div>
-    <div class="section-sub">Số host vật lý cần cho {fmt_int(result['demand']['vmCount'])} VM theo từng cấu hình; dòng tô xanh là phương án {'mua mới tốt nhất' if mode == 'reuse' else 'đề xuất'}.</div>
-    {_comparison_table(result, currency)}
-    {('<div class="insight-box" style="margin-top:8px;"><b>' + ('Nếu phải mua mới.' if mode == 'reuse' else 'Phương án đề xuất.') + '</b> ' + esc(result['recommendation']['detail']) + '</div>') if best else ''}
-  </div>"""
-    if mode == "reuse":
-        target = _pick_target(existing, target_cluster)
-        summary_html = _reuse_summary_box(result, best, existing, target, include_new, currency, project)
-        if existing:
-            existing_html = f"""
-  <div class="section">
-    <div class="section-title">Hạ tầng hiện hữu — khả năng tiếp nhận dự án</div>
-    <div class="section-sub">Mọi cluster trong phạm vi vCenter đang chọn; dòng tô màu là cluster đang xét tiếp nhận (xanh: an toàn, cam: cần bổ sung host).</div>
-    {_existing_table(existing, policy_txt, highlight=target['name'] if target else None)}
-    {_target_detail(target, result['demand']) if target else ''}
-  </div>"""
-        else:
-            existing_html = ('<div class="section"><div class="section-title">Hạ tầng hiện hữu — khả năng tiếp nhận dự án</div>'
-                             '<div class="small-note" style="font-size:9px;">Không có dữ liệu cluster hiện hữu (chưa đồng bộ vCenter hoặc chưa import host/VM).</div></div>')
-        main_html = existing_html + (comparison_html if include_new else "")
-    else:
-        summary_html = _summary_box(result, best, existing if include_existing else [], currency)
-        existing_html = ""
-        if existing and include_existing:
-            existing_html = f"""
-  <div class="section">
-    <div class="section-title">Hạ tầng hiện hữu có hấp thụ được không?</div>
-    {_existing_table(existing, policy_txt)}
-  </div>"""
-        main_html = comparison_html + existing_html
-    body = f"""
-  {summary_html}
-  {main_html}
-  <div class="section">
-    <div class="section-title">Giả định</div>
-    {_assumptions_html(result)}
-  </div>
-  <div class="section {appendix_break}" style="{'page-break-before:always;' if len(vm_dicts) > 12 else ''}">
-    <div class="section-title">Phụ lục — Danh sách VM yêu cầu (theo thông tin dự án)</div>
-    {_vm_table(vm_dicts, result['demand'])}
-    <div class="small-note">Đề xuất này là tài liệu sizing dựa trên giả định; cấu hình và số lượng cuối cùng cần đối chiếu báo giá nhà cung cấp và xác nhận của chủ dự án trước khi trình duyệt ngân sách.{(' Người lập: ' + esc(prepared_by) + '.') if prepared_by else ''}</div>
-  </div>"""
-    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"/><style>{_base_css('Đề xuất cấu hình máy chủ', generated_at)}{_exec_visual_css()}{_planning_css()}
-.decision-table td {{ vertical-align:middle; }}
-.appendix-table td {{ font-size:8.3px; padding:3.5px 6px; }}
-</style></head>
-<body>
-  <div class="cover-header">
-    <div>
-      <div class="eyebrow">Infrastructure Capacity Ops · Host Sizing · {'Tận dụng hiện hữu' if mode == 'reuse' else 'Trang bị mới'}{eyebrow_project} · {esc(generated_at.split(' ')[-1])}</div>
-      <div class="cover-title" style="margin-bottom:6px;">{title}</div>
-    </div>
-    {logo_html}
-  </div>
-  {body}
-</body></html>"""
-
-
-
 def render_sizing_html(*args, detail: str = "full", **kwargs) -> str:
-    if detail == "brief":
-        return render_brief_html(*args, **kwargs)
+    """detail='full' → báo cáo tư vấn đầy đủ · detail='brief' → báo cáo tư vấn rút gọn (same template, compact)."""
     from .report_sizing_full import render_full_html
-    return render_full_html(*args, **kwargs)
+    return render_full_html(*args, compact=(detail == "brief"), **kwargs)
 
 
 def build_sizing_pdf(*args, **kwargs) -> bytes:
