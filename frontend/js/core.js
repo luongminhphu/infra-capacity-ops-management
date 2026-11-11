@@ -1,5 +1,5 @@
 /* =========================================================
-   VMware Capacity Ops Management — Core state & utilities
+   Infra Capacity Ops Management — Core state & utilities
    ========================================================= */
 const appState = {
   hosts: [],            // normalized host objects
@@ -1800,7 +1800,7 @@ function syncViewSections() {
   const map = {
     executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
     inventory:'#viewInventory', whatif:'#viewWhatif', sizing:'#viewSizing', planning:'#viewPlanning',
-    licensing:'#viewLicensing', reports:'#viewReports', settings:'#viewSettings',
+    licensing:'#viewLicensing', backup:'#viewBackup', reports:'#viewReports', settings:'#viewSettings',
   };
   const target = $(map[appState.view] || map.dashboard);
   if (target) target.classList.remove('hidden');
@@ -1822,6 +1822,7 @@ function renderActiveView() {
   else if (appState.view === 'whatif') renderWhatifView();
   else if (appState.view === 'sizing' && typeof renderSizingView === 'function') renderSizingView();
   else if (appState.view === 'licensing' && typeof renderLicensingView === 'function') renderLicensingView();
+  else if (appState.view === 'backup' && typeof renderBackupView === 'function') renderBackupView();
   // reports / planning / settings are static forms bound once in app.js.
 }
 

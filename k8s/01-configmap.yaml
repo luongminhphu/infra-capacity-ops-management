@@ -46,3 +46,16 @@ data:
   VCENTER_4_USERNAME: "infra.mon@vsphere.local"
   VCENTER_4_VERIFY_SSL: "false"
   VCENTER_4_DEMO: "false"
+
+  # ---- Veritas NetBackup #1..#4 (module Backup) — phần KHÔNG nhạy cảm ----
+  # API key / mật khẩu đặt trong Secret (NETBACKUP_i_API_KEY hoặc NETBACKUP_i_PASSWORD).
+  # NETBACKUP_i_DEMO=true để chạy thử với dữ liệu giả lập.
+  BACKUP_INITIAL_DAYS: "14"
+  BACKUP_RETENTION_DAYS: "400"
+  NETBACKUP_1_KEY: "nbu-hcm"
+  NETBACKUP_1_NAME: "NetBackup HCM"
+  NETBACKUP_1_HOST: "nbu-primary01.yourcompany.local"
+  NETBACKUP_1_PORT: "1556"
+  NETBACKUP_1_VERIFY_SSL: "false"
+  NETBACKUP_1_API_VERSION: "8.0"
+  NETBACKUP_1_DEMO: "false"

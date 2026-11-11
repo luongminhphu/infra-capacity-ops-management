@@ -1,5 +1,5 @@
 /* =====================================================================
-   VMware Capacity Ops Management — stylesheet on the HSC Design System.
+   Infra Capacity Ops Management — stylesheet on the HSC Design System.
    Tokens are copied verbatim from the HSC export (Figma "theming", 06/2026);
    dark is the product default (:root), light is [data-theme="light"].
    Legacy aliases (--surface, --muted, --ok, …) keep JS templates and
@@ -715,3 +715,15 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
   body{background:#fff;color:#000;}
   .card,.panel,.kpi-card,.table-card{border:1px solid #ccc;}
 }
+
+/* ── Backup (NetBackup) ─────────────────────────────────────────────── */
+#bkHead .bk-chips{display:inline-flex;gap:var(--space-1);flex-wrap:wrap;}
+#bkHead .bk-chips .pill{max-width:420px;overflow:hidden;text-overflow:ellipsis;}
+.bk-brief{margin:0 0 var(--space-4);}
+.bk-brief-head{display:flex;gap:var(--space-2);align-items:flex-start;}
+.bk-brief.bk-crit{background:var(--crit-bg);border-color:var(--red-a24);}
+.bk-brief.bk-warn{background:var(--warn-bg);}
+.bk-brief.bk-ok{background:var(--ok-bg);}
+.muted-sub.bk-wrap{white-space:normal;max-width:520px;}
+.bk-th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--space-3) var(--space-4);}
+.bk-th-grid .field .muted-sub{white-space:normal;}

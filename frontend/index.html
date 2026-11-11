@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>VMware Capacity Ops Management</title>
+<title>Infra Capacity Ops Management</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -17,13 +17,13 @@
 <!-- ================= LOGIN SCREEN ================= -->
 <div id="loginScreen">
   <form class="login-card" id="loginForm">
-    <div class="brand-mark" aria-label="VMware Capacity Ops">
+    <div class="brand-mark" aria-label="Infra Capacity Ops">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="4" width="7" height="7" rx="1.4"></rect><rect x="14" y="4" width="7" height="7" rx="1.4"></rect>
         <rect x="3" y="14" width="7" height="7" rx="1.4"></rect><rect x="14" y="14" width="7" height="7" rx="1.4"></rect>
       </svg>
     </div>
-    <h2>VMware Capacity Ops Management</h2>
+    <h2>Infra Capacity Ops Management</h2>
     <p class="lead">Đăng nhập để xem capacity, compliance và license của hạ tầng VMware.</p>
     <div id="loginError" role="alert"></div>
     <div class="login-field">
@@ -51,7 +51,7 @@
         </svg>
       </div>
       <div class="brand-text">
-        <div class="brand-name">VMware Capacity Ops</div>
+        <div class="brand-name">Infra Capacity Ops</div>
         <div class="brand-sub">Management</div>
       </div>
       <button class="btn icon-btn sidebar-close" id="btnSidebarClose" type="button" aria-label="Đóng menu"><i data-lucide="x"></i></button>
@@ -548,6 +548,12 @@
         <div id="licBody"><div class="empty-note">Đang tải dữ liệu…</div></div>
       </section>
 
+      <!-- ================= BACKUP (NETBACKUP) ================= -->
+      <section id="viewBackup" class="view-section hidden">
+        <section class="table-card lic-head-card" id="bkHead"></section>
+        <div id="bkBody"><div class="empty-note">Đang tải dữ liệu backup…</div></div>
+      </section>
+
       <!-- ================= TRUNG TÂM BÁO CÁO ================= -->
       <section id="viewReports" class="view-section hidden">
         <div class="reports-layout">
@@ -593,6 +599,17 @@
                   <div class="report-card-actions">
                     <button class="btn btn-secondary btn-sm" id="btnExportPdfLicSummary" type="button">Xuất PDF</button>
                     <button class="btn btn-ghost btn-sm" type="button" data-nav-link="lic-assess">Phạm vi</button>
+                  </div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="database-backup"></i></div>
+                  <div class="report-card-body">
+                    <div class="report-card-title">Hiện trạng Backup (NetBackup)</div>
+                    <p class="report-card-desc">Tỷ lệ thành công, RPO theo client, nguyên nhân lỗi, độ phủ backup VM, disk pool và policy — PDF và Excel thống kê.</p>
+                  </div>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" id="btnExportPdfBackup" type="button">Xuất PDF</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-overview">Mở Backup</button>
                   </div>
                 </article>
                 <article class="report-card">
@@ -747,7 +764,7 @@
 
     </main>
 
-    <div class="footer-note">VMware Capacity Ops Management — dữ liệu live từ vCenter (tài khoản chỉ đọc infra.mon@vsphere.local) + import thủ công, lưu lịch sử để phân tích xu hướng.</div>
+    <div class="footer-note">Infra Capacity Ops Management — dữ liệu live từ vCenter và Veritas NetBackup qua tài khoản chỉ đọc + import thủ công, lưu lịch sử để phân tích xu hướng.</div>
   </div>
 </div>
 
@@ -757,6 +774,7 @@
 <script src="js/views/executive.js?v=__ASSET_V__"></script>
 <script src="js/views/sizing.js?v=__ASSET_V__"></script>
 <script src="js/views/licensing.js?v=__ASSET_V__"></script>
+<script src="js/views/backup.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

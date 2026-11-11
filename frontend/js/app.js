@@ -50,6 +50,20 @@ const NAV_GROUPS = [
     { id: 'lic-snapshots', view: 'licensing', sub: 'snapshots', icon: 'camera', label: 'Snapshot license', title: 'Snapshot license',
       desc: 'Lưu kết quả đánh giá tại một thời điểm để đối chiếu, tái lập hoặc xuất PDF.', scope: ['vcenter', 'cluster'] },
   ] },
+  { label: 'Backup', items: [
+    { id: 'bk-overview', view: 'backup', sub: 'overview', icon: 'database-backup', label: 'Tổng quan backup', title: 'Tổng quan backup',
+      desc: 'Tỷ lệ backup thành công, RPO, nguyên nhân lỗi và phát hiện từ Veritas NetBackup (tài khoản chỉ đọc).', scope: [] },
+    { id: 'bk-clients', view: 'backup', sub: 'clients', icon: 'monitor-check', label: 'Client & RPO', title: 'Client & RPO',
+      desc: 'Lần backup thành công gần nhất, lỗi liên tiếp và đánh giá RPO của từng client.', scope: [] },
+    { id: 'bk-jobs', view: 'backup', sub: 'jobs', icon: 'list-checks', label: 'Job backup', title: 'Job backup',
+      desc: 'Danh sách job theo kết quả, loại job, client, policy và mã lỗi NetBackup.', scope: [] },
+    { id: 'bk-coverage', view: 'backup', sub: 'coverage', icon: 'shield-check', label: 'Độ phủ VM', title: 'Độ phủ backup VM',
+      desc: 'Đối chiếu VM trong vCenter với client NetBackup: VM chưa có backup hoặc backup lỗi.', scope: [] },
+    { id: 'bk-storage', view: 'backup', sub: 'storage', icon: 'hard-drive', label: 'Storage & policy', title: 'Storage & policy',
+      desc: 'Dung lượng disk pool, xu hướng và số ngày tới ngưỡng high-water; tình trạng từng policy.', scope: [] },
+    { id: 'bk-config', view: 'backup', sub: 'config', icon: 'sliders-horizontal', label: 'Nguồn & ngưỡng', title: 'Nguồn NetBackup & ngưỡng',
+      desc: 'Trạng thái kết nối NetBackup, hướng dẫn tài khoản chỉ đọc và ngưỡng giám sát backup.', scope: [] },
+  ] },
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
       desc: 'Xuất báo cáo PDF, dữ liệu CSV / Excel và cấu hình phạm vi, loại finding, logo cho báo cáo.', scope: ['vcenter'] },
@@ -90,6 +104,11 @@ function currentNavId() {
     const hit = Object.values(NAV_ITEMS).find(it => it.view === 'licensing' && it.sub === sub);
     return hit ? hit.id : 'lic-hardware';
   }
+  if (appState.view === 'backup') {
+    const sub = (typeof bkState === 'function' ? bkState().sub : 'overview') || 'overview';
+    const hitB = Object.values(NAV_ITEMS).find(it => it.view === 'backup' && it.sub === sub);
+    return hitB ? hitB.id : 'bk-overview';
+  }
   const hit = Object.values(NAV_ITEMS).find(it => it.view === appState.view);
   return hit ? hit.id : 'dashboard';
 }
@@ -106,7 +125,7 @@ function syncNavState() {
   const groupEl = $('#pageGroup'); if (groupEl) groupEl.textContent = group ? group.label : '';
   const titleEl = $('#pageTitle'); if (titleEl) titleEl.textContent = item.title;
   const descEl = $('#pageDesc'); if (descEl) descEl.textContent = item.desc;
-  document.title = `${item.title} — VMware Capacity Ops Management`;
+  document.title = `${item.title} — Infra Capacity Ops Management`;
   updateScopeControls(item);
   const want = `#/${activeNavId}`;
   if (location.hash !== want) history.replaceState(null, '', want);
@@ -127,6 +146,7 @@ function navigateTo(id) {
   appState.view = item.view;
   appState.perspective = item.view === 'executive' ? 'executive' : 'technical';
   if (item.view === 'licensing' && typeof licState === 'function') licState().sub = item.sub || 'hardware';
+  if (item.view === 'backup' && typeof bkState === 'function') bkState().sub = item.sub || 'overview';
   closeSidebar();
   syncViewSections();
   renderActiveView();
@@ -146,6 +166,7 @@ function applyInitialRoute() {
   appState.view = item.view;
   appState.perspective = item.view === 'executive' ? 'executive' : 'technical';
   if (item.view === 'licensing' && typeof licState === 'function') licState().sub = item.sub || 'hardware';
+  if (item.view === 'backup' && typeof bkState === 'function') bkState().sub = item.sub || 'overview';
   syncViewSections();
 }
 
@@ -723,6 +744,13 @@ function bindTopBarInteractions() {
   $('#btnExportPdfPlan').addEventListener('click', e => handleExportPdf('planning', e.currentTarget));
   const planQuick = $('#btnExportPdfPlanQuick');
   if (planQuick) planQuick.addEventListener('click', e => handleExportPdf('planning', e.currentTarget));
+  const bkPdfBtn = $('#btnExportPdfBackup');
+  if (bkPdfBtn) bkPdfBtn.addEventListener('click', async e => {
+    const btn = e.currentTarget; const orig = btn.innerHTML; btn.disabled = true; btn.textContent = 'Đang tạo PDF...';
+    try { const st = bkState(); await api.bkReportPdf(st.server, st.days); }
+    catch (err) { showValidationBanner([`Không thể xuất báo cáo backup: ${err.message}`], []); }
+    finally { btn.disabled = false; btn.innerHTML = orig; }
+  });
   const licSummary = $('#btnExportPdfLicSummary');
   if (licSummary) licSummary.addEventListener('click', e => handleExportLicSummaryPdf(e.currentTarget));
   const saveThr = $('#btnSaveThresholds');

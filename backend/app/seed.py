@@ -12,7 +12,7 @@ from .security import hash_password
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create or update a VMware Capacity Ops login user")
+    parser = argparse.ArgumentParser(description="Create or update an Infra Capacity Ops login user")
     parser.add_argument("--username", required=True)
     parser.add_argument("--password", required=True)
     parser.add_argument("--display-name", default=None)
