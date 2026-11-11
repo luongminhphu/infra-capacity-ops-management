@@ -41,7 +41,7 @@ class NetBackupConfig:
 
     def __init__(self, key: str, name: str, host: str, port: int, api_key: str, username: str, password: str,
                  domain_type: str, domain_name: str, verify_ssl: bool, api_version: str, demo: bool = False,
-                 timeout: int = 60):
+                 timeout: int = 60, ca_cert: str = ""):
         self.key = key
         self.name = name
         self.host = host
@@ -55,6 +55,8 @@ class NetBackupConfig:
         self.api_version = api_version
         self.demo = demo
         self.timeout = timeout
+        # PEM file with the NetBackup CA certificate, used when verify_ssl is on.
+        self.ca_cert = ca_cert
 
 
 class Settings(BaseSettings):
@@ -148,6 +150,8 @@ class Settings(BaseSettings):
                 api_version=env("API_VERSION", "8.0") or "8.0",
                 demo=demo,
                 timeout=int(env("TIMEOUT", "60") or 60),
+                # Per server, or one CA file shared by every server (NETBACKUP_CA_CERT).
+                ca_cert=env("CA_CERT") or os.environ.get("NETBACKUP_CA_CERT", ""),
             ))
         return result
 

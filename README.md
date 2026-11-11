@@ -538,8 +538,19 @@ App chỉ **đọc** (GET) — không khởi chạy, huỷ hay sửa job/policy.
    `NETBACKUP_i_PASSWORD` (`DOMAIN_TYPE`: `unixpwd`, `vx`, `NT`…; `DOMAIN_NAME` theo domain của user) —
    app đăng nhập `/netbackup/login`, lấy token, đọc dữ liệu rồi `/logout`.
 4. Mở firewall từ app (pod / host chạy Docker) tới primary server cổng **1556/TCP** (HTTPS).
-5. `NETBACKUP_i_VERIFY_SSL=false` khi primary server dùng chứng chỉ NetBackup CA tự ký (kết nối vẫn mã
-   hoá); đặt `true` nếu chứng chỉ được CA nội bộ tin cậy cấp.
+5. **TLS.** `NETBACKUP_i_VERIFY_SSL=false`: kết nối vẫn mã hoá nhưng không xác thực chứng chỉ.
+   Nên bật `true` và khai báo CA của NetBackup ở `NETBACKUP_i_CA_CERT` (file PEM; hoặc
+   `NETBACKUP_CA_CERT` dùng chung cho mọi server):
+   - Lấy CA trên primary server (Linux): file `/usr/openv/var/webtruststore/cacert.pem`; đối chiếu
+     fingerprint với `/usr/openv/netbackup/bin/nbcertcmd -displayCACertDetail`.
+   - `NETBACKUP_i_HOST` phải trùng tên trong chứng chỉ của primary server (thường là FQDN), không dùng IP.
+   - Docker Compose: mount file vào container (ví dụ `./certs/nbu-ca.pem:/etc/netbackup-ca/ca.pem:ro`)
+     rồi đặt `NETBACKUP_1_CA_CERT=/etc/netbackup-ca/ca.pem`. Kubernetes: tạo ConfigMap từ file CA và
+     mount theo mẫu đã comment sẵn trong `k8s/04-app.yaml`.
+   - CA nội bộ của NetBackup không có extension *keyUsage*; Python 3.13 mặc định bật chế độ X.509
+     strict và từ chối CA này (`CA cert does not include key usage extension`). App dùng một SSL
+     context riêng cho NetBackup (`nbu_ssl_context`) bỏ cờ strict nhưng vẫn kiểm tra chuỗi chứng chỉ
+     và hostname; kết nối vCenter không bị ảnh hưởng.
 6. `NETBACKUP_i_API_VERSION`: phiên bản API (media type `application/vnd.netbackup+json;version=…`).
    Mặc định `8.0` (NetBackup 10.0); NetBackup mới hơn vẫn nhận phiên bản cũ. Lỗi **406** → chỉnh giá trị
    này theo bảng phiên bản API của hãng.
