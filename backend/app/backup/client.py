@@ -252,6 +252,26 @@ def parse_disk_pool(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # HTTP client
 # ---------------------------------------------------------------------------
+def _error_detail(exc: urllib.error.HTTPError) -> str:
+    """NetBackup returns JSON errors; Tomcat-level rejections (e.g. a malformed URL) return HTML."""
+    try:
+        raw = exc.read() or b""
+    except Exception:  # noqa: BLE001
+        return ""
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, dict):
+            msg = payload.get("errorMessage") or payload.get("message") or ""
+            if payload.get("errorCode") is not None and msg:
+                msg = f"{msg} (errorCode {payload['errorCode']})"
+            return str(msg)
+    except ValueError:
+        pass
+    import re
+    text = re.sub(r"<[^>]+>", " ", raw.decode("utf-8", "replace"))
+    return re.sub(r"\s+", " ", text).strip()[:200]
+
+
 class NetBackupClient:
     def __init__(self, cfg: NetBackupConfig):
         self.cfg = cfg
@@ -266,7 +286,9 @@ class NetBackupClient:
                  body: Optional[Dict[str, Any]] = None, extra_headers: Optional[Dict[str, str]] = None) -> Any:
         url = self.base + path
         if params:
-            url += "?" + urllib.parse.urlencode(params, safe="[]:',", quote_via=urllib.parse.quote)
+            # Brackets in "page[limit]" must be percent-encoded: NetBackup's API runs on Tomcat,
+            # which rejects a raw "[" / "]" in the request target with HTTP 400 (RFC 3986).
+            url += "?" + urllib.parse.urlencode(params, safe=":',", quote_via=urllib.parse.quote)
         headers = {"Accept": self.media_type, "Content-Type": self.media_type}
         if self.token:
             headers["Authorization"] = self.token
@@ -278,12 +300,7 @@ class NetBackupClient:
                 raw = resp.read()
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as exc:
-            detail = ""
-            try:
-                payload = json.loads(exc.read() or b"{}")
-                detail = payload.get("errorMessage") or payload.get("message") or ""
-            except Exception:  # noqa: BLE001
-                pass
+            detail = _error_detail(exc)
             if exc.code == 401:
                 if path == "/login":
                     raise NetBackupError(
@@ -296,7 +313,7 @@ class NetBackupClient:
                 raise NetBackupError(f"Tài khoản không có quyền đọc {path} (403) — bổ sung quyền View trong RBAC role.") from exc
             if exc.code == 406:
                 raise NetBackupError(f"Phiên bản API {self.cfg.api_version} không được hỗ trợ (406) — chỉnh NETBACKUP_i_API_VERSION.") from exc
-            raise NetBackupError(f"Lỗi API {exc.code} tại {path}: {detail or exc.reason}") from exc
+            raise NetBackupError(f"Lỗi API {exc.code} tại {path}: {detail or exc.reason or 'không có mô tả'}") from exc
         except urllib.error.URLError as exc:
             if isinstance(exc.reason, ssl.SSLCertVerificationError):
                 raise NetBackupError(
