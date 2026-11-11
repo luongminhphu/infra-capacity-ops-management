@@ -447,6 +447,15 @@ def projection(vms, params, profile_obj, installed: int) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Findings (risks & advisories) and next steps
 # ---------------------------------------------------------------------------
+def finding_id(f: Dict[str, Any]) -> str:
+    """Stable id of a finding (area + title without numbers) so a hidden finding stays hidden after a recalculation."""
+    import unicodedata
+    text = unicodedata.normalize("NFD", f"{f.get('area', '')} {f.get('title', '')}".lower())
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn").replace("đ", "d")
+    text = re.sub(r"[\d.,%]+", " ", text)
+    return "-".join(re.findall(r"[a-z]+", text))[:80]
+
+
 def _finding(sev: str, area: str, title: str, detail: str, action: str) -> Dict[str, str]:
     return {"severity": sev, "area": area, "title": title, "detail": detail, "action": action}
 
@@ -713,6 +722,8 @@ def build_advisory(vms, params, profiles, demand: Dict[str, Any], results: List[
     wl = workload_profile(vms, demand, th)
     proj = projection(vms, params, profiles[best_idx], best["hostsTotal"]) if best else None
     fnd = findings(demand, params, best, wl, proj, results)
+    for f_ in fnd:
+        f_["id"] = finding_id(f_)
     n_crit = sum(1 for x in fnd if x["severity"] == "critical")
     readiness = "crit" if n_crit else ("warn" if any(x["severity"] == "warning" for x in fnd) else "ok")
     return {

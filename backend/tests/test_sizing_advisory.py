@@ -237,3 +237,45 @@ def test_platform_vocabulary_and_licensing():
     # Nutanix CVM reserve too low → warning
     nx = sizing.build_sizing(vms, sizing.SizingParams(platform="nutanix", reserve_ram_gb=16), prof)
     assert any(f["area"] == "Nền tảng" for f in nx["analysis"]["findings"])
+
+
+# --- Adjustments after the calculation ---------------------------------------------------------------------
+def test_manual_option_and_host_override():
+    auto = _pi_case()
+    assert not auto["selection"]["manual"]
+    r = _pi_case(pick_profile="2x32x384", host_override=4)
+    best = r["results"][r["recommendedIndex"]]
+    assert best["profile"]["name"] == "2×32C / 384 GB" and best["hostsTotal"] == 4 and best["hostsComputed"] == 3
+    assert best["hostsForced"] and round(best["failure"]["ramPct"]) < 80 and best["spare"]["extraAvgVms"] > 0
+    assert r["analysis"]["projection"]["installed"] == 4
+    assert r["selection"]["changedOption"] and r["selection"]["changedHosts"]
+    assert r["recommendation"]["why"].startswith("Người lập điều chỉnh")
+    # host override never lowers the computed count
+    low = _pi_case(host_override=1)
+    assert low["results"][low["recommendedIndex"]]["hostsTotal"] == 3
+    # a suggested option can be promoted
+    v = _pi_case(pick_profile="2x16x512")
+    vb = v["results"][v["recommendedIndex"]]
+    assert vb["profile"]["coresPerSocket"] == 16 and not vb.get("suggested")
+    # unknown key falls back to the automatic pick
+    u = _pi_case(pick_profile="9x9x9")
+    assert u["results"][u["recommendedIndex"]]["profile"]["name"] == "2×32C / 512 GB"
+
+
+def test_report_options_sections_and_content():
+    from app import report_sizing_full
+    r = _pi_case()
+    fid = next(f["id"] for f in r["analysis"]["findings"] if f["area"] == "Sao lưu")
+    assert fid == _pi_case(cpu_ratio=3)["analysis"]["findings"][[f["area"] for f in _pi_case(cpu_ratio=3)["analysis"]["findings"]].index("Sao lưu")]["id"]
+    vms = [sizing.VmSpec(name="Backup Server", qty=1, vcpu=8, ram_gb=32, disk_gb=4000, note="Veeam"),
+           sizing.VmSpec(name="APP", qty=4, vcpu=8, ram_gb=32, disk_gb=200)]
+    prof = [sizing.HostProfile(name="2×16C / 512 GB", sockets=2, cores_per_socket=16, ram_gb=512)]
+    opts = {"sections": {"scope": False, "bom": False, "glossary": False, "scores": False},
+            "headline": "Câu kết luận riêng.", "note": "Ghi chú A\nGhi chú B", "selectionNote": "Theo hợp đồng khung.",
+            "hiddenFindings": [fid], "extraFindings": [{"severity": "critical", "area": "Mạng", "title": "Thiếu switch 25GbE"}]}
+    html = report_sizing_full.render_full_html(vms, sizing.SizingParams(), prof, report_options=opts)
+    assert 'id="sec-scope"' not in html and 'id="app-glossary"' not in html and "BOM sơ bộ" not in html and "Bảng điểm" not in html
+    assert "Câu kết luận riêng." in html and "Ghi chú A<br/>Ghi chú B" in html and "Thiếu switch 25GbE" in html
+    assert "Máy chủ backup chạy chung cụm" not in html
+    assert "CẦN XỬ LÝ RỦI RO" in html  # readiness recomputed from the printed findings (custom critical)
+    assert 'Phụ lục A. Danh sách máy ảo' in html and 'id="sec-demand"><div class="section-title"><span class="sec-num">2</span>' in html

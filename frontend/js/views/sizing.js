@@ -99,7 +99,7 @@ const nextSizingId = () => `sz${Date.now().toString(36)}${(sizingSeq++).toString
 
 function sizingState() {
   if (!appState.sizing) {
-    appState.sizing = { vms: [], params: { ...SIZING_DEFAULT_PARAMS }, profiles: deepClone(SIZING_DEFAULT_PROFILES), doc: { ...SIZING_DEFAULT_DOC }, result: null, warnings: [], bound: false, sensKey: 'growth' };
+    appState.sizing = { vms: [], params: { ...SIZING_DEFAULT_PARAMS }, profiles: deepClone(SIZING_DEFAULT_PROFILES), doc: { ...SIZING_DEFAULT_DOC }, report: sizingDefaultReport(), result: null, warnings: [], bound: false, sensKey: 'growth' };
     try {
       const raw = localStorage.getItem(SIZING_STORE_KEY);
       if (raw) {
@@ -107,6 +107,7 @@ function sizingState() {
         if (Array.isArray(saved.vms)) appState.sizing.vms = saved.vms;
         if (saved.params) appState.sizing.params = { ...SIZING_DEFAULT_PARAMS, ...saved.params };
         if (saved.doc) appState.sizing.doc = { ...SIZING_DEFAULT_DOC, ...saved.doc };
+        if (saved.report) appState.sizing.report = { ...sizingDefaultReport(), ...saved.report };
         // Older builds auto-filled the sample project name into "Tên dự án / hệ thống" and persisted it; drop it once.
         if (/^Ví dụ\s*[—-]\s*ứng dụng 3 lớp$/i.test(String(appState.sizing.params.environment || '').trim())) appState.sizing.params.environment = '';
         if (Array.isArray(saved.profiles) && saved.profiles.length) appState.sizing.profiles = saved.profiles;
@@ -122,7 +123,7 @@ function sizingState() {
 function persistSizing() {
   const st = sizingState();
   try {
-    localStorage.setItem(SIZING_STORE_KEY, JSON.stringify({ vms: st.vms, params: st.params, profiles: st.profiles, doc: st.doc }));
+    localStorage.setItem(SIZING_STORE_KEY, JSON.stringify({ vms: st.vms, params: st.params, profiles: st.profiles, doc: st.doc, report: st.report }));
   } catch (e) { /* storage full / disabled */ }
 }
 
@@ -324,10 +325,13 @@ function sizingPayload() {
   const profiles = st.profiles.map(p => ({ name: p.name, sockets: p.sockets, coresPerSocket: p.coresPerSocket, ramGB: p.ramGB, diskGB: p.diskGB || 0, unitPrice: p.unitPrice == null ? null : p.unitPrice }));
   const params = { ...st.params, advisory: { ...SIZING_DEFAULT_ADVISORY, ...(st.params.advisory || {}) } };
   if (params.storage_mode !== 'local') params.storage_protection_factor = 1.0;
+  const rep = st.report || sizingDefaultReport();
+  params.pick_profile = rep.pick || '';
+  params.host_override = Math.max(0, Math.round(cleanNum(rep.hosts)) || 0);
   return { vms, params, profiles };
 }
 
-async function runSizing(btn) {
+async function runSizing(btn, scroll = true) {
   const payload = sizingPayload();
   if (!payload.vms.length) {
     showValidationBanner(['Danh sách VM trống hoặc chưa có dòng nào hợp lệ (cần số lượng > 0 và vCPU/RAM > 0).'], []);
@@ -338,7 +342,8 @@ async function runSizing(btn) {
   try {
     const result = await api.calcSizing(payload);
     sizingState().result = result;
-    renderSizingResult(result, payload);
+    renderSizingAdjust(result);
+    renderSizingResult(result, payload, scroll);
   } catch (err) {
     showValidationBanner([`Không tính được sizing: ${err.message}`], []);
   } finally {
@@ -467,6 +472,156 @@ function renderSizingResult(result, payload, scroll = true) {
   area.classList.remove('hidden');
   renderSizingCharts(result);
   if (scroll) area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---------- Report customisation after the calculation ---------- */
+function sizingDefaultReport() {
+  return { pick: '', hosts: 0, selectionNote: '', sections: {}, headline: '', note: '', hiddenFindings: [], extraFindings: [] };
+}
+
+const SZ_QUICK = [
+  ['cpu_ratio', 'Tỷ lệ chia sẻ CPU (vCPU / thread)', 1, 8, 0.5, v => `${v}`],
+  ['ram_ratio', 'Tỷ lệ chia sẻ RAM', 1, 2, 0.1, v => `${v} : 1`],
+  ['max_util_pct', 'Mức dùng tối đa mỗi host', 50, 95, 5, v => `${v}%`],
+  ['growth_pct', 'Dự phòng tăng trưởng', 0, 100, 5, v => `+${v}%`],
+  ['annual_growth_pct', 'Tăng trưởng hằng năm (dự báo)', 0, 50, 5, v => `${v}%/năm`],
+];
+const SZ_SECTIONS = [
+  ['scope', 'Phạm vi & dữ liệu đầu vào'], ['demand', 'Nhu cầu tài nguyên'], ['options', 'So sánh phương án'],
+  ['scores', 'Bảng điểm', 'options'], ['cost', 'Biểu đồ TCO', 'options'], ['design', 'Cấu hình đề xuất'],
+  ['bom', 'BOM sơ bộ', 'design'], ['arch', 'Kiến trúc logic', 'design'], ['alloc', 'Phân bổ năng lực', 'design'],
+  ['scale', 'Khả năng mở rộng'], ['risks', 'Rủi ro & khuyến nghị'], ['plan', 'Kế hoạch triển khai'],
+  ['method', 'Giả định & cách tính'], ['existing', 'Hạ tầng hiện hữu (chế độ tận dụng)'], ['vms', 'Phụ lục: Danh sách máy ảo'],
+  ['glossary', 'Phụ lục: Thuật ngữ'],
+];
+let szRecalcTimer = null;
+function szRecalcSoon() {
+  clearTimeout(szRecalcTimer);
+  szRecalcTimer = setTimeout(() => runSizing(null, false), 250);
+}
+
+function renderSizingAdjust(result) {
+  const box = $('#sizingAdjust');
+  if (!box) return;
+  const st = sizingState();
+  const rep = st.report || (st.report = sizingDefaultReport());
+  const p = st.params;
+  const sel = result.selection || {};
+  const rows = result.results || [];
+  const best = result.recommendedIndex != null ? rows[result.recommendedIndex] : null;
+  const curKey = rep.pick || '';
+  const hostsMin = best ? (best.hostsComputed || best.hostsTotal) : 1;
+  const tag = r => (r.suggested ? ' · tham khảo' : '') + (r.tight ? ' · sát ngưỡng' : '') + (!r.failure.ok ? ' · chưa đạt N+1' : '');
+  const opts = [`<option value="" ${!curKey ? 'selected' : ''}>Tự động — ${esc(sel.autoName || '—')} (${sel.autoHosts || '—'} host)</option>`]
+    .concat(rows.filter(r => r.hostsTotal).map(r => `<option value="${esc(r.key)}" ${r.key === curKey ? 'selected' : ''}>${esc(r.profile.name.replace(' (gợi ý)', ''))} — ${r.hostsComputed || r.hostsTotal} host${tag(r)}</option>`)).join('');
+  const quick = SZ_QUICK.map(([k, label, min, max, step, fmt]) => `
+    <div class="sz-adj-row"><span class="sz-adj-label">${label}</span>
+      <input type="range" data-quick="${k}" min="${min}" max="${max}" step="${step}" value="${p[k]}"><output data-out="${k}">${fmt(p[k])}</output></div>`).join('')
+    + `<div class="sz-adj-row"><span class="sz-adj-label">Dự phòng sự cố</span>
+      <select data-quick="redundancy">${[0, 1, 2].map(x => `<option value="${x}" ${Number(p.redundancy) === x ? 'selected' : ''}>N+${x}</option>`).join('')}</select><span></span></div>`;
+  const secs = rep.sections || {};
+  const cb = (k, label, sub) => `<label class="${sub ? 'sub' : ''}"><input type="checkbox" data-sec="${k}" ${secs[k] === false ? '' : 'checked'}> ${label}</label>`;
+  const checks = SZ_SECTIONS.filter(x => !x[2]).map(([k, label]) =>
+    `<div class="sz-adj-group">${cb(k, label)}${SZ_SECTIONS.filter(x => x[2] === k).map(([ck, cl]) => cb(ck, cl, true)).join('')}</div>`).join('');
+  const hidden = new Set(rep.hiddenFindings || []);
+  const SEV = { critical: ['crit', 'Nghiêm trọng'], warning: ['warn', 'Cảnh báo'], info: ['na', 'Lưu ý'], ok: ['ok', 'Đạt'] };
+  const fl = ((result.analysis || {}).findings || []).map(f => `<label class="${hidden.has(f.id) ? 'off' : ''}"><input type="checkbox" data-finding="${esc(f.id)}" ${hidden.has(f.id) ? '' : 'checked'}>
+      <span class="pill ${SEV[f.severity][0]}">${SEV[f.severity][1]}</span><span class="t">${esc(f.title)}</span></label>`).join('');
+  const extras = (rep.extraFindings || []).map((x, i) => `<label><span class="pill ${(SEV[x.severity] || SEV.info)[0]}">${(SEV[x.severity] || SEV.info)[1]}</span>
+      <span class="t">${esc(x.title)}</span><button class="btn btn-ghost btn-sm" type="button" data-del-extra="${i}" title="Xoá">✕</button></label>`).join('');
+  const changed = rep.pick || rep.hosts || rep.headline || rep.note || (rep.hiddenFindings || []).length || (rep.extraFindings || []).length
+    || Object.values(rep.sections || {}).some(v => v === false);
+  box.innerHTML = `
+    <div class="sz-adj-head"><div><div class="panel-title panel-title-sm">Tuỳ chỉnh báo cáo</div>
+      <p class="panel-sub">Điều chỉnh sau khi tính: giả định và phương án áp dụng cho kết quả trên màn hình, PDF và Excel; mục in và nội dung áp dụng cho PDF báo cáo đầy đủ.</p></div>
+      <button class="btn btn-secondary btn-sm" type="button" id="btnSzAdjReset" ${changed ? '' : 'disabled'}>Khôi phục mặc định</button></div>
+    <div class="sz-adj-grid">
+      <details class="sz-adj-box" open><summary>Chỉnh nhanh giả định</summary>${quick}
+        <p class="logo-upload-hint">Thả tay để tính lại; giá trị đồng bộ với cột Giả định bên trái.</p></details>
+      <details class="sz-adj-box" open><summary>Phương án & số host trong báo cáo</summary>
+        <div class="field"><label>Phương án đề xuất</label><select id="szAdjPick">${opts}</select></div>
+        <div class="field"><label>Số host đề xuất (tối thiểu ${hostsMin} theo tính toán)</label>
+          <input id="szAdjHosts" type="number" min="0" step="1" value="${rep.hosts || ''}" placeholder="${hostsMin} (theo tính toán)"></div>
+        <div class="field"><label>Lý do điều chỉnh (ghi vào báo cáo)</label><input id="szAdjSelNote" value="${esc(rep.selectionNote || '')}" placeholder="VD: theo hợp đồng khung phần cứng hiện có"></div>
+        ${sel.manual ? `<p class="logo-upload-hint"><b>Đang dùng lựa chọn của người lập</b> — tự động là ${esc(sel.autoName || '')} × ${sel.autoHosts} host.</p>` : ''}</details>
+      <details class="sz-adj-box" open><summary>Mục in trong báo cáo</summary><div class="sz-adj-checks">${checks}</div>
+        <p class="logo-upload-hint">Mục Tóm tắt luôn được in; số mục, mục lục và chữ cái phụ lục tự đánh lại.</p></details>
+      <details class="sz-adj-box" open><summary>Nội dung tư vấn</summary>
+        <div class="field"><label>Câu kết luận (để trống = tự động)</label><textarea id="szAdjHeadline" placeholder="${esc((result.recommendation || {}).headline || '')}">${esc(rep.headline || '')}</textarea></div>
+        <div class="field"><label>Ghi chú của người lập (in ở mục Tóm tắt)</label><textarea id="szAdjNote" placeholder="VD: điều kiện, cam kết, lưu ý riêng cho khách hàng">${esc(rep.note || '')}</textarea></div>
+        <div class="sz-adj-label" style="margin-bottom:4px;">Khuyến nghị in trong báo cáo (bỏ chọn để ẩn)</div>
+        <div class="sz-adj-findings">${fl}${extras}</div>
+        <details><summary class="muted-sub">+ Thêm khuyến nghị riêng</summary>
+          <div class="sz-adj-extra" style="margin-top:6px;">
+            <select id="szExSev"><option value="warning">Cảnh báo</option><option value="info" selected>Lưu ý</option><option value="critical">Nghiêm trọng</option><option value="ok">Đạt</option></select>
+            <input id="szExArea" placeholder="Lĩnh vực (VD: Mạng)">
+            <input id="szExTitle" class="full" placeholder="Nhận định (bắt buộc)">
+            <input id="szExDetail" class="full" placeholder="Chi tiết">
+            <input id="szExAction" class="full" placeholder="Khuyến nghị">
+            <button class="btn btn-secondary btn-sm" type="button" id="btnSzExAdd">Thêm</button></div></details></details>
+    </div>`;
+  box.classList.remove('hidden');
+}
+
+function bindSizingAdjust() {
+  const box = $('#sizingAdjust');
+  if (!box || box.dataset.bound) return;
+  box.dataset.bound = '1';
+  const st = () => sizingState();
+  const rep = () => (st().report || (st().report = sizingDefaultReport()));
+  box.addEventListener('input', e => {
+    const k = e.target.dataset.quick;
+    if (k && e.target.type === 'range') {
+      const def = SZ_QUICK.find(q => q[0] === k);
+      const out = box.querySelector(`[data-out="${k}"]`);
+      if (out && def) out.textContent = def[5](e.target.value);
+    }
+  });
+  box.addEventListener('change', e => {
+    const t = e.target;
+    if (t.dataset.quick) {
+      const k = t.dataset.quick;
+      const v = k === 'redundancy' ? Math.round(cleanNum(t.value)) : cleanNum(t.value);
+      st().params[k] = v;
+      const el = document.getElementById(SIZING_PARAM_FIELDS[k]);
+      if (el) el.value = v;
+      persistSizing(); szRecalcSoon(); return;
+    }
+    if (t.id === 'szAdjPick') { rep().pick = t.value; rep().hosts = 0; persistSizing(); szRecalcSoon(); return; }
+    if (t.id === 'szAdjHosts') { rep().hosts = Math.max(0, Math.round(cleanNum(t.value)) || 0); persistSizing(); szRecalcSoon(); return; }
+    if (t.id === 'szAdjSelNote') { rep().selectionNote = t.value.trim(); persistSizing(); return; }
+    if (t.id === 'szAdjHeadline') { rep().headline = t.value.trim(); persistSizing(); return; }
+    if (t.id === 'szAdjNote') { rep().note = t.value.trim(); persistSizing(); return; }
+    if (t.dataset.sec) { rep().sections = { ...(rep().sections || {}), [t.dataset.sec]: t.checked }; persistSizing(); return; }
+    if (t.dataset.finding) {
+      const set = new Set(rep().hiddenFindings || []);
+      if (t.checked) set.delete(t.dataset.finding); else set.add(t.dataset.finding);
+      rep().hiddenFindings = [...set];
+      t.closest('label').classList.toggle('off', !t.checked);
+      persistSizing();
+    }
+  });
+  box.addEventListener('click', e => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.id === 'btnSzExAdd') {
+      const title = $('#szExTitle').value.trim();
+      if (!title) { $('#szExTitle').focus(); return; }
+      rep().extraFindings = (rep().extraFindings || []).concat([{ severity: $('#szExSev').value, area: $('#szExArea').value.trim() || 'Khác', title,
+        detail: $('#szExDetail').value.trim(), action: $('#szExAction').value.trim() }]);
+      persistSizing(); renderSizingAdjust(st().result); return;
+    }
+    if (t.dataset.delExtra != null) {
+      rep().extraFindings = (rep().extraFindings || []).filter((_, i) => i !== Number(t.dataset.delExtra));
+      persistSizing(); renderSizingAdjust(st().result); return;
+    }
+    if (t.id === 'btnSzAdjReset') {
+      const hadSelection = rep().pick || rep().hosts;
+      st().report = sizingDefaultReport();
+      persistSizing();
+      if (hadSelection) szRecalcSoon(); else renderSizingAdjust(st().result);
+    }
+  });
 }
 
 /* ---------- Advisory: findings, charts, roadmap ---------- */
@@ -663,7 +818,7 @@ async function importSizingFile(file) {
     renderSizingVmTable();
     const t = sizingTotals(rows);
     showValidationBanner(parsed.warnings || [], [`Đã import ${rows.length} dòng (${szNum(t.count)} VM · ${szNum(t.vcpu)} vCPU · ${szGB(t.ram)} RAM · ${szGB(t.disk)} disk) từ "${file.name}"${parsed.sheet ? `, sheet "${parsed.sheet}"` : ''}.`]);
-    $('#sizingResult').classList.add('hidden');
+    $('#sizingResult').classList.add('hidden'); $('#sizingAdjust').classList.add('hidden');
   } catch (err) {
     showValidationBanner([`Import thất bại: ${err.message}`], []);
   }
@@ -677,7 +832,7 @@ async function loadSizingSample() {
     // Sample data never names the project — the user types the real project/system name so titles stay clean.
     persistSizing();
     renderSizingVmTable();
-    $('#sizingResult').classList.add('hidden');
+    $('#sizingResult').classList.add('hidden'); $('#sizingAdjust').classList.add('hidden');
   } catch (err) {
     showValidationBanner([`Không nạp được ví dụ: ${err.message}`], []);
   }
@@ -707,7 +862,10 @@ function sizingExistingPayload() {
   const includeNewOption = $('#szPdfIncludeNew') ? $('#szPdfIncludeNew').checked : true;
   const includeExisting = $('#szPdfIncludeExisting') ? $('#szPdfIncludeExisting').checked : true;
   const detail = (document.querySelector('input[name="szPdfDetail"]:checked') || {}).value === 'brief' ? 'brief' : 'full';
-  return { ...payload, existing, policyText, mode, targetCluster, includeNewOption, includeExisting, detail, ...sizingDocPayload() };
+  const rep = sizingState().report || sizingDefaultReport();
+  const reportOptions = { sections: rep.sections || {}, headline: rep.headline || '', note: rep.note || '', selectionNote: rep.selectionNote || '',
+    hiddenFindings: rep.hiddenFindings || [], extraFindings: (rep.extraFindings || []).filter(x => x.title && x.title.trim()) };
+  return { ...payload, existing, policyText, mode, targetCluster, includeNewOption, includeExisting, detail, ...sizingDocPayload(), reportOptions };
 }
 
 /* Document control / scope fields shared by the PDF and Excel exports. */
@@ -832,7 +990,7 @@ function bindSizingView() {
 
   $('#btnSizingAddRow').addEventListener('click', () => addSizingVmRow());
   $('#btnSizingClear').addEventListener('click', () => {
-    if (!st.vms.length || confirm('Xoá toàn bộ danh sách VM yêu cầu?')) { st.vms = []; persistSizing(); renderSizingVmTable(); $('#sizingResult').classList.add('hidden'); }
+    if (!st.vms.length || confirm('Xoá toàn bộ danh sách VM yêu cầu?')) { st.vms = []; persistSizing(); renderSizingVmTable(); $('#sizingResult').classList.add('hidden'); $('#sizingAdjust').classList.add('hidden'); }
   });
   $('#btnSizingImport').addEventListener('click', () => $('#sizingFile').click());
   $('#sizingFile').addEventListener('change', e => { importSizingFile(e.target.files && e.target.files[0]); e.target.value = ''; });
@@ -849,6 +1007,7 @@ function bindSizingView() {
     persistSizing(); renderSizingProfiles();
   });
   $('#btnSizingRun').addEventListener('click', e => runSizing(e.currentTarget));
+  bindSizingAdjust();
   $('#btnSzAdvReset').addEventListener('click', () => { st.params.advisory = { ...SIZING_DEFAULT_ADVISORY }; persistSizing(); renderSizingAdvisoryFields(); });
   $('#btnSizingExport').addEventListener('click', e => exportSizingXlsx(e.currentTarget));
   $('#btnSizingPdf').addEventListener('click', e => exportSizingPdf(e.currentTarget));
@@ -890,7 +1049,7 @@ function renderSizingView() {
   renderSizingAdvisoryFields();
   renderSizingVmTable();
   renderSizingProfiles();
-  if (appState.sizing.result) renderSizingResult(appState.sizing.result, sizingPayload(), false);
+  if (appState.sizing.result) { renderSizingAdjust(appState.sizing.result); renderSizingResult(appState.sizing.result, sizingPayload(), false); }
 }
 
 window.renderSizingView = renderSizingView;

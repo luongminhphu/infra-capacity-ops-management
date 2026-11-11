@@ -167,7 +167,7 @@ def _cover(result, best, params, doc: Dict[str, str], logo_html: str, toc: List[
             ("Người lập", doc.get("preparedBy") or "—"), ("Người duyệt", doc.get("approvedBy") or "—"),
             ("Đơn vị tư vấn", doc.get("org") or "—")]
     meta_html = "".join(f"<tr><td>{esc(k)}</td><td><b>{esc(v)}</b></td></tr>" for k, v in meta)
-    toc_html = "".join(f'<li><a href="#{i}"><span class="toc-num">{esc(nm) if len(nm) == 1 and nm.isdigit() else ""}</span>{esc(t)}</a></li>' for i, nm, t in toc)
+    toc_html = "".join(f'<li><a href="#{i}"><span class="toc-num">{esc(nm) if nm.isdigit() else ""}</span>{esc(t)}</a></li>' for i, nm, t in toc)
     hist = (f'<tr><td>{esc(doc.get("version") or "1.0")}</td><td>{esc(doc.get("date") or "—")}</td>'
             f'<td>{esc(doc.get("versionNote") or "Phát hành lần đầu")}</td><td>{esc(doc.get("preparedBy") or "—")}</td></tr>')
     sign = "".join(f'<td><div class="sign-role">{esc(r)}</div><div class="sign-space"></div><div class="sign-name">{esc(nm or "")}</div></td>'
@@ -203,17 +203,23 @@ def _cover(result, best, params, doc: Dict[str, str], logo_html: str, toc: List[
 # ---------------------------------------------------------------------------
 # Section bodies
 # ---------------------------------------------------------------------------
-def _summary(result, best, existing, currency, mode, target, include_new, include_existing, project) -> str:
+def _summary(result, best, existing, currency, mode, target, include_new, include_existing, project, opts: Optional[Dict[str, Any]] = None) -> str:
+    opts = opts or {}
     a = result["analysis"]
     fc = a.get("findingCounts") or {}
     box = (_reuse_summary_box(result, best, existing, target, include_new, currency, project, si=True) if mode == "reuse"
            else _summary_box(result, best, existing if include_existing else [], currency, si=True))
     box = _vn_html(box)
     why = result["recommendation"].get("why") or ""
+    if opts.get("selectionNote"):
+        why = (why.rstrip(".") + ". " if why else "") + "Lý do: " + opts["selectionNote"].strip()
     why_html = f'<div class="callout" style="margin-top:8px;"><b>Lý do chọn phương án.</b> {esc(vn(why[len("Lý do chọn: "):] if why.startswith("Lý do chọn: ") else why))}</div>' if why else ""
     risk_line = (f'<div class="note-line">Rủi ro &amp; lưu ý: <b>{fc.get("critical", 0)} nghiêm trọng</b> · <b>{fc.get("warning", 0)} cảnh báo</b> · '
-                 f'{fc.get("info", 0)} lưu ý — chi tiết tại mục 7.</div>')
-    return box + why_html + risk_line
+                 f'{fc.get("info", 0)} lưu ý' + (f' — chi tiết tại mục {opts["risksNum"]}.' if opts.get("risksNum") else '.') + '</div>')
+    note = (opts.get("note") or "").strip()
+    note_html = ("<div class=\"callout note\" style=\"margin-top:8px;\"><b>Ghi chú của người lập.</b> "
+                 + "<br/>".join(esc(x) for x in note.splitlines() if x.strip()) + "</div>") if note else ""
+    return box + why_html + note_html + risk_line
 
 
 _TEXT_NODE_RE = re.compile(r">([^<>]+)<")
@@ -317,7 +323,8 @@ def _row_status(r: Dict[str, Any]) -> str:
     return f'<span class="muted">#{r["rank"]}</span>'
 
 
-def _options(result, currency) -> str:
+def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
+    show = show or {}
     rows = sorted(result["results"], key=lambda x: (x.get("suggested", False), x["rank"] or 99))
     p = result["params"]
     local = p["storage_mode"] == "local"
@@ -368,7 +375,7 @@ def _options(result, currency) -> str:
     score_tbl = _table(["Phương án"] + [esc(ax["label"]) for ax in axes] + ["Điểm TB"], srows, cls="score-table",
                        aligns=["left"] + ["center"] * (len(axes) + 1))
     cost_html = ""
-    if any_price:
+    if any_price and show.get("cost", True):
         yrs = rows[0]["advisory"]["costs"]["years"]
         cost_rows = [{"label": r["profile"]["name"], "hw": r["advisory"]["costs"]["hardware"], "lic": r["advisory"]["costs"]["license"],
                       "best": r["recommended"]} for r in rows if r["advisory"]["costs"]["tco"]]
@@ -376,6 +383,9 @@ def _options(result, currency) -> str:
           {svg_cost_bars(cost_rows, currency, width=680)}{_legend([(COLORS['primary'], 'Phần cứng'), (COLORS['accent'] + '8c', f'License {yrs} năm')])}</div>"""
     has_sugg = any(r.get("suggested") for r in rows)
     basis_txt = {"tco": "TCO", "budget": "chi phí phần cứng", "cores": "số core license"}.get(result.get("costBasis"), "chi phí")
+    score_html = (f'''<div class="keep" style="margin-top:8px;"><div class="sub-h">Bảng điểm (0–100, cao = tốt)</div>{score_tbl}</div>
+    <div class="small-note">Số host, Chi phí: so với phương án tốt nhất (chi phí theo {basis_txt}). Hiệu suất: mức dùng của yếu tố quyết định khi mất host.
+    Cân đối: độ chênh giữa mức dùng CPU và RAM. Chịu lỗi: mức tải khi mất host. Mở rộng: dư địa tăng trưởng. NUMA: tỷ lệ VM nằm gọn trong một CPU.</div>''')
     return f"""
     <div class="chart-card keep"><div class="chart-card-title">Số host cần theo từng phương án</div>{hosts_chart}
       {_legend([(COLORS['primary'], 'Theo CPU'), (COLORS['accent'], 'Theo RAM'), (COLORS['primary_dark'], 'Tổng (gồm dự phòng)')])}</div>
@@ -383,9 +393,7 @@ def _options(result, currency) -> str:
     <div class="small-note">Quy tắc chọn: ít host nhất → {basis_txt} thấp nhất → không sát ngưỡng (còn dư địa) → điểm tổng hợp cao nhất.
     “Mất 1 host” là mức dùng trên phần năng lực khả dụng của các host còn lại; tối đa cho phép {n(p['max_util_pct'])}%.
     {'Dòng in nghiêng (*) là phương án tham khảo do hệ thống gợi ý, không thuộc danh sách ứng viên ban đầu.' if has_sugg else ''}</div>
-    <div class="keep" style="margin-top:8px;"><div class="sub-h">Bảng điểm (0–100, cao = tốt)</div>{score_tbl}</div>
-    <div class="small-note">Số host, Chi phí: so với phương án tốt nhất (chi phí theo {basis_txt}). Hiệu suất: mức dùng của yếu tố quyết định khi mất host.
-    Cân đối: độ chênh giữa mức dùng CPU và RAM. Chịu lỗi: mức tải khi mất host. Mở rộng: dư địa tăng trưởng. NUMA: tỷ lệ VM nằm gọn trong một CPU.</div>
+    {score_html if show.get("scores", True) else ""}
     {cost_html}"""
 
 
@@ -564,7 +572,8 @@ def _gauges(best, p) -> str:
     return f'<table class="grid4 keep"><tr>{cells}</tr></table>'
 
 
-def _design(result, best, params) -> str:
+def _design(result, best, params, num: str = "5", show: Optional[Dict[str, bool]] = None) -> str:
+    show = show or {}
     d, p = result["demand"], result["params"]
     prof, ph, adv = best["profile"], best["perHost"], best["advisory"]
     numa, lic, run = adv["numa"], adv["license"], adv["runway"]
@@ -575,7 +584,8 @@ def _design(result, best, params) -> str:
     spec = [
         ("Cấu hình mỗi host", f"{prof['sockets']} CPU × {prof['coresPerSocket']} core = {prof['cores']} core ({n(prof['cores'] * max(1.0, p['ht_factor']))} thread) · {ram(prof['ramGB'])} RAM"),
         ("Số host", f"{best['hostsTotal']} host = {best['hostsBase']} theo tải + {best['redundancy']} dự phòng"
-                    + (f" (tối thiểu {p['min_hosts']})" if best["hostsTotal"] > best["hostsBase"] + best["redundancy"] else "")),
+                    + (f" + {best['hostsTotal'] - best['hostsComputed']} bổ sung theo lựa chọn của người lập" if best.get("hostsForced") else
+                       (f" (tối thiểu {p['min_hosts']})" if best["hostsTotal"] > best["hostsBase"] + best["redundancy"] else ""))),
         ("Năng lực khả dụng / host", f"{n(ph['usableCores'])} core · {n(ph['logicalCpu'])} thread · {ram(ph['usableRamGB'])} RAM (đã trừ phần dành cho hypervisor)"),
         ("Tổng cụm", f"{n(best['totals']['cores'])} core · {ram(best['totals']['ramGB'])} RAM"),
         ("Tỷ lệ chia sẻ thực tế", f"CPU {ratio(best.get('vcpuPerCore'))} (vCPU : core vật lý) · RAM {ratio(d['ramPlannedGB'] / max(1, best['totals']['ramGB']))}"),
@@ -598,18 +608,19 @@ def _design(result, best, params) -> str:
         bal_txt = f"CPU quyết định số host; khoảng {n(bal['strandedRamPct'])}% RAM còn trống khi CPU chạm mức tối đa."
     else:
         bal_txt = f"CPU ({pct(bal['cpuUtilPct'])}) và RAM ({pct(bal['ramUtilPct'])}) được dùng cân đối."
-    return f"""
-    <div class="sub-h">5.1 Thông số cụm</div>
-    {spec_html}
-    <div class="sub-h">5.2 Cấu hình phần cứng tham chiếu (BOM sơ bộ)</div>
-    {_bom(best, params, result)}
-    <div class="keep"><div class="sub-h">5.3 Kiến trúc logic</div>
-    <div class="chart-card">{svg_architecture(best, params, result)}
-      <div class="small-note" style="margin-top:2px;">Mỗi host nối 4 mạng tách VLAN, mỗi mạng 2 đường dự phòng. {esc(_arch_note(params))}</div></div></div>
-    <div class="keep"><div class="sub-h">5.4 Phân bổ năng lực</div>
-    <div class="chart-card">{_stackbar(best, d, p)}</div>
-    {_gauges(best, p)}
-    <div class="callout" style="margin-top:6px;"><b>Cân đối CPU / RAM.</b> {esc(vn(bal_txt))}</div></div>"""
+    parts = [f'<div class="sub-h">{num}.1 Thông số cụm</div>{spec_html}']
+    k = 2
+    if show.get("bom", True):
+        parts.append(f'<div class="sub-h">{num}.{k} Cấu hình phần cứng tham chiếu (BOM sơ bộ)</div>{_bom(best, params, result)}')
+        k += 1
+    if show.get("arch", True):
+        parts.append(f'<div class="keep"><div class="sub-h">{num}.{k} Kiến trúc logic</div><div class="chart-card">{svg_architecture(best, params, result)}'
+                     f'<div class="small-note" style="margin-top:2px;">Mỗi host nối 4 mạng tách VLAN, mỗi mạng 2 đường dự phòng. {esc(_arch_note(params))}</div></div></div>')
+        k += 1
+    if show.get("alloc", True):
+        parts.append(f'<div class="keep"><div class="sub-h">{num}.{k} Phân bổ năng lực</div><div class="chart-card">{_stackbar(best, d, p)}</div>'
+                     f'{_gauges(best, p)}<div class="callout" style="margin-top:6px;"><b>Cân đối CPU / RAM.</b> {esc(vn(bal_txt))}</div></div>')
+    return "".join(parts)
 
 
 def _scale(result, best_idx, params) -> str:
@@ -669,11 +680,11 @@ def _plan(steps) -> str:
     return _table(["Giai đoạn", "Thời điểm", "Nội dung"], rows, cls="plan-table", widths=["24%", "18%", "58%"])
 
 
-def _method(result, best, params) -> str:
+def _method(result, best, params, num: str = "9") -> str:
     rows = [[esc(k), esc(vn(v)), esc(vn(m))] for k, v, m in sizing.assumption_rows(params)]
     t1 = _table(["Hạng mục", "Giá trị", "Ý nghĩa"], rows, cls="method-table", widths=["24%", "32%", "44%"])
     if not best:
-        return '<div class="sub-h">Bảng 9.1 – Giả định</div>' + t1
+        return f'<div class="sub-h">Bảng {num}.1 – Giả định</div>' + t1
     d, p = result["demand"], result["params"]
     prof, ph, calc, f = best["profile"], best["perHost"], best["calc"], best["failure"]
     ht = max(1.0, p["ht_factor"])
@@ -691,7 +702,8 @@ def _method(result, best, params) -> str:
         ["3. Số host theo tải", "Bước 1 ÷ Bước 2, làm tròn lên",
          f"{n(calc['cpuHostsRaw'], 2)} → {best['hostsForCpu']}", f"{n(calc['ramHostsRaw'], 2)} → {best['hostsForRam']}"],
         ["4. Cộng dự phòng", f"max(CPU, RAM) + {best['redundancy']}" + (f", tối thiểu {p['min_hosts']}" if p["min_hosts"] > best["hostsBase"] + best["redundancy"] else ""),
-         {"span": f"<b>{best['hostsTotal']} host</b>"}, None],
+         {"span": (f"{best['hostsComputed']} host theo tính toán → <b>{best['hostsTotal']} host</b> theo lựa chọn của người lập"
+                   if best.get("hostsForced") else f"<b>{best['hostsTotal']} host</b>")}, None],
         [f"5. Kiểm tra mất {best['redundancy']} host", f"Nhu cầu ÷ năng lực khả dụng {f['hostsLeft']} host còn lại",
          pct(f["cpuPct"]) + warn(f["cpuPct"]), pct(f["ramPct"]) + warn(f["ramPct"])],
         ["6. Lưu trữ", stor_formula,
@@ -705,8 +717,8 @@ def _method(result, best, params) -> str:
             body += f'<tr><td>{r[0]}</td><td>{r[1]}</td><td style="text-align:right;">{r[2]}</td><td style="text-align:right;">{r[3]}</td></tr>'
     t2 = (f'<table class="method-table"><thead><tr><th style="width:26%;">Bước</th><th>Công thức</th>'
           f'<th style="width:17%;text-align:right;">CPU</th><th style="width:17%;text-align:right;">RAM</th></tr></thead><tbody>{body}</tbody></table>')
-    return (f'<div class="sub-h">Bảng 9.1 – Giả định</div>{t1}'
-            f'<div class="keep"><div class="sub-h">Bảng 9.2 – Cách tính (phương án {esc(prof["name"])})</div>{t2}</div>'
+    return (f'<div class="sub-h">Bảng {num}.1 – Giả định</div>{t1}'
+            f'<div class="keep"><div class="sub-h">Bảng {num}.2 – Cách tính (phương án {esc(prof["name"])})</div>{t2}</div>'
             f'<div class="small-note">Dung lượng: 1 TiB = 1.024 GB. "Thô" là dung lượng trước khi trừ phần bảo vệ dữ liệu của lưu trữ HCI; "dùng được" là sau khi trừ.</div>')
 
 
@@ -788,6 +800,7 @@ html, body {{ margin:0; padding:0; }}
 .chart-card {{ width:100%; margin-bottom:0; padding:8px 10px; }}
 .callout {{ background:{c['surface']}; border:1px solid {c['border']}; border-left:3px solid {c['accent']}; border-radius:0 5px 5px 0; padding:7px 10px; font-size:9.3px; line-height:1.5; }}
 .callout b {{ color:{c['primary_dark']}; }}
+.callout.note {{ border-left-color:{c['primary_dark']}; background:#f5f8fe; }}
 .note-line {{ margin-top:8px; font-size:9.2px; color:{c['muted']}; }}
 .muted {{ color:{c['muted']}; }} .small {{ font-size:8.2px; }} .warn-txt {{ color:{c['warn']}; font-weight:700; white-space:nowrap; }}
 table {{ width:100%; }}
@@ -853,14 +866,46 @@ table.cv-sign td {{ width:33.3%; border:1px solid {c['border']}; padding:5px 7px
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+SECTION_KEYS = ["scope", "existing", "demand", "options", "scores", "cost", "design", "bom", "arch", "alloc", "scale",
+                "risks", "plan", "method", "vms", "glossary"]
+SEV_ORDER = {"critical": 0, "warning": 1, "info": 2, "ok": 3}
+
+
+def _apply_report_options(result: Dict[str, Any], opts: Dict[str, Any]) -> None:
+    """Content edits by the person preparing the report: headline, hidden / extra findings.
+    Counts and readiness are recomputed from what is actually printed."""
+    a = result["analysis"]
+    if (opts.get("headline") or "").strip():
+        result["recommendation"]["headline"] = opts["headline"].strip()
+    hidden = set(opts.get("hiddenFindings") or [])
+    fnd = [f for f in a["findings"] if f.get("id") not in hidden]
+    for i, x in enumerate(opts.get("extraFindings") or []):
+        if not (x.get("title") or "").strip():
+            continue
+        sev = x.get("severity") if x.get("severity") in SEV_ORDER else "info"
+        fnd.append({"severity": sev, "area": (x.get("area") or "Khác").strip(), "title": x["title"].strip(),
+                    "detail": (x.get("detail") or "").strip(), "action": (x.get("action") or "").strip(), "id": f"custom-{i}", "custom": True})
+    fnd.sort(key=lambda f: SEV_ORDER.get(f["severity"], 9))
+    a["findings"] = fnd
+    a["findingCounts"] = {k: sum(1 for f in fnd if f["severity"] == k) for k in SEV_ORDER}
+    c = a["findingCounts"]
+    a["readiness"] = "crit" if c["critical"] else ("warn" if c["warning"] else "ok")
+
+
 def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, profiles: List[sizing.HostProfile],
                      existing: Optional[List[Dict[str, Any]]] = None, policy_txt: str = "", currency: str = "VND",
                      logo_data_url: Optional[str] = None, prepared_by: str = "", mode: str = "new",
                      target_cluster: Optional[str] = None, include_new: bool = True, include_existing: bool = True,
                      customer_name: str = "", prepared_org: str = "", document_code: str = "",
                      version: str = "", approved_by: str = "", customer_contact: str = "", version_note: str = "",
-                     input_source: str = "", input_date: str = "", out_of_scope: Optional[List[str]] = None, **_ignored) -> str:
+                     input_source: str = "", input_date: str = "", out_of_scope: Optional[List[str]] = None,
+                     report_options: Optional[Dict[str, Any]] = None, **_ignored) -> str:
+    opts = dict(report_options or {})
+    sections = opts.get("sections") or {}
+    on = lambda k: sections.get(k, True) is not False  # noqa: E731  — every section is on unless explicitly turned off
+
     result = sizing.build_sizing(vms, params, profiles)
+    _apply_report_options(result, opts)
     best_idx = result["recommendedIndex"]
     best = result["results"][best_idx] if best_idx is not None else None
     existing = existing or []
@@ -873,39 +918,72 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
            "preparedBy": prepared_by.strip(), "approvedBy": approved_by.strip(), "versionNote": version_note.strip(),
            "inputSource": input_source.strip(), "inputDate": input_date.strip(), "outOfScope": out_of_scope or []}
     a = result["analysis"]
+    target = _pick_target(existing, target_cluster) if mode == "reuse" else None
+    has_new = bool(best) and (mode != "reuse" or include_new)
 
-    toc = list(TOC_BASE)
-    if mode == "reuse":
-        toc.insert(2, ("sec-existing", "", "Hạ tầng hiện hữu"))
+    # Section plan: (id, title, subtitle, builder(num) -> html, cls, numbered)
+    fc = a["findingCounts"]
+    plan: List[tuple] = [("sec-summary", "Tóm tắt", "", None, "", True)]
+    if on("scope"):
+        plan.append(("sec-scope", "Phạm vi & dữ liệu đầu vào", "", lambda num: _scope(result, params, doc), "", True))
+    if mode == "reuse" and on("existing"):
+        def _existing_body(num):
+            if not existing:
+                return '<div class="small-note">Không có dữ liệu cluster hiện hữu (chưa đồng bộ vCenter hoặc chưa import host/VM).</div>'
+            return _vn_html(_existing_chart(existing) + _existing_table(existing, policy_txt, highlight=target["name"] if target else None)
+                            + (_target_detail(target, result["demand"]) if target else ""))
+        plan.append(("sec-existing", "Hạ tầng hiện hữu", "Khả năng tiếp nhận hệ thống mới trên các cụm đang vận hành; dòng tô màu là cụm được đề xuất.",
+                     _existing_body, "", True))
+    if on("demand"):
+        plan.append(("sec-demand", "Nhu cầu tài nguyên", "", lambda num: _demand(result, params, best), "", True))
+    if has_new and on("options"):
+        plan.append(("sec-options", "So sánh phương án" + (" (trang bị mới)" if mode == "reuse" else ""), "",
+                     lambda num: _options(result, currency, {"scores": on("scores"), "cost": on("cost")})
+                     + f'<div class="callout" style="margin-top:8px;"><b>Phương án đề xuất.</b> {esc(vn(result["recommendation"]["detail"]))}</div>', "", True))
+    if has_new and on("design"):
+        plan.append(("sec-design", "Cấu hình đề xuất", esc(best["profile"]["name"]) + f" × {best['hostsTotal']} host",
+                     lambda num: _design(result, best, params, num, {"bom": on("bom"), "arch": on("arch"), "alloc": on("alloc")}), "", True))
+    if has_new and on("scale"):
+        plan.append(("sec-scale", "Khả năng mở rộng", "", lambda num: _scale(result, best_idx, params), "", True))
+    if on("risks"):
+        plan.append(("sec-risks", "Rủi ro & khuyến nghị",
+                     f"{fc.get('critical', 0)} nghiêm trọng · {fc.get('warning', 0)} cảnh báo · {fc.get('info', 0)} lưu ý · {fc.get('ok', 0)} đạt",
+                     lambda num: _findings(a["findings"]) if a["findings"] else '<div class="small-note">Không có nhận định.</div>', "", True))
+    if on("plan"):
+        plan.append(("sec-plan", "Kế hoạch triển khai", "", lambda num: _plan(a["nextSteps"]), "", True))
+    if on("method"):
+        plan.append(("sec-method", "Giả định & cách tính", "", lambda num: _method(result, best, params, num), "", True))
+    vm_dicts = [{"name": v.name, "qty": v.qty, "vcpu": v.vcpu, "ramGB": v.ram_gb, "diskGB": v.disk_gb, "note": v.note} for v in vms]
+    appendices = []
+    if on("vms"):
+        appendices.append(("app-vms", "Danh sách máy ảo", "Theo dữ liệu khách hàng cung cấp.", lambda num: _vm_appendix(vm_dicts, result["demand"])))
+    if on("glossary"):
+        appendices.append(("app-glossary", "Thuật ngữ", "", lambda num: _glossary(params)))
+
+    numbered = []
+    for i, item in enumerate(plan, 1):
+        numbered.append((str(i),) + item)
+    risks_num = next((nm for nm, sid, *_ in numbered if sid == "sec-risks"), None)
+    letters = "ABCDEFGH"
+    app_items = [(letters[i], sid, f"Phụ lục {letters[i]}. {t}", sub, fn) for i, (sid, t, sub, fn) in enumerate(appendices)]
+    glossary_letter = next((ltr for ltr, sid, *_ in app_items if sid == "app-glossary"), None)
+
+    toc = [(sid, nm, t) for nm, sid, t, *_ in numbered] + [(sid, ltr, title) for ltr, sid, title, _, _ in app_items]
     logo_html = f'<img class="cover-logo" src="{logo_data_url}" alt="logo"/>' if logo_data_url else ""
     cover = _cover(result, best, params, doc, logo_html, toc)
 
-    target = _pick_target(existing, target_cluster) if mode == "reuse" else None
-    secs = [_section("sec-summary", "1", "Tóm tắt", "", _summary(result, best, existing, currency, mode, target, include_new, include_existing, project))]
-    secs.append(_section("sec-scope", "2", "Phạm vi & dữ liệu đầu vào", "", _scope(result, params, doc)))
-    if mode == "reuse":
-        if existing:
-            body = _vn_html(_existing_chart(existing) + _existing_table(existing, policy_txt, highlight=target["name"] if target else None)
-                            + (_target_detail(target, result["demand"]) if target else ""))
+    secs = []
+    for nm, sid, title, sub, fn, cls, _ in numbered:
+        if sid == "sec-summary":
+            body = _summary(result, best, existing, currency, mode, target, include_new, include_existing, project,
+                            {**opts, "risksNum": risks_num})
         else:
-            body = '<div class="small-note">Không có dữ liệu cluster hiện hữu (chưa đồng bộ vCenter hoặc chưa import host/VM).</div>'
-        secs.append(_section("sec-existing", "", "Hạ tầng hiện hữu", "Khả năng tiếp nhận hệ thống mới trên các cụm đang vận hành; dòng tô màu là cụm được đề xuất.", body))
-    secs.append(_section("sec-demand", "3", "Nhu cầu tài nguyên", "", _demand(result, params, best)))
-    if best and (mode != "reuse" or include_new):
-        secs.append(_section("sec-options", "4", "So sánh phương án" + (" (trang bị mới)" if mode == "reuse" else ""), "",
-                             _options(result, currency)
-                             + f'<div class="callout" style="margin-top:8px;"><b>Phương án đề xuất.</b> {esc(vn(result["recommendation"]["detail"]))}</div>'))
-        secs.append(_section("sec-design", "5", "Cấu hình đề xuất", esc(best["profile"]["name"]) + f" × {best['hostsTotal']} host", _design(result, best, params)))
-        secs.append(_section("sec-scale", "6", "Khả năng mở rộng", "", _scale(result, best_idx, params)))
-    fc = a["findingCounts"]
-    secs.append(_section("sec-risks", "7", "Rủi ro & khuyến nghị",
-                         f"{fc.get('critical', 0)} nghiêm trọng · {fc.get('warning', 0)} cảnh báo · {fc.get('info', 0)} lưu ý · {fc.get('ok', 0)} đạt",
-                         _findings(a["findings"]) if a["findings"] else '<div class="small-note">Không có nhận định.</div>'))
-    secs.append(_section("sec-plan", "8", "Kế hoạch triển khai", "", _plan(a["nextSteps"])))
-    secs.append(_section("sec-method", "9", "Giả định & cách tính", "", _method(result, best, params)))
-    vm_dicts = [{"name": v.name, "qty": v.qty, "vcpu": v.vcpu, "ramGB": v.ram_gb, "diskGB": v.disk_gb, "note": v.note} for v in vms]
-    secs.append(_section("app-vms", "", "Phụ lục A. Danh sách máy ảo", "Theo dữ liệu khách hàng cung cấp.", _vm_appendix(vm_dicts, result["demand"]), "appendix"))
-    secs.append(_section("app-glossary", "", "Phụ lục B. Thuật ngữ", "", _glossary(params)))
+            body = fn(nm)
+        if sid == "sec-scope" and glossary_letter != "B":
+            body = body.replace("Thuật ngữ: xem Phụ lục B.", f"Thuật ngữ: xem Phụ lục {glossary_letter}." if glossary_letter else "")
+        secs.append(_section(sid, nm, title, sub, body, cls))
+    for i, (ltr, sid, title, sub, fn) in enumerate(app_items):
+        secs.append(_section(sid, "", title, sub, fn(ltr), "appendix" if i == 0 else ""))
 
     header_left = " · ".join(x for x in [doc["org"], "Đề xuất cấu hình máy chủ" + (f" – {doc['customer']}" if doc["customer"] else "")] if x)
     header_right = " · ".join(x for x in [doc["code"], f"Phiên bản {doc['version']}"] if x)

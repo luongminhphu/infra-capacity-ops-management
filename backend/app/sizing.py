@@ -83,6 +83,9 @@ class SizingParams:
     platform: str = "vmware"         # vmware | nutanix | hyperv | proxmox | generic — vocabulary & licence rules (platforms.py)
     license_edition: str = "VMware vSphere Foundation (VVF)"  # shown on the report; final per vendor policy at quote time
     suggest_variants: bool = True    # add engine-suggested reference options (fewer cores / more RAM)
+    # Manual override by the person preparing the report (applied after the automatic ranking):
+    pick_profile: str = ""           # profile key "<sockets>x<coresPerSocket>x<ramGB>" (user or suggested option); "" = automatic
+    host_override: int = 0           # hosts to propose for the chosen option (only raises the computed count); 0 = computed
     advisory: AdvisoryThresholds = field(default_factory=AdvisoryThresholds)  # tunable advisory thresholds
 
     def __post_init__(self):
@@ -126,7 +129,14 @@ def summarize_demand(vms: List[VmSpec], params: SizingParams) -> Dict[str, Any]:
     }
 
 
-def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingParams) -> Dict[str, Any]:
+def profile_key(p) -> str:
+    """Stable key of a host configuration (HostProfile or result['profile'] dict)."""
+    if isinstance(p, dict):
+        return f"{int(p['sockets'])}x{int(p['coresPerSocket'])}x{float(p['ramGB']):g}"
+    return f"{int(p.sockets)}x{int(p.cores_per_socket)}x{float(p.ram_gb):g}"
+
+
+def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingParams, force_hosts: int = 0) -> Dict[str, Any]:
     util = max(0.05, min(1.0, params.max_util_pct / 100.0))
     usable_cores = max(0.0, profile.cores - params.reserve_cores)
     usable_ram = max(0.0, profile.ram_gb - params.reserve_ram_gb)
@@ -141,6 +151,9 @@ def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingPar
     n_base = max(n_cpu, n_ram, 1 if demand["vmCount"] else 0)
     redundancy = max(0, int(params.redundancy))
     n_total = max(n_base + redundancy, int(params.min_hosts)) if n_base else 0
+    n_computed = n_total
+    if n_total and force_hosts and force_hosts > n_total:
+        n_total = int(force_hosts)
     if n_cpu == n_ram:
         binding = "CPU & RAM"
     else:
@@ -205,7 +218,8 @@ def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingPar
             "vcpuCapacity": vcpu_cap_host, "vramCapacityGB": vram_cap_host,
         },
         "hostsForCpu": n_cpu, "hostsForRam": n_ram, "hostsBase": n_base, "redundancy": redundancy,
-        "hostsTotal": n_total, "binding": binding,
+        "hostsTotal": n_total, "hostsComputed": n_computed, "hostsForced": n_total != n_computed, "binding": binding,
+        "key": profile_key(profile),
         "totals": {"cores": total_cores, "ramGB": total_ram, "logicalCpu": profile.cores * max(1.0, params.ht_factor) * n_total},
         "after": {
             "cpuOvercommit": cpu_oc_after, "ramOvercommit": ram_oc_after,
@@ -339,12 +353,56 @@ def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostPro
                 v["tight"] = _is_tight(v, params)
             results = results + variants
 
+    # Manual selection (option and/or host count) by the person preparing the report.
+    selection = {"manual": False, "autoKey": best["key"] if best else None, "autoName": best["profile"]["name"] if best else None,
+                 "autoHosts": best["hostsTotal"] if best else None}
+    profiles = list(profiles)
+    pick = (params.pick_profile or "").strip()
+    if best is not None and (pick or params.host_override):
+        idx = next((i for i, r in enumerate(results) if r["key"] == pick), best_idx) if pick else best_idx
+        row = results[idx]
+        if row.get("suggested"):  # promote a suggested option to a real candidate
+            src = row["profile"]
+            hp = HostProfile(name=src["name"].replace(" (gợi ý)", ""), sockets=src["sockets"], cores_per_socket=src["coresPerSocket"],
+                             ram_gb=src["ramGB"], disk_gb=src["diskGB"], unit_price=src.get("unitPrice"))
+            profiles.append(hp)
+            prof_idx = len(profiles) - 1
+        else:
+            prof_idx = idx if idx < len(profiles) else best_idx
+        forced = max(0, int(params.host_override or 0))
+        new_row = size_profile(profiles[prof_idx], demand, params, force_hosts=forced)
+        sizing_advisory.annotate_results([new_row], vms, params, demand, ref_rows=[r for r in results if not r.get("suggested")])
+        new_row["tight"] = _is_tight(new_row, params)
+        if row.get("suggested"):
+            results = [r for r in results if r is not row]
+            results.insert(len(profiles) - 1, new_row)
+            idx = len(profiles) - 1
+        else:
+            results[idx] = new_row
+        for i, r in enumerate(results):
+            r["recommended"] = (i == idx)
+        new_row["rank"] = new_row.get("rank") or row.get("rank")
+        new_row["manual"] = True
+        best_idx, best = idx, new_row
+        selection.update({"manual": True, "key": new_row["key"], "name": new_row["profile"]["name"],
+                          "hosts": new_row["hostsTotal"], "hostsComputed": new_row["hostsComputed"],
+                          "changedOption": new_row["key"] != selection["autoKey"], "changedHosts": new_row["hostsForced"]})
+
     recommendation = _recommendation_text(demand, params, best, results, basis)
+    if selection["manual"]:
+        parts = []
+        if selection["changedOption"]:
+            parts.append(f"chọn {selection['name']} thay cho phương án tự động {selection['autoName']}")
+        if selection["changedHosts"]:
+            parts.append(f"đề xuất {selection['hosts']} host thay vì {selection['hostsComputed']} host theo tính toán (thêm dư địa)")
+        if parts:
+            recommendation["why"] = "Người lập điều chỉnh: " + "; ".join(parts) + "."
     return {
         "demand": demand,
         "params": {**params.__dict__, "advisory": params.advisory.__dict__.copy()},
         "results": results,
         "recommendedIndex": best_idx,
+        "selection": selection,
         "recommendation": recommendation,
         "costBasis": basis,
         "assumptions": assumption_lines(params),
