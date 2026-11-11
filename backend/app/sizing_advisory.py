@@ -48,7 +48,7 @@ DEFAULT_BACKUP_KEYWORDS = "backup, veeam, commvault, netbackup, veritas, avamar,
 @dataclass
 class AdvisoryThresholds:
     """Tunable thresholds behind the workload classification, findings and
-    scorecard. Defaults are common VMware practice; a partner / customer can
+    scorecard. Defaults are common virtualisation practice; a partner / customer can
     override any of them per request (``params.advisory``) without code changes."""
     compute_max_gb_per_vcpu: float = 3.0     # ≤ → compute-intensive
     memory_min_gb_per_vcpu: float = 6.0      # > → memory-intensive
@@ -64,7 +64,7 @@ class AdvisoryThresholds:
     cluster_info_hosts: int = 32             # suggest splitting the cluster above this
     cluster_warn_hosts: int = 64             # warn above this
     failover_margin_pct: float = 2.0         # load after host loss within this many points of the max-util limit = "at the limit"
-    vsan_free_min_pct: float = 25.0          # recommended free space (storage overhead) for vSAN
+    vsan_free_min_pct: float = 25.0          # recommended free space (storage overhead) for HCI storage (vSAN / AOS / S2D / Ceph)
     db_keywords: str = DEFAULT_DB_KEYWORDS   # comma-separated name/note keywords marking DB-like VMs
     dc_keywords: str = DEFAULT_DC_KEYWORDS   # keywords marking domain controllers (anti-affinity)
     backup_keywords: str = DEFAULT_BACKUP_KEYWORDS  # keywords marking backup servers
@@ -92,7 +92,7 @@ THRESHOLD_META = [
     ("low_runway_pct", "Cảnh báo dư địa tăng trưởng <", "%"),
     ("failover_comfort_pct", "Tải khi mất host được điểm tối đa ≤", "%"),
     ("failover_margin_pct", "Coi là sát ngưỡng khi tải lúc mất host cách mức tối đa ≤", "điểm %"),
-    ("vsan_free_min_pct", "Dung lượng trống khuyến nghị cho vSAN ≥", "%"),
+    ("vsan_free_min_pct", "Dung lượng trống khuyến nghị cho lưu trữ HCI ≥", "%"),
     ("cheaper_alt_pct", "Nêu phương án rẻ hơn khi TCO thấp hơn ≥", "%"),
     ("cluster_info_hosts", "Gợi ý chia cụm khi số host >", "host"),
     ("cluster_warn_hosts", "Cảnh báo cụm quá lớn khi số host >", "host"),
@@ -120,7 +120,7 @@ def _clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
 
 
 def _gb_txt(v: float) -> str:
-    """GB (as entered, = GiB in vSphere) → TiB above 1 024 GB; one unit convention for the whole report."""
+    """GB (as entered, = GiB in the hypervisor) → TiB above 1 024 GB; one unit convention for the whole report."""
     if v >= 1024:
         return f"{v / 1024:,.1f} TiB"
     return f"{v:,.0f} GB"
@@ -297,13 +297,23 @@ def _balance(r: Dict[str, Any], demand: Dict[str, Any], params) -> Dict[str, Any
 
 
 def _license(r: Dict[str, Any], params) -> Dict[str, Any]:
+    """Licence units per platform: cores (with per-CPU / per-host minimums) or CPU sockets.
+    `coresTotal` keeps its name for compatibility and holds the licensed *units*."""
+    from . import platforms
+    pf = platforms.get(params)
     p = r["profile"]
-    min_cps = max(0, int(params.license_min_cores_per_socket or 0))
-    per_host = p["sockets"] * max(min_cps, p["coresPerSocket"])
+    if pf["license_unit"] == "socket":
+        per_host = p["sockets"]
+        padded = 0
+        unit = "socket"
+    else:
+        min_cps = max(0, int(params.license_min_cores_per_socket or 0))
+        per_host = max(p["sockets"] * max(min_cps, p["coresPerSocket"]), int(pf.get("license_min_per_host") or 0))
+        padded = per_host - p["cores"]
+        unit = "core"
     total = per_host * r["hostsTotal"]
-    padded = (per_host - p["cores"]) * r["hostsTotal"]
     yearly = (params.license_price_per_core * total) if params.license_price_per_core is not None else None
-    return {"coresPerHost": per_host, "coresTotal": total, "paddedCores": max(0, padded),
+    return {"coresPerHost": per_host, "coresTotal": total, "paddedCores": max(0, padded * r["hostsTotal"]), "unit": unit,
             "pricePerCoreYear": params.license_price_per_core, "yearlyCost": yearly}
 
 
@@ -448,6 +458,8 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     if not best or not demand["vmCount"]:
         return out
     th = thresholds_of(params)
+    from . import platforms
+    pf = platforms.get(params)
     a = best["advisory"]
     prof = best["profile"]
     f = best["failure"]
@@ -476,7 +488,7 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
         lic_b, lic_r = a["license"]["coresTotal"], r["advisory"]["license"]["coresTotal"]
         vpc = demand["vcpuPlanned"] / max(1, r["totals"]["cores"])
         if why == "fewer_cores":
-            out.append(_finding("info", "Chi phí", f"Phương án tham khảo {r['profile']['name']}: giảm license từ {lic_b} xuống {lic_r} core",
+            out.append(_finding("info", "Chi phí", f"Phương án tham khảo {r['profile']['name']}: giảm license từ {lic_b} xuống {lic_r} {a['license'].get('unit', 'core')}",
                                 f"CPU đang dư nhiều; với {r['profile']['coresPerSocket']} core/CPU vẫn đủ ({vpc:.1f} vCPU : 1 core), "
                                 f"cần {r['hostsTotal']} host, khi mất {r['redundancy']} host dùng {r['failure']['cpuPct'] or 0:.0f}% CPU · {r['failure']['ramPct'] or 0:.0f}% RAM.",
                                 "Cân nhắc khi chi phí license theo core là ưu tiên; kiểm tra lại với yêu cầu hiệu năng của ứng dụng."))
@@ -505,17 +517,24 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     else:
         out.append(_finding("ok", "Chịu lỗi", f"Đạt dự phòng N+{red}",
                             f"Khi mất {red} host, cụm vẫn chạy ở mức {f['cpuPct'] or 0:.0f}% CPU và {f['ramPct'] or 0:.0f}% RAM.",
-                            f"Cấu hình vSphere HA (tự khởi động lại VM khi host lỗi) dành sẵn năng lực N+{red}; bật DRS để cân bằng tải."))
+                            f"Cấu hình {pf['ha']} (tự khởi động lại VM khi host lỗi) dành sẵn năng lực N+{red}; bật {pf['balancer']} để cân bằng tải."))
     if best["hostsTotal"] == 2 and red >= 1:
         out.append(_finding("info", "Chịu lỗi", "Cụm 2 host: một nửa năng lực dành cho dự phòng",
                             "Trong lúc một host bảo trì, cụm không còn dự phòng.",
                             "Cân nhắc 3 host cấu hình nhỏ hơn để bảo trì an toàn."))
 
+    # Platform services that run on every host (Nutanix CVM, Ceph OSDs on Proxmox).
+    needs_overhead = pf.get("overhead_min_ram_gb") and (params.platform == "nutanix" or params.storage_mode == "local")
+    if needs_overhead and params.reserve_ram_gb < pf["overhead_min_ram_gb"]:
+        out.append(_finding("warning", "Nền tảng", f"Phần tài nguyên dành cho {pf['hypervisor']} có thể thấp",
+                            f"{pf['overhead_note']} Giả định hiện tại chỉ trừ {params.reserve_ram_gb:g} GB RAM / host.",
+                            f"Tăng mục \"Tài nguyên dành cho hypervisor\" lên khoảng {pf['reserve']['ram_gb']} GB RAM và {pf['reserve']['cores']} core / host rồi tính lại."))
+
     # Placement rules (anti-affinity) for DCs and multi-instance groups
     if workload.get("dcCount", 0) >= 2:
         out.append(_finding("warning", "Bố trí VM", f"{workload['dcCount']} Domain Controller cần nằm trên host khác nhau",
                             f"{', '.join(workload['domainControllers'][:3])}: nếu cùng nằm trên một host, sự cố host làm mất toàn bộ dịch vụ xác thực.",
-                            "Tạo quy tắc DRS tách host (VM-VM anti-affinity) cho các Domain Controller."))
+                            f"Tạo {pf['anti_affinity']} cho các Domain Controller."))
     multi = [n for n in workload.get("multiInstance", []) if n not in workload.get("domainControllers", [])]
     if multi:
         out.append(_finding("info", "Bố trí VM", "Nhóm VM chạy nhiều bản nên được tách host",
@@ -590,9 +609,11 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
 
     # Licensing
     lic = a["license"]
-    if lic["paddedCores"] > 0:
+    if lic["paddedCores"] > 0 and lic.get("unit", "core") == "core":
         out.append(_finding("info", "License", f"{lic['paddedCores']} core license không dùng tới",
-                            f"License tính tối thiểu {params.license_min_cores_per_socket} core mỗi CPU, cấu hình chỉ có {prof['coresPerSocket']} core/CPU.",
+                            (f"License tính tối thiểu {params.license_min_cores_per_socket} core mỗi CPU"
+                             + (f" và {pf['license_min_per_host']} core mỗi host" if pf.get("license_min_per_host") else "")
+                             + f", cấu hình chỉ có {prof['coresPerSocket']} core/CPU."),
                             f"Chọn CPU từ {params.license_min_cores_per_socket} core trở lên để dùng hết license."))
 
     # Cluster size
@@ -602,31 +623,32 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
                             f"Chia thành nhiều cụm {th.cluster_info_hosts}–{th.cluster_warn_hosts} host hoặc dùng host lớn hơn."))
     elif best["hostsTotal"] > th.cluster_info_hosts:
         out.append(_finding("info", "Kiến trúc", f"{best['hostsTotal']} host — nên chia nhiều cụm",
-                            "Vẫn trong giới hạn của vSphere nhưng nên tách theo tầng ứng dụng.", "Thiết kế từ 2 cụm, mỗi cụm có N+1 riêng."))
+                            "Vẫn trong giới hạn của nền tảng nhưng nên tách theo tầng ứng dụng.", "Thiết kế từ 2 cụm, mỗi cụm có N+1 riêng."))
 
     # Storage
     st = best["storage"]
     if params.storage_mode == "local":
         prot = params.storage_protection_factor or 1
+        hci = pf["hci"]
         if st.get("ok") is False:
             out.append(_finding("critical", "Lưu trữ", "Dung lượng đĩa trên host chưa đủ",
                                 f"Mỗi host cần {_gb_txt(st.get('perHostNeededGB') or 0)} dung lượng thô, cấu hình có {_gb_txt(prof['diskGB'] or 0)}.",
                                 "Tăng số lượng / dung lượng ổ đĩa mỗi host, hoặc chuyển sang SAN."))
-        min_vsan = 4 if 1.0 < prot < 1.9 else 3
-        if best["hostsTotal"] < min_vsan:
-            out.append(_finding("warning", "Lưu trữ", f"vSAN cần tối thiểu {min_vsan} host",
-                                f"Mức bảo vệ ×{prot:g} yêu cầu từ {min_vsan} host.", f"Nâng cụm lên {min_vsan} host."))
-        elif best["hostsTotal"] == min_vsan and prot >= 1.9:
-            out.append(_finding("warning", "Lưu trữ", f"vSAN {min_vsan} host: không còn chỗ dựng lại dữ liệu khi 1 host bảo trì",
-                                "Với mức bảo vệ chịu lỗi 1 host (RAID-1), khi 1 host bảo trì hoặc hỏng, dữ liệu chạy ở trạng thái không còn bản sao dự phòng cho đến khi host trở lại.",
-                                f"Khuyến nghị {min_vsan + 1} host để vSAN tự dựng lại dữ liệu; nếu giữ {min_vsan} host, lên lịch bảo trì ngắn và theo dõi chặt."))
+        min_nodes = max(int(pf.get("hci_min_nodes", 3)), 4 if 1.0 < prot < 1.9 else 0)
+        if best["hostsTotal"] < min_nodes:
+            out.append(_finding("warning", "Lưu trữ", f"{hci} cần tối thiểu {min_nodes} host",
+                                f"Mức bảo vệ ×{prot:g} trên {hci} yêu cầu từ {min_nodes} host.", f"Nâng cụm lên {min_nodes} host."))
+        elif best["hostsTotal"] == min_nodes and prot >= 1.9:
+            out.append(_finding("warning", "Lưu trữ", f"{hci} {min_nodes} host: không còn chỗ dựng lại dữ liệu khi 1 host bảo trì",
+                                "Với mức bảo vệ chịu lỗi 1 host (2 bản sao), khi 1 host bảo trì hoặc hỏng, dữ liệu chỉ còn một bản cho đến khi host trở lại.",
+                                f"Khuyến nghị {min_nodes + 1} host để {hci} tự dựng lại dữ liệu; nếu giữ {min_nodes} host, lên lịch bảo trì ngắn và theo dõi chặt."))
         if params.storage_overhead_pct < th.vsan_free_min_pct:
-            out.append(_finding("warning", "Lưu trữ", f"Dự trữ dung lượng vSAN {params.storage_overhead_pct:g}% thấp hơn khuyến nghị",
-                                f"vSAN cần khoảng {th.vsan_free_min_pct:g}–30% dung lượng trống cho snapshot, dựng lại dữ liệu và thao tác bảo trì.",
+            out.append(_finding("warning", "Lưu trữ", f"Dự trữ dung lượng {hci} {params.storage_overhead_pct:g}% thấp hơn khuyến nghị",
+                                f"Lưu trữ HCI cần khoảng {th.vsan_free_min_pct:g}–30% dung lượng trống cho snapshot, dựng lại dữ liệu và bảo trì.",
                                 f"Tăng mức dự trữ lên ≥ {th.vsan_free_min_pct:g}% khi chốt số lượng ổ đĩa."))
-        out.append(_finding("info", "Lưu trữ", "vSphere HA cần lưu trữ dùng chung",
-                            "Thiết kế giả định đĩa trên host được gộp thành vSAN datastore. Nếu chỉ dùng đĩa cục bộ độc lập, HA không khởi động lại được VM trên host khác.",
-                            "Chốt vSAN (kèm license vSAN) hoặc SAN dùng chung trước khi báo giá."))
+        out.append(_finding("info", "Lưu trữ", f"{pf['ha']} cần lưu trữ dùng chung",
+                            f"Thiết kế giả định ổ đĩa trên host được gộp thành {pf['hci_long']}. Nếu chỉ dùng đĩa cục bộ độc lập, HA không khởi động lại được VM trên host khác.",
+                            f"Chốt {hci} hoặc SAN dùng chung trước khi báo giá."))
     else:
         out.append(_finding("info", "Lưu trữ", f"Cần {_gb_txt(demand['storageNeededGB'])} trên SAN",
                             f"Đã gồm +{params.growth_pct:g}% tăng trưởng và +{params.storage_overhead_pct:g}% dự trữ (snapshot, swap, vùng trống).",
@@ -640,6 +662,8 @@ def next_steps(demand, params, best, n_findings_crit: int) -> List[Dict[str, str
     """Implementation plan (SI engagement)."""
     if not best:
         return []
+    from . import platforms
+    pf = platforms.get(params)
     p = best["profile"]
     steps = [
         {"phase": "1. Thống nhất yêu cầu", "when": "Tuần 1",
@@ -648,8 +672,8 @@ def next_steps(demand, params, best, n_findings_crit: int) -> List[Dict[str, str
          "what": f"Hoàn thiện cấu hình {best['hostsTotal']} host {p['name']}, gửi báo giá gồm phần cứng, license, bảo hành, dịch vụ triển khai và TCO {params.horizon_years} năm."},
         {"phase": "3. Phê duyệt", "when": "Tuần 3–4", "what": "Khách hàng phê duyệt phương án và ngân sách; báo cáo này dùng làm thuyết minh kỹ thuật."},
         {"phase": "4. Triển khai", "when": "Sau khi giao thiết bị",
-         "what": "Lắp đặt, cấu hình cụm: vSphere HA, DRS (kèm quy tắc tách host), EVC, mạng quản lý / vMotion"
-                 + (" / vSAN" if params.storage_mode == "local" else " / lưu trữ") + ", mẫu VM chuẩn."},
+         "what": f"Lắp đặt, cấu hình cụm {pf['label']}: {pf['ha']}, {pf['balancer']} (kèm {pf['anti_affinity']}), {pf['cpu_compat']}, "
+                 f"mạng quản lý / {pf['migration']}" + (f" / {pf['hci']}" if params.storage_mode == "local" else " / lưu trữ") + ", mẫu VM chuẩn."},
         {"phase": "5. Kiểm thử & nghiệm thu", "when": "Trước vận hành chính thức",
          "what": f"Kiểm thử chịu lỗi: tắt {max(1, best['redundancy'])} host, xác nhận VM tự khởi động lại và hiệu năng đạt yêu cầu; nghiệm thu."},
         {"phase": "6. Hỗ trợ vận hành", "when": "30 / 60 / 90 ngày",

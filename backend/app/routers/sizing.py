@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
-from .. import report_sizing, sizing, sizing_advisory
+from .. import platforms, report_sizing, sizing, sizing_advisory
 from ..database import get_db
 from ..models import ReportLogo, User
 from ..security import get_current_user
@@ -89,6 +89,7 @@ class ParamsIn(BaseModel):
     license_price_per_core: Optional[float] = Field(default=None, ge=0)
     license_min_cores_per_socket: int = Field(default=16, ge=0, le=128)
     optimize_for: str = Field(default="hosts", pattern="^(hosts|cost)$")
+    platform: str = Field(default="vmware", pattern="^(vmware|nutanix|hyperv|proxmox|generic)$")
     license_edition: str = Field(default="VMware vSphere Foundation (VVF)", max_length=120)
     suggest_variants: bool = True
     advisory: AdvisoryIn = AdvisoryIn()
@@ -220,7 +221,8 @@ def sizing_defaults(user: User = Depends(get_current_user)):
     params = sizing.SizingParams()
     return {"params": {**params.__dict__, "advisory": params.advisory.__dict__.copy()}, "profiles": sizing.DEFAULT_PROFILES,
             "sampleVms": sizing.TEMPLATE_ROWS,
-            "advisoryMeta": [{"key": k, "label": lbl, "unit": u} for k, lbl, u in sizing_advisory.THRESHOLD_META]}
+            "advisoryMeta": [{"key": k, "label": lbl, "unit": u} for k, lbl, u in sizing_advisory.THRESHOLD_META],
+            "platforms": platforms.meta()}
 
 
 @router.post("/calc")

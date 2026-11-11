@@ -171,6 +171,12 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   "<đơn vị tư vấn> · Đề xuất cấu hình máy chủ – <khách hàng>"; một lề duy nhất khai báo trong `@page`; số theo định dạng Việt Nam;
   dung lượng theo TiB (1 TiB = 1.024 GB). Trường mới của payload: `customerContact`, `version`, `versionNote`, `approvedBy`,
   `inputSource`, `inputDate`, `outOfScope`; tham số `license_edition`, `suggest_variants`.
+- **Nền tảng ảo hoá** (`params.platform`: `vmware` · `nutanix` · `hyperv` · `proxmox` · `generic`, danh mục trong
+  `backend/app/platforms.py`): phép tính sizing không đổi; tên gọi trong báo cáo (hypervisor, quản trị tập trung, HA, cân bằng tải,
+  di chuyển VM, lưu trữ HCI), sơ đồ kiến trúc logic, BOM, kế hoạch triển khai và nhận định lấy theo nền tảng. License tính theo
+  đơn vị của từng nền tảng (VMware: core, tối thiểu 16 core/CPU; Windows Server: tối thiểu 8 core/CPU và 16 core/host; Proxmox:
+  CPU socket). Chọn nền tảng trên giao diện tự điền loại license, số core tối thiểu và phần tài nguyên dành cho nền tảng (Nutanix
+  CVM, Ceph). `generic` dùng khái niệm chung khi chưa chốt nền tảng; Phụ lục B có bảng tên gọi tương ứng giữa các nền tảng.
 - **Quy tắc chọn phương án**: ít host nhất → chi phí thấp nhất (TCO nếu mọi phương án có giá, nếu không thì ngân sách phần cứng, nếu
   không thì số core license) → không sát ngưỡng (mất host vẫn dưới mức tối đa, còn dư địa) → điểm tổng hợp cao nhất. Phương án đạt
   N+1 nhưng tải khi mất host chạm mức tối đa được đánh dấu "Sát ngưỡng". Hệ thống tự thêm **phương án tham khảo** (không tham gia

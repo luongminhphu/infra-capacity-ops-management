@@ -68,11 +68,11 @@ class SizingParams:
     growth_pct: float = 20.0         # growth buffer applied to the Dev team's request
     redundancy: int = 1              # N + redundancy
     min_hosts: int = 2
-    reserve_cores: float = 2.0       # physical cores reserved for ESXi per host
-    reserve_ram_gb: float = 16.0     # RAM reserved for ESXi per host
+    reserve_cores: float = 2.0       # physical cores reserved for the hypervisor (+ CVM / Ceph if any) per host
+    reserve_ram_gb: float = 16.0     # RAM reserved for the hypervisor (+ CVM / Ceph if any) per host
     storage_mode: str = "san"        # 'san' | 'local'
     storage_overhead_pct: float = 25.0  # snapshots, swap, vmdk growth, free-space floor
-    storage_protection_factor: float = 1.0  # local/vSAN only: FTT=1 mirror → 2.0, RAID-5 → 1.33 ...
+    storage_protection_factor: float = 1.0  # local / HCI only: 2-way mirror → 2.0, RAID-5/EC 3+1 → 1.33 ...
     environment: str = ""            # free text shown on the report, e.g. "Core Banking phase 2"
     # Advisory / costing (see sizing_advisory.py)
     annual_growth_pct: float = 15.0  # yearly organic growth used for the multi-year projection
@@ -80,7 +80,8 @@ class SizingParams:
     license_price_per_core: Optional[float] = None  # per-core subscription price per year (VCF/VVF-style), optional
     license_min_cores_per_socket: int = 16          # per-core licensing minimum per CPU socket
     optimize_for: str = "hosts"      # 'hosts' = fewest hosts first · 'cost' = lowest TCO first (when priced)
-    license_edition: str = "VMware vSphere Foundation (VVF)"  # shown on the report; final per Broadcom policy at quote time
+    platform: str = "vmware"         # vmware | nutanix | hyperv | proxmox | generic — vocabulary & licence rules (platforms.py)
+    license_edition: str = "VMware vSphere Foundation (VVF)"  # shown on the report; final per vendor policy at quote time
     suggest_variants: bool = True    # add engine-suggested reference options (fewer cores / more RAM)
     advisory: AdvisoryThresholds = field(default_factory=AdvisoryThresholds)  # tunable advisory thresholds
 
@@ -300,7 +301,9 @@ def _suggest_variants(best_profile: HostProfile, best: Dict[str, Any], profiles:
     # Fewer cores when CPU is mostly idle (after losing the redundant hosts).
     cpu_fail = best["failure"]["cpuPct"] or 0
     lic_min = max(1, int(params.license_min_cores_per_socket or 0))
-    if cpu_fail < 50:
+    from . import platforms
+    per_core_licence = platforms.get(params)["license_unit"] == "core"
+    if cpu_fail < 50 and per_core_licence:
         for c in STD_CORES:
             if c >= lic_min and c < bp.cores_per_socket:
                 before = len(out)
@@ -351,6 +354,8 @@ def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostPro
 
 def assumption_rows(p: SizingParams) -> List[List[str]]:
     """[hạng mục, giá trị, ý nghĩa] — the assumptions table of the report."""
+    from . import platforms
+    pf = platforms.get(p)
     ht = max(1.0, p.ht_factor)
     rows = [
         ["Tỷ lệ chia sẻ CPU", f"{p.cpu_ratio:g} vCPU / thread (≈ {p.cpu_ratio * ht:g} vCPU / core)", "Số vCPU tối đa xếp lên 1 luồng CPU vật lý (HT ×" + f"{ht:g})"],
@@ -358,18 +363,23 @@ def assumption_rows(p: SizingParams) -> List[List[str]]:
         ["Vùng an toàn", f"{100 - p.max_util_pct:g}%", f"Mỗi host chỉ dùng tối đa {p.max_util_pct:g}%"],
         ["Dự phòng tăng trưởng", f"+{p.growth_pct:g}%", "Cộng vào nhu cầu ban đầu (tương đương năm thứ 1 của dự báo nếu bằng tăng trưởng hằng năm)"],
         ["Dự phòng sự cố", f"N+{p.redundancy}, tối thiểu {p.min_hosts} host", f"Mất {p.redundancy} host hệ thống vẫn chạy" if p.redundancy else "Không có host dự phòng"],
-        ["Tài nguyên dành cho ESXi", f"{p.reserve_cores:g} core + {p.reserve_ram_gb:g} GB / host", "Trừ khỏi năng lực khả dụng"],
+        ["Tài nguyên dành cho hypervisor", f"{p.reserve_cores:g} core + {p.reserve_ram_gb:g} GB / host",
+         f"{pf['hypervisor']}" + (f" và dịch vụ lưu trữ ({pf['hci']})" if p.storage_mode == "local" and pf.get("overhead_note") else "") + "; trừ khỏi năng lực khả dụng"],
     ]
     if p.storage_mode == "local":
-        rows.append(["Lưu trữ (vSAN)", f"Hệ số bảo vệ ×{p.storage_protection_factor:g}, dự trữ {p.storage_overhead_pct:g}%",
-                     "×2 tương đương RAID-1, chịu lỗi 1 host; dự trữ cho snapshot, swap, dựng lại dữ liệu"])
+        rows.append([f"Lưu trữ ({pf['hci']})", f"Hệ số bảo vệ ×{p.storage_protection_factor:g}, dự trữ {p.storage_overhead_pct:g}%",
+                     "×2 tương đương 2 bản sao (mirror), chịu lỗi 1 host; dự trữ cho snapshot, swap, dựng lại dữ liệu"])
     else:
         rows.append(["Lưu trữ (SAN)", f"Dự trữ {p.storage_overhead_pct:g}%", "Snapshot, swap, tăng trưởng ổ đĩa ảo, vùng trống tối thiểu"])
     rows.append(["Tăng trưởng hằng năm", f"{p.annual_growth_pct:g}% / năm, dự báo {p.horizon_years} năm",
                  "Dự báo tính lại từ nhu cầu ban đầu, không cộng dồn với dự phòng tăng trưởng"])
-    rows.append(["License", f"Theo core, tối thiểu {p.license_min_cores_per_socket} core / CPU",
-                 (f"{p.license_price_per_core:,.0f} / core / năm" if p.license_price_per_core is not None else "Chưa có đơn giá")
-                 + f"; {p.license_edition}"])
+    unit = "socket" if pf["license_unit"] == "socket" else "core"
+    lic_rule = ("Theo CPU socket" if unit == "socket" else
+                f"Theo core, tối thiểu {p.license_min_cores_per_socket} core / CPU"
+                + (f", {pf['license_min_per_host']} core / host" if pf.get("license_min_per_host") else ""))
+    rows.append(["License", lic_rule,
+                 (f"{p.license_price_per_core:,.0f} / {unit} / năm" if p.license_price_per_core is not None else "Chưa có đơn giá")
+                 + f"; {platforms.edition_of(p)}"])
     return rows
 
 
@@ -400,8 +410,10 @@ def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Opt
                     + (" — sát mức tối đa." if fail.get("atLimit") else "."))
     else:
         fail_txt = f"Chưa đạt dự phòng N+{best['redundancy']} — cần thêm host hoặc giảm tỷ lệ chia sẻ."
+    from . import platforms
+    hci = platforms.get(params)["hci"]
     store_txt = (f"Lưu trữ cần cấp: {_tib(demand['storageNeededGB'])} trên SAN." if params.storage_mode == "san"
-                 else f"Lưu trữ vSAN: {_tib(demand['storageNeededGB'])} dung lượng thô (~{_tib(best['storage'].get('perHostNeededGB', 0))} mỗi host).")
+                 else f"Lưu trữ {hci}: {_tib(demand['storageNeededGB'])} dung lượng thô (~{_tib(best['storage'].get('perHostNeededGB', 0))} mỗi host).")
     bind = {"CPU": "CPU", "RAM": "RAM", "CPU & RAM": "cả CPU và RAM"}.get(best["binding"], best["binding"])
     detail = (f"Yếu tố quyết định số host là {bind}: cần {best['hostsForCpu']} host theo CPU, {best['hostsForRam']} host theo RAM, "
               f"cộng {best['redundancy']} host dự phòng. {fail_txt} {store_txt}")

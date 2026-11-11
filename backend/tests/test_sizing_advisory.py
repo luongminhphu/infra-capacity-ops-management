@@ -205,3 +205,35 @@ def test_full_report_structure_and_vn_numbers():
     assert report_sizing_full.vn("12,100.5 GB và 0.95 : 1, 2×32C") == "12.100,5 GB và 0,95 : 1, 2×32C"
     assert report_sizing_full._clean_note("EWS VM", "EWS VM: Engineering") == "Engineering"
     assert r["results"]
+
+
+def test_platform_vocabulary_and_licensing():
+    from app import platforms, report_sizing_full
+    vms = [sizing.VmSpec(name="APP", qty=6, vcpu=8, ram_gb=32, disk_gb=200), sizing.VmSpec(name="Domain Controller", qty=2, vcpu=2, ram_gb=8)]
+    prof = [sizing.HostProfile(name="2×16C / 512 GB", sockets=2, cores_per_socket=16, ram_gb=512, disk_gb=8000)]
+    for key in platforms.PLATFORM_KEYS:
+        pf = platforms.PLATFORMS[key]
+        p = sizing.SizingParams(platform=key, storage_mode="local", storage_protection_factor=2.0,
+                                license_min_cores_per_socket=pf["license_min_per_socket"], reserve_ram_gb=pf["reserve"]["ram_gb"])
+        r = sizing.build_sizing(vms, p, prof)
+        best = r["results"][r["recommendedIndex"]]
+        lic = best["advisory"]["license"]
+        assert lic["unit"] == pf["license_unit"]
+        html = report_sizing_full.render_full_html(vms, p, prof, customer_name="X")
+        text = " ".join(f["action"] + f["detail"] + f["title"] for f in r["analysis"]["findings"])
+        if key != "vmware":
+            # no VMware product names leak into other platforms' advice or design section
+            assert "vSphere" not in text and "vSAN" not in text and "DRS" not in text.replace("DRS tách", "")
+            design = html[html.index('id="sec-design"'):html.index('id="sec-scale"')]
+            assert "ESXi" not in design and "vCenter" not in design and "vSAN" not in design
+        if key != "generic":
+            assert pf["hypervisor"] in html and pf["hci_short"] in html
+    # licence units
+    hp = sizing.build_sizing(vms, sizing.SizingParams(platform="proxmox"), prof)
+    assert hp["results"][0]["advisory"]["license"]["coresTotal"] == 2 * hp["results"][0]["hostsTotal"]  # sockets
+    hv = sizing.build_sizing(vms, sizing.SizingParams(platform="hyperv", license_min_cores_per_socket=8),
+                             [sizing.HostProfile(name="1×8C", sockets=1, cores_per_socket=8, ram_gb=256)])
+    assert hv["results"][0]["advisory"]["license"]["coresPerHost"] == 16  # Windows Server: min 16 core / host
+    # Nutanix CVM reserve too low → warning
+    nx = sizing.build_sizing(vms, sizing.SizingParams(platform="nutanix", reserve_ram_gb=16), prof)
+    assert any(f["area"] == "Nền tảng" for f in nx["analysis"]["findings"])
