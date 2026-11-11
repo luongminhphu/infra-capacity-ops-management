@@ -18,6 +18,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from . import platforms, sizing
+from .report_view import customer_view
 from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc, html_to_pdf_bytes,
                          svg_bar_chart, svg_donut, svg_gauge)
 from .report_planning import _planning_css
@@ -236,14 +237,14 @@ def _summary(result, best, existing, currency, mode, target, include_new, includ
     box = _vn_html(box)
     why = result["recommendation"].get("why") or ""
     if opts.get("selectionNote"):
-        why = (why.rstrip(".") + ". " if why else "") + "Lý do: " + opts["selectionNote"].strip()
+        why = (why.rstrip(".") + ". " if why else "") + opts["selectionNote"].strip()
     why_html = f'<div class="callout" style="margin-top:8px;"><b>Lý do chọn phương án.</b> {esc(vn(why[len("Lý do chọn: "):] if why.startswith("Lý do chọn: ") else why))}</div>' if why else ""
     risk_line = (f'<div class="note-line">Rủi ro &amp; lưu ý: <b>{fc.get("critical", 0)} nghiêm trọng</b> · <b>{fc.get("warning", 0)} cảnh báo</b> · '
                  f'{fc.get("info", 0)} lưu ý' + (f' — chi tiết tại mục {opts["risksNum"]}.' if opts.get("risksNum") else '.') + '</div>')
     if opts.get("compact") and (result["analysis"].get("expandText")):
         why_html += f'<div class="note-line"><b>Mở rộng:</b> {esc(vn(result["analysis"]["expandText"]))}</div>'
     note = (opts.get("note") or "").strip()
-    note_html = ("<div class=\"callout note\" style=\"margin-top:8px;\"><b>Ghi chú của người lập.</b> "
+    note_html = ("<div class=\"callout note\" style=\"margin-top:8px;\"><b>Ghi chú.</b> "
                  + "<br/>".join(esc(x) for x in note.splitlines() if x.strip()) + "</div>") if note else ""
     return box + why_html + note_html + risk_line
 
@@ -355,7 +356,7 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
     p = result["params"]
     local = p["storage_mode"] == "local"
     any_price = any(r["advisory"]["costs"]["tco"] for r in rows if not r.get("suggested"))
-    labels = [r["profile"]["name"].replace(" (gợi ý)", "*") for r in rows]
+    labels = [r["profile"]["name"] + ("*" if r.get("suggested") else "") for r in rows]
     hosts_chart = svg_bar_chart(labels, [
         {"name": "Theo CPU", "color": COLORS["primary"], "values": [r["hostsForCpu"] for r in rows]},
         {"name": "Theo RAM", "color": COLORS["accent"], "values": [r["hostsForRam"] for r in rows]},
@@ -403,6 +404,9 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
     cost_html = ""
     has_sugg = any(r.get("suggested") for r in rows)
     basis_txt = {"tco": "TCO", "budget": "chi phí phần cứng", "cores": "số core license"}.get(result.get("costBasis"), "chi phí")
+    # The ranking rule is only printed when it is what produced the recommendation.
+    rule_txt = ("" if (result.get("selection") or {}).get("changedOption") else
+                f"Thứ tự xếp hạng: ít host nhất → không sát ngưỡng (còn dư địa) → {basis_txt} thấp nhất → điểm tổng hợp cao nhất.\n    ")
     score_html = (f'''<div class="keep" style="margin-top:8px;"><div class="sub-h">Bảng điểm (0–100, cao = tốt)</div>{score_tbl}</div>
     <div class="small-note">Số host, Chi phí: so với phương án tốt nhất (chi phí theo {basis_txt}). Hiệu suất: mức dùng của yếu tố quyết định khi mất host.
     Cân đối: độ chênh giữa mức dùng CPU và RAM. Chịu lỗi: mức tải khi mất host. Mở rộng: dư địa tăng trưởng. NUMA: tỷ lệ VM nằm gọn trong một CPU.</div>''')
@@ -412,9 +416,8 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
     return f"""
     {chart_html}
     <div class="keep" style="margin-top:8px;">{cmp_tbl}</div>
-    <div class="small-note">Quy tắc chọn: ít host nhất → không sát ngưỡng (còn dư địa) → {basis_txt} thấp nhất → điểm tổng hợp cao nhất.
-    “Mất 1 host” là mức dùng trên phần năng lực khả dụng của các host còn lại; tối đa cho phép {n(p['max_util_pct'])}%.
-    {'Dòng in nghiêng (*) là phương án tham khảo do hệ thống gợi ý, không thuộc danh sách ứng viên ban đầu.' if has_sugg else ''}</div>
+    <div class="small-note">{rule_txt}“Mất 1 host” là mức dùng trên phần năng lực khả dụng của các host còn lại; tối đa cho phép {n(p['max_util_pct'])}%.
+    {'Phương án đánh dấu (*) là cấu hình tham khảo để so sánh, không xếp hạng.' if has_sugg else ''}</div>
     {score_html if show.get("scores", True) else ""}
     {cost_html}"""
 
@@ -654,7 +657,7 @@ def _design(result, best, params, num: str = "5", show: Optional[Dict[str, bool]
     spec = [
         ("Cấu hình mỗi host", f"{prof['sockets']} CPU × {prof['coresPerSocket']} core = {prof['cores']} core ({n(prof['cores'] * max(1.0, p['ht_factor']))} thread) · {ram(prof['ramGB'])} RAM"),
         ("Số host", f"{best['hostsTotal']} host = {best['hostsBase']} theo tải + {best['redundancy']} dự phòng"
-                    + (f" + {best['hostsTotal'] - best['hostsComputed']} bổ sung theo lựa chọn của người lập" if best.get("hostsForced") else
+                    + (f" + {best['hostsTotal'] - best['hostsComputed']} dư địa mở rộng" if best.get("hostsForced") else
                        (f" (tối thiểu {p['min_hosts']})" if best["hostsTotal"] > best["hostsBase"] + best["redundancy"] else ""))),
         ("Năng lực khả dụng / host", f"{n(ph['usableCores'])} core · {n(ph['logicalCpu'])} thread · {ram(ph['usableRamGB'])} RAM (đã trừ phần dành cho hypervisor)"),
         ("Tổng cụm", f"{n(best['totals']['cores'])} core · {ram(best['totals']['ramGB'])} RAM"),
@@ -776,7 +779,7 @@ def _tco(result, best, currency, compact: bool = False) -> str:
     <div class="chart-card keep" style="margin-top:8px;"><div class="chart-card-title">Chi phí theo năm và lũy kế</div>{svg_yearly_tco(c['yearly'], currency)}{leg}</div>
     {"" if len(opts) < 2 else f'<div class="keep"><div class="sub-h">So sánh TCO giữa các phương án</div>{cmp_tbl}<div class="chart-card" style="margin-top:6px;">{bars}{_legend([(COST_COLORS["hw"], "Phần cứng"), (COST_COLORS["lic"], "License"), (COST_COLORS["war"], "Dịch vụ bảo hành HW")])}</div></div>'}
     <div class="small-note">TCO chỉ gồm phần cứng, gia hạn bảo hành và license theo đơn giá đã nhập; chưa gồm dịch vụ triển khai, điện, không gian và chi phí vận hành.
-    {"Phương án tham khảo chưa có đơn giá phần cứng nên không đưa vào so sánh TCO." if any(r.get("suggested") and not _tco_comparable(r, result) for r in result["results"]) else ""}</div>"""
+</div>"""
 
 
 def _scale(result, best_idx, params) -> str:
@@ -860,7 +863,7 @@ def _method(result, best, params, num: str = "9", compact: bool = False) -> str:
         ["3. Số host theo tải", "Bước 1 ÷ Bước 2, làm tròn lên",
          f"{n(calc['cpuHostsRaw'], 2)} → {best['hostsForCpu']}", f"{n(calc['ramHostsRaw'], 2)} → {best['hostsForRam']}"],
         ["4. Cộng dự phòng", f"max(CPU, RAM) + {best['redundancy']}" + (f", tối thiểu {p['min_hosts']}" if p["min_hosts"] > best["hostsBase"] + best["redundancy"] else ""),
-         {"span": (f"{best['hostsComputed']} host theo tính toán → <b>{best['hostsTotal']} host</b> theo lựa chọn của người lập"
+         {"span": (f"<b>{best['hostsTotal']} host</b> (gồm {best['hostsTotal'] - best['hostsComputed']} host dư địa mở rộng)"
                    if best.get("hostsForced") else f"<b>{best['hostsTotal']} host</b>")}, None],
         [f"5. Kiểm tra mất {best['redundancy']} host", f"Nhu cầu ÷ năng lực khả dụng {f['hostsLeft']} host còn lại",
          pct(f["cpuPct"]) + warn(f["cpuPct"]), pct(f["ramPct"]) + warn(f["ramPct"])],
@@ -1077,7 +1080,7 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
     compact_off = {"scope", "demand", "scale", "plan", "glossary", "scores", "arch", "alloc"} if compact else set()
     on = lambda k: sections.get(k, k not in compact_off) is not False  # noqa: E731
 
-    result = sizing.build_sizing(vms, params, profiles)
+    result = customer_view(sizing.build_sizing(vms, params, profiles))
     _apply_report_options(result, opts)
     best_idx = result["recommendedIndex"]
     best = result["results"][best_idx] if best_idx is not None else None
