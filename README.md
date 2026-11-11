@@ -167,7 +167,7 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   1 Tóm tắt (một bộ KPI duy nhất, lý do chọn phương án) · 2 Phạm vi & dữ liệu đầu vào (nguồn, ngày nhận, trong/ngoài phạm vi, quy ước) ·
   3 Nhu cầu tài nguyên · 4 So sánh phương án (bảng điểm, không dùng radar) · 5 Cấu hình đề xuất (thông số cụm, BOM sơ bộ, kiến trúc
   logic, phân bổ năng lực) · 6 Khả năng mở rộng · 7 Rủi ro & khuyến nghị · 8 Kế hoạch triển khai · 9 Giả định & cách tính (bảng giả
-  định + bảng tính từng bước) · Phụ lục A Danh sách máy ảo · B Ngưỡng đánh giá · C Thuật ngữ. Đầu trang:
+  định + bảng tính từng bước) · Phụ lục A Danh sách máy ảo · B Thuật ngữ. Đầu trang:
   "<đơn vị tư vấn> · Đề xuất cấu hình máy chủ – <khách hàng>"; một lề duy nhất khai báo trong `@page`; số theo định dạng Việt Nam;
   dung lượng theo TiB (1 TiB = 1.024 GB). Trường mới của payload: `customerContact`, `version`, `versionNote`, `approvedBy`,
   `inputSource`, `inputDate`, `outOfScope`; tham số `license_edition`, `suggest_variants`.

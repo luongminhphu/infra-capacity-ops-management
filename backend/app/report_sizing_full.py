@@ -5,7 +5,7 @@ Structure (short, plain headings):
   1 Tóm tắt · 2 Phạm vi & dữ liệu đầu vào · [Hạ tầng hiện hữu] · 3 Nhu cầu tài nguyên
   4 So sánh phương án · 5 Cấu hình đề xuất · 6 Khả năng mở rộng · 7 Rủi ro & khuyến nghị
   8 Kế hoạch triển khai · 9 Giả định & cách tính
-  Phụ lục A. Danh sách máy ảo · B. Ngưỡng đánh giá · C. Thuật ngữ
+  Phụ lục A. Danh sách máy ảo · B. Thuật ngữ
 
 Conventions: one vocabulary ("host" after first mention, "tỷ lệ chia sẻ", "vùng an toàn",
 "yếu tố quyết định", "luồng CPU (thread)"), Vietnamese number format (1.234,5),
@@ -17,7 +17,7 @@ import math
 import re
 from typing import Any, Dict, List, Optional
 
-from . import sizing, sizing_advisory
+from . import sizing
 from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc, html_to_pdf_bytes,
                          svg_bar_chart, svg_donut, svg_gauge)
 from .report_planning import _planning_css
@@ -150,7 +150,7 @@ TOC_BASE = [("sec-summary", "1", "Tóm tắt"), ("sec-scope", "2", "Phạm vi & 
             ("sec-design", "5", "Cấu hình đề xuất"), ("sec-scale", "6", "Khả năng mở rộng"),
             ("sec-risks", "7", "Rủi ro & khuyến nghị"), ("sec-plan", "8", "Kế hoạch triển khai"),
             ("sec-method", "9", "Giả định & cách tính"), ("app-vms", "A", "Phụ lục A. Danh sách máy ảo"),
-            ("app-thresholds", "B", "Phụ lục B. Ngưỡng đánh giá"), ("app-glossary", "C", "Phụ lục C. Thuật ngữ")]
+            ("app-glossary", "B", "Phụ lục B. Thuật ngữ")]
 
 
 def _cover(result, best, params, doc: Dict[str, str], logo_html: str, toc: List[tuple]) -> str:
@@ -239,7 +239,7 @@ def _scope(result, params, doc: Dict[str, Any]) -> str:
         ("Trong phạm vi", "<ul class='tight'>" + "".join(f"<li>{esc(x)}</li>" for x in in_scope) + "</ul>"),
         ("Ngoài phạm vi", "<ul class='tight'>" + "".join(f"<li>{esc(x)}</li>" for x in out_scope) + "</ul>"),
         ("Quy ước", "Máy chủ vật lý chạy ESXi gọi là <b>host</b>. Số liệu dùng dấu chấm phân cách hàng nghìn, dấu phẩy thập phân. "
-                    "Dung lượng theo hệ nhị phân: 1 TiB = 1.024 GB. Thuật ngữ: xem Phụ lục C."),
+                    "Dung lượng theo hệ nhị phân: 1 TiB = 1.024 GB. Thuật ngữ: xem Phụ lục B."),
     ]
     return _kv_table(rows, key_w="24%")
 
@@ -710,23 +710,6 @@ def _vm_appendix(vms: List[Dict[str, Any]], d: Dict[str, Any]) -> str:
     return _table(header, rows, cls="appendix-table", aligns=aligns)
 
 
-def _thresholds(result) -> str:
-    th = (result.get("analysis") or {}).get("thresholds") or {}
-    defaults = sizing_advisory.AdvisoryThresholds().__dict__
-    rows, kw = [], []
-    for key, label, unit in sizing_advisory.THRESHOLD_META:
-        v = th.get(key, defaults.get(key))
-        changed = v != defaults.get(key)
-        if key.endswith("_keywords"):
-            kw.append((label, v, changed))
-            continue
-        val = f"{n(v, 2).rstrip('0').rstrip(',')} {unit}".strip() if isinstance(v, (int, float)) else str(v)
-        rows.append([esc(label), f'<span style="white-space:nowrap;{"font-weight:700;color:" + COLORS["primary_dark"] + ";" if changed else ""}">{esc(val)}{" *" if changed else ""}</span>'])
-    t = _table(["Ngưỡng", "Giá trị"], rows, cls="method-table", aligns=["left", "right"], widths=["78%", "22%"])
-    kws = "".join(f'<div class="small-note"><b>{esc(lbl)}{" *" if ch else ""}:</b> {esc(v)}</div>' for lbl, v, ch in kw)
-    return t + kws + '<div class="small-note">Dấu * = đã điều chỉnh so với mặc định.</div>'
-
-
 def _glossary() -> str:
     return _table(["Thuật ngữ", "Giải thích"], [[f"<b>{esc(k)}</b>", esc(v)] for k, v in GLOSSARY], cls="method-table glossary", widths=["24%", "76%"])
 
@@ -891,8 +874,7 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
     secs.append(_section("sec-method", "9", "Giả định & cách tính", "", _method(result, best, params)))
     vm_dicts = [{"name": v.name, "qty": v.qty, "vcpu": v.vcpu, "ramGB": v.ram_gb, "diskGB": v.disk_gb, "note": v.note} for v in vms]
     secs.append(_section("app-vms", "", "Phụ lục A. Danh sách máy ảo", "Theo dữ liệu khách hàng cung cấp.", _vm_appendix(vm_dicts, result["demand"]), "appendix"))
-    secs.append(_section("app-thresholds", "", "Phụ lục B. Ngưỡng đánh giá", "Các ngưỡng dùng để phân loại workload, đưa ra cảnh báo và chấm điểm.", _thresholds(result)))
-    secs.append(_section("app-glossary", "", "Phụ lục C. Thuật ngữ", "", _glossary()))
+    secs.append(_section("app-glossary", "", "Phụ lục B. Thuật ngữ", "", _glossary()))
 
     header_left = " · ".join(x for x in [doc["org"], "Đề xuất cấu hình máy chủ" + (f" – {doc['customer']}" if doc["customer"] else "")] if x)
     header_right = " · ".join(x for x in [doc["code"], f"Phiên bản {doc['version']}"] if x)
