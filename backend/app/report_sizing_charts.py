@@ -276,27 +276,80 @@ def svg_stack_bars(rows: List[Dict[str, Any]], width: int = 680, label_w: int = 
     return "".join(parts)
 
 
+COST_COLORS = {"hw": "#2681FF", "war": "#f59e0b", "lic": "#0891b2"}
+
+
 def svg_cost_bars(rows: List[Dict[str, Any]], currency: str, width: int = 330) -> str:
-    """Stacked hardware + license TCO per candidate. rows: [{label, hw, lic, best}]."""
-    rows = [r for r in rows if (r.get("hw") or 0) + (r.get("lic") or 0) > 0]
+    """Stacked TCO per candidate: hardware + warranty extension + licence. rows: [{label, hw, war, lic, best}]."""
+    tot = lambda r: (r.get("hw") or 0) + (r.get("war") or 0) + (r.get("lic") or 0)  # noqa: E731
+    rows = [r for r in rows if tot(r) > 0]
     if not rows:
         return EMPTY
-    label_w, pad_r, row_h = 92, 58, 20
+    label_w, pad_r, row_h = 110, 62, 20
     plot_w = width - label_w - pad_r
-    mx = max((r.get("hw") or 0) + (r.get("lic") or 0) for r in rows) or 1.0
+    mx = max(tot(r) for r in rows) or 1.0
     h = len(rows) * row_h + 4
     parts = [f'<svg width="{width}" height="{h}" viewBox="0 0 {width} {h}" {FONT}>']
     for i, r in enumerate(rows):
         y = 2 + i * row_h
         bh = row_h - 7
-        hw, lic = r.get("hw") or 0.0, r.get("lic") or 0.0
-        w1, w2 = hw / mx * plot_w, lic / mx * plot_w
-        name = str(r["label"])[:18]
+        name = str(r["label"])[:22]
         weight = "800" if r.get("best") else "400"
         parts.append(f'<text x="{label_w - 5}" y="{y + bh / 2 + 3:.1f}" text-anchor="end" font-size="7.8" font-weight="{weight}" fill="{COLORS["ink"]}">{esc(name)}</text>')
-        parts.append(f'<rect x="{label_w}" y="{y}" width="{max(0.5, w1):.1f}" height="{bh}" fill="{COLORS["primary"]}"/>')
-        if w2 > 0:
-            parts.append(f'<rect x="{label_w + w1:.1f}" y="{y}" width="{w2:.1f}" height="{bh}" fill="{COLORS["accent"]}" fill-opacity="0.55"/>')
-        parts.append(f'<text x="{label_w + w1 + w2 + 4:.1f}" y="{y + bh / 2 + 3:.1f}" font-size="7.4" font-weight="700" fill="{COLORS["ink"]}">{esc(money_short(hw + lic, currency))}</text>')
+        x = label_w
+        for key in ("hw", "war", "lic"):
+            w = (r.get(key) or 0) / mx * plot_w
+            if w > 0:
+                parts.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="{bh}" fill="{COST_COLORS[key]}"/>')
+                x += w
+        parts.append(f'<text x="{x + 4:.1f}" y="{y + bh / 2 + 3:.1f}" font-size="7.4" font-weight="700" fill="{COLORS["ink"]}">{esc(money_short(tot(r), currency))}</text>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def svg_yearly_tco(yearly: List[Dict[str, Any]], currency: str, width: int = 680, height: int = 190) -> str:
+    """Stacked columns per year (hardware / warranty / licence) + cumulative line on a secondary axis."""
+    if not yearly:
+        return EMPTY
+    pad_l, pad_r, pad_t, pad_b = 46, 58, 16, 30
+    plot_w, plot_h = width - pad_l - pad_r, height - pad_t - pad_b
+    n = len(yearly)
+    gw = plot_w / n
+    bw = min(64.0, gw * 0.52)
+    mx = _nice_ceiling(max(y["total"] for y in yearly) * 1.15)
+    cmx = _nice_ceiling(max(y["cumulative"] for y in yearly) * 1.08)
+
+    def y_of(v, m):
+        return pad_t + plot_h * (1 - max(0.0, min(1.0, v / m)))
+
+    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" {FONT}>',
+             f'<rect x="{pad_l}" y="{pad_t}" width="{plot_w:.1f}" height="{plot_h:.1f}" rx="4" fill="{COLORS["surface2"]}"/>']
+    for i in range(5):
+        v = mx * i / 4
+        y = y_of(v, mx)
+        parts.append(f'<line x1="{pad_l}" y1="{y:.1f}" x2="{pad_l + plot_w:.1f}" y2="{y:.1f}" stroke="#fff" stroke-width="1.1"/>')
+        parts.append(f'<text x="{pad_l - 4}" y="{y + 3:.1f}" text-anchor="end" font-size="7" fill="{COLORS["muted"]}">{esc(money_short(v, currency))}</text>')
+        parts.append(f'<text x="{pad_l + plot_w + 4}" y="{y + 3:.1f}" font-size="7" fill="{COLORS["primary_dark"]}">{esc(money_short(cmx * i / 4, currency))}</text>')
+    pts = []
+    for i, yr in enumerate(yearly):
+        cx = pad_l + gw * i + gw / 2
+        x = cx - bw / 2
+        base = pad_t + plot_h
+        for key, val in (("hw", yr.get("hardware")), ("war", yr.get("warranty")), ("lic", yr.get("license"))):
+            if val:
+                hgt = val / mx * plot_h
+                parts.append(f'<rect x="{x:.1f}" y="{base - hgt:.1f}" width="{bw:.1f}" height="{hgt:.1f}" fill="{COST_COLORS[key]}"/>')
+                base -= hgt
+        parts.append(f'<text x="{cx:.1f}" y="{base - 3:.1f}" text-anchor="middle" font-size="7.4" font-weight="700" fill="{COLORS["ink"]}">{esc(money_short(yr["total"], currency))}</text>')
+        lbl = f"Năm {yr['year']}"
+        parts.append(f'<text x="{cx:.1f}" y="{pad_t + plot_h + 10:.1f}" text-anchor="middle" font-size="7.4" font-weight="700" fill="{COLORS["muted"]}">{lbl}</text>')
+        sub = "trong bảo hành" if yr.get("inWarranty") else ("gia hạn BH" if yr.get("warranty") else "chưa có giá BH")
+        parts.append(f'<text x="{cx:.1f}" y="{pad_t + plot_h + 19:.1f}" text-anchor="middle" font-size="6.6" fill="{COLORS["faint"]}">{sub}</text>')
+        pts.append((cx, y_of(yr["cumulative"], cmx)))
+    d = " ".join(f"{'M' if k == 0 else 'L'} {x:.1f} {y:.1f}" for k, (x, y) in enumerate(pts))
+    parts.append(f'<path d="{d}" fill="none" stroke="{COLORS["primary_dark"]}" stroke-width="1.6" stroke-dasharray="4 2"/>')
+    for x, y in pts:
+        parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.4" fill="#fff" stroke="{COLORS["primary_dark"]}" stroke-width="1.4"/>')
+    parts.append(f'<text x="{pad_l + plot_w + 4}" y="{pad_t - 5}" font-size="6.8" font-weight="700" fill="{COLORS["primary_dark"]}">Lũy kế</text>')
     parts.append("</svg>")
     return "".join(parts)

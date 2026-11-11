@@ -318,15 +318,49 @@ def _license(r: Dict[str, Any], params) -> Dict[str, Any]:
 
 
 def _costs(r: Dict[str, Any], lic: Dict[str, Any], demand: Dict[str, Any], params) -> Dict[str, Any]:
+    """Year-by-year TCO: hardware in year 1 (warranty for `warranty_included_years` included in the price),
+    warranty extension per host per year afterwards (amount or % of the host price), licence every year."""
+    years = max(1, min(10, int(getattr(params, "tco_years", 0) or params.horizon_years or 1)))
+    inc = max(0, min(years, int(getattr(params, "warranty_included_years", 0) or 0)))
+    mode = getattr(params, "warranty_ext_mode", "amount")
+    vals = list(getattr(params, "warranty_ext_values", None) or [])
+    hosts = r["hostsTotal"] or 0
+    price = r["profile"].get("unitPrice")
     hw = r["budget"]
-    years = max(1, int(params.horizon_years or 1))
-    lic_total = lic["yearlyCost"] * years if lic["yearlyCost"] is not None else None
-    if hw is None and lic_total is None:
-        return {"hardware": None, "license": None, "tco": None, "years": years, "perVm": None, "perVcpu": None, "perGbRam": None, "perVmMonth": None}
-    tco = (hw or 0.0) + (lic_total or 0.0)
+    lic_year = lic["yearlyCost"]
+    yearly, missing = [], []
+    cum = 0.0
+    for y in range(1, years + 1):
+        hw_y = (hw if y == 1 else 0.0) if hw is not None else None
+        if y <= inc:
+            war_y = 0.0
+        else:
+            v = vals[y - inc - 1] if y - inc - 1 < len(vals) else None
+            if v is None:
+                war_y = None
+                missing.append(y)
+            elif mode == "pct":
+                war_y = (price * v / 100.0 * hosts) if price is not None else None
+                if price is None:
+                    missing.append(y)
+            else:
+                war_y = v * hosts
+        total = sum(x for x in (hw_y, war_y, lic_year) if x is not None)
+        cum += total
+        yearly.append({"year": y, "hardware": hw_y, "warranty": war_y, "license": lic_year, "total": total, "cumulative": cum,
+                       "inWarranty": y <= inc})
+    known = [x for row in yearly for x in (row["hardware"], row["warranty"], row["license"]) if x is not None]
+    base = {"years": years, "warrantyIncludedYears": inc, "warrantyMode": mode, "warrantyMissingYears": missing}
+    if not known or not any(known):
+        return {**base, "hardware": None, "warranty": None, "license": None, "tco": None, "yearly": [], "perVm": None,
+                "perVcpu": None, "perGbRam": None, "perVmMonth": None}
+    war_vals = [row["warranty"] for row in yearly if row["warranty"] is not None]
+    lic_total = lic_year * years if lic_year is not None else None
+    tco = cum
     vms = demand["vmCount"] or 0
     return {
-        "hardware": hw, "license": lic_total, "tco": tco, "years": years,
+        **base,
+        "hardware": hw, "warranty": sum(war_vals) if war_vals else None, "license": lic_total, "tco": tco, "yearly": yearly,
         "perVm": tco / vms if vms else None,
         "perVcpu": tco / demand["vcpu"] if demand["vcpu"] else None,
         "perGbRam": tco / demand["ramGB"] if demand["ramGB"] else None,
@@ -615,6 +649,15 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     if params.growth_pct <= 0:
         out.append(_finding("info", "Tăng trưởng", "Chưa tính dự phòng tăng trưởng",
                             "Nhu cầu tài nguyên thường tăng 15–30% trong năm đầu vận hành.", "Đặt dự phòng tăng trưởng 15–25%."))
+
+    # TCO completeness
+    c = a["costs"]
+    if c.get("tco") and c.get("warrantyMissingYears"):
+        yrs = ", ".join(str(y) for y in c["warrantyMissingYears"])
+        out.append(_finding("info", "Chi phí", f"TCO {c['years']} năm chưa gồm gia hạn bảo hành năm {yrs}",
+                            f"Bảo hành kèm theo phần cứng {c['warrantyIncludedYears']} năm; chưa nhập chi phí gia hạn cho năm {yrs}"
+                            + (" (tính theo % cần có đơn giá host)." if c.get("warrantyMode") == "pct" else "."),
+                            "Nhập chi phí gia hạn bảo hành từng năm để TCO đầy đủ."))
 
     # Licensing
     lic = a["license"]

@@ -76,7 +76,13 @@ class SizingParams:
     environment: str = ""            # free text shown on the report, e.g. "Core Banking phase 2"
     # Advisory / costing (see sizing_advisory.py)
     annual_growth_pct: float = 15.0  # yearly organic growth used for the multi-year projection
-    horizon_years: int = 3           # projection horizon and TCO period
+    horizon_years: int = 3           # capacity projection horizon (years)
+    # TCO model: hardware bought in year 1 with `warranty_included_years` of warranty in the price; the
+    # remaining years carry a warranty-extension cost entered per year; licence is a yearly subscription.
+    tco_years: int = 5
+    warranty_included_years: int = 3
+    warranty_ext_mode: str = "amount"   # 'amount' = currency / host / year · 'pct' = % of the host unit price / year
+    warranty_ext_values: List[Optional[float]] = field(default_factory=list)  # one value per extension year (year included+1 …)
     license_price_per_core: Optional[float] = None  # per-core subscription price per year (VCF/VVF-style), optional
     license_min_cores_per_socket: int = 16          # per-core licensing minimum per CPU socket
     optimize_for: str = "hosts"      # 'hosts' = fewest hosts first · 'cost' = lowest TCO first (when priced)
@@ -262,7 +268,7 @@ def _is_tight(r: Dict[str, Any], params: "SizingParams") -> bool:
 
 
 def _rank_key(r: Dict[str, Any], params: "SizingParams", basis: str):
-    """Fewest hosts → lowest cost (same basis for all options) → not sitting at the limit →
+    """Fewest hosts → not sitting at the limit → lowest cost (same basis for all options) →
     highest overall score. (Previously ties went to the *most utilised* option, which picked
     configurations with no growth headroom.)"""
     hosts = r["hostsTotal"] if r["hostsTotal"] else 10**9
@@ -271,7 +277,9 @@ def _rank_key(r: Dict[str, Any], params: "SizingParams", basis: str):
     score = -((r.get("advisory") or {}).get("scoreTotal") or 0)
     if params.optimize_for == "cost":
         return (cost, hosts, tight, score)
-    return (hosts, cost, tight, score)
+    # Safety before price: among options with the same host count, one that sits at the limit
+    # (no headroom after losing a host) is never preferred just because it is cheaper.
+    return (hosts, tight, cost, score)
 
 
 STD_CORES = [8, 12, 16, 24, 32, 48, 64, 96, 128]
@@ -431,6 +439,17 @@ def assumption_rows(p: SizingParams) -> List[List[str]]:
         rows.append(["Lưu trữ (SAN)", f"Dự trữ {p.storage_overhead_pct:g}%", "Snapshot, swap, tăng trưởng ổ đĩa ảo, vùng trống tối thiểu"])
     rows.append(["Tăng trưởng hằng năm", f"{p.annual_growth_pct:g}% / năm, dự báo {p.horizon_years} năm",
                  "Dự báo tính lại từ nhu cầu ban đầu, không cộng dồn với dự phòng tăng trưởng"])
+    years = max(1, int(p.tco_years or 1))
+    inc = max(0, min(years, int(p.warranty_included_years or 0)))
+    ext_years = list(range(inc + 1, years + 1))
+    if ext_years:
+        vals = list(p.warranty_ext_values or [])
+        unit_txt = "% giá host / năm" if p.warranty_ext_mode == "pct" else " / host / năm"
+        ext_txt = "; ".join(f"năm {y}: " + (f"{vals[i]:,.0f}{unit_txt}" if p.warranty_ext_mode != "pct" else f"{vals[i]:g}{unit_txt}")
+                            if i < len(vals) and vals[i] is not None else f"năm {y}: chưa nhập" for i, y in enumerate(ext_years))
+    else:
+        ext_txt = "không có năm gia hạn"
+    rows.append(["TCO", f"{years} năm", f"Năm 1 mua phần cứng, bảo hành {inc} năm kèm theo giá mua; gia hạn bảo hành — {ext_txt}; license tính theo từng năm"])
     unit = "socket" if pf["license_unit"] == "socket" else "core"
     lic_rule = ("Theo CPU socket" if unit == "socket" else
                 f"Theo core, tối thiểu {p.license_min_cores_per_socket} core / CPU"
