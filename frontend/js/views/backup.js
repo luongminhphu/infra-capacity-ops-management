@@ -6,6 +6,7 @@
    Scope: NetBackup server + period selected in the page header.
    ========================================================= */
 
+const BK_TTL_MS = 60 * 1000;
 const BK_STATUS = { ok: 'Đạt', warn: 'Cần theo dõi', crit: 'Cần xử lý', na: 'Không hoạt động' };
 const BK_SEV = { critical: { cls: 'crit', label: 'Nghiêm trọng' }, warning: { cls: 'warn', label: 'Cảnh báo' }, info: { cls: 'na', label: 'Lưu ý' } };
 const BK_OUTCOME = { success: { cls: 'ok', label: 'Thành công' }, partial: { cls: 'warn', label: 'Một phần' }, failed: { cls: 'crit', label: 'Lỗi' }, running: { cls: 'na', label: 'Đang chạy' } };
@@ -18,7 +19,7 @@ function bkState() {
       loading: false, error: null, bound: false, charts: {},
       clientFilter: { status: 'all', q: '' }, jobFilter: { outcome: 'failed', category: 'backup', q: '' }, covFilter: { state: 'unprotected', q: '', vc: 'all', cl: 'all' },
       scope: null, scopeEdit: null,
-      lastKey: null,
+      lastKey: null, loadedAt: 0,
     };
   }
   return appState.backup;
@@ -53,6 +54,7 @@ async function bkLoad(force) {
     if (!st.servers || force) await bkLoadServers();
     st.summary = await api.bkSummary(st.server, st.days);
     st.lastKey = key;
+    st.loadedAt = Date.now();
     st.jobs = null;
     st.error = null;
   } catch (err) {
@@ -255,7 +257,7 @@ function bkJobs() {
 
 function bkCoverage(s) {
   const cov = s.coverage;
-  if (!cov.available) return '<section class="table-card"><div class="empty-note">Chưa có inventory vCenter để đối chiếu. Đồng bộ vCenter (nút “Đồng bộ ngay”) rồi tải lại trang này.</div></section>';
+  if (!cov.available) return `${bkScopePanel(cov)}<section class="table-card"><div class="empty-note">Chưa có inventory vCenter để đối chiếu. Bấm “Đồng bộ ngay” (vCenter) — trang này tự cập nhật sau khi đồng bộ xong.</div></section>`;
   const f = bkState().covFilter;
   const q = f.q.trim().toLowerCase();
   const pass = (v) => (f.vc === 'all' || (v.vcenterKey || 'import') === f.vc) && (f.cl === 'all' || v.cluster === f.cl);
@@ -649,6 +651,18 @@ async function renderBackupView() {
     renderBackupBody();
     return;
   }
-  if (!st.summary) { renderBackupBody(); await bkLoad(false); }
+  // Reload when the data is older than BK_TTL_MS or was invalidated (vCenter / NetBackup sync,
+  // scheduler poll): coverage depends on the vCenter inventory, which changes outside this page.
+  const stale = !st.summary || (Date.now() - (st.loadedAt || 0)) > BK_TTL_MS;
+  if (stale) { renderBackupBody(); await bkLoad(true); }
   renderBackupBody();
+}
+
+/* Called after a vCenter sync elsewhere in the app: the next visit (or the current page) reloads. */
+function bkInvalidate() {
+  if (!appState.backup) return;
+  const st = bkState();
+  st.loadedAt = 0;
+  st.scope = null;
+  if (appState.view === 'backup') renderBackupView();
 }

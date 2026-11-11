@@ -20,12 +20,10 @@ spec:
       labels:
         app: ico-app
     spec:
-      # Image ghcr.io/luongminhphu/infra-capacity-ops-management-app là PUBLIC —
-      # không cần imagePullSecrets. Nếu sau này bạn chuyển package về Private (hoặc
-      # GitHub tự đổi lại do "Inherit access from source repository"), thêm lại:
-      #   imagePullSecrets:
-      #     - name: ghcr-pull-secret
-      # và tạo secret đó theo hướng dẫn trong README.md.
+      # Package GHCR private: kéo image bằng Secret ghcr-pull-secret (PAT classic, quyền read:packages),
+      # tạo theo README. Package Public thì Secret không có cũng không sao — kubelet kéo ẩn danh.
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       # Đợi Postgres sẵn sàng trước khi app khởi động (tránh crash-loop lúc cụm vừa lên).
       initContainers:
         - name: wait-postgres

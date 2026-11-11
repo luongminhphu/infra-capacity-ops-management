@@ -657,6 +657,7 @@ async function handleSyncNow() {
     await refreshVcenterList();
     await loadLiveData();
     showValidationBanner([], [`Đã đồng bộ dữ liệu từ vCenter lúc ${new Date().toLocaleString('vi-VN')}.`]);
+    if (typeof bkInvalidate === 'function') bkInvalidate();
   } catch (err) {
     showValidationBanner([`Đồng bộ vCenter thất bại: ${err.message}`], []);
   } finally {
