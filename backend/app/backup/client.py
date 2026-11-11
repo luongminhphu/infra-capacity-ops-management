@@ -285,7 +285,13 @@ class NetBackupClient:
             except Exception:  # noqa: BLE001
                 pass
             if exc.code == 401:
-                raise NetBackupError("NetBackup từ chối xác thực (401) — kiểm tra API key / tài khoản read-only.") from exc
+                if path == "/login":
+                    raise NetBackupError(
+                        f"Đăng nhập NetBackup thất bại (401{': ' + detail if detail else ''}) — kiểm tra mật khẩu và "
+                        f"DOMAIN_TYPE={self.cfg.domain_type} / DOMAIN_NAME={self.cfg.domain_name or self.cfg.host} của user "
+                        f"{self.cfg.username}.") from exc
+                raise NetBackupError(f"NetBackup từ chối xác thực (401{': ' + detail if detail else ''}) — kiểm tra API key / "
+                                     "tài khoản read-only.") from exc
             if exc.code == 403:
                 raise NetBackupError(f"Tài khoản không có quyền đọc {path} (403) — bổ sung quyền View trong RBAC role.") from exc
             if exc.code == 406:
