@@ -57,5 +57,7 @@ data:
   NETBACKUP_1_HOST: "nbu-primary01.yourcompany.local"
   NETBACKUP_1_PORT: "1556"
   NETBACKUP_1_VERIFY_SSL: "false"
+  # Bật VERIFY_SSL="true" thì mount CA NetBackup vào pod (xem k8s/04-app.yaml) và trỏ tới file:
+  # NETBACKUP_1_CA_CERT: "/etc/netbackup-ca/ca.pem"
   NETBACKUP_1_API_VERSION: "8.0"
   NETBACKUP_1_DEMO: "false"

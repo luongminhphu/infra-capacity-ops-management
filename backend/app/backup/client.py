@@ -16,6 +16,7 @@ stays None instead of failing the whole sync.
 import datetime as dt
 import json
 import logging
+import os
 import ssl
 import urllib.error
 import urllib.parse
@@ -37,6 +38,31 @@ RESTORE_TYPES = {"RESTORE", "SNAPRESTORE", "INSTANT_RECOVERY"}
 
 class NetBackupError(Exception):
     """Connection / authentication / permission problem, with a message an operator can act on."""
+
+
+def nbu_ssl_context(cfg: NetBackupConfig) -> ssl.SSLContext:
+    """TLS context for one NetBackup primary server only — vCenter connections are untouched.
+
+    * verify_ssl off → encrypted but unverified (NetBackup ships a self-signed CA).
+    * verify_ssl on  → verify against ``cfg.ca_cert`` (the NetBackup CA, PEM) or the system
+      trust store. The NetBackup internal CA has no keyUsage extension, which Python 3.13's
+      default VERIFY_X509_STRICT rejects, so that flag is cleared; ``getattr`` keeps this
+      working on older Pythons that do not define the constant.
+    """
+    if not cfg.verify_ssl:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    cafile = (cfg.ca_cert or "").strip() or None
+    if cafile and not os.path.isfile(cafile):
+        raise NetBackupError(f"Không tìm thấy file CA NetBackup: {cafile} (NETBACKUP_i_CA_CERT).")
+    try:
+        ctx = ssl.create_default_context(cafile=cafile)
+    except ssl.SSLError as exc:
+        raise NetBackupError(f"File CA NetBackup không hợp lệ ({cafile}): {exc}") from exc
+    ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+    return ctx
 
 
 # ---------------------------------------------------------------------------
@@ -233,12 +259,7 @@ class NetBackupClient:
         self.media_type = f"application/vnd.netbackup+json;version={cfg.api_version}"
         self.token: Optional[str] = cfg.api_key or None
         self._login_token = False
-        if cfg.verify_ssl:
-            self.ctx = ssl.create_default_context()
-        else:
-            self.ctx = ssl.create_default_context()
-            self.ctx.check_hostname = False
-            self.ctx.verify_mode = ssl.CERT_NONE
+        self.ctx = nbu_ssl_context(cfg)
 
     # -- low level -------------------------------------------------------
     def _request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
@@ -271,6 +292,10 @@ class NetBackupClient:
                 raise NetBackupError(f"Phiên bản API {self.cfg.api_version} không được hỗ trợ (406) — chỉnh NETBACKUP_i_API_VERSION.") from exc
             raise NetBackupError(f"Lỗi API {exc.code} tại {path}: {detail or exc.reason}") from exc
         except urllib.error.URLError as exc:
+            if isinstance(exc.reason, ssl.SSLCertVerificationError):
+                raise NetBackupError(
+                    f"Chứng chỉ của {self.cfg.host} không được tin cậy ({exc.reason.verify_message}) — khai báo CA NetBackup "
+                    "ở NETBACKUP_i_CA_CERT, kiểm tra HOST trùng tên trong chứng chỉ, hoặc đặt NETBACKUP_i_VERIFY_SSL=false.") from exc
             raise NetBackupError(f"Không kết nối được {self.cfg.host}:{self.cfg.port} — {exc.reason}") from exc
         except (TimeoutError, OSError) as exc:
             raise NetBackupError(f"Hết thời gian chờ / lỗi mạng tới {self.cfg.host}:{self.cfg.port} — {exc}") from exc

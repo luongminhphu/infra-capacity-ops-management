@@ -41,9 +41,17 @@ spec:
             httpGet: { path: /api/health, port: 8000 }
             initialDelaySeconds: 20
             periodSeconds: 20
+          # Xác thực chứng chỉ NetBackup (NETBACKUP_i_VERIFY_SSL="true"): mount CA vào pod
+          #   kubectl create configmap nbu-ca -n infra-ops --from-file=ca.pem=./nbu-ca.pem
+          # rồi bỏ comment 2 khối dưới và đặt NETBACKUP_1_CA_CERT="/etc/netbackup-ca/ca.pem".
+          # volumeMounts:
+          #   - { name: nbu-ca, mountPath: /etc/netbackup-ca, readOnly: true }
           resources:
             requests: { cpu: "100m", memory: "256Mi" }
             limits: { cpu: "1", memory: "512Mi" }
+      # volumes:
+      #   - name: nbu-ca
+      #     configMap: { name: nbu-ca }
 ---
 apiVersion: v1
 kind: Service

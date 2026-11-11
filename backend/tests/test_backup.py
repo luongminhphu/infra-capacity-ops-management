@@ -130,3 +130,107 @@ def test_demo_sync_upsert_and_api():
         xlsx = c.get("/api/backup/report/xlsx?days=7")
         assert xlsx.status_code == 200 and xlsx.content[:2] == b"PK"
         assert c.get("/api/health").json()["app"] == "Infra Capacity Ops Management"
+
+
+# ---------------------------------------------------------------------------
+# TLS: NetBackup internal CA has no keyUsage extension (rejected by Python 3.13 strict mode)
+# ---------------------------------------------------------------------------
+def _nbu_like_pki(tmp_path):
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+    now = dt.datetime.now(dt.timezone.utc)
+    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "NBU Internal CA")])
+    ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name).public_key(ca_key.public_key())
+          .serial_number(1).not_valid_before(now - dt.timedelta(hours=1)).not_valid_after(now + dt.timedelta(days=1))
+          .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+          .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
+          .sign(ca_key, hashes.SHA256()))  # deliberately no KeyUsage, like the NetBackup CA
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    leaf = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")]))
+            .issuer_name(ca_name).public_key(key.public_key()).serial_number(2)
+            .not_valid_before(now - dt.timedelta(hours=1)).not_valid_after(now + dt.timedelta(days=1))
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost")]), critical=False)
+            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+            .sign(ca_key, hashes.SHA256()))
+    pem = lambda c: c.public_bytes(serialization.Encoding.PEM)  # noqa: E731
+    (tmp_path / "ca.pem").write_bytes(pem(ca))
+    (tmp_path / "srv.pem").write_bytes(pem(leaf))
+    (tmp_path / "srv.key").write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL,
+                                                         serialization.NoEncryption()))
+    return tmp_path
+
+
+def _https_server(pki):
+    import json
+    import ssl
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            body = json.dumps({"data": []}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(str(pki / "srv.pem"), str(pki / "srv.key"))
+    srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def _cfg(port, **kw):
+    from app.config import NetBackupConfig
+    return NetBackupConfig("t", "t", kw.get("host", "localhost"), port, "KEY", "", "", "unixpwd", "", kw.get("verify", True),
+                           "8.0", timeout=5, ca_cert=kw.get("ca", ""))
+
+
+def test_ssl_context_flags():
+    import ssl
+    off = client.nbu_ssl_context(_cfg(1, verify=False))
+    assert off.verify_mode == ssl.CERT_NONE and not off.check_hostname
+    on = client.nbu_ssl_context(_cfg(1))
+    assert on.verify_mode == ssl.CERT_REQUIRED and on.check_hostname
+    assert not on.verify_flags & getattr(ssl, "VERIFY_X509_STRICT", 0)
+    try:
+        client.nbu_ssl_context(_cfg(1, ca="/no/such/ca.pem"))
+        raise AssertionError("missing CA file must fail")
+    except client.NetBackupError as exc:
+        assert "CA_CERT" in str(exc)
+
+
+def test_ssl_accepts_netbackup_ca_without_key_usage(tmp_path):
+    import ssl
+    pki = _nbu_like_pki(tmp_path)
+    srv = _https_server(pki)
+    port = srv.server_address[1]
+    since = dt.datetime(2026, 11, 1)
+    try:
+        assert client.NetBackupClient(_cfg(port, ca=str(pki / "ca.pem"))).fetch_jobs(since) == []
+        if hasattr(ssl, "VERIFY_X509_STRICT"):  # the strict default is exactly what the shared context removes
+            strict = client.NetBackupClient(_cfg(port, ca=str(pki / "ca.pem")))
+            strict.ctx.verify_flags |= ssl.VERIFY_X509_STRICT
+            try:
+                strict.fetch_jobs(since)
+                raise AssertionError("strict mode should reject the CA")
+            except client.NetBackupError as exc:
+                assert "key usage" in str(exc).lower()
+        for bad in (_cfg(port), _cfg(port, ca=str(pki / "ca.pem"), host="127.0.0.1")):  # no CA / wrong host name
+            try:
+                client.NetBackupClient(bad).fetch_jobs(since)
+                raise AssertionError("verification must fail")
+            except client.NetBackupError as exc:
+                assert "không được tin cậy" in str(exc)
+        assert client.NetBackupClient(_cfg(port, verify=False)).fetch_jobs(since) == []
+    finally:
+        srv.shutdown()
