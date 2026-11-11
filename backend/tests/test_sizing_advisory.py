@@ -197,8 +197,9 @@ def test_full_report_structure_and_vn_numbers():
                                                customer_name="CMC", customer_contact="Ms. Hung", prepared_org="ioBox Solutions",
                                                version="1.1", approved_by="B", document_code="X-1")
     for sec in ("sec-summary", "sec-scope", "sec-demand", "sec-options", "sec-design", "sec-scale", "sec-risks", "sec-plan",
-                "sec-method", "app-vms", "app-thresholds", "app-glossary"):
+                "sec-method", "app-vms", "app-glossary"):
         assert f'id="{sec}"' in html
+    assert "Ngưỡng đánh giá" not in html and "app-thresholds" not in html
     assert "ioBox Solutions · Đề xuất cấu hình máy chủ – CMC" in html and "Ms. Hung" in html and "Phiên bản 1.1" in html
     assert "radar" not in html.lower() or "svg_radar" not in html
     assert report_sizing_full.vn("12,100.5 GB và 0.95 : 1, 2×32C") == "12.100,5 GB và 0,95 : 1, 2×32C"
