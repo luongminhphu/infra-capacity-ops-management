@@ -133,7 +133,7 @@ def _linreg_slope(points: List[Tuple[float, float]]) -> Optional[float]:
 # ---------------------------------------------------------------------------
 def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage: List[Dict[str, Any]],
             storage_history: List[Dict[str, Any]], vms: Optional[List[Dict[str, Any]]], th: BackupThresholds,
-            now: dt.datetime, days: int = 7) -> Dict[str, Any]:
+            now: dt.datetime, days: int = 7, scope: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """jobs: dicts with nbuKey, jobId, parentJobId, jobType, category, policyName, policyType, scheduleType,
     clientName, clientKey, state, status, startTime, endTime, elapsedSec, kbytes (≥ LOOKBACK_DAYS of history)."""
     start = now - dt.timedelta(days=days)
@@ -343,7 +343,7 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
     copy_failed = [j for j in copies if j["status"] > 1]
 
     # -- VM coverage -------------------------------------------------------------
-    coverage = _coverage(vms, backup_all, policies, th, now)
+    coverage = _coverage(vms, backup_all, policies, th, now, scope)
 
     # -- findings ------------------------------------------------------------------
     findings = []
@@ -445,8 +445,41 @@ def _job_brief(j: Dict[str, Any]) -> Dict[str, Any]:
             "gb": round((j["kbytes"] or 0) / 1024 ** 2, 2)}
 
 
+def in_scope(vm: Dict[str, Any], rules: Optional[List[Dict[str, Any]]]) -> bool:
+    """Backup scope: the systems that must be backed up (e.g. production only).
+    No rules = every VM is in scope. A rule names a vCenter, optionally a cluster and a host;
+    a VM is in scope when any rule matches it."""
+    if not rules:
+        return True
+    vc = vm.get("vcenterKey") or "import"
+    for r in rules:
+        if (r.get("vcenterKey") or "import") != vc:
+            continue
+        if r.get("cluster") and r["cluster"] != vm.get("cluster"):
+            continue
+        if r.get("host") and r["host"] != vm.get("host"):
+            continue
+        return True
+    return False
+
+
+def scope_label(rules: Optional[List[Dict[str, Any]]], limit: int = 6) -> str:
+    if not rules:
+        return "Toàn bộ hệ thống trong inventory vCenter"
+    parts = []
+    for r in rules:
+        p = r.get("vcenterKey") or "import"
+        if r.get("cluster"):
+            p += " / " + r["cluster"]
+        if r.get("host"):
+            p += " / " + r["host"]
+        parts.append(p)
+    more = f" và {len(parts) - limit} mục khác" if len(parts) > limit else ""
+    return "; ".join(parts[:limit]) + more
+
+
 def _coverage(vms: Optional[List[Dict[str, Any]]], backup_all: List[Dict[str, Any]], policies: List[Dict[str, Any]],
-              th: BackupThresholds, now: dt.datetime) -> Dict[str, Any]:
+              th: BackupThresholds, now: dt.datetime, scope: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     if not vms:
         return {"available": False}
     excl = [x.strip().lower() for x in (th.coverage_exclude or "").split(",") if x.strip()]
@@ -464,9 +497,12 @@ def _coverage(vms: Optional[List[Dict[str, Any]]], backup_all: List[Dict[str, An
         if p.get("active"):
             for c in p.get("clients") or []:
                 seen.setdefault(client_key(c), "fail")
-    rows, excluded, off = [], 0, 0
+    rows, excluded, off, out_scope = [], 0, 0, 0
     for v in vms:
         name = v.get("vm") or ""
+        if not in_scope(v, scope):
+            out_scope += 1
+            continue
         if any(e in name.lower() for e in excl):
             excluded += 1
             continue
@@ -475,7 +511,7 @@ def _coverage(vms: Optional[List[Dict[str, Any]]], backup_all: List[Dict[str, An
             continue
         keys = [k for k in (client_key(name), client_key(v.get("guestHostname")), v.get("ipAddress")) if k]
         res = next((seen[k] for k in keys if seen.get(k) == "ok"), None) or next((seen[k] for k in keys if k in seen), None)
-        rows.append({"vm": name, "vcenterKey": v.get("vcenterKey"), "cluster": v.get("cluster"), "ip": v.get("ipAddress"),
+        rows.append({"vm": name, "vcenterKey": v.get("vcenterKey"), "cluster": v.get("cluster"), "host": v.get("host"), "ip": v.get("ipAddress"),
                      "vcpu": v.get("vcpu"), "ramGB": v.get("ramGB"), "diskGB": v.get("diskProvGB"),
                      "state": "protected" if res == "ok" else ("failing" if res == "fail" else "unprotected")})
     n = len(rows)
@@ -488,6 +524,7 @@ def _coverage(vms: Optional[List[Dict[str, Any]]], backup_all: List[Dict[str, An
         "failing": sum(1 for r in rows if r["state"] == "failing"),
         "unprotected": sum(1 for r in rows if r["state"] == "unprotected"),
         "excluded": excluded, "poweredOff": off, "pct": _pct(prot, n),
+        "outOfScope": out_scope, "scopeActive": bool(scope), "scopeLabel": scope_label(scope), "scopeRules": scope or [],
         "byCluster": sorted([{"vcenterKey": k[0], "cluster": k[1], "total": sum(c.values()), "protected": c["protected"],
                               "failing": c["failing"], "unprotected": c["unprotected"], "pct": _pct(c["protected"], sum(c.values()))}
                              for k, c in by_cluster.items()], key=lambda r: (r["pct"] if r["pct"] is not None else 101, r["cluster"])),
@@ -559,10 +596,11 @@ def _storage_dict(s) -> Dict[str, Any]:
 
 
 def build_report(db, keys: Optional[List[str]] = None, days: int = 7, th: Optional[BackupThresholds] = None,
-                 vms: Optional[List[Dict[str, Any]]] = None, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+                 vms: Optional[List[Dict[str, Any]]] = None, now: Optional[dt.datetime] = None,
+                 scope: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     now = now or dt.datetime.utcnow()
     inp = load_inputs(db, keys, now, days)
-    return analyze(inp["jobs"], inp["policies"], inp["storage"], inp["history"], vms, th or BackupThresholds(), now, days)
+    return analyze(inp["jobs"], inp["policies"], inp["storage"], inp["history"], vms, th or BackupThresholds(), now, days, scope)
 
 
 def iter_jobs(db, keys: Optional[List[str]], since: dt.datetime) -> Iterable[Dict[str, Any]]:

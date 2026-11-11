@@ -116,7 +116,7 @@ def _summary(r: Dict[str, Any]) -> str:
         g = r["failureGroups"][0]
         pts.append(f"Nguyên nhân lỗi nhiều nhất: <b>{esc(g['label'].lower())}</b> ({vn(g['count'], 0)} job, {vn(g['clientCount'], 0)} client).")
     if cov.get("available"):
-        pts.append(f"Độ phủ backup VM: <b>{vn(cov['pct'])}%</b> VM đang chạy có bản backup thành công trong {th['coverage_days']} ngày; "
+        pts.append(f"Độ phủ backup VM{' (trong phạm vi cần backup)' if cov.get('scopeActive') else ''}: <b>{vn(cov['pct'])}%</b> VM đang chạy có bản backup thành công trong {th['coverage_days']} ngày; "
                    f"<b>{vn(cov['unprotected'], 0)} VM</b> chưa có trong backup.")
     if k["storageMaxPct"] is not None:
         pts.append(f"Disk pool dùng nhiều nhất: {esc(k['storageMaxName'])} {vn(k['storageMaxPct'], 0)}%.")
@@ -204,6 +204,8 @@ def _coverage(r: Dict[str, Any]) -> str:
         return f"""
   <div class="section"><div class="section-title"><span class="sec-num">4</span>Độ phủ backup máy ảo</div>
   <div class="small-note" style="font-size:9px;">Chưa có dữ liệu inventory vCenter để đối chiếu — đồng bộ vCenter trước khi xuất báo cáo.</div></div>"""
+    scope_txt = f"<b>Phạm vi cần backup:</b> {esc(cov['scopeLabel'])}. " if cov.get("scopeActive") else ""
+    out_txt = f", {vn(cov['outOfScope'], 0)} VM ngoài phạm vi" if cov.get("scopeActive") else ""
     donut = svg_donut([{"label": "Có backup", "value": cov["protected"], "color": OUT_COLORS["success"]},
                        {"label": "Có job nhưng lỗi", "value": cov["failing"], "color": OUT_COLORS["partial"]},
                        {"label": "Chưa backup", "value": cov["unprotected"], "color": OUT_COLORS["failed"]}],
@@ -216,8 +218,8 @@ def _coverage(r: Dict[str, Any]) -> str:
     return f"""
   <div class="section">
     <div class="section-title"><span class="sec-num">4</span>Độ phủ backup máy ảo</div>
-    <div class="section-sub">Đối chiếu {vn(cov['total'], 0)} VM đang chạy trong inventory vCenter với client NetBackup (theo tên VM, hostname guest hoặc IP).
-    Có backup = thành công trong {th['coverage_days']} ngày. Không tính {vn(cov['poweredOff'], 0)} VM đang tắt và {vn(cov['excluded'], 0)} VM loại trừ theo tên.</div>
+    <div class="section-sub">{scope_txt}Đối chiếu {vn(cov['total'], 0)} VM đang chạy {'trong phạm vi' if cov.get('scopeActive') else 'trong inventory vCenter'} với client NetBackup (theo tên VM, hostname guest hoặc IP).
+    Có backup = thành công trong {th['coverage_days']} ngày. Không tính {vn(cov['poweredOff'], 0)} VM đang tắt và {vn(cov['excluded'], 0)} VM loại trừ theo tên{out_txt}.</div>
     <div class="chart-row">
       <div class="chart-card" style="flex:0 0 34%;display:flex;gap:8px;align-items:center;">{donut}<div class="donut-legend">{leg}</div></div>
       <div style="flex:1;">{_table(["vCenter", "Cluster", "VM", "Có backup", "Lỗi", "Chưa backup", "Độ phủ"], rows)}</div>
@@ -278,7 +280,8 @@ def _criteria(r: Dict[str, Any], servers: List[Dict[str, Any]]) -> str:
         f"RPO client: thời gian từ bản backup thành công gần nhất; đạt khi ≤ {vn(th['rpo_hours'], 0)} giờ, nghiêm trọng khi > {vn(th['rpo_crit_hours'], 0)} giờ hoặc lỗi liên tiếp ≥ {th['consecutive_fail']} lần.",
         f"Job chạy quá {vn(th['long_running_hours'], 0)} giờ hoặc chờ quá {vn(th['queued_hours'], 0)} giờ; job đêm kết thúc sau {th['window_end_hour']}:00 được ghi nhận tràn cửa sổ backup.",
         f"Disk pool: cảnh báo {vn(th['storage_warn_pct'], 0)}%, nghiêm trọng {vn(th['storage_crit_pct'], 0)}% hoặc chạm high-water trong {th['storage_days_warn']} ngày.",
-        f"Độ phủ VM: VM đang chạy có bản backup thành công trong {th['coverage_days']} ngày; loại trừ VM có tên chứa “{esc(th['coverage_exclude'])}”.",
+        f"Độ phủ VM: VM đang chạy có bản backup thành công trong {th['coverage_days']} ngày; loại trừ VM có tên chứa “{esc(th['coverage_exclude'])}”"
+        + (f"; chỉ tính hệ thống trong phạm vi cần backup: {esc(r['coverage'].get('scopeLabel'))}." if r["coverage"].get("scopeActive") else "."),
     ]
     src = "; ".join(f"{esc(s['name'])} ({esc(s['host'])}) — đồng bộ {_t(s['lastSyncAt'], '%H:%M %d/%m/%Y')}" + (" · dữ liệu demo" if s.get("demo") else "")
                     for s in servers) or "—"

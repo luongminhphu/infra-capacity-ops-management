@@ -342,3 +342,16 @@ class BackupStorageSnapshot(Base):
     captured_at = Column(DateTime, default=utcnow, index=True)
 
     run = relationship("BackupSyncRun", back_populates="storage")
+
+
+class BackupScopeRule(Base):
+    """Systems that must be backed up (e.g. production only): VM coverage is measured on VMs
+    matching any rule. No rows = every VM in the vCenter inventory is in scope."""
+    __tablename__ = "backup_scope_rules"
+
+    id = Column(Integer, primary_key=True)
+    vcenter_key = Column(String(64), nullable=False)
+    cluster = Column(String(128), nullable=True)   # null = whole vCenter
+    host = Column(String(255), nullable=True)      # null = whole cluster
+    updated_by = Column(String(64), nullable=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

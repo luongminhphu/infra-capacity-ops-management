@@ -13,7 +13,7 @@ from ..backup.client import NetBackupError
 from ..backup.collector import sync_netbackup
 from ..config import get_settings
 from ..database import get_db
-from ..models import AppSetting, BackupSyncRun, ReportLogo, User
+from ..models import AppSetting, BackupScopeRule, BackupSyncRun, ReportLogo, User
 from ..security import get_current_user
 from ..timeutil import to_iso_utc
 
@@ -67,8 +67,13 @@ def _vms(db: Session):
     return vms
 
 
+def scope_rules(db: Session) -> List[Dict[str, Any]]:
+    return [{"vcenterKey": r.vcenter_key, "cluster": r.cluster, "host": r.host}
+            for r in db.query(BackupScopeRule).order_by(BackupScopeRule.vcenter_key, BackupScopeRule.cluster, BackupScopeRule.host).all()]
+
+
 def build_summary(db: Session, server: Optional[str], days: int) -> Dict[str, Any]:
-    return analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=_vms(db))
+    return analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=_vms(db), scope=scope_rules(db))
 
 
 @router.get("/servers")
@@ -129,6 +134,76 @@ def jobs(server: Optional[str] = Query(default="all"), days: int = Query(default
         if len(rows) < limit:
             rows.append(j)
     return _jsonable({"total": total, "rows": rows})
+
+
+# ---------------------------------------------------------------------------
+# Backup scope: which vCenter / cluster / host must be backed up (e.g. production only)
+# ---------------------------------------------------------------------------
+class ScopeRuleIn(BaseModel):
+    vcenterKey: str
+    cluster: Optional[str] = None
+    host: Optional[str] = None
+
+
+class ScopeIn(BaseModel):
+    rules: List[ScopeRuleIn] = []
+
+
+def _scope_tree(db: Session) -> List[Dict[str, Any]]:
+    """vCenter → cluster → host from the latest inventory, with powered-on VM counts."""
+    hosts, vms, _ = data_access.get_latest_combined(db, include_import=True)
+    names = {c.key: c.name for c in get_settings().vcenters()}
+    tree: Dict[str, Dict[str, Any]] = {}
+
+    def node(vc, cl, h):
+        v = tree.setdefault(vc, {"vcenterKey": vc, "name": names.get(vc, "Dữ liệu import" if vc == "import" else vc), "clusters": {}})
+        c = v["clusters"].setdefault(cl, {"name": cl, "hosts": {}})
+        return c["hosts"].setdefault(h, {"name": h, "vms": 0, "vmsOn": 0}) if h else None
+
+    for h in hosts:
+        node(h.get("vcenterKey") or "import", h.get("cluster") or "UNKNOWN", h.get("host"))
+    for v in vms:
+        hn = node(v.get("vcenterKey") or "import", v.get("cluster") or "UNKNOWN", v.get("host") or "(không rõ host)")
+        hn["vms"] += 1
+        hn["vmsOn"] += 1 if v.get("isPoweredOn") else 0
+    out = []
+    for v in sorted(tree.values(), key=lambda x: x["vcenterKey"]):
+        clusters = []
+        for c in sorted(v["clusters"].values(), key=lambda x: x["name"]):
+            hs = sorted(c["hosts"].values(), key=lambda x: x["name"])
+            clusters.append({"name": c["name"], "hosts": hs, "vms": sum(x["vms"] for x in hs), "vmsOn": sum(x["vmsOn"] for x in hs)})
+        out.append({"vcenterKey": v["vcenterKey"], "name": v["name"], "clusters": clusters,
+                    "vms": sum(c["vms"] for c in clusters), "vmsOn": sum(c["vmsOn"] for c in clusters)})
+    return out
+
+
+@router.get("/scope")
+def get_scope(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rules = scope_rules(db)
+    return {"rules": rules, "label": analysis.scope_label(rules), "tree": _scope_tree(db)}
+
+
+@router.put("/scope")
+def put_scope(payload: ScopeIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    clean, seen = [], set()
+    for r in payload.rules:
+        vc = (r.vcenterKey or "").strip()
+        if not vc:
+            raise HTTPException(400, "Thiếu vCenter trong phạm vi backup")
+        cl = (r.cluster or "").strip() or None
+        h = (r.host or "").strip() or None
+        if h and not cl:
+            raise HTTPException(400, "Chọn host phải kèm cluster")
+        key = (vc, cl, h)
+        if key not in seen:
+            seen.add(key)
+            clean.append(key)
+    db.query(BackupScopeRule).delete()
+    for vc, cl, h in clean:
+        db.add(BackupScopeRule(vcenter_key=vc[:64], cluster=cl, host=h, updated_by=getattr(user, "username", None)))
+    db.commit()
+    rules = scope_rules(db)
+    return {"rules": rules, "label": analysis.scope_label(rules), "tree": _scope_tree(db)}
 
 
 class ThresholdsIn(BaseModel):

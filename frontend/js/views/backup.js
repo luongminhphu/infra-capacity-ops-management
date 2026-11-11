@@ -16,7 +16,8 @@ function bkState() {
     appState.backup = {
       sub: 'overview', server: 'all', days: 7, servers: null, summary: null, jobs: null, thresholds: null,
       loading: false, error: null, bound: false, charts: {},
-      clientFilter: { status: 'all', q: '' }, jobFilter: { outcome: 'failed', category: 'backup', q: '' }, covFilter: { state: 'unprotected', q: '' },
+      clientFilter: { status: 'all', q: '' }, jobFilter: { outcome: 'failed', category: 'backup', q: '' }, covFilter: { state: 'unprotected', q: '', vc: 'all', cl: 'all' },
+      scope: null, scopeEdit: null,
       lastKey: null,
     };
   }
@@ -257,33 +258,165 @@ function bkCoverage(s) {
   if (!cov.available) return '<section class="table-card"><div class="empty-note">Chưa có inventory vCenter để đối chiếu. Đồng bộ vCenter (nút “Đồng bộ ngay”) rồi tải lại trang này.</div></section>';
   const f = bkState().covFilter;
   const q = f.q.trim().toLowerCase();
+  const pass = (v) => (f.vc === 'all' || (v.vcenterKey || 'import') === f.vc) && (f.cl === 'all' || v.cluster === f.cl);
   const vms = (f.state === 'unprotected' ? cov.unprotectedVms : f.state === 'failing' ? cov.failingVms : cov.unprotectedVms.concat(cov.failingVms))
-    .filter(v => !q || `${v.vm} ${v.cluster} ${v.ip || ''}`.toLowerCase().includes(q));
-  const byCl = cov.byCluster.map(c => `<tr><td>${esc(c.vcenterKey)}</td><td><b>${esc(c.cluster)}</b></td><td class="num">${c.total}</td><td class="num">${c.protected}</td>
+    .filter(v => pass(v) && (!q || `${v.vm} ${v.cluster} ${v.host || ''} ${v.ip || ''}`.toLowerCase().includes(q)));
+  const vcOpts = [...new Set(cov.byCluster.map(c => c.vcenterKey))].sort();
+  const clOpts = [...new Set(cov.byCluster.filter(c => f.vc === 'all' || c.vcenterKey === f.vc).map(c => c.cluster))].sort();
+  const byCl = cov.byCluster.filter(c => pass({ vcenterKey: c.vcenterKey, cluster: c.cluster })).map(c => `<tr><td>${esc(c.vcenterKey)}</td><td><b>${esc(c.cluster)}</b></td><td class="num">${c.total}</td><td class="num">${c.protected}</td>
     <td class="num">${c.failing || 0}</td><td class="num">${c.unprotected ? `<b class="tone-crit">${c.unprotected}</b>` : 0}</td><td class="num">${bkPct(c.pct)}</td></tr>`).join('');
-  const rows = vms.map(v => `<tr><td><b>${esc(v.vm)}</b></td><td>${esc(v.vcenterKey || '')}</td><td>${esc(v.cluster || '')}</td><td>${esc(v.ip || '—')}</td>
+  const rows = vms.map(v => `<tr><td><b>${esc(v.vm)}</b></td><td>${esc(v.vcenterKey || '')}</td><td>${esc(v.cluster || '')}</td><td>${esc(v.host || '—')}</td><td>${esc(v.ip || '—')}</td>
     <td class="num">${bkNum(v.vcpu)}</td><td class="num">${bkNum(v.ramGB)}</td><td class="num">${bkNum(v.diskGB)}</td>
     <td>${v.state === 'unprotected' ? bkPill('crit', 'Chưa backup') : bkPill('warn', 'Có job nhưng lỗi')}</td></tr>`).join('');
-  const k = [['VM đang chạy', bkNum(cov.total), `Không tính ${cov.poweredOff} VM tắt · ${cov.excluded} VM loại trừ theo tên`],
+  const k = [['VM đang chạy' + (cov.scopeActive ? ' (trong phạm vi)' : ''), bkNum(cov.total), `Không tính ${cov.poweredOff} VM tắt · ${cov.excluded} VM loại trừ theo tên${cov.scopeActive ? ` · ${cov.outOfScope} VM ngoài phạm vi` : ''}`],
              ['Có backup', bkNum(cov.protected), `Thành công trong ${s.thresholds.coverage_days} ngày · ${bkPct(cov.pct)}`],
              ['Có job nhưng lỗi', bkNum(cov.failing), 'Có trong policy / có job, chưa thành công'],
              ['Chưa có backup', `<span class="${cov.unprotected ? 'tone-crit' : 'tone-ok'}">${bkNum(cov.unprotected)}</span>`, 'Không khớp client NetBackup nào']];
+  const filt = `<select data-bk-filter="covVc"><option value="all">Mọi vCenter</option>${vcOpts.map(x => `<option value="${esc(x)}" ${f.vc === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+          <select data-bk-filter="covCl"><option value="all">Mọi cluster</option>${clOpts.map(x => `<option value="${esc(x)}" ${f.cl === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
   return `
+    ${bkScopePanel(cov)}
     <div class="kpi-grid">${k.map(([l, v, sub]) => `<div class="kpi-card"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${sub}</div></div>`).join('')}</div>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Độ phủ theo cluster</div><p class="panel-sub">Đối chiếu VM trong inventory vCenter với client NetBackup theo tên VM, hostname guest hoặc IP.</p></div></div>
+      <div class="panel-head"><div><div class="panel-title">Độ phủ theo cluster</div><p class="panel-sub">Đối chiếu VM ${cov.scopeActive ? 'trong phạm vi cần backup' : 'trong inventory vCenter'} với client NetBackup theo tên VM, hostname guest hoặc IP.</p></div>
+        <div class="panel-toolbar">${filt}</div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>vCenter</th><th>Cluster</th><th>VM</th><th>Có backup</th><th>Lỗi</th><th>Chưa backup</th><th>Độ phủ</th></tr></thead><tbody>${byCl}</tbody></table></div>
     </section>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">VM cần xác nhận backup</div><p class="panel-sub">Xác nhận với System Owner: bổ sung vào policy / query VMware hoặc ghi nhận ngoại lệ (thêm từ khoá loại trừ ở trang Nguồn &amp; ngưỡng).</p></div>
         <div class="panel-toolbar">
+          ${filt}
           <select data-bk-filter="covState">${[['unprotected', 'Chưa backup'], ['failing', 'Có job nhưng lỗi'], ['all', 'Cả hai']].map(([kk, l]) => `<option value="${kk}" ${f.state === kk ? 'selected' : ''}>${l}</option>`).join('')}</select>
-          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="covQ" placeholder="Tìm VM / cluster / IP" value="${esc(f.q)}"/></span>
+          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="covQ" placeholder="Tìm VM / host / IP" value="${esc(f.q)}"/></span>
         </div></div>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>VM</th><th>vCenter</th><th>Cluster</th><th>IP</th><th>vCPU</th><th>RAM (GB)</th><th>Disk (GB)</th><th>Tình trạng</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="8" class="empty-note">Không có VM nào.</td></tr>'}</tbody></table></div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>VM</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>IP</th><th>vCPU</th><th>RAM (GB)</th><th>Disk (GB)</th><th>Tình trạng</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="9" class="empty-note">Không có VM nào.</td></tr>'}</tbody></table></div>
       <div class="row-count">${vms.length} VM</div>
     </section>`;
+}
+
+/* ---------- Backup scope (systems that must be backed up) ----------
+   Tree vCenter → cluster → host; several clusters across several vCenters can be ticked.
+   Saved as rules on the server, compressed to the highest fully-ticked level so a
+   whole cluster / vCenter keeps covering hosts added later. */
+const BK_SEP = '\u0001';
+const bkHostKey = (vc, cl, h) => [vc, cl, h].join(BK_SEP);
+
+function bkRuleMatch(rules, vc, cl, h) {
+  return (rules || []).some(r => (r.vcenterKey || 'import') === vc && (!r.cluster || r.cluster === cl) && (!r.host || r.host === h));
+}
+
+function bkScopeStartEdit() {
+  const st = bkState();
+  const sc = st.scope;
+  const checked = new Set();
+  (sc.tree || []).forEach(v => v.clusters.forEach(c => c.hosts.forEach(h => {
+    if (bkRuleMatch(sc.rules, v.vcenterKey, c.name, h.name)) checked.add(bkHostKey(v.vcenterKey, c.name, h.name));
+  })));
+  st.scopeEdit = { mode: sc.rules.length ? 'selected' : 'all', checked, open: new Set(), q: '' };
+}
+
+function bkScopeRules() {
+  const st = bkState(), ed = st.scopeEdit;
+  if (ed.mode === 'all') return [];
+  const rules = [];
+  (st.scope.tree || []).forEach(v => {
+    const all = v.clusters.every(c => c.hosts.every(h => ed.checked.has(bkHostKey(v.vcenterKey, c.name, h.name))));
+    if (all && v.clusters.length) { rules.push({ vcenterKey: v.vcenterKey }); return; }
+    v.clusters.forEach(c => {
+      const hs = c.hosts.filter(h => ed.checked.has(bkHostKey(v.vcenterKey, c.name, h.name)));
+      if (hs.length && hs.length === c.hosts.length) rules.push({ vcenterKey: v.vcenterKey, cluster: c.name });
+      else hs.forEach(h => rules.push({ vcenterKey: v.vcenterKey, cluster: c.name, host: h.name }));
+    });
+  });
+  return rules;
+}
+
+function bkTriState(keys, checked) {
+  const n = keys.filter(k => checked.has(k)).length;
+  return n === 0 ? 'none' : (n === keys.length ? 'all' : 'some');
+}
+
+function bkScopeEditorHtml() {
+  const st = bkState(), sc = st.scope, ed = st.scopeEdit;
+  const q = ed.q.trim().toLowerCase();
+  const dis = ed.mode === 'all' ? 'disabled' : '';
+  const box = (attr, state, label, sub) => `<label class="bk-sc-item"><input type="checkbox" ${attr} ${state === 'all' ? 'checked' : ''} data-tri="${state}" ${dis}/><span>${label}</span>${sub ? `<span class="muted-sub">${sub}</span>` : ''}</label>`;
+  const tree = (sc.tree || []).map(v => {
+    const clusters = v.clusters.filter(c => !q || `${v.vcenterKey} ${v.name} ${c.name} ${c.hosts.map(h => h.name).join(' ')}`.toLowerCase().includes(q));
+    if (!clusters.length) return '';
+    const vKeys = v.clusters.flatMap(c => c.hosts.map(h => bkHostKey(v.vcenterKey, c.name, h.name)));
+    const cl = clusters.map(c => {
+      const cKeys = c.hosts.map(h => bkHostKey(v.vcenterKey, c.name, h.name));
+      const ck = `${v.vcenterKey}${BK_SEP}${c.name}`;
+      const open = ed.open.has(ck) || (q && c.hosts.some(h => h.name.toLowerCase().includes(q)) && !c.name.toLowerCase().includes(q));
+      const hosts = open ? `<div class="bk-sc-hosts">${c.hosts.map(h => box(`data-sc-host="${esc(bkHostKey(v.vcenterKey, c.name, h.name))}"`,
+        ed.checked.has(bkHostKey(v.vcenterKey, c.name, h.name)) ? 'all' : 'none', esc(h.name), `${h.vmsOn} VM đang chạy`)).join('')}</div>` : '';
+      return `<div class="bk-sc-cluster"><button type="button" class="bk-sc-caret" data-sc-toggle="${esc(ck)}" title="Chọn từng host">${open ? '▾' : '▸'}</button>
+        ${box(`data-sc-cl="${esc(ck)}"`, bkTriState(cKeys, ed.checked), `<b>${esc(c.name)}</b>`, `${c.hosts.length} host · ${c.vmsOn} VM đang chạy`)}${hosts}</div>`;
+    }).join('');
+    return `<div class="bk-sc-vc">${box(`data-sc-vc="${esc(v.vcenterKey)}"`, bkTriState(vKeys, ed.checked), `<b>${esc(v.name)}</b> <span class="muted">(${esc(v.vcenterKey)})</span>`, `${v.clusters.length} cluster · ${v.vmsOn} VM đang chạy`)}
+      <div class="bk-sc-clusters">${cl}</div></div>`;
+  }).join('');
+  const rules = bkScopeRules();
+  const nVm = (sc.tree || []).reduce((s, v) => s + v.clusters.reduce((s2, c) => s2 + c.hosts.reduce((s3, h) => s3 + (ed.mode === 'all' || ed.checked.has(bkHostKey(v.vcenterKey, c.name, h.name)) ? h.vmsOn : 0), 0), 0), 0);
+  return `
+    <div class="bk-sc-mode">
+      <label><input type="radio" name="bkScMode" value="all" data-sc-mode ${ed.mode === 'all' ? 'checked' : ''}/> Tất cả hệ thống trong inventory vCenter</label>
+      <label><input type="radio" name="bkScMode" value="selected" data-sc-mode ${ed.mode === 'selected' ? 'checked' : ''}/> Chỉ các vCenter / cluster / host được chọn (ví dụ production)</label>
+    </div>
+    <div class="panel-toolbar bk-sc-tools">
+      <span class="search-box"><i data-lucide="search"></i><input type="text" data-sc-q placeholder="Lọc cluster / host theo tên, vd: prod" value="${esc(ed.q)}" ${dis}/></span>
+      <button class="btn btn-secondary btn-sm" type="button" data-bk-action="scope-select-visible" ${dis}>Chọn các cluster đang hiện</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-bk-action="scope-clear" ${dis}>Bỏ chọn tất cả</button>
+    </div>
+    <div class="bk-sc-tree ${ed.mode === 'all' ? 'is-disabled' : ''}">${tree || '<div class="empty-note">Không có cluster khớp bộ lọc.</div>'}</div>
+    <div class="bk-sc-foot">
+      <span class="muted">${ed.mode === 'all' ? 'Mọi VM đang chạy đều được yêu cầu có backup.' : `${rules.length} mục phạm vi · khoảng ${bkNum(nVm)} VM đang chạy cần backup.`}
+        Nên chọn theo cluster: chọn theo host sẽ bỏ sót VM khi DRS / vMotion chuyển VM sang host khác.</span>
+      <span class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-bk-action="scope-cancel">Huỷ</button>
+      <button class="btn btn-primary btn-sm" type="button" data-bk-action="scope-save">Lưu phạm vi</button></span>
+    </div>`;
+}
+
+function bkScopePanel(cov) {
+  const st = bkState();
+  const editing = !!st.scopeEdit;
+  const label = cov.scopeActive ? esc(cov.scopeLabel) : 'Toàn bộ hệ thống trong inventory vCenter';
+  return `
+    <section class="table-card bk-scope-card">
+      <div class="panel-head panel-head-tight"><div><div class="panel-title">Phạm vi cần backup</div>
+        <p class="panel-sub">Chỉ VM thuộc phạm vi này được tính độ phủ, đưa vào phát hiện và báo cáo PDF / Excel. Có thể chọn nhiều cluster trên nhiều vCenter.</p></div>
+        ${editing ? '' : `<div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="scope-edit"><i data-lucide="filter"></i>Chỉnh phạm vi</button></div>`}</div>
+      ${editing ? `<div id="bkScopeEditor">${bkScopeEditorHtml()}</div>`
+        : `<div class="bk-scope-summary">${cov.scopeActive ? bkPill('ok', 'Đang áp dụng') : bkPill('na', 'Chưa giới hạn')} <span>${label}</span>${cov.scopeActive ? `<span class="muted"> · ${bkNum(cov.outOfScope)} VM ngoài phạm vi không tính</span>` : ''}</div>`}
+    </section>`;
+}
+
+function bkScopeRerender() {
+  const el = $('#bkScopeEditor');
+  if (!el) return;
+  const qEl = el.querySelector('[data-sc-q]');
+  const hadFocus = qEl && document.activeElement === qEl;
+  const pos = hadFocus ? qEl.selectionStart : 0;
+  el.innerHTML = bkScopeEditorHtml();
+  el.querySelectorAll('input[data-tri="some"]').forEach(i => { i.indeterminate = true; });
+  refreshIcons();
+  if (hadFocus) { const n = el.querySelector('[data-sc-q]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch { /* ignore */ } } }
+}
+
+function bkScopeSetMany(keys, on) {
+  const ed = bkState().scopeEdit;
+  keys.forEach(k => (on ? ed.checked.add(k) : ed.checked.delete(k)));
+}
+
+function bkScopeKeysOf(vc, cl) {
+  const out = [];
+  (bkState().scope.tree || []).forEach(v => {
+    if (v.vcenterKey !== vc) return;
+    v.clusters.forEach(c => { if (cl === undefined || c.name === cl) c.hosts.forEach(h => out.push(bkHostKey(v.vcenterKey, c.name, h.name))); });
+  });
+  return out;
 }
 
 function bkStorage(s) {
@@ -355,6 +488,7 @@ function renderBackupBody() {
   }
   const html = { overview: bkOverview, clients: bkClients, coverage: bkCoverage, storage: bkStorage }[st.sub];
   body.innerHTML = st.sub === 'jobs' ? bkJobs() : html(s);
+  body.querySelectorAll('input[data-tri="some"]').forEach(i => { i.indeterminate = true; });
   refreshIcons();
   if (st.sub === 'overview') bkChartDaily(s);
   if (st.sub === 'storage') bkChartStorage(s);
@@ -404,6 +538,12 @@ function bindBackupBody() {
   const st = bkState();
   let qTimer = null;
   body.addEventListener('input', e => {
+    if (e.target.matches('[data-sc-q]') && st.scopeEdit) {
+      st.scopeEdit.q = e.target.value;
+      clearTimeout(qTimer);
+      qTimer = setTimeout(bkScopeRerender, 200);
+      return;
+    }
     const k = e.target.dataset.bkFilter;
     if (!k || !['clientQ', 'covQ'].includes(k)) { if (k === 'jobQ') st.jobFilter.q = e.target.value; return; }
     if (k === 'clientQ') st.clientFilter.q = e.target.value; else st.covFilter.q = e.target.value;
@@ -416,7 +556,18 @@ function bindBackupBody() {
     }, 250);
   });
   body.addEventListener('change', e => {
-    const k = e.target.dataset.bkFilter;
+    const t = e.target;
+    if (st.scopeEdit && (t.matches('[data-sc-mode]') || t.matches('[data-sc-vc]') || t.matches('[data-sc-cl]') || t.matches('[data-sc-host]'))) {
+      if (t.matches('[data-sc-mode]')) st.scopeEdit.mode = t.value;
+      else if (t.dataset.scVc) bkScopeSetMany(bkScopeKeysOf(t.dataset.scVc), t.checked);
+      else if (t.dataset.scCl) { const [vc, cl] = t.dataset.scCl.split(BK_SEP); bkScopeSetMany(bkScopeKeysOf(vc, cl), t.checked); }
+      else bkScopeSetMany([t.dataset.scHost], t.checked);
+      bkScopeRerender();
+      return;
+    }
+    const k = t.dataset.bkFilter;
+    if (k === 'covVc') { st.covFilter.vc = t.value; st.covFilter.cl = 'all'; renderBackupBody(); return; }
+    if (k === 'covCl') { st.covFilter.cl = t.value; renderBackupBody(); return; }
     if (k === 'clientStatus') { st.clientFilter.status = e.target.value; renderBackupBody(); }
     else if (k === 'covState') { st.covFilter.state = e.target.value; renderBackupBody(); }
     else if (k === 'jobOutcome') { st.jobFilter.outcome = e.target.value; bkLoadJobs(); }
@@ -424,6 +575,13 @@ function bindBackupBody() {
   });
   body.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.bkFilter === 'jobQ') { st.jobFilter.q = e.target.value; bkLoadJobs(); } });
   body.addEventListener('click', async e => {
+    const tg = e.target.closest('[data-sc-toggle]');
+    if (tg && st.scopeEdit) {
+      const o = st.scopeEdit.open;
+      o.has(tg.dataset.scToggle) ? o.delete(tg.dataset.scToggle) : o.add(tg.dataset.scToggle);
+      bkScopeRerender();
+      return;
+    }
     const a = e.target.closest('[data-bk-action]');
     const syncBtn = e.target.closest('[data-bk-sync]');
     if (syncBtn) {
@@ -434,6 +592,33 @@ function bindBackupBody() {
       return;
     }
     if (!a) return;
+    const act = a.dataset.bkAction;
+    if (act === 'scope-edit') {
+      try { st.scope = await api.bkScope(); } catch (err) { bkSetStatus(`Không tải được phạm vi: ${err.message}`, true); return; }
+      bkScopeStartEdit(); renderBackupBody(); bkScopeRerender(); return;
+    }
+    if (act === 'scope-cancel') { st.scopeEdit = null; renderBackupBody(); return; }
+    if (act === 'scope-clear') { st.scopeEdit.checked.clear(); bkScopeRerender(); return; }
+    if (act === 'scope-select-visible') {
+      const q = st.scopeEdit.q.trim().toLowerCase();
+      (st.scope.tree || []).forEach(v => v.clusters.forEach(c => {
+        if (!q || `${v.vcenterKey} ${v.name} ${c.name}`.toLowerCase().includes(q)) bkScopeSetMany(bkScopeKeysOf(v.vcenterKey, c.name), true);
+      }));
+      bkScopeRerender(); return;
+    }
+    if (act === 'scope-save') {
+      const rules = bkScopeRules();
+      if (st.scopeEdit.mode === 'selected' && !rules.length) { bkSetStatus('Chưa chọn vCenter / cluster / host nào cho phạm vi backup.', true); return; }
+      a.disabled = true;
+      try {
+        st.scope = await api.bkScopeSave(rules);
+        st.scopeEdit = null;
+        bkSetStatus(rules.length ? `Đã lưu phạm vi cần backup: ${st.scope.label}.` : 'Đã lưu: tính độ phủ trên toàn bộ hệ thống.');
+        await bkLoad(true);
+        renderBackupBody();
+      } catch (err) { bkSetStatus(`Không lưu được phạm vi: ${err.message}`, true); a.disabled = false; }
+      return;
+    }
     if (a.dataset.bkAction === 'jobs-search') { const inp = body.querySelector('[data-bk-filter="jobQ"]'); st.jobFilter.q = inp ? inp.value : ''; bkLoadJobs(); }
     else if (a.dataset.bkAction === 'th-save' || a.dataset.bkAction === 'th-reset') {
       const payload = {};

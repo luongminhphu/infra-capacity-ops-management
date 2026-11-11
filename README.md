@@ -296,7 +296,7 @@ lưu lịch sử vào cùng database và làm báo cáo thống kê theo cùng c
 | **Tổng quan backup** | Kết luận (Đạt / Cần theo dõi / Cần xử lý), 6 KPI, biểu đồ job theo ngày (thành công / một phần / lỗi + TB), nguyên nhân lỗi, client cần xử lý, phát hiện & khuyến nghị. |
 | **Client & RPO** | Mỗi client: job gần nhất, lần thành công gần nhất, số giờ đã qua, số lần lỗi liên tiếp, đánh giá RPO. |
 | **Job backup** | Activity monitor đã lưu: lọc theo kết quả, loại job (backup / nhân bản DR / restore), client, policy, mã lỗi. |
-| **Độ phủ VM** | Đối chiếu VM đang chạy trong inventory vCenter với client NetBackup (tên VM, hostname guest, IP): VM chưa có backup / có job nhưng lỗi, theo cluster. |
+| **Độ phủ VM** | **Phạm vi cần backup** (chọn nhiều vCenter / cluster / host, ví dụ chỉ production) và đối chiếu VM đang chạy trong phạm vi với client NetBackup (tên VM, hostname guest, IP): VM chưa có backup / có job nhưng lỗi, lọc theo vCenter / cluster. |
 | **Storage & policy** | Disk pool: % dùng, xu hướng 30 ngày, số ngày tới ngưỡng high-water; policy: bật/tắt, lần chạy gần nhất, tỷ lệ thành công. |
 | **Nguồn & ngưỡng** | Trạng thái kết nối từng primary server, hướng dẫn tài khoản chỉ đọc, ngưỡng giám sát (lưu server, dùng chung). |
 
@@ -319,6 +319,12 @@ Thanh đầu trang chọn **NetBackup server** và **kỳ thống kê** (24 gi�
 7. **Bản sao DR** — tỷ lệ thành công job duplication / replication (SLP).
 8. **Độ phủ VM** — VM đang chạy có bản backup thành công trong 7 ngày; loại trừ theo từ khoá tên
    (mặc định `vCLS,template,tmpl`), VM tắt không tính.
+   **Phạm vi cần backup** (trang Độ phủ VM → *Chỉnh phạm vi*): chọn các vCenter / cluster / host phải
+   có backup (có thể chọn nhiều cluster trên nhiều vCenter, lọc nhanh theo tên như `prod`). Chỉ VM trong
+   phạm vi được tính độ phủ, đưa vào phát hiện và báo cáo PDF / Excel; VM ngoài phạm vi chỉ được đếm.
+   Phạm vi lưu trên server (bảng `backup_scope_rules`), dùng chung cho mọi người dùng; chọn nguyên
+   cluster / vCenter sẽ tự bao gồm host thêm sau này. Nên chọn theo cluster — chọn theo host sẽ bỏ sót
+   VM khi DRS / vMotion chuyển VM sang host khác. API: `GET|PUT /api/backup/scope`.
 
 **Báo cáo PDF “Hiện trạng Backup”**: tóm tắt điều hành → 1 kết quả theo ngày → 2 nguyên nhân lỗi →
 3 client cần xử lý → 4 độ phủ VM → 5 dung lượng lưu trữ → 6 policy → 7 phát hiện & khuyến nghị →
