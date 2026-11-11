@@ -234,3 +234,36 @@ def test_ssl_accepts_netbackup_ca_without_key_usage(tmp_path):
         assert client.NetBackupClient(_cfg(port, verify=False)).fetch_jobs(since) == []
     finally:
         srv.shutdown()
+
+
+def test_query_string_is_tomcat_safe(monkeypatch):
+    """NetBackup's API runs on Tomcat, which answers 400 to a raw '[' or ']' in the URL."""
+    import urllib.parse
+    seen = []
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"data": []}'
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", lambda req, **kw: (seen.append(req.full_url), _Resp())[1])
+    client.NetBackupClient(_cfg(1556, verify=False)).fetch_jobs(dt.datetime(2026, 11, 1))
+    query = seen[0].split("?", 1)[1]
+    assert "[" not in query and "]" not in query and " " not in query
+    q = urllib.parse.parse_qs(query)
+    assert q["page[limit]"] == ["100"] and q["page[offset]"] == ["0"]
+    assert q["filter"] == ["startTime ge 2026-11-01T00:00:00.000Z"]
+
+
+def test_error_detail_from_json_and_html():
+    import io
+    import urllib.error
+    j = urllib.error.HTTPError("u", 400, "", {}, io.BytesIO(b'{"errorCode":9973,"errorMessage":"Invalid filter"}'))
+    assert client._error_detail(j) == "Invalid filter (errorCode 9973)"
+    h = urllib.error.HTTPError("u", 400, "", {}, io.BytesIO(b"<html><body><h1>HTTP Status 400 - Bad Request</h1></body></html>"))
+    assert client._error_detail(h) == "HTTP Status 400 - Bad Request"
