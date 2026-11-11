@@ -497,7 +497,11 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sz-tco-table{width:100%;font-size:var(--fs-caption);border-collapse:collapse;margin-top:var(--space-2);}
 .sz-tco-table th,.sz-tco-table td{padding:3px 6px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;}
 .sz-tco-table th:first-child,.sz-tco-table td:first-child{text-align:left;}
-.sz-tco-table tr.total td{font-weight:var(--fw-semibold);}
+.sz-tco-table .sz-muted{color:var(--text-secondary);font-size:var(--fs-micro);}
+.sz-tco-table tr.total td{font-weight:var(--fw-semibold);border-top:2px solid var(--border);}
+.sz-tco-table td.sum,.sz-tco-table th.sum{font-weight:var(--fw-semibold);background:var(--surface-2,rgba(127,127,127,.08));}
+.sz-tco-table td:first-child{white-space:normal;min-width:150px;}
+.sz-tco-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);}
 .sz-adjust .sz-adj-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);}
 .sz-adj-box{border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3);min-width:0;}
 .sz-adj-box>summary{cursor:pointer;font-weight:var(--fw-semibold);color:var(--text-primary);font-size:var(--fs-body-sm);list-style:revert;}

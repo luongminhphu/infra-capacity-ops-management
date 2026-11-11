@@ -181,6 +181,8 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   kèm theo phần cứng `warranty_included_years` năm (mặc định 3, đã gồm trong giá); các năm còn lại nhập **chi phí gia hạn bảo hành
   từng năm** — theo số tiền / host / năm hoặc % giá host / năm (`warranty_ext_mode`, `warranty_ext_values`); license tính theo từng
   năm. Kết quả `advisory.costs.yearly` (phần cứng, bảo hành, license, tổng năm, lũy kế); năm chưa nhập giá gia hạn được ghi chú.
+  Bảng TCO trình bày dạng ma trận: cột = Năm 1 … Năm N + Tổng N năm; hàng = Phần cứng, License, Dịch vụ bảo hành HW, Tổng theo
+  năm, Lũy kế (web, PDF và sheet Excel — Excel dùng công thức cho tổng và lũy kế).
   Hiển thị: bảng + biểu đồ theo năm trên web, mục **Chi phí & TCO** trong PDF (bật/tắt được), sheet **Chi phí TCO** trong Excel.
   Phương án tham khảo chưa có giá phần cứng không đưa vào so sánh TCO.
 - **Tuỳ chỉnh báo cáo sau khi tính** (khung "Tuỳ chỉnh báo cáo" hiện sau nút *Tính sizing*, lưu trên trình duyệt):

@@ -749,19 +749,27 @@ function sizingTcoHtml(best) {
   const c = best && best.advisory && best.advisory.costs;
   if (!c || !c.tco || !c.yearly || !c.yearly.length) return '';
   const m = v => (v == null ? '—' : szMoneyShort(v));
-  const rows = c.yearly.map(y => `<tr><td>Năm ${y.year}</td><td>${y.hardware ? m(y.hardware) : '0'}</td>
-      <td>${y.inWarranty ? '<span class="muted-sub">trong bảo hành</span>' : (y.warranty == null ? '<span class="pill warn">chưa nhập</span>' : m(y.warranty))}</td>
-      <td>${m(y.license)}</td><td><b>${m(y.total)}</b></td><td>${m(y.cumulative)}</td></tr>`).join('');
+  const z = v => (v == null ? '<span class="pill warn">chưa nhập</span>' : (v ? szMoneyShort(v) : '<span class="sz-muted">–</span>'));
+  const ys = c.yearly;
+  const head = `<tr><th>Thành phần</th>${ys.map(y => `<th>Năm ${y.year}</th>`).join('')}<th class="sum">Tổng ${c.years} năm</th></tr>`;
+  const row = (label, cells, total, cls = '') => `<tr class="${cls}"><td>${label}</td>${cells.join('')}<td class="sum">${total}</td></tr>`;
+  const rows = [
+    row('Phần cứng', ys.map(y => `<td>${y.hardware == null ? '—' : z(y.hardware)}</td>`), m(c.hardware)),
+    row('License', ys.map(y => `<td>${y.license == null ? '—' : z(y.license)}</td>`), m(c.license)),
+    row(`Dịch vụ bảo hành HW<div class="muted-sub">${c.warrantyIncludedYears} năm đầu đã gồm trong giá HW</div>`,
+      ys.map(y => `<td>${y.inWarranty ? '<span class="sz-muted">Đã gồm</span>' : z(y.warranty)}</td>`), m(c.warranty || 0)),
+    row('Tổng theo năm', ys.map(y => `<td>${m(y.total)}</td>`), m(c.tco), 'total'),
+    row('<span class="muted-sub">Lũy kế</span>', ys.map(y => `<td><span class="sz-muted">${m(y.cumulative)}</span></td>`), '', 'cum'),
+  ].join('');
   const miss = (c.warrantyMissingYears || []).length
     ? `<p class="logo-upload-hint">Chưa nhập chi phí gia hạn bảo hành năm ${c.warrantyMissingYears.join(', ')} — nhập ở nhóm “Tư vấn &amp; chi phí” để TCO đầy đủ.</p>` : '';
   return `<div class="sz-section-title">Chi phí &amp; TCO ${c.years} năm — phương án đề xuất</div>
-    <div class="sz-chart-grid">
+    <div class="sz-chart-grid sz-tco-grid">
       <div class="sz-chart"><div class="sz-chart-title">Chi phí theo năm và lũy kế</div>
         <div class="sz-chart-sub">Năm 1 mua phần cứng (gồm bảo hành ${c.warrantyIncludedYears} năm); các năm sau: gia hạn bảo hành + license.</div>
         <div class="chart-wrap"><canvas id="szChartTcoYear"></canvas></div></div>
       <div class="sz-chart"><div class="sz-chart-title">Bảng TCO theo năm</div>
-        <table class="sz-tco-table"><thead><tr><th>Năm</th><th>Phần cứng</th><th>Bảo hành</th><th>License</th><th>Tổng năm</th><th>Lũy kế</th></tr></thead>
-        <tbody>${rows}<tr class="total"><td>Tổng ${c.years} năm</td><td>${m(c.hardware)}</td><td>${m(c.warranty)}</td><td>${m(c.license)}</td><td>${m(c.tco)}</td><td></td></tr></tbody></table>${miss}</div>
+        <div class="table-scroll"><table class="sz-tco-table"><thead>${head}</thead><tbody>${rows}</tbody></table></div>${miss}</div>
     </div>`;
 }
 
@@ -867,8 +875,8 @@ function renderSizingCharts(result) {
         data: { labels: ys.map(y => `Năm ${y.year}`), datasets: [
           { type: 'line', label: 'Lũy kế', data: ys.map(y => y.cumulative), borderColor: '#074B9B', borderDash: [5, 3], pointRadius: 3, yAxisID: 'y2', order: 0 },
           { label: 'Phần cứng', data: ys.map(y => y.hardware || 0), backgroundColor: c.primary, stack: 's', order: 1 },
-          { label: 'Bảo hành', data: ys.map(y => y.warranty || 0), backgroundColor: '#f59e0b', stack: 's', order: 1 },
-          { label: 'License', data: ys.map(y => y.license || 0), backgroundColor: c.accent, stack: 's', order: 1 }] },
+          { label: 'License', data: ys.map(y => y.license || 0), backgroundColor: c.accent, stack: 's', order: 1 },
+          { label: 'Dịch vụ bảo hành HW', data: ys.map(y => y.warranty || 0), backgroundColor: '#f59e0b', stack: 's', order: 1 }] },
         options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${szMoney(ctx.raw)}` } } },
           scales: { x: { stacked: true, ticks: { color: c.muted }, grid: { display: false } },
             y: { stacked: true, beginAtZero: true, ticks: { color: c.muted, callback: v => szMoneyShort(v) }, grid: { color: c.divider } },
