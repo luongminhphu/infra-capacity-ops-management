@@ -15,7 +15,8 @@ const SIZING_DEFAULT_PARAMS = {
   environment: '', cpu_ratio: 3, ht_factor: 2, ram_ratio: 1.0, max_util_pct: 80, growth_pct: 20,
   redundancy: 1, min_hosts: 2, reserve_cores: 2, reserve_ram_gb: 16,
   storage_mode: 'san', storage_overhead_pct: 25, storage_protection_factor: 2.0,
-  optimize_for: 'hosts', annual_growth_pct: 15, horizon_years: 3, license_price_per_core: null, license_min_cores_per_socket: 16,
+  optimize_for: 'hosts', annual_growth_pct: 15, horizon_years: 3, tco_years: 5, warranty_included_years: 3,
+  warranty_ext_mode: 'amount', warranty_ext_values: [], license_price_per_core: null, license_min_cores_per_socket: 16,
   license_edition: 'VMware vSphere Foundation (VVF)', platform: 'vmware',
 };
 // Advisory thresholds — mirror of backend sizing_advisory.AdvisoryThresholds / THRESHOLD_META.
@@ -140,15 +141,47 @@ const SIZING_PARAM_FIELDS = {
   reserve_ram_gb: 'szReserveRam', storage_mode: 'szStorageMode', storage_overhead_pct: 'szStorageOverhead',
   storage_protection_factor: 'szProtection', optimize_for: 'szOptimize', annual_growth_pct: 'szAnnualGrowth',
   horizon_years: 'szHorizon', license_price_per_core: 'szLicPrice', license_min_cores_per_socket: 'szLicMin', license_edition: 'szLicEdition',
-  platform: 'szPlatform',
+  platform: 'szPlatform', tco_years: 'szTcoYears', warranty_included_years: 'szWarrantyInc', warranty_ext_mode: 'szWarrantyMode',
 };
 const SIZING_DOC_FIELDS = { customerName: 'szCustomer', customerContact: 'szContact', preparedOrg: 'szPreparedOrg', preparedBy: 'szPreparedBy',
   approvedBy: 'szApprovedBy', documentCode: 'szDocCode', version: 'szVersion', versionNote: 'szVersionNote',
   inputSource: 'szInputSource', inputDate: 'szInputDate', outOfScope: 'szOutOfScope' };
 
+/* One input per warranty-extension year (years after the warranty included with the hardware). */
+function renderWarrantyYears(force = false) {
+  const box = $('#szWarrantyYears');
+  if (!box) return;
+  const p = sizingState().params;
+  const years = Math.max(1, Number(p.tco_years) || 5);
+  const inc = Math.max(0, Math.min(years, Number(p.warranty_included_years) || 0));
+  const vals = Array.isArray(p.warranty_ext_values) ? p.warranty_ext_values : [];
+  const pct = p.warranty_ext_mode === 'pct';
+  const n = years - inc;
+  // Rebuild only when the set of years or the unit changes — rebuilding while the user is moving
+  // into one of these inputs would destroy the field they just clicked.
+  const sig = `${inc}|${n}|${pct ? 'pct' : 'amount'}`;
+  if (!force && box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  if (n <= 0) { box.innerHTML = ''; return; }
+  box.innerHTML = Array.from({ length: n }, (_, i) => `
+    <div class="field"><label for="szWy${i}">Gia hạn BH năm ${inc + i + 1} ${pct ? '(% giá host)' : '(/ host)'}</label>
+      <input id="szWy${i}" data-wy="${i}" value="${vals[i] == null ? '' : esc(vals[i])}" placeholder="${pct ? 'VD: 8' : 'VD: 30.000.000'}"></div>`).join('')
+    + `<div class="sz-wy-note">Năm 1–${inc}: bảo hành đã gồm trong giá mua. Để trống = chưa có giá (TCO sẽ ghi chú thiếu).</div>`;
+  box.querySelectorAll('input[data-wy]').forEach(inp => inp.addEventListener('change', () => {
+    const arr = (Array.isArray(p.warranty_ext_values) ? p.warranty_ext_values.slice() : []);
+    const i = Number(inp.dataset.wy);
+    while (arr.length < n) arr.push(null);
+    const v = String(inp.value).trim();
+    arr[i] = v === '' ? null : Math.max(0, cleanNum(v));
+    p.warranty_ext_values = arr.slice(0, n);
+    persistSizing();
+  }));
+}
+
 function sizingParamsToDom() {
   const p = sizingState().params;
   sizingFillEditions(p.platform || 'vmware', p.license_edition);
+  renderWarrantyYears();
   Object.entries(SIZING_PARAM_FIELDS).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (el) el.value = p[key] ?? '';
@@ -163,7 +196,9 @@ function sizingParamsFromDom() {
   Object.entries(SIZING_PARAM_FIELDS).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (key === 'environment' || key === 'storage_mode' || key === 'optimize_for' || key === 'license_edition' || key === 'platform') p[key] = el.value.trim();
+    if (key === 'environment' || key === 'storage_mode' || key === 'optimize_for' || key === 'license_edition' || key === 'platform' || key === 'warranty_ext_mode') p[key] = el.value.trim();
+    else if (key === 'tco_years') p[key] = Math.min(10, Math.max(1, Math.round(cleanNum(el.value)) || 5));
+    else if (key === 'warranty_included_years') p[key] = Math.min(10, Math.max(0, Math.round(cleanNum(el.value)) || 0));
     else if (key === 'license_price_per_core') p[key] = szOptNum(el.value);
     else if (key === 'redundancy' || key === 'min_hosts' || key === 'license_min_cores_per_socket') p[key] = Math.max(0, Math.round(cleanNum(el.value)));
     else if (key === 'horizon_years') p[key] = Math.min(10, Math.max(1, Math.round(cleanNum(el.value)) || 3));
@@ -325,6 +360,9 @@ function sizingPayload() {
   const profiles = st.profiles.map(p => ({ name: p.name, sockets: p.sockets, coresPerSocket: p.coresPerSocket, ramGB: p.ramGB, diskGB: p.diskGB || 0, unitPrice: p.unitPrice == null ? null : p.unitPrice }));
   const params = { ...st.params, advisory: { ...SIZING_DEFAULT_ADVISORY, ...(st.params.advisory || {}) } };
   if (params.storage_mode !== 'local') params.storage_protection_factor = 1.0;
+  const nExt = Math.max(0, (Number(params.tco_years) || 5) - (Number(params.warranty_included_years) || 0));
+  params.warranty_ext_values = (Array.isArray(params.warranty_ext_values) ? params.warranty_ext_values : []).slice(0, nExt)
+    .map(v => (v === '' || v == null || !isFinite(v)) ? null : Number(v));
   const rep = st.report || sizingDefaultReport();
   params.pick_profile = rep.pick || '';
   params.host_override = Math.max(0, Math.round(cleanNum(rep.hosts)) || 0);
@@ -453,7 +491,7 @@ function renderSizingResult(result, payload, scroll = true) {
   }
 
   area.innerHTML = `
-    <div class="panel-head"><div><div class="panel-title">Kết quả sizing${p.environment ? ` — ${esc(p.environment)}` : ''}</div><p class="panel-sub">Số host vật lý cần cho ${szNum(d.vmCount)} VM theo từng cấu hình ứng viên; phương án đề xuất: ít host nhất → chi phí thấp nhất → không sát ngưỡng → điểm tổng hợp cao nhất. Dòng in nghiêng là phương án tham khảo do hệ thống gợi ý.</p></div></div>
+    <div class="panel-head"><div><div class="panel-title">Kết quả sizing${p.environment ? ` — ${esc(p.environment)}` : ''}</div><p class="panel-sub">Số host vật lý cần cho ${szNum(d.vmCount)} VM theo từng cấu hình ứng viên; phương án đề xuất: ít host nhất → không sát ngưỡng → chi phí thấp nhất → điểm tổng hợp cao nhất. Dòng in nghiêng là phương án tham khảo do hệ thống gợi ý.</p></div></div>
     ${best ? `<div class="insight-box sz-headline"><strong>${esc(result.recommendation.headline)}</strong><div class="sz-detail">${esc(result.recommendation.detail)}</div>${result.recommendation.why ? `<div class="sz-detail"><b>${esc(result.recommendation.why)}</b></div>` : ''}</div>` : ''}
     ${tiles}
     <div class="sz-section-title">So sánh cấu hình host</div>
@@ -488,9 +526,9 @@ const SZ_QUICK = [
 ];
 const SZ_SECTIONS = [
   ['scope', 'Phạm vi & dữ liệu đầu vào'], ['demand', 'Nhu cầu tài nguyên'], ['options', 'So sánh phương án'],
-  ['scores', 'Bảng điểm', 'options'], ['cost', 'Biểu đồ TCO', 'options'], ['design', 'Cấu hình đề xuất'],
+  ['scores', 'Bảng điểm', 'options'], ['design', 'Cấu hình đề xuất'],
   ['bom', 'BOM sơ bộ', 'design'], ['arch', 'Kiến trúc logic', 'design'], ['alloc', 'Phân bổ năng lực', 'design'],
-  ['scale', 'Khả năng mở rộng'], ['risks', 'Rủi ro & khuyến nghị'], ['plan', 'Kế hoạch triển khai'],
+  ['tco', 'Chi phí & TCO'], ['scale', 'Khả năng mở rộng'], ['risks', 'Rủi ro & khuyến nghị'], ['plan', 'Kế hoạch triển khai'],
   ['method', 'Giả định & cách tính'], ['existing', 'Hạ tầng hiện hữu (chế độ tận dụng)'], ['vms', 'Phụ lục: Danh sách máy ảo'],
   ['glossary', 'Phụ lục: Thuật ngữ'],
 ];
@@ -657,7 +695,7 @@ function sizingAdvisoryHtml(result) {
   const [rcls, rtxt] = SZ_READY[a.readiness] || SZ_READY.ok;
   const fc = a.findingCounts || {};
   const costTiles = best && best.advisory.costs.tco ? `
-      <article class="kpi-card"><div class="label">TCO ${best.advisory.costs.years} năm (đề xuất)</div><div class="value">${szMoneyShort(best.advisory.costs.tco)}</div><div class="sub">phần cứng ${szMoneyShort(best.advisory.costs.hardware)} · license ${szMoneyShort(best.advisory.costs.license)}</div></article>
+      <article class="kpi-card"><div class="label">TCO ${best.advisory.costs.years} năm (đề xuất)</div><div class="value">${szMoneyShort(best.advisory.costs.tco)}</div><div class="sub">phần cứng ${szMoneyShort(best.advisory.costs.hardware)} · bảo hành ${szMoneyShort(best.advisory.costs.warranty)} · license ${szMoneyShort(best.advisory.costs.license)}</div></article>
       <article class="kpi-card"><div class="label">Chi phí / VM / tháng</div><div class="value">${szMoneyShort(best.advisory.costs.perVmMonth)}</div><div class="sub">/ VM: ${szMoneyShort(best.advisory.costs.perVm)} · / vCPU: ${szMoneyShort(best.advisory.costs.perVcpu)}</div></article>` : '';
   const insightTiles = best ? `
     <div class="kpi-grid sz-kpis">
@@ -698,16 +736,37 @@ function sizingAdvisoryHtml(result) {
     <div class="sz-chart-grid">
       <div class="sz-chart"><div class="panel-head panel-head-tight"><div><div class="sz-chart-title">Phân tích độ nhạy</div><div class="sz-chart-sub">Số host của từng cấu hình khi một giả định thay đổi.</div></div>
         <select id="szSensKey" class="btn-sm">${sensOpts}</select></div><div class="chart-wrap"><canvas id="szChartSens"></canvas></div></div>
-      ${anyCost ? `<div class="sz-chart"><div class="sz-chart-title">TCO ${best.advisory.costs.years} năm theo phương án</div><div class="sz-chart-sub">Phần cứng + license theo core.</div><div class="chart-wrap"><canvas id="szChartCost"></canvas></div></div>`
+      ${anyCost ? `<div class="sz-chart"><div class="sz-chart-title">TCO ${best.advisory.costs.years} năm theo phương án</div><div class="sz-chart-sub">Phần cứng + gia hạn bảo hành + license.</div><div class="chart-wrap"><canvas id="szChartCost"></canvas></div></div>`
         : `<div class="sz-chart"><div class="sz-chart-title">Chi phí</div><div class="sz-chart-sub">Nhập đơn giá host và/hoặc đơn giá license / core để xem TCO, chi phí / VM / tháng và so sánh chi phí giữa các phương án.</div></div>`}
     </div>` : ''}
+    ${sizingTcoHtml(best)}
     <div class="sz-section-title">Rủi ro &amp; khuyến nghị</div>
     <div class="sz-findings">${findings || '<div class="empty-note">Không có nhận định.</div>'}</div>
     ${steps ? `<div class="sz-section-title">Lộ trình triển khai đề xuất</div><div class="sz-steps">${steps}</div>` : ''}`;
 }
 
+function sizingTcoHtml(best) {
+  const c = best && best.advisory && best.advisory.costs;
+  if (!c || !c.tco || !c.yearly || !c.yearly.length) return '';
+  const m = v => (v == null ? '—' : szMoneyShort(v));
+  const rows = c.yearly.map(y => `<tr><td>Năm ${y.year}</td><td>${y.hardware ? m(y.hardware) : '0'}</td>
+      <td>${y.inWarranty ? '<span class="muted-sub">trong bảo hành</span>' : (y.warranty == null ? '<span class="pill warn">chưa nhập</span>' : m(y.warranty))}</td>
+      <td>${m(y.license)}</td><td><b>${m(y.total)}</b></td><td>${m(y.cumulative)}</td></tr>`).join('');
+  const miss = (c.warrantyMissingYears || []).length
+    ? `<p class="logo-upload-hint">Chưa nhập chi phí gia hạn bảo hành năm ${c.warrantyMissingYears.join(', ')} — nhập ở nhóm “Tư vấn &amp; chi phí” để TCO đầy đủ.</p>` : '';
+  return `<div class="sz-section-title">Chi phí &amp; TCO ${c.years} năm — phương án đề xuất</div>
+    <div class="sz-chart-grid">
+      <div class="sz-chart"><div class="sz-chart-title">Chi phí theo năm và lũy kế</div>
+        <div class="sz-chart-sub">Năm 1 mua phần cứng (gồm bảo hành ${c.warrantyIncludedYears} năm); các năm sau: gia hạn bảo hành + license.</div>
+        <div class="chart-wrap"><canvas id="szChartTcoYear"></canvas></div></div>
+      <div class="sz-chart"><div class="sz-chart-title">Bảng TCO theo năm</div>
+        <table class="sz-tco-table"><thead><tr><th>Năm</th><th>Phần cứng</th><th>Bảo hành</th><th>License</th><th>Tổng năm</th><th>Lũy kế</th></tr></thead>
+        <tbody>${rows}<tr class="total"><td>Tổng ${c.years} năm</td><td>${m(c.hardware)}</td><td>${m(c.warranty)}</td><td>${m(c.license)}</td><td>${m(c.tco)}</td><td></td></tr></tbody></table>${miss}</div>
+    </div>`;
+}
+
 function renderSizingCharts(result) {
-  ['szSizes', 'szTop', 'szWaterfall', 'szHosts', 'szRadar', 'szAlloc', 'szProjection', 'szSens', 'szCost'].forEach(destroyChart);
+  ['szSizes', 'szTop', 'szWaterfall', 'szHosts', 'szRadar', 'szAlloc', 'szProjection', 'szSens', 'szCost', 'szTcoYear'].forEach(destroyChart);
   if (typeof Chart === 'undefined' || !result.analysis) return;
   const c = chartPalette();
   const a = result.analysis;
@@ -790,14 +849,30 @@ function renderSizingCharts(result) {
     const sel = $('#szSensKey');
     if (sel) sel.addEventListener('change', () => { sizingState().sensKey = sel.value; drawSens(); });
 
-    const costRows = rows.filter(r => r.advisory.costs.tco);
+    const anyHw = rows.some(r => !r.suggested && r.advisory.costs.hardware != null);
+    const costRows = rows.filter(r => r.advisory.costs.tco && !(anyHw && r.advisory.costs.hardware == null));
     if (costRows.length) {
       mk('szCost', 'szChartCost', { type: 'bar',
         data: { labels: costRows.map(r => r.profile.name + (r.recommended ? ' ★' : '')), datasets: [
           { label: 'Phần cứng', data: costRows.map(r => r.advisory.costs.hardware || 0), backgroundColor: c.primary, borderRadius: 3 },
+          { label: 'Gia hạn bảo hành', data: costRows.map(r => r.advisory.costs.warranty || 0), backgroundColor: '#f59e0b', borderRadius: 3 },
           { label: `License ${costRows[0].advisory.costs.years} năm`, data: costRows.map(r => r.advisory.costs.license || 0), backgroundColor: c.accent, borderRadius: 3 }] },
         options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${szMoney(ctx.raw)}`, footer: items => `TCO: ${szMoney(costRows[items[0].dataIndex].advisory.costs.tco)}` } } },
           scales: { x: { stacked: true, ticks: { color: c.muted, callback: v => szMoneyShort(v) }, grid: { color: c.divider } }, y: { stacked: true, ticks: { color: c.text }, grid: { display: false } } } } });
+    }
+    const bc = best.advisory.costs;
+    if (bc && bc.tco && bc.yearly && bc.yearly.length) {
+      const ys = bc.yearly;
+      mk('szTcoYear', 'szChartTcoYear', { type: 'bar',
+        data: { labels: ys.map(y => `Năm ${y.year}`), datasets: [
+          { type: 'line', label: 'Lũy kế', data: ys.map(y => y.cumulative), borderColor: '#074B9B', borderDash: [5, 3], pointRadius: 3, yAxisID: 'y2', order: 0 },
+          { label: 'Phần cứng', data: ys.map(y => y.hardware || 0), backgroundColor: c.primary, stack: 's', order: 1 },
+          { label: 'Bảo hành', data: ys.map(y => y.warranty || 0), backgroundColor: '#f59e0b', stack: 's', order: 1 },
+          { label: 'License', data: ys.map(y => y.license || 0), backgroundColor: c.accent, stack: 's', order: 1 }] },
+        options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${szMoney(ctx.raw)}` } } },
+          scales: { x: { stacked: true, ticks: { color: c.muted }, grid: { display: false } },
+            y: { stacked: true, beginAtZero: true, ticks: { color: c.muted, callback: v => szMoneyShort(v) }, grid: { color: c.divider } },
+            y2: { position: 'right', beginAtZero: true, ticks: { color: '#074B9B', callback: v => szMoneyShort(v) }, grid: { display: false } } } } });
     }
   }
 }
@@ -1037,6 +1112,17 @@ function bindSizingView() {
     el.addEventListener('change', () => {
       if (id === 'szPlatform') sizingApplyPlatform(el.value);
       sizingParamsFromDom();
+      if (id === 'szWarrantyMode') sizingState().params.warranty_ext_values = [];  // amounts and % are different units
+      if (id === 'szTcoYears' || id === 'szWarrantyInc' || id === 'szWarrantyMode') {
+        // Let the click that triggered this change land first, then rebuild and give focus back.
+        setTimeout(() => {
+          const active = document.activeElement;
+          const idx = active && active.dataset && active.dataset.wy != null ? Number(active.dataset.wy) : null;
+          renderWarrantyYears(id === 'szWarrantyMode');
+          if (idx != null) { const again = document.getElementById(`szWy${idx}`); if (again) again.focus(); }
+          persistSizing();
+        }, 0);
+      }
       if (id === 'szStorageMode') renderSizingProfiles();
     });
   });

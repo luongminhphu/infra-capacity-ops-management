@@ -146,8 +146,9 @@ def _pi_case(**kw):
             ("Domain Controller", 2, 4, 16, 200, "AD DS"), ("Backup Server", 1, 8, 32, 4000, "Veeam"),
             ("EWS VM", 2, 16, 48, 500, "EWS VM: engineering"), ("Jump Host", 2, 11, 16, 200, "")]
     vms = [sizing.VmSpec(name=a, qty=b, vcpu=c, ram_gb=d, disk_gb=e, note=f) for a, b, c, d, e, f in rows]
-    profs = [sizing.HostProfile(name="2×32C / 384 GB", sockets=2, cores_per_socket=32, ram_gb=384, disk_gb=12000),
-             sizing.HostProfile(name="2×32C / 512 GB", sockets=2, cores_per_socket=32, ram_gb=512, disk_gb=12000)]
+    priced = "license_price_per_core" in kw
+    profs = [sizing.HostProfile(name="2×32C / 384 GB", sockets=2, cores_per_socket=32, ram_gb=384, disk_gb=12000, unit_price=600e6 if priced else None),
+             sizing.HostProfile(name="2×32C / 512 GB", sockets=2, cores_per_socket=32, ram_gb=512, disk_gb=12000, unit_price=650e6 if priced else None)]
     base = dict(cpu_ratio=4, growth_pct=15, storage_mode="local", storage_overhead_pct=15, storage_protection_factor=2.0)
     base.update(kw)
     return sizing.build_sizing(vms, sizing.SizingParams(**base), profs)
@@ -279,3 +280,42 @@ def test_report_options_sections_and_content():
     assert "Máy chủ backup chạy chung cụm" not in html
     assert "CẦN XỬ LÝ RỦI RO" in html  # readiness recomputed from the printed findings (custom critical)
     assert 'Phụ lục A. Danh sách máy ảo' in html and 'id="sec-demand"><div class="section-title"><span class="sec-num">2</span>' in html
+
+
+# --- 5-year TCO with warranty extension ----------------------------------------------------------------------
+def _priced(**kw):
+    vms = [sizing.VmSpec(name="APP", qty=10, vcpu=8, ram_gb=32, disk_gb=200)]
+    prof = [sizing.HostProfile(name="A", sockets=2, cores_per_socket=16, ram_gb=512, unit_price=500.0)]
+    return sizing.build_sizing(vms, sizing.SizingParams(license_price_per_core=10.0, **kw), prof)
+
+
+def test_tco_yearly_amount_mode():
+    r = _priced(warranty_ext_values=[20.0, 25.0])
+    c = r["results"][0]["advisory"]["costs"]
+    hosts, cores = r["results"][0]["hostsTotal"], r["results"][0]["advisory"]["license"]["coresTotal"]
+    assert c["years"] == 5 and c["warrantyIncludedYears"] == 3 and len(c["yearly"]) == 5
+    y = c["yearly"]
+    assert y[0]["hardware"] == 500.0 * hosts and all(x["hardware"] == 0 for x in y[1:])
+    assert [x["warranty"] for x in y] == [0, 0, 0, 20.0 * hosts, 25.0 * hosts]
+    assert all(x["license"] == 10.0 * cores for x in y)
+    assert c["tco"] == 500.0 * hosts + 45.0 * hosts + 50.0 * cores == y[-1]["cumulative"]
+    assert c["warrantyMissingYears"] == []
+
+
+def test_tco_pct_mode_and_missing_years():
+    r = _priced(warranty_ext_mode="pct", warranty_ext_values=[10.0])
+    c = r["results"][0]["advisory"]["costs"]
+    hosts = r["results"][0]["hostsTotal"]
+    assert c["yearly"][3]["warranty"] == 50.0 * hosts and c["yearly"][4]["warranty"] is None
+    assert c["warrantyMissingYears"] == [5]
+    assert any("chưa gồm gia hạn bảo hành năm 5" in f["title"] for f in r["analysis"]["findings"])
+    # custom horizon: 7-year TCO with 5 years included
+    c7 = _priced(tco_years=7, warranty_included_years=5, warranty_ext_values=[1.0, 2.0])["results"][0]["advisory"]["costs"]
+    assert len(c7["yearly"]) == 7 and c7["yearly"][5]["warranty"] > 0 and c7["yearly"][4]["warranty"] == 0
+
+
+def test_safety_before_price_when_priced():
+    """A cheaper option that sits at the limit must not beat a safe one with the same host count."""
+    r = _pi_case(license_price_per_core=3.5e6, warranty_ext_values=[30e6, 35e6])
+    best = r["results"][r["recommendedIndex"]]
+    assert best["profile"]["name"] == "2×32C / 512 GB"

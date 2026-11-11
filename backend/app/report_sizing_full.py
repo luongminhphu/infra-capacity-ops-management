@@ -22,7 +22,8 @@ from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now
                          svg_bar_chart, svg_donut, svg_gauge)
 from .report_planning import _planning_css
 from .report_sizing import _existing_table, _pick_target, _reuse_summary_box, _summary_box, _target_detail
-from .report_sizing_charts import SERIES_COLORS, money_short, svg_cost_bars, svg_dual_hbars, svg_lines, svg_projection, svg_waterfall
+from .report_sizing_charts import (COST_COLORS, SERIES_COLORS, money_short, svg_cost_bars, svg_dual_hbars, svg_lines, svg_projection,
+                                   svg_waterfall, svg_yearly_tco)
 
 # ---------------------------------------------------------------------------
 # Vietnamese number formatting
@@ -349,7 +350,7 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
             st = r["storage"]
             cells.append(n((st.get("perHostNeededGB") or 0) / 1024, 1) + ("" if st.get("ok") is not False else " ⚠"))
         if any_price:
-            cells.append(money_short(adv["costs"]["tco"], currency))
+            cells.append(money_short(adv["costs"]["tco"], currency) if _tco_comparable(r, result) else "—")
         cells.append(_row_status(r))
         style = f' style="background:{COLORS["ok_bg"]};"' if r["recommended"] else (' style="color:#475467;font-style:italic;"' if r.get("suggested") else "")
         body.append({"style": style, "cells": cells})
@@ -360,7 +361,7 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
         header.append("Đĩa thô/host (TiB)")
         aligns.append("right")
     if any_price:
-        header.append(f"TCO {p['horizon_years']} năm")
+        header.append(f"TCO {next((r['advisory']['costs']['years'] for r in rows if r['advisory']['costs'].get('tco')), p.get('tco_years', 5))} năm")
         aligns.append("right")
     header.append("Kết luận")
     aligns.append("center")
@@ -375,12 +376,6 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
     score_tbl = _table(["Phương án"] + [esc(ax["label"]) for ax in axes] + ["Điểm TB"], srows, cls="score-table",
                        aligns=["left"] + ["center"] * (len(axes) + 1))
     cost_html = ""
-    if any_price and show.get("cost", True):
-        yrs = rows[0]["advisory"]["costs"]["years"]
-        cost_rows = [{"label": r["profile"]["name"], "hw": r["advisory"]["costs"]["hardware"], "lic": r["advisory"]["costs"]["license"],
-                      "best": r["recommended"]} for r in rows if r["advisory"]["costs"]["tco"]]
-        cost_html = f"""<div class="chart-card keep" style="margin-top:8px;"><div class="chart-card-title">TCO {yrs} năm theo phương án</div>
-          {svg_cost_bars(cost_rows, currency, width=680)}{_legend([(COLORS['primary'], 'Phần cứng'), (COLORS['accent'] + '8c', f'License {yrs} năm')])}</div>"""
     has_sugg = any(r.get("suggested") for r in rows)
     basis_txt = {"tco": "TCO", "budget": "chi phí phần cứng", "cores": "số core license"}.get(result.get("costBasis"), "chi phí")
     score_html = (f'''<div class="keep" style="margin-top:8px;"><div class="sub-h">Bảng điểm (0–100, cao = tốt)</div>{score_tbl}</div>
@@ -390,7 +385,7 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
     <div class="chart-card keep"><div class="chart-card-title">Số host cần theo từng phương án</div>{hosts_chart}
       {_legend([(COLORS['primary'], 'Theo CPU'), (COLORS['accent'], 'Theo RAM'), (COLORS['primary_dark'], 'Tổng (gồm dự phòng)')])}</div>
     <div class="keep" style="margin-top:8px;">{cmp_tbl}</div>
-    <div class="small-note">Quy tắc chọn: ít host nhất → {basis_txt} thấp nhất → không sát ngưỡng (còn dư địa) → điểm tổng hợp cao nhất.
+    <div class="small-note">Quy tắc chọn: ít host nhất → không sát ngưỡng (còn dư địa) → {basis_txt} thấp nhất → điểm tổng hợp cao nhất.
     “Mất 1 host” là mức dùng trên phần năng lực khả dụng của các host còn lại; tối đa cho phép {n(p['max_util_pct'])}%.
     {'Dòng in nghiêng (*) là phương án tham khảo do hệ thống gợi ý, không thuộc danh sách ứng viên ban đầu.' if has_sugg else ''}</div>
     {score_html if show.get("scores", True) else ""}
@@ -427,6 +422,9 @@ def _bom(best, params, result) -> str:
     rows += [
         ["Quản trị phần cứng", "Cổng quản trị từ xa (iDRAC / iLO / XCC)", "1", n(nh)],
         ["Nguồn", "2 bộ nguồn dự phòng (redundant), hot-plug", "2", n(2 * nh)],
+        ["Bảo hành phần cứng", f"{adv['costs'].get('warrantyIncludedYears', 3)} năm kèm theo giá mua"
+         + (f"; gia hạn đến năm {adv['costs']['years']} theo mục Chi phí & TCO" if adv["costs"].get("years", 0) > adv["costs"].get("warrantyIncludedYears", 3) else ""),
+         "—", n(nh)],
         [f"License {pf['short']}" if params.platform != "generic" else "License nền tảng",
          esc(platforms.edition_of(params)) + (" — tính theo CPU socket" if pf["license_unit"] == "socket" else
                                               f" — tính theo core, tối thiểu {params.license_min_cores_per_socket} core / CPU"
@@ -621,6 +619,62 @@ def _design(result, best, params, num: str = "5", show: Optional[Dict[str, bool]
         parts.append(f'<div class="keep"><div class="sub-h">{num}.{k} Phân bổ năng lực</div><div class="chart-card">{_stackbar(best, d, p)}</div>'
                      f'{_gauges(best, p)}<div class="callout" style="margin-top:6px;"><b>Cân đối CPU / RAM.</b> {esc(vn(bal_txt))}</div></div>')
     return "".join(parts)
+
+
+def _tco_comparable(r, result) -> bool:
+    """An option's TCO is comparable only if it has the same cost components as the others
+    (an engine-suggested option has no hardware price — leaving it in would look cheaper)."""
+    c = r["advisory"]["costs"]
+    if not c.get("tco"):
+        return False
+    any_hw = any(x["advisory"]["costs"].get("hardware") is not None for x in result["results"] if not x.get("suggested"))
+    return not (any_hw and c.get("hardware") is None)
+
+
+def _tco(result, best, currency) -> str:
+    c = best["advisory"]["costs"]
+    years, inc = c["years"], c["warrantyIncludedYears"]
+    rows = []
+    for y in c["yearly"]:
+        war = ("Trong bảo hành" if y["inWarranty"] else ("—" if y["warranty"] is None else money_short(y["warranty"], currency)))
+        rows.append([f"<b>Năm {y['year']}</b>", money_short(y["hardware"], currency) if y["hardware"] else ("—" if y["hardware"] is None else "0"),
+                     war, money_short(y["license"], currency) if y["license"] is not None else "—",
+                     f"<b>{money_short(y['total'], currency)}</b>", money_short(y["cumulative"], currency)])
+    rows.append({"style": f' style="background:{COLORS["surface2"]};font-weight:700;"',
+                 "cells": [f"Tổng {years} năm", money_short(c["hardware"], currency), money_short(c["warranty"], currency),
+                           money_short(c["license"], currency), money_short(c["tco"], currency), ""]})
+    year_tbl = _table(["Năm", "Phần cứng", "Bảo hành", "License", "Tổng năm", "Lũy kế"], rows, cls="num-table",
+                      aligns=["left", "right", "right", "right", "right", "right"])
+    leg = _legend([(COST_COLORS["hw"], "Phần cứng"), (COST_COLORS["war"], "Gia hạn bảo hành"), (COST_COLORS["lic"], "License"),
+                   (COLORS["primary_dark"], "Lũy kế (trục phải)")])
+    opts = [r for r in sorted(result["results"], key=lambda x: (x.get("suggested", False), x["rank"] or 99)) if _tco_comparable(r, result)]
+    cmp_rows = []
+    for r in opts:
+        cc = r["advisory"]["costs"]
+        style = f' style="background:{COLORS["ok_bg"]};font-weight:700;"' if r["recommended"] else ""
+        cmp_rows.append({"style": style, "cells": [esc(r["profile"]["name"]), f"{r['hostsTotal']}", money_short(cc["hardware"], currency),
+                                                   money_short(cc["warranty"], currency), money_short(cc["license"], currency),
+                                                   f"<b>{money_short(cc['tco'], currency)}</b>", money_short(cc["perVmMonth"], currency)]})
+    cmp_tbl = _table(["Phương án", "Host", "Phần cứng", "Gia hạn BH", f"License {years} năm", f"TCO {years} năm", "/ VM / tháng"], cmp_rows,
+                     cls="num-table", aligns=["left", "center", "right", "right", "right", "right", "right"])
+    bars = svg_cost_bars([{"label": r["profile"]["name"], "hw": r["advisory"]["costs"]["hardware"], "war": r["advisory"]["costs"]["warranty"],
+                           "lic": r["advisory"]["costs"]["license"], "best": r["recommended"]} for r in opts], currency, width=680)
+    ext = f"năm {inc + 1}–{years}" if years > inc + 1 else (f"năm {years}" if years > inc else "")
+    intro = (f"Phần cứng mua năm 1, đã gồm bảo hành {inc} năm"
+             + (f"; gia hạn bảo hành {ext} tính theo "
+                + ("% giá host mỗi năm" if c["warrantyMode"] == "pct" else "chi phí mỗi host mỗi năm") if ext else "")
+             + "; license tính theo từng năm. Đơn vị: " + esc(currency) + ".")
+    miss = ""
+    if c.get("warrantyMissingYears"):
+        miss = (f'<div class="callout" style="margin-top:6px;border-left-color:{COLORS["warn"]};"><b>Chưa đủ dữ liệu.</b> Chưa nhập chi phí gia hạn bảo hành năm '
+                f'{", ".join(str(y) for y in c["warrantyMissingYears"])} — TCO chưa gồm khoản này.</div>')
+    return f"""
+    <div class="section-desc">{intro}</div>
+    <div class="keep"><div class="sub-h">TCO theo năm — {esc(best['profile']['name'])} × {best['hostsTotal']} host</div>{year_tbl}{miss}</div>
+    <div class="chart-card keep" style="margin-top:8px;"><div class="chart-card-title">Chi phí theo năm và lũy kế</div>{svg_yearly_tco(c['yearly'], currency)}{leg}</div>
+    {"" if len(opts) < 2 else f'<div class="keep"><div class="sub-h">So sánh TCO giữa các phương án</div>{cmp_tbl}<div class="chart-card" style="margin-top:6px;">{bars}{_legend([(COST_COLORS["hw"], "Phần cứng"), (COST_COLORS["war"], "Gia hạn bảo hành"), (COST_COLORS["lic"], "License")])}</div></div>'}
+    <div class="small-note">TCO chỉ gồm phần cứng, gia hạn bảo hành và license theo đơn giá đã nhập; chưa gồm dịch vụ triển khai, điện, không gian và chi phí vận hành.
+    {"Phương án tham khảo chưa có đơn giá phần cứng nên không đưa vào so sánh TCO." if any(r.get("suggested") and not _tco_comparable(r, result) for r in result["results"]) else ""}</div>"""
 
 
 def _scale(result, best_idx, params) -> str:
@@ -866,7 +920,7 @@ table.cv-sign td {{ width:33.3%; border:1px solid {c['border']}; padding:5px 7px
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
-SECTION_KEYS = ["scope", "existing", "demand", "options", "scores", "cost", "design", "bom", "arch", "alloc", "scale",
+SECTION_KEYS = ["scope", "existing", "demand", "options", "scores", "tco", "design", "bom", "arch", "alloc", "scale",
                 "risks", "plan", "method", "vms", "glossary"]
 SEV_ORDER = {"critical": 0, "warning": 1, "info": 2, "ok": 3}
 
@@ -938,11 +992,13 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
         plan.append(("sec-demand", "Nhu cầu tài nguyên", "", lambda num: _demand(result, params, best), "", True))
     if has_new and on("options"):
         plan.append(("sec-options", "So sánh phương án" + (" (trang bị mới)" if mode == "reuse" else ""), "",
-                     lambda num: _options(result, currency, {"scores": on("scores"), "cost": on("cost")})
+                     lambda num: _options(result, currency, {"scores": on("scores")})
                      + f'<div class="callout" style="margin-top:8px;"><b>Phương án đề xuất.</b> {esc(vn(result["recommendation"]["detail"]))}</div>', "", True))
     if has_new and on("design"):
         plan.append(("sec-design", "Cấu hình đề xuất", esc(best["profile"]["name"]) + f" × {best['hostsTotal']} host",
                      lambda num: _design(result, best, params, num, {"bom": on("bom"), "arch": on("arch"), "alloc": on("alloc")}), "", True))
+    if has_new and on("tco") and best["advisory"]["costs"].get("tco"):
+        plan.append(("sec-tco", f"Chi phí & TCO {best['advisory']['costs']['years']} năm", "", lambda num: _tco(result, best, currency), "", True))
     if has_new and on("scale"):
         plan.append(("sec-scale", "Khả năng mở rộng", "", lambda num: _scale(result, best_idx, params), "", True))
     if on("risks"):

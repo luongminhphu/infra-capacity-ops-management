@@ -177,6 +177,12 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   đơn vị của từng nền tảng (VMware: core, tối thiểu 16 core/CPU; Windows Server: tối thiểu 8 core/CPU và 16 core/host; Proxmox:
   CPU socket). Chọn nền tảng trên giao diện tự điền loại license, số core tối thiểu và phần tài nguyên dành cho nền tảng (Nutanix
   CVM, Ceph). `generic` dùng khái niệm chung khi chưa chốt nền tảng; Phụ lục B có bảng tên gọi tương ứng giữa các nền tảng.
+- **TCO nhiều năm** (mặc định 5 năm, nhóm *Tư vấn & chi phí*): năm 1 mua phần cứng (đơn giá / host của từng cấu hình), bảo hành
+  kèm theo phần cứng `warranty_included_years` năm (mặc định 3, đã gồm trong giá); các năm còn lại nhập **chi phí gia hạn bảo hành
+  từng năm** — theo số tiền / host / năm hoặc % giá host / năm (`warranty_ext_mode`, `warranty_ext_values`); license tính theo từng
+  năm. Kết quả `advisory.costs.yearly` (phần cứng, bảo hành, license, tổng năm, lũy kế); năm chưa nhập giá gia hạn được ghi chú.
+  Hiển thị: bảng + biểu đồ theo năm trên web, mục **Chi phí & TCO** trong PDF (bật/tắt được), sheet **Chi phí TCO** trong Excel.
+  Phương án tham khảo chưa có giá phần cứng không đưa vào so sánh TCO.
 - **Tuỳ chỉnh báo cáo sau khi tính** (khung "Tuỳ chỉnh báo cáo" hiện sau nút *Tính sizing*, lưu trên trình duyệt):
   - *Chỉnh nhanh giả định*: thanh trượt tỷ lệ chia sẻ CPU/RAM, mức dùng tối đa, dự phòng / tăng trưởng hằng năm, N+x — tính lại khi
     thả tay, đồng bộ với cột Giả định.
@@ -187,8 +193,8 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
     chữ cái phụ lục tự đánh lại.
   - *Nội dung*: sửa câu kết luận, thêm ghi chú của người lập, ẩn nhận định, thêm khuyến nghị riêng (số đếm và mức sẵn sàng tính
     theo nội dung thực in). Gửi trong `reportOptions` của `/api/sizing/pdf` (chỉ áp dụng cho báo cáo đầy đủ).
-- **Quy tắc chọn phương án**: ít host nhất → chi phí thấp nhất (TCO nếu mọi phương án có giá, nếu không thì ngân sách phần cứng, nếu
-  không thì số core license) → không sát ngưỡng (mất host vẫn dưới mức tối đa, còn dư địa) → điểm tổng hợp cao nhất. Phương án đạt
+- **Quy tắc chọn phương án**: ít host nhất → không sát ngưỡng (mất host vẫn dưới mức tối đa, còn dư địa) → chi phí thấp nhất (TCO nếu mọi
+  phương án có giá, nếu không thì ngân sách phần cứng, nếu không thì số core license) → điểm tổng hợp cao nhất. Phương án đạt
   N+1 nhưng tải khi mất host chạm mức tối đa được đánh dấu "Sát ngưỡng". Hệ thống tự thêm **phương án tham khảo** (không tham gia
   xếp hạng): ít core hơn khi CPU dư nhiều (giảm license), thêm RAM khi phương án được chọn sát ngưỡng.
 - **Nhận định theo đặc thù workload**: nhận diện CSDL (gồm PI Data Archive / historian), Domain Controller (quy tắc tách host),

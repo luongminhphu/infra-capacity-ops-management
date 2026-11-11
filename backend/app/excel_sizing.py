@@ -32,6 +32,7 @@ from . import sizing_advisory
 NAVY = "074B9B"
 BLUE = "2681FF"
 TEAL = "0891B2"
+AMBER = "F59E0B"
 INK = "101828"
 MUTED = "475467"
 FAINT = "98A2B3"
@@ -562,19 +563,19 @@ def _chart_data(wb, result) -> Dict[str, Any]:
         refs["sens"] = ch
 
     # 7. TCO
-    priced = [r for r in rows_sorted if r["advisory"]["costs"].get("tco")]
+    priced = [r for r in rows_sorted if _tco_comparable(r, result)]
     if priced:
-        top = block("TCO theo phương án", ["Cấu hình", "Phần cứng", f"License {priced[0]['advisory']['costs']['years']} năm"],
+        top = block("TCO theo phương án", ["Cấu hình", "Phần cứng", "Gia hạn bảo hành", f"License {priced[0]['advisory']['costs']['years']} năm"],
                     [[r["profile"]["name"] + (" ★" if r["recommended"] else ""), r["advisory"]["costs"]["hardware"] or 0,
-                      r["advisory"]["costs"]["license"] or 0] for r in priced])
+                      r["advisory"]["costs"]["warranty"] or 0, r["advisory"]["costs"]["license"] or 0] for r in priced])
         ch = BarChart()
         ch.type = "bar"
         ch.grouping = "stacked"
         ch.overlap = 100
-        ch.add_data(Reference(ws, min_col=2, max_col=3, min_row=top, max_row=top + len(priced)), titles_from_data=True)
+        ch.add_data(Reference(ws, min_col=2, max_col=4, min_row=top, max_row=top + len(priced)), titles_from_data=True)
         ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(priced)))
-        _style_chart(ch, "Tổng chi phí sở hữu (TCO) theo phương án")
-        _color_series(ch, [BLUE, TEAL])
+        _style_chart(ch, f"TCO {priced[0]['advisory']['costs']['years']} năm theo phương án")
+        _color_series(ch, [BLUE, AMBER, TEAL])
         ch.y_axis.number_format = '#,##0,," tr"' 
         refs["tco"] = ch
 
@@ -585,11 +586,94 @@ def _chart_data(wb, result) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Detail sheets
 # ---------------------------------------------------------------------------
+def _tco_comparable(r, result) -> bool:
+    c = r["advisory"]["costs"]
+    if not c.get("tco"):
+        return False
+    any_hw = any(x["advisory"]["costs"].get("hardware") is not None for x in result["results"] if not x.get("suggested"))
+    return not (any_hw and c.get("hardware") is None)
+
+
+def _tco_sheet(wb, result, subtitle: str) -> None:
+    best = result["results"][result["recommendedIndex"]] if result["recommendedIndex"] is not None else None
+    if not best or not best["advisory"]["costs"].get("tco"):
+        return
+    c = best["advisory"]["costs"]
+    ws = wb.create_sheet("Chi phí TCO")
+    ws.sheet_properties.tabColor = AMBER
+    start = _sheet_title(ws, f"Chi phí & TCO {c['years']} năm", subtitle, 7)
+    inc = c["warrantyIncludedYears"]
+    mode = "% giá host / năm" if c["warrantyMode"] == "pct" else "chi phí / host / năm"
+    ws.merge_cells(f"A{start}:G{start}")
+    ws[f"A{start}"] = (f"Phần cứng mua năm 1, đã gồm bảo hành {inc} năm; gia hạn bảo hành các năm sau tính theo {mode}; license tính theo từng năm."
+                       + (f" Chưa nhập chi phí gia hạn năm {', '.join(str(y) for y in c['warrantyMissingYears'])}." if c.get("warrantyMissingYears") else ""))
+    ws[f"A{start}"].font = _font(9.5, False, MUTED, italic=True)
+    ws[f"A{start}"].alignment = Alignment(wrap_text=True)
+    ws.row_dimensions[start].height = 30
+    row = _section(ws, start + 2, f"TCO theo năm — {best['profile']['name']} × {best['hostsTotal']} host", 7)
+    top = row
+    rows = []
+    for i, y in enumerate(c["yearly"]):
+        r = top + 1 + i
+        rows.append([f"Năm {y['year']}", y["hardware"] or 0, (y["warranty"] if y["warranty"] is not None else None), y["license"] or 0,
+                     f"=SUM(B{r}:D{r})", f"=E{r}" if i == 0 else f"=F{r - 1}+E{r}", "Trong bảo hành" if y["inWarranty"] else
+                     ("Gia hạn bảo hành" if y["warranty"] is not None else "Chưa nhập giá gia hạn")])
+    last = _write_rows(ws, row, ["Năm", "Phần cứng", "Bảo hành", "License", "Tổng năm", "Lũy kế", "Ghi chú"], rows,
+                       fmts={2: MONEY, 3: MONEY, 4: MONEY, 5: MONEY, 6: MONEY})
+    _table(ws, f"A{top}:G{last}", "TCOTheoNam")
+    tot = last + 1
+    ws.cell(row=tot, column=1, value=f"Tổng {c['years']} năm")
+    for col in "BCDE":
+        ws[f"{col}{tot}"] = f"=SUM({col}{top + 1}:{col}{last})"
+        ws[f"{col}{tot}"].number_format = MONEY
+    for cc in range(1, 8):
+        cell = ws.cell(row=tot, column=cc)
+        cell.font = _font(10, True)
+        cell.fill = _fill(SURFACE2)
+        cell.border = Border(top=Side(style="medium", color=NAVY))
+    # yearly chart: stacked columns + cumulative line
+    bar = BarChart()
+    bar.type = "col"
+    bar.grouping = "stacked"
+    bar.overlap = 100
+    bar.add_data(Reference(ws, min_col=2, max_col=4, min_row=top, max_row=last), titles_from_data=True)
+    bar.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=last))
+    _style_chart(bar, "Chi phí theo năm và lũy kế")
+    _color_series(bar, [BLUE, AMBER, TEAL])
+    bar.y_axis.number_format = '#,##0,," tr"'
+    line = LineChart()
+    line.add_data(Reference(ws, min_col=6, min_row=top, max_row=last), titles_from_data=True)
+    line.y_axis.axId = 200
+    line.y_axis.title = "Lũy kế"
+    line.y_axis.number_format = '#,##0,," tr"'
+    line.y_axis.crosses = "max"
+    line.series[0].graphicalProperties.line.solidFill = NAVY
+    line.series[0].graphicalProperties.line.dashStyle = "dash"
+    bar += line
+    bar.height, bar.width = 8, 18
+    ws.add_chart(bar, f"A{tot + 2}")
+    # comparison of options
+    row = _section(ws, tot + 20, "So sánh TCO giữa các phương án", 7)
+    top2 = row
+    opts = [r for r in sorted(result["results"], key=lambda x: (x.get("suggested", False), x["rank"] or 99)) if _tco_comparable(r, result)]
+    rows2 = [[r["profile"]["name"] + (" ★" if r["recommended"] else ""), r["hostsTotal"], r["advisory"]["costs"]["hardware"],
+              r["advisory"]["costs"]["warranty"], r["advisory"]["costs"]["license"], r["advisory"]["costs"]["tco"],
+              _r(r["advisory"]["costs"]["perVmMonth"], 0)] for r in opts]
+    last2 = _write_rows(ws, row, ["Phương án", "Host", "Phần cứng", "Gia hạn bảo hành", f"License {c['years']} năm", f"TCO {c['years']} năm",
+                                  "Chi phí / VM / tháng"], rows2, fmts={3: MONEY, 4: MONEY, 5: MONEY, 6: MONEY, 7: MONEY})
+    if rows2:
+        _table(ws, f"A{top2}:G{last2}", "TCOPhuongAn", "TableStyleLight9")
+        ws.conditional_formatting.add(f"F{top2 + 1}:F{last2}", DataBarRule(start_type="num", start_value=0, end_type="max", color=AMBER))
+    ws.cell(row=last2 + 2, column=1, value="TCO chỉ gồm phần cứng, gia hạn bảo hành và license theo đơn giá đã nhập; chưa gồm dịch vụ triển khai, điện, không gian và vận hành.").font = _font(8.5, False, FAINT, italic=True)
+    _widths(ws, {"A": 30, "B": 18, "C": 18, "D": 18, "E": 18, "F": 18, "G": 22})
+    _print_setup(ws)
+
+
 def _options_sheet(wb, result, subtitle: str) -> None:
     ws = wb.create_sheet("So sánh phương án")
     ws.sheet_properties.tabColor = BLUE
     p = result["params"]
-    years = p.get("horizon_years", 3)
+    years = p.get("tco_years", 5)
     header = ["Hạng", "Cấu hình host", "CPU × core", "RAM / host (GB)", "Host theo CPU", "Host theo RAM", "Dự phòng",
               "Tổng host", "Yếu tố quyết định", "Tổng core", "Tổng RAM (GB)", "CPU khi mất 1 host (%)", "RAM khi mất 1 host (%)",
               "Đạt dự phòng", "Chứa thêm (VM)", "Đơn giá / host", "Chi phí phần cứng", "Core license", "License / năm",
@@ -601,7 +685,8 @@ def _options_sheet(wb, result, subtitle: str) -> None:
                      f"N+{r['redundancy']}", r["hostsTotal"], r["binding"], r["totals"]["cores"], r["totals"]["ramGB"],
                      _r(r["failure"]["cpuPct"]), _r(r["failure"]["ramPct"]), ("Sát ngưỡng" if r["failure"].get("atLimit") else "Đạt") if r["failure"]["ok"] else "Chưa đạt",
                      r["spare"]["extraAvgVms"], pr["unitPrice"], r["budget"], adv["license"]["coresTotal"], adv["license"]["yearlyCost"],
-                     adv["costs"]["tco"], _r(adv["costs"]["perVmMonth"], 0), _r(adv["runway"]["extraGrowthPct"]),
+                     adv["costs"]["tco"] if _tco_comparable(r, result) else None,
+                     _r(adv["costs"]["perVmMonth"], 0) if _tco_comparable(r, result) else None, _r(adv["runway"]["extraGrowthPct"]),
                      _r(adv.get("scoreTotal"), 0), "★ Đề xuất" if r["recommended"] else ("Gợi ý" if r.get("suggested") else "")])
     start = _sheet_title(ws, "So sánh phương án cấu hình", subtitle, len(header))
     last = _write_rows(ws, start, header, rows, fmts={4: NUM, 10: NUM, 11: NUM, 12: NUM1, 13: NUM1, 16: MONEY, 17: MONEY, 18: NUM,
@@ -837,6 +922,7 @@ def build_workbook(result: Dict[str, Any], vms: List[Dict[str, Any]], meta: Dict
     refs = _chart_data(wb, result)
     _dashboard(wb, result, meta, wb["Dữ liệu biểu đồ"], refs)
     _options_sheet(wb, result, subtitle)
+    _tco_sheet(wb, result, subtitle)
     _findings_sheet(wb, result, subtitle)
     _workload_sheet(wb, result, subtitle)
     _sensitivity_sheet(wb, result, subtitle)

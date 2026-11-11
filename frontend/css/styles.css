@@ -490,6 +490,14 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sz-compare td.sz-hosts{font-size:var(--fs-body-sm);}
 .sz-headline .sz-detail{margin-top:var(--space-1);color:var(--text-primary);font-weight:var(--fw-regular);}
 .sz-param-group{margin-top:var(--space-4);}
+.sz-warranty-years{grid-column:1 / -1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2);}
+.sz-warranty-years:empty{display:none;}
+.sz-warranty-years .field{margin:0;}
+.sz-warranty-years .sz-wy-note{grid-column:1 / -1;font-size:var(--fs-micro);color:var(--text-secondary);}
+.sz-tco-table{width:100%;font-size:var(--fs-caption);border-collapse:collapse;margin-top:var(--space-2);}
+.sz-tco-table th,.sz-tco-table td{padding:3px 6px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;}
+.sz-tco-table th:first-child,.sz-tco-table td:first-child{text-align:left;}
+.sz-tco-table tr.total td{font-weight:var(--fw-semibold);}
 .sz-adjust .sz-adj-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);}
 .sz-adj-box{border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3);min-width:0;}
 .sz-adj-box>summary{cursor:pointer;font-weight:var(--fw-semibold);color:var(--text-primary);font-size:var(--fs-body-sm);list-style:revert;}

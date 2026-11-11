@@ -186,7 +186,7 @@ def _assumptions_html(result: Dict[str, Any]) -> str:
       <div class="small-note" style="margin-top:4px;">Cách tính: số host = max(host theo CPU, host theo RAM) + dự phòng N+{p['redundancy']}, tối thiểu {p['min_hosts']} host.
       Host theo CPU = vCPU yêu cầu (sau tăng trưởng) ÷ [(cores − {p['reserve_cores']:g}) × HT {p['ht_factor']:g} × {p['cpu_ratio']:g}x × {p['max_util_pct']:g}%];
       host theo RAM = RAM yêu cầu ÷ [(RAM host − {p['reserve_ram_gb']:g} GB) × {p['ram_ratio']:g}x × {p['max_util_pct']:g}%].
-      Phương án đề xuất: ít host nhất → chi phí thấp nhất (TCO, ngân sách hoặc số core license) → không sát ngưỡng → điểm tổng hợp cao nhất. Overcommit thực tế sau khi lắp luôn thấp hơn mục tiêu vì đã trừ vùng an toàn và dự phòng.</div>
+      Phương án đề xuất: ít host nhất → không sát ngưỡng → chi phí thấp nhất (TCO, ngân sách hoặc số core license) → điểm tổng hợp cao nhất. Overcommit thực tế sau khi lắp luôn thấp hơn mục tiêu vì đã trừ vùng an toàn và dự phòng.</div>
     </div>"""
 
 

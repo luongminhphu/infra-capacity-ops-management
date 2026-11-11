@@ -400,9 +400,14 @@
               <div class="field"><label for="szOptimize" title="Cách chọn phương án đề xuất giữa các cấu hình ứng viên.">Tiêu chí chọn phương án</label>
                 <select id="szOptimize"><option value="hosts" selected>Ít host nhất, rồi chi phí</option><option value="cost">Chi phí (TCO) thấp nhất</option></select></div>
               <div class="field"><label for="szAnnualGrowth" title="Tăng trưởng tự nhiên mỗi năm, dùng cho biểu đồ dự báo nhiều năm.">Tăng trưởng hằng năm (%)</label><input id="szAnnualGrowth" value="15"></div>
-              <div class="field"><label for="szHorizon" title="Số năm dự báo và số năm tính TCO (license).">Kỳ dự báo / TCO (năm)</label><input id="szHorizon" value="3"></div>
+              <div class="field"><label for="szHorizon" title="Số năm dự báo nhu cầu host.">Kỳ dự báo (năm)</label><input id="szHorizon" value="3"></div>
               <div class="field"><label for="szLicPrice" title="Đơn giá license theo core mỗi năm (VD: VMware VCF/VVF). Để trống nếu chưa có báo giá.">Đơn giá license / core / năm (tuỳ chọn)</label><input id="szLicPrice" placeholder="VND"></div>
               <div class="field"><label for="szLicMin" title="Số core tối thiểu tính license cho mỗi CPU (VMware 16, Windows Server 8). 0 = không áp dụng.">License tối thiểu (core / CPU)</label><input id="szLicMin" value="16"></div>
+              <div class="field"><label for="szTcoYears" title="Số năm tính tổng chi phí sở hữu (phần cứng + bảo hành + license).">Kỳ TCO (năm)</label><input id="szTcoYears" value="5"></div>
+              <div class="field"><label for="szWarrantyInc" title="Số năm bảo hành đã gồm trong giá mua phần cứng.">Bảo hành kèm phần cứng (năm)</label><input id="szWarrantyInc" value="3"></div>
+              <div class="field"><label for="szWarrantyMode" title="Cách nhập chi phí gia hạn bảo hành cho các năm sau thời gian bảo hành kèm theo.">Gia hạn bảo hành tính theo</label>
+                <select id="szWarrantyMode"><option value="amount" selected>Chi phí / host / năm</option><option value="pct">% giá host / năm</option></select></div>
+              <div class="sz-warranty-years" id="szWarrantyYears"></div>
               <div class="field"><label for="szLicEdition" title="Ghi trên báo cáo; điều kiện cuối cùng theo chính sách của hãng tại thời điểm báo giá.">Loại license</label>
                 <select id="szLicEdition"></select></div>
             </div>

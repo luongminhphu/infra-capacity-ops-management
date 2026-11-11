@@ -86,6 +86,18 @@ class ParamsIn(BaseModel):
     environment: str = Field(default="", max_length=120)
     annual_growth_pct: float = Field(default=15, ge=0, le=300)
     horizon_years: int = Field(default=3, ge=1, le=10)
+    tco_years: int = Field(default=5, ge=1, le=10)
+    warranty_included_years: int = Field(default=3, ge=0, le=10)
+    warranty_ext_mode: str = Field(default="amount", pattern="^(amount|pct)$")
+    warranty_ext_values: List[Optional[float]] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def _warranty_values(self):
+        if any(v is not None and v < 0 for v in self.warranty_ext_values):
+            raise ValueError("Chi phí gia hạn bảo hành không được âm.")
+        if self.warranty_ext_mode == "pct" and any(v is not None and v > 100 for v in self.warranty_ext_values):
+            raise ValueError("Tỷ lệ gia hạn bảo hành phải trong khoảng 0–100% giá host / năm.")
+        return self
     license_price_per_core: Optional[float] = Field(default=None, ge=0)
     license_min_cores_per_socket: int = Field(default=16, ge=0, le=128)
     optimize_for: str = Field(default="hosts", pattern="^(hosts|cost)$")
