@@ -263,6 +263,46 @@ def test_manual_option_and_host_override():
     assert u["results"][u["recommendedIndex"]]["profile"]["name"] == "2×32C / 512 GB"
 
 
+def test_customer_view_hides_preparation_trail():
+    """Reports read as one recommendation: no manual-override wording, chosen option ranked #1,
+    no "(gợi ý)" suffixes."""
+    from app.report_view import customer_view
+    raw = _pi_case(pick_profile="2x32x384", host_override=4)
+    cv = customer_view(raw)
+    assert raw["recommendation"]["why"].startswith("Người lập điều chỉnh")  # UI keeps the trail
+    assert cv["recommendation"]["why"] == ""
+    best = cv["results"][cv["recommendedIndex"]]
+    assert best["rank"] == 1
+    ranks = sorted(r["rank"] for r in cv["results"] if r["rank"] is not None)
+    assert ranks == list(range(1, len(ranks) + 1))
+    assert not any("(gợi ý)" in r["profile"]["name"] for r in cv["results"])
+
+
+def test_reports_have_no_customisation_wording():
+    import io
+    from openpyxl import load_workbook
+    from app import excel_sizing, report_sizing_full
+    vms = [sizing.VmSpec(name="APP", qty=20, vcpu=8, ram_gb=64, disk_gb=200)]
+    prof = [sizing.HostProfile(name="2×32C / 384 GB", sockets=2, cores_per_socket=32, ram_gb=384),
+            sizing.HostProfile(name="2×32C / 512 GB", sockets=2, cores_per_socket=32, ram_gb=512)]
+    params = sizing.SizingParams(pick_profile="2x32x384", host_override=6)
+    banned = ["người lập", "Người lập điều chỉnh", "phương án tự động", "gợi ý", "theo lựa chọn", "Đã điều chỉnh"]
+    for compact in (False, True):
+        html = report_sizing_full.render_full_html(vms, params, prof, compact=compact,
+                                                   report_options={"note": "N1", "selectionNote": "Đồng bộ với hạ tầng hiện có."})
+        body = html.split("<body", 1)[-1]
+        for w in banned:
+            assert w not in body, (compact, w)
+        assert "Đồng bộ với hạ tầng hiện có." in body
+    wb = excel_sizing.build_workbook(sizing.build_sizing(vms, params, prof), [], {})
+    buf = io.BytesIO()
+    wb.save(buf)
+    text = " ".join(str(c.value) for ws in load_workbook(io.BytesIO(buf.getvalue())).worksheets
+                    for row in ws.iter_rows() for c in row if c.value is not None)
+    for w in banned:
+        assert w not in text, w
+
+
 def test_report_options_sections_and_content():
     from app import report_sizing_full
     r = _pi_case()

@@ -25,6 +25,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from . import sizing_advisory
+from .report_view import customer_view
 
 # ---------------------------------------------------------------------------
 # Palette & styles (aligned with the PDF report)
@@ -724,7 +725,7 @@ def _options_sheet(wb, result, subtitle: str) -> None:
                      r["spare"]["extraAvgVms"], pr["unitPrice"], r["budget"], adv["license"]["coresTotal"], adv["license"]["yearlyCost"],
                      adv["costs"]["tco"] if _tco_comparable(r, result) else None,
                      _r(adv["costs"]["perVmMonth"], 0) if _tco_comparable(r, result) else None, _r(adv["runway"]["extraGrowthPct"]),
-                     _r(adv.get("scoreTotal"), 0), "★ Đề xuất" if r["recommended"] else ("Gợi ý" if r.get("suggested") else "")])
+                     _r(adv.get("scoreTotal"), 0), "★ Đề xuất" if r["recommended"] else ("Tham khảo" if r.get("suggested") else "")])
     start = _sheet_title(ws, "So sánh phương án cấu hình", subtitle, len(header))
     last = _write_rows(ws, start, header, rows, fmts={4: NUM, 10: NUM, 11: NUM, 12: NUM1, 13: NUM1, 16: MONEY, 17: MONEY, 18: NUM,
                                                        19: MONEY, 20: MONEY, 21: MONEY, 22: NUM1, 23: NUM})
@@ -892,25 +893,24 @@ def _sensitivity_sheet(wb, result, subtitle: str) -> None:
 def _assumptions_sheet(wb, result, subtitle: str) -> None:
     ws = wb.create_sheet("Giả định & ngưỡng")
     ws.sheet_properties.tabColor = MUTED
-    start = _sheet_title(ws, "Giả định & ngưỡng tư vấn", subtitle, 3)
-    row = _section(ws, start, "Giả định sizing", 3)
+    start = _sheet_title(ws, "Giả định & ngưỡng tư vấn", subtitle, 2)
+    row = _section(ws, start, "Giả định sizing", 2)
     for ln in result["assumptions"]:
-        ws.merge_cells(f"A{row}:C{row}")
+        ws.merge_cells(f"A{row}:B{row}")
         ws.cell(row=row, column=1, value="•  " + ln).font = _font(10)
         ws.cell(row=row, column=1).alignment = Alignment(wrap_text=True)
         row += 1
-    row = _section(ws, row + 1, "Ngưỡng tư vấn áp dụng", 3)
+    row = _section(ws, row + 1, "Ngưỡng tư vấn áp dụng", 2)
     th = (result["params"] or {}).get("advisory") or {}
     defaults = sizing_advisory.AdvisoryThresholds().__dict__
     top = row
     rows = []
     for key, label, unit in sizing_advisory.THRESHOLD_META:
         v = th.get(key, defaults.get(key))
-        rows.append([label, f"{v} {unit}".strip(), "Đã điều chỉnh" if v != defaults.get(key) else "Mặc định"])
-    lst = _write_rows(ws, row, ["Ngưỡng", "Giá trị", "Trạng thái"], rows, wrap_cols=(2,))
-    _table(ws, f"A{top}:C{lst}", "NguongTuVan", "TableStyleLight9")
-    ws.conditional_formatting.add(f"C{top + 1}:C{lst}", CellIsRule(operator="equal", formula=['"Đã điều chỉnh"'], font=Font(color=NAVY, bold=True)))
-    _widths(ws, {"A": 52, "B": 60, "C": 16})
+        rows.append([label, f"{v} {unit}".strip()])
+    lst = _write_rows(ws, row, ["Ngưỡng", "Giá trị"], rows, wrap_cols=(2,))
+    _table(ws, f"A{top}:B{lst}", "NguongTuVan", "TableStyleLight9")
+    _widths(ws, {"A": 52, "B": 60})
     _print_setup(ws, landscape=False)
 
 
@@ -947,6 +947,7 @@ def _vm_sheet(wb, vms: List[Dict[str, Any]], result, subtitle: str) -> None:
 def build_workbook(result: Dict[str, Any], vms: List[Dict[str, Any]], meta: Dict[str, Any]) -> Workbook:
     """`result` = sizing.build_sizing() output; `vms` = submitted VM rows (name/qty/vcpu/ramGB/diskGB/note);
     `meta` = {customerName, preparedOrg, preparedBy, documentCode, logoDataUrl}."""
+    result = customer_view(result)
     wb = Workbook()
     env = result["params"].get("environment") or "Dự án mới"
     parts = [env]
