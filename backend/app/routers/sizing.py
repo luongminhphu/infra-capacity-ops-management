@@ -169,7 +169,7 @@ class SizingPayload(BaseModel):
     inputSource: str = Field(default="", max_length=200)
     inputDate: str = Field(default="", max_length=40)
     outOfScope: Optional[List[str]] = Field(default=None, max_length=20)
-    # 'full' = consulting report with charts & advisory (default) · 'brief' = 2-page decision memo
+    # 'full' = báo cáo tư vấn đầy đủ (default) · 'brief' = báo cáo tư vấn rút gọn (same template, compact content)
     detail: str = Field(default="full", pattern="^(full|brief)$")
     # Optional per-report logo (data URL, same formats/limit as Settings → logo); empty = default report logo
     logoDataUrl: Optional[str] = Field(default=None, max_length=3_000_000)
@@ -227,7 +227,7 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
     except Exception as exc:  # pragma: no cover - surfaced to the UI
         raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
     label = _ascii_slug(params.environment, fallback="")
-    kind = "tan_dung_hien_huu" if payload.mode == "reuse" else "trang_bi_moi"
+    kind = ("tan_dung_hien_huu" if payload.mode == "reuse" else "trang_bi_moi") + ("_rut_gon" if payload.detail == "brief" else "")
     filename = f"VCO_De_xuat_cau_hinh_may_chu_{(label + '_') if label else ''}{kind}_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     return StreamingResponse(iter([pdf_bytes]), media_type="application/pdf", headers=_attachment_headers(filename))
 

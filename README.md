@@ -160,8 +160,8 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
   ≤ 2MB) để dùng logo khác cho PDF và Excel (`logoDataUrl`); không chọn hoặc bấm *Dùng logo mặc định* → dùng logo trong
   Cài đặt báo cáo. Logo đã chọn được nhớ trên trình duyệt. Excel không nhúng được SVG.
 - **Giọng văn báo cáo đầy đủ**: viết theo góc nhìn đơn vị tư vấn tích hợp giải pháp (SI) gửi khách hàng — "chúng tôi
-  khuyến nghị / triển khai", "Quý khách phê duyệt", hạn chế thuật ngữ và giải thích ngắn khi cần. Tờ trình tóm tắt
-  (`detail=brief`) giữ văn phong nội bộ.
+  khuyến nghị / triển khai", "Quý khách phê duyệt", hạn chế thuật ngữ và giải thích ngắn khi cần. Báo cáo tư vấn
+  rút gọn (`detail=brief`) dùng cùng văn phong.
 - **Báo cáo đầy đủ** (mặc định, `detail=full`, `backend/app/report_sizing_full.py`): trang bìa (thông tin tài liệu — khách hàng,
   đầu mối, dự án, mã tài liệu, phiên bản, ngày lập, người lập, người duyệt — mục lục có số trang, lịch sử phiên bản, ký duyệt), rồi
   1 Tóm tắt (một bộ KPI duy nhất, lý do chọn phương án) · 2 Phạm vi & dữ liệu đầu vào (nguồn, ngày nhận, trong/ngoài phạm vi, quy ước) ·
@@ -205,24 +205,13 @@ team Infra cần đề xuất số lượng và cấu hình máy chủ vật lý
 - **Hướng tới dịch vụ độc lập**: `sizing.py` + `sizing_advisory.py` là Python thuần (không DB, không I/O),
   `report_sizing*.py` chỉ cần WeasyPrint — có thể tách thành micro-service/CLI riêng cho đối tác, khách hàng
   mà giữ nguyên API (`/calc`, `/pdf`, `/export`). Test: `cd backend && python -m pytest tests`.
-- **Xuất PDF · Tờ trình tóm tắt** (`POST /api/sizing/pdf` với `detail=brief`, `backend/app/report_sizing.py`): file "Đề xuất cấu hình
-  máy chủ — <dự án>" khổ A4, 2 trang, bố cục báo cáo quản trị để đính kèm tờ trình: hộp **Tổng kết — đề
-  xuất & quyết định đề nghị** (câu đề xuất; các dòng "Mua N host … → Duyệt ngân sách …", "Cấp X TB SAN →
-  Duyệt cấp dung lượng", dự phòng N+x, phương án thay thế dùng cluster hiện hữu nếu hấp thụ được; 5 ô số
-  liệu) → bảng **So sánh cấu hình host ứng viên** (dòng đề xuất tô xanh + đoạn "Phương án đề xuất") →
-  **Giả định** (kèm công thức tính) → **Hạ tầng hiện hữu có hấp thụ được không?** (UI gửi kèm kết quả
-  kiểm tra trên dữ liệu vCenter hiện tại) → **Phụ lục** danh sách VM (tự sang trang mới nếu > 12 dòng).
-  Dùng logo báo cáo đã cấu hình.
-  Nút "Xuất PDF · Đề xuất" mở hộp **Nội dung đề xuất** với 2 tùy chọn (`mode`):
-  - **Trang bị mới server** (mặc định) — bố cục trên; có thể bỏ mục kiểm tra hạ tầng hiện hữu
-    (`includeExisting=false` → 1 trang).
-  - **Tận dụng server hiện hữu** (`mode=reuse`) — đặt dự án lên một cluster đang có: chọn cluster tiếp nhận
-    (`targetCluster`; mặc định tự chọn cluster an toàn nhất: dưới 80% ngưỡng và giữ N+1). Hộp Tổng kết
-    đổi sang trạng thái TẬN DỤNG HIỆN HỮU / CẦN CÂN NHẮC / KHÔNG AN TOÀN, các dòng quyết định "Duyệt chủ
-    trương dùng chung hạ tầng với System Owner cluster X", host dự phòng, dư địa còn lại (~VM cỡ dự án),
-    ô "Chi phí tránh được" (= ngân sách phương án mua mới). Bảng cluster hiện hữu tô màu cluster đang xét
-    kèm đoạn chi tiết cores/RAM/overcommit; tuỳ chọn kèm **Phương án B — trang bị mới (đối chiếu)**
-    (`includeNewOption`). Tên file kết thúc bằng `_trang_bi_moi` / `_tan_dung_hien_huu`.
+- **Báo cáo tư vấn rút gọn** (`POST /api/sizing/pdf` với `detail=brief`, cùng template `report_sizing_full.py` ở chế độ
+  `compact`): cùng định dạng trang với báo cáo đầy đủ (header / footer, lề, số kiểu Việt Nam, thuật ngữ theo nền tảng), trang 1 là khối
+  tiêu đề + thông tin tài liệu thay cho trang bìa; gồm Tóm tắt, So sánh phương án (bảng), **Cấu hình đề xuất & BOM cơ bản** (thông số
+  chính, BOM sơ bộ và **Kết luận BOM**: tổng CPU / core / RAM, ổ dữ liệu, cổng mạng, license, bảo hành, mức đáp ứng khi mất host,
+  TCO ước tính), Chi phí & TCO (bảng), Rủi ro & khuyến nghị chính (nghiêm trọng / cảnh báo), Giả định chính và Phụ lục danh sách VM.
+  Bật/tắt mục trong khung Tuỳ chỉnh báo cáo áp dụng cho cả hai bản. Tên file kết thúc bằng `_rut_gon`. Kết luận BOM cũng có trong
+  báo cáo đầy đủ.
 
 ### License & Inventory — Inventory & License Assessment
 
