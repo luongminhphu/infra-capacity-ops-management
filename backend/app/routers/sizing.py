@@ -47,15 +47,19 @@ class AdvisoryIn(BaseModel):
     stranded_warn_pct: float = Field(default=35.0, ge=0, le=100)
     balance_ok_gap_pct: float = Field(default=15.0, ge=0, le=100)
     balance_min_load_pct: float = Field(default=40.0, ge=0, le=100)
-    db_cpu_ratio_max: float = Field(default=2.0, gt=0, le=20)
-    high_cpu_ratio_warn: float = Field(default=5.0, gt=0, le=40)
+    db_cpu_per_core_max: float = Field(default=4.0, gt=0, le=40)
+    high_cpu_per_core_warn: float = Field(default=6.0, gt=0, le=80)
     ram_ratio_warn: float = Field(default=1.0, gt=0, le=4)
     low_runway_pct: float = Field(default=10.0, ge=0, le=500)
     failover_comfort_pct: float = Field(default=60.0, ge=0, le=99)
     cheaper_alt_pct: float = Field(default=3.0, ge=0, le=100)
     cluster_info_hosts: int = Field(default=32, ge=2, le=1000)
     cluster_warn_hosts: int = Field(default=64, ge=2, le=1000)
-    db_keywords: str = Field(default=sizing_advisory.DEFAULT_DB_KEYWORDS, max_length=600)
+    failover_margin_pct: float = Field(default=2.0, ge=0, le=50)
+    vsan_free_min_pct: float = Field(default=25.0, ge=0, le=80)
+    db_keywords: str = Field(default=sizing_advisory.DEFAULT_DB_KEYWORDS, max_length=800)
+    dc_keywords: str = Field(default=sizing_advisory.DEFAULT_DC_KEYWORDS, max_length=400)
+    backup_keywords: str = Field(default=sizing_advisory.DEFAULT_BACKUP_KEYWORDS, max_length=400)
 
     @model_validator(mode="after")
     def _ordered(self):
@@ -85,6 +89,8 @@ class ParamsIn(BaseModel):
     license_price_per_core: Optional[float] = Field(default=None, ge=0)
     license_min_cores_per_socket: int = Field(default=16, ge=0, le=128)
     optimize_for: str = Field(default="hosts", pattern="^(hosts|cost)$")
+    license_edition: str = Field(default="VMware vSphere Foundation (VVF)", max_length=120)
+    suggest_variants: bool = True
     advisory: AdvisoryIn = AdvisoryIn()
 
 
@@ -122,6 +128,14 @@ class SizingPayload(BaseModel):
     customerName: str = Field(default="", max_length=120)
     preparedOrg: str = Field(default="", max_length=120)
     documentCode: str = Field(default="", max_length=60)
+    # Document control & scope (full report)
+    customerContact: str = Field(default="", max_length=120)
+    version: str = Field(default="1.0", max_length=20)
+    versionNote: str = Field(default="", max_length=200)
+    approvedBy: str = Field(default="", max_length=80)
+    inputSource: str = Field(default="", max_length=200)
+    inputDate: str = Field(default="", max_length=40)
+    outOfScope: Optional[List[str]] = Field(default=None, max_length=20)
     # 'full' = consulting report with charts & advisory (default) · 'brief' = 2-page decision memo
     detail: str = Field(default="full", pattern="^(full|brief)$")
     # Optional per-report logo (data URL, same formats/limit as Settings → logo); empty = default report logo
@@ -171,7 +185,10 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
                                                    mode=payload.mode, target_cluster=payload.targetCluster,
                                                    include_new=payload.includeNewOption, include_existing=payload.includeExisting,
                                                    detail=payload.detail, customer_name=payload.customerName,
-                                                   prepared_org=payload.preparedOrg, document_code=payload.documentCode)
+                                                   prepared_org=payload.preparedOrg, document_code=payload.documentCode,
+                                                   version=payload.version, version_note=payload.versionNote, approved_by=payload.approvedBy,
+                                                   customer_contact=payload.customerContact, input_source=payload.inputSource,
+                                                   input_date=payload.inputDate, out_of_scope=[x[:200] for x in (payload.outOfScope or [])])
     except Exception as exc:  # pragma: no cover - surfaced to the UI
         raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
     label = _ascii_slug(params.environment, fallback="")

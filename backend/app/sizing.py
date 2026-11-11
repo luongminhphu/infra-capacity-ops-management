@@ -80,6 +80,8 @@ class SizingParams:
     license_price_per_core: Optional[float] = None  # per-core subscription price per year (VCF/VVF-style), optional
     license_min_cores_per_socket: int = 16          # per-core licensing minimum per CPU socket
     optimize_for: str = "hosts"      # 'hosts' = fewest hosts first · 'cost' = lowest TCO first (when priced)
+    license_edition: str = "VMware vSphere Foundation (VVF)"  # shown on the report; final per Broadcom policy at quote time
+    suggest_variants: bool = True    # add engine-suggested reference options (fewer cores / more RAM)
     advisory: AdvisoryThresholds = field(default_factory=AdvisoryThresholds)  # tunable advisory thresholds
 
     def __post_init__(self):
@@ -159,6 +161,11 @@ def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingPar
     cpu_fail_pct = _pct(demand["vcpuPlanned"], vcpu_cap_host * n_fail / util) if n_fail else None
     ram_fail_pct = _pct(demand["ramPlannedGB"], vram_cap_host * n_fail / util) if n_fail else None
     fail_ok = bool(n_fail) and (cpu_fail_pct or 0) <= 100.0 + 1e-6 and (ram_fail_pct or 0) <= 100.0 + 1e-6
+    # "At the limit": after losing the redundant hosts, the load sits at (or within a small margin of)
+    # the planned max utilisation — passes N+x on paper, but any growth forces another host.
+    margin = getattr(getattr(params, "advisory", None), "failover_margin_pct", 2.0)
+    worst_fail = max(cpu_fail_pct or 0, ram_fail_pct or 0)
+    at_limit = bool(fail_ok and redundancy and worst_fail >= params.max_util_pct - margin)
 
     # Spare capacity after N+x (in average-VM units) – useful "how many more VMs fit" number.
     spare_vcpu = max(0.0, vcpu_cap_host * n_fail - demand["vcpuPlanned"])
@@ -203,7 +210,11 @@ def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingPar
             "cpuOvercommit": cpu_oc_after, "ramOvercommit": ram_oc_after,
             "cpuUtilPct": cpu_util_pct, "ramUtilPct": ram_util_pct,
         },
-        "failure": {"hostsLeft": n_fail, "cpuPct": cpu_fail_pct, "ramPct": ram_fail_pct, "ok": fail_ok},
+        "failure": {"hostsLeft": n_fail, "cpuPct": cpu_fail_pct, "ramPct": ram_fail_pct, "ok": fail_ok, "atLimit": at_limit},
+        # vCPU per *physical core* — the ratio customers usually reason in (vs. per thread in cpu_ratio).
+        "vcpuPerCore": (demand["vcpuPlanned"] / total_cores) if total_cores else None,
+        "calc": {"cpuHostsRaw": (demand["vcpuPlanned"] / vcpu_cap_host) if vcpu_cap_host > 0 else None,
+                 "ramHostsRaw": (demand["ramPlannedGB"] / vram_cap_host) if vram_cap_host > 0 else None},
         "spare": {"vcpu": spare_vcpu, "ramGB": spare_ram, "extraAvgVms": extra_vms},
         "efficiency": {"cpuPct": eff_cpu, "ramPct": eff_ram},
         "storage": storage,
@@ -211,18 +222,93 @@ def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingPar
     }
 
 
-def _rank_key(r: Dict[str, Any], optimize_for: str = "hosts"):
-    # Prefer: fewest hosts → lowest cost (TCO incl. license when priced, else hardware budget)
-    # → highest efficiency of the binding resource.
-    eff = r["efficiency"]
-    eff_bind = eff["cpuPct"] if r["binding"].startswith("CPU") else eff["ramPct"]
-    tco = (r.get("advisory") or {}).get("costs", {}).get("tco")
-    cost = tco if tco is not None else r["budget"]
+def _cost_basis(results: List[Dict[str, Any]]) -> str:
+    """Compare like with like: TCO when every option has one, else hardware budget, else licence cores."""
+    live = [r for r in results if r["hostsTotal"]]
+    if live and all((r.get("advisory") or {}).get("costs", {}).get("tco") is not None for r in live):
+        return "tco"
+    if live and all(r["budget"] is not None for r in live):
+        return "budget"
+    return "cores"
+
+
+def _cost_of(r: Dict[str, Any], basis: str) -> float:
+    if basis == "tco":
+        return r["advisory"]["costs"]["tco"]
+    if basis == "budget":
+        return r["budget"]
+    return float((r.get("advisory") or {}).get("license", {}).get("coresTotal") or 0)
+
+
+def _is_tight(r: Dict[str, Any], params: "SizingParams") -> bool:
+    run = ((r.get("advisory") or {}).get("runway") or {}).get("extraGrowthPct")
+    low = getattr(params.advisory, "low_runway_pct", 10.0)
+    return bool(r["failure"].get("atLimit")) or (run is not None and run < low) or not r["failure"]["ok"]
+
+
+def _rank_key(r: Dict[str, Any], params: "SizingParams", basis: str):
+    """Fewest hosts → lowest cost (same basis for all options) → not sitting at the limit →
+    highest overall score. (Previously ties went to the *most utilised* option, which picked
+    configurations with no growth headroom.)"""
     hosts = r["hostsTotal"] if r["hostsTotal"] else 10**9
-    cost_k = cost if cost is not None else float("inf")
-    if optimize_for == "cost":
-        return (cost_k, hosts, -(eff_bind or 0))
-    return (hosts, cost_k, -(eff_bind or 0))
+    cost = _cost_of(r, basis) if r["hostsTotal"] else float("inf")
+    tight = 1 if _is_tight(r, params) else 0
+    score = -((r.get("advisory") or {}).get("scoreTotal") or 0)
+    if params.optimize_for == "cost":
+        return (cost, hosts, tight, score)
+    return (hosts, cost, tight, score)
+
+
+STD_CORES = [8, 12, 16, 24, 32, 48, 64, 96, 128]
+STD_RAM_GB = [128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096]
+
+
+def _ram_label(gb: float) -> str:
+    return f"{gb / 1024:g} TB" if gb >= 1024 else f"{gb:g} GB"
+
+
+def _suggest_variants(best_profile: HostProfile, best: Dict[str, Any], profiles: List[HostProfile],
+                      demand: Dict[str, Any], params: "SizingParams") -> List[Dict[str, Any]]:
+    """Reference options the customer usually asks about: fewer cores per CPU when CPU is
+    largely idle (licence is per core), and more RAM per host when the pick has no headroom."""
+    out: List[Dict[str, Any]] = []
+    existing = {(p.sockets, p.cores_per_socket, float(p.ram_gb)) for p in profiles}
+
+    def try_add(prof: HostProfile, why: str, must_keep_hosts: bool = True):
+        key = (prof.sockets, prof.cores_per_socket, float(prof.ram_gb))
+        if key in existing:
+            return
+        r = size_profile(prof, demand, params)
+        if not r["hostsTotal"] or not r["failure"]["ok"] or r["failure"].get("atLimit"):
+            return
+        if must_keep_hosts and r["hostsTotal"] > best["hostsTotal"]:
+            return
+        r["suggested"] = True
+        r["suggestedWhy"] = why
+        existing.add(key)
+        out.append(r)
+
+    bp = best_profile
+    tight = bool(best["failure"].get("atLimit"))
+    ram_bound = best["binding"] in ("RAM", "CPU & RAM")
+    # More RAM when the pick is at the limit on RAM.
+    bigger_ram = next((g for g in STD_RAM_GB if g > bp.ram_gb), None)
+    if tight and ram_bound and bigger_ram:
+        try_add(HostProfile(name=f"{bp.sockets}×{bp.cores_per_socket}C / {_ram_label(bigger_ram)} (gợi ý)", sockets=bp.sockets,
+                            cores_per_socket=bp.cores_per_socket, ram_gb=bigger_ram, disk_gb=bp.disk_gb), "more_ram")
+    base_ram = bigger_ram if (tight and ram_bound and bigger_ram) else bp.ram_gb
+    # Fewer cores when CPU is mostly idle (after losing the redundant hosts).
+    cpu_fail = best["failure"]["cpuPct"] or 0
+    lic_min = max(1, int(params.license_min_cores_per_socket or 0))
+    if cpu_fail < 50:
+        for c in STD_CORES:
+            if c >= lic_min and c < bp.cores_per_socket:
+                before = len(out)
+                try_add(HostProfile(name=f"{bp.sockets}×{c}C / {_ram_label(base_ram)} (gợi ý)", sockets=bp.sockets,
+                                    cores_per_socket=c, ram_gb=base_ram, disk_gb=bp.disk_gb), "fewer_cores")
+                if len(out) > before:
+                    break
+    return out
 
 
 def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostProfile]) -> Dict[str, Any]:
@@ -231,77 +317,117 @@ def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostPro
     demand = summarize_demand(vms, params)
     results = [size_profile(p, demand, params) for p in profiles]
     sizing_advisory.annotate_results(results, vms, params, demand)
-    ranked = sorted(range(len(results)), key=lambda i: _rank_key(results[i], params.optimize_for))
+    basis = _cost_basis(results)
+    ranked = sorted(range(len(results)), key=lambda i: _rank_key(results[i], params, basis))
     best_idx = ranked[0] if ranked and demand["vmCount"] else None
     for i, r in enumerate(results):
         r["recommended"] = (i == best_idx)
         r["rank"] = ranked.index(i) + 1 if ranked else None
+        r["tight"] = _is_tight(r, params)
 
-    recommendation = _recommendation_text(demand, params, results[best_idx] if best_idx is not None else None)
+    best = results[best_idx] if best_idx is not None else None
+    if best is not None and params.suggest_variants:
+        variants = _suggest_variants(profiles[best_idx], best, profiles, demand, params)
+        if variants:
+            sizing_advisory.annotate_results(variants, vms, params, demand, ref_rows=results)
+            for v in variants:
+                v["recommended"] = False
+                v["rank"] = None
+                v["tight"] = _is_tight(v, params)
+            results = results + variants
+
+    recommendation = _recommendation_text(demand, params, best, results, basis)
     return {
         "demand": demand,
         "params": {**params.__dict__, "advisory": params.advisory.__dict__.copy()},
         "results": results,
         "recommendedIndex": best_idx,
         "recommendation": recommendation,
+        "costBasis": basis,
         "assumptions": assumption_lines(params),
         "analysis": sizing_advisory.build_advisory(vms, params, profiles, demand, results, best_idx),
     }
 
 
-def assumption_lines(p: SizingParams) -> List[str]:
-    lines = [
-        f"Overcommit CPU mục tiêu {p.cpu_ratio:g}x trên pCPU logic (HT ×{p.ht_factor:g}); RAM {p.ram_ratio:g}x.",
-        f"Chỉ dùng tối đa {p.max_util_pct:g}% năng lực mỗi host (headroom {100 - p.max_util_pct:g}%).",
-        f"Dự phòng tăng trưởng +{p.growth_pct:g}% trên nhu cầu ban đầu.",
-        f"Dự phòng hỏng hóc N+{p.redundancy}; tối thiểu {p.min_hosts} host/cluster.",
-        f"ESXi chiếm {p.reserve_cores:g} core và {p.reserve_ram_gb:g} GB RAM mỗi host.",
+def assumption_rows(p: SizingParams) -> List[List[str]]:
+    """[hạng mục, giá trị, ý nghĩa] — the assumptions table of the report."""
+    ht = max(1.0, p.ht_factor)
+    rows = [
+        ["Tỷ lệ chia sẻ CPU", f"{p.cpu_ratio:g} vCPU / thread (≈ {p.cpu_ratio * ht:g} vCPU / core)", "Số vCPU tối đa xếp lên 1 luồng CPU vật lý (HT ×" + f"{ht:g})"],
+        ["Tỷ lệ chia sẻ RAM", f"{p.ram_ratio:g} : 1", "Không cấp RAM vượt dung lượng thật" if p.ram_ratio <= 1 else "Cấp RAM vượt dung lượng thật"],
+        ["Vùng an toàn", f"{100 - p.max_util_pct:g}%", f"Mỗi host chỉ dùng tối đa {p.max_util_pct:g}%"],
+        ["Dự phòng tăng trưởng", f"+{p.growth_pct:g}%", "Cộng vào nhu cầu ban đầu (tương đương năm thứ 1 của dự báo nếu bằng tăng trưởng hằng năm)"],
+        ["Dự phòng sự cố", f"N+{p.redundancy}, tối thiểu {p.min_hosts} host", f"Mất {p.redundancy} host hệ thống vẫn chạy" if p.redundancy else "Không có host dự phòng"],
+        ["Tài nguyên dành cho ESXi", f"{p.reserve_cores:g} core + {p.reserve_ram_gb:g} GB / host", "Trừ khỏi năng lực khả dụng"],
     ]
     if p.storage_mode == "local":
-        lines.append(f"Lưu trữ cục bộ/vSAN: overhead {p.storage_overhead_pct:g}%, hệ số bảo vệ ×{p.storage_protection_factor:g}.")
+        rows.append(["Lưu trữ (vSAN)", f"Hệ số bảo vệ ×{p.storage_protection_factor:g}, dự trữ {p.storage_overhead_pct:g}%",
+                     "×2 tương đương RAID-1, chịu lỗi 1 host; dự trữ cho snapshot, swap, dựng lại dữ liệu"])
     else:
-        lines.append(f"Lưu trữ trên SAN dùng chung: dung lượng cấp phát + {p.storage_overhead_pct:g}% overhead (snapshot, swap, tăng trưởng vmdk).")
-    lines.append(f"Dự báo {p.horizon_years} năm với tăng trưởng tự nhiên {p.annual_growth_pct:g}%/năm; TCO tính trong {p.horizon_years} năm.")
-    if p.license_price_per_core is not None:
-        lines.append(f"License tính theo core (tối thiểu {p.license_min_cores_per_socket} core/socket), {p.license_price_per_core:,.0f}/core/năm.")
-    else:
-        lines.append(f"License tính theo core (tối thiểu {p.license_min_cores_per_socket} core/socket); chưa nhập đơn giá license.")
-    return lines
+        rows.append(["Lưu trữ (SAN)", f"Dự trữ {p.storage_overhead_pct:g}%", "Snapshot, swap, tăng trưởng ổ đĩa ảo, vùng trống tối thiểu"])
+    rows.append(["Tăng trưởng hằng năm", f"{p.annual_growth_pct:g}% / năm, dự báo {p.horizon_years} năm",
+                 "Dự báo tính lại từ nhu cầu ban đầu, không cộng dồn với dự phòng tăng trưởng"])
+    rows.append(["License", f"Theo core, tối thiểu {p.license_min_cores_per_socket} core / CPU",
+                 (f"{p.license_price_per_core:,.0f} / core / năm" if p.license_price_per_core is not None else "Chưa có đơn giá")
+                 + f"; {p.license_edition}"])
+    return rows
+
+
+def assumption_lines(p: SizingParams) -> List[str]:
+    return [f"{k}: {v} — {m}." for k, v, m in assumption_rows(p)]
 
 
 def _fmt_int(v: float) -> str:
     return f"{int(round(v)):,}"
 
 
-def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Optional[Dict[str, Any]]) -> Dict[str, str]:
+def _tib(gb: float) -> str:
+    return f"{gb / 1024:,.1f} TiB" if gb >= 1024 else f"{gb:,.0f} GB"
+
+
+def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Optional[Dict[str, Any]],
+                         results: Optional[List[Dict[str, Any]]] = None, basis: str = "cores") -> Dict[str, str]:
     if not best or not demand["vmCount"]:
-        return {"headline": "Chưa có VM nào trong danh sách yêu cầu.", "detail": ""}
+        return {"headline": "Chưa có VM nào trong danh sách yêu cầu.", "detail": "", "why": ""}
     p = best["profile"]
-    tb = f"{_fmt_int(demand['storageNeededGB'] / 1024)} TB" if demand["storageNeededGB"] >= 1024 else f"{_fmt_int(demand['storageNeededGB'])} GB"
     headline = (
-        f"Đề xuất {best['hostsTotal']} host {p['name']} ({p['cores']} cores · {_fmt_int(p['ramGB'])} GB RAM mỗi host) "
-        f"cho {demand['vmCount']} VM "
-        f"({_fmt_int(demand['vcpu'])} vCPU · {_fmt_int(demand['ramGB'])} GB RAM · {_fmt_int(demand['diskGB'])} GB disk)."
+        f"Đề xuất {best['hostsTotal']} host {p['name']} ({p['cores']} core · {_fmt_int(p['ramGB'])} GB RAM mỗi host) "
+        f"cho {demand['vmCount']} VM ({_fmt_int(demand['vcpu'])} vCPU · {_fmt_int(demand['ramGB'])} GB RAM · {_tib(demand['diskGB'])} dữ liệu)."
     )
     fail = best["failure"]
-    fail_txt = (
-        f"Khi {best['redundancy']} máy chủ gặp sự cố, các máy còn lại vẫn đáp ứng ({fail['cpuPct']:.0f}% CPU · {fail['ramPct']:.0f}% RAM)."
-        if fail["ok"] and fail["cpuPct"] is not None else
-        "Chưa đảm bảo dự phòng N+%d — cần bổ sung máy chủ hoặc điều chỉnh tỷ lệ chia sẻ tài nguyên." % best["redundancy"]
-    )
-    store_txt = (
-        f"Dung lượng lưu trữ cần cấp: {tb} trên SAN." if params.storage_mode == "san"
-        else f"Dung lượng lưu trữ cục bộ: {tb} (~{_fmt_int(best['storage'].get('perHostNeededGB', 0))} GB mỗi máy chủ)."
-    )
+    if fail["ok"] and fail["cpuPct"] is not None:
+        fail_txt = (f"Khi mất {best['redundancy']} host, cụm dùng {fail['cpuPct']:.0f}% CPU · {fail['ramPct']:.0f}% RAM"
+                    + (" — sát mức tối đa." if fail.get("atLimit") else "."))
+    else:
+        fail_txt = f"Chưa đạt dự phòng N+{best['redundancy']} — cần thêm host hoặc giảm tỷ lệ chia sẻ."
+    store_txt = (f"Lưu trữ cần cấp: {_tib(demand['storageNeededGB'])} trên SAN." if params.storage_mode == "san"
+                 else f"Lưu trữ vSAN: {_tib(demand['storageNeededGB'])} dung lượng thô (~{_tib(best['storage'].get('perHostNeededGB', 0))} mỗi host).")
     bind = {"CPU": "CPU", "RAM": "RAM", "CPU & RAM": "cả CPU và RAM"}.get(best["binding"], best["binding"])
-    detail = (
-        f"Số máy chủ được quyết định bởi {bind}: cần {best['hostsForCpu']} máy chủ để đủ CPU, {best['hostsForRam']} máy chủ để đủ RAM, "
-        f"cộng {best['redundancy']} máy dự phòng. {fail_txt} {store_txt}"
-    )
+    detail = (f"Yếu tố quyết định số host là {bind}: cần {best['hostsForCpu']} host theo CPU, {best['hostsForRam']} host theo RAM, "
+              f"cộng {best['redundancy']} host dự phòng. {fail_txt} {store_txt}")
     extra = best["spare"].get("extraAvgVms")
     if extra is not None:
-        detail += f" Sau khi trừ dự phòng, hệ thống vẫn còn chỗ cho khoảng {extra} máy ảo cỡ trung bình nữa."
-    return {"headline": headline, "detail": detail}
+        detail += (" Không còn dư địa cho VM mới khi vẫn giữ dự phòng." if extra <= 0
+                   else f" Sau khi trừ dự phòng, cụm còn chứa thêm khoảng {extra} VM cỡ trung bình.")
+    # Why this option over the others (same order as the ranking rule).
+    why = ""
+    peers = [r for r in (results or []) if r is not best and r["hostsTotal"] and not r.get("suggested")]
+    if peers:
+        basis_txt = {"tco": "TCO", "budget": "chi phí phần cứng", "cores": "số core license"}[basis]
+        same_hosts = [r for r in peers if r["hostsTotal"] == best["hostsTotal"]]
+        parts = []
+        fewer = [r for r in peers if r["hostsTotal"] > best["hostsTotal"]]
+        if fewer and params.optimize_for != "cost":
+            parts.append(f"ít host hơn {', '.join(r['profile']['name'] for r in fewer[:2])}")
+        if same_hosts:
+            tight_peers = [r for r in same_hosts if r.get("tight")]
+            if tight_peers and not best.get("tight"):
+                parts.append(f"cùng {best['hostsTotal']} host nhưng {', '.join(r['profile']['name'] for r in tight_peers[:2])} sát ngưỡng, không còn dư địa")
+            else:
+                parts.append(f"cùng số host, {basis_txt} thấp hơn hoặc bằng và điểm tổng hợp cao hơn")
+        if parts:
+            why = "Lý do chọn: " + "; ".join(parts) + "."
+    return {"headline": headline, "detail": detail, "why": why}
 
 
 # ---------------------------------------------------------------------------

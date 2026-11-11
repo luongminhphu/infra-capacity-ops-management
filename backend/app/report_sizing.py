@@ -5,13 +5,10 @@ assumptions, with the requested VM list and the existing-cluster absorption
 check as appendices. Meant to be attached to a procurement proposal."""
 from typing import Any, Dict, List, Optional
 
-from . import sizing, sizing_advisory
+from . import sizing
 from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
                          fmt_num, fmt_pct, html_to_pdf_bytes)
 from .report_planning import _planning_css
-from .report_pdf import svg_bar_chart, svg_donut, svg_gauge, svg_radar_chart
-from .report_sizing_charts import (SEG_COLORS, SERIES_COLORS, money_short, svg_cost_bars, svg_dual_hbars, svg_lines,
-                                   svg_projection, svg_stack_bars, svg_waterfall)
 
 PRIORITY_CSS = {"cao": "priority-cao", "tb": "priority-tb", "thap": "priority-thap", "info": "priority-info"}
 PRIORITY_TXT = {"cao": "Quyết định chính", "tb": "Kèm theo", "thap": "Tuỳ chọn", "info": "Thông tin"}
@@ -23,23 +20,24 @@ import re as _re
 # ("Duyệt ngân sách …"). In the full consulting report the author is the SI /
 # solution provider talking to the customer, so the same lines are re-voiced.
 _SI_DECISIONS = [
-    (r"^Duyệt ngân sách (.+)$", r"Quý khách phê duyệt ngân sách \1"),
-    (r"^Duyệt chủ trương mua sắm \(chưa có báo giá\)$", "Quý khách phê duyệt chủ trương đầu tư; chúng tôi gửi báo giá chi tiết"),
-    (r"^Duyệt cấp dung lượng lưu trữ$", "Quý khách xác nhận dung lượng lưu trữ cấp cho hệ thống"),
-    (r"^Thêm host hoặc hạ overcommit mục tiêu$", "Chúng tôi bổ sung máy chủ hoặc điều chỉnh tỷ lệ chia sẻ tài nguyên"),
-    (r"^Cân nhắc dùng chung thay vì mua mới$", "Có thể triển khai trên hạ tầng sẵn có nếu Quý khách ưu tiên tiết kiệm chi phí"),
-    (r"^Bắt buộc bổ sung host$", "Cần đầu tư máy chủ mới theo đề xuất"),
-    (r"^Duyệt chủ trương dùng chung hạ tầng, thống nhất với System Owner cluster (.+)$", r"Quý khách phê duyệt dùng chung hạ tầng; chúng tôi phối hợp với đơn vị quản lý cluster \1"),
-    (r"^Chỉ duyệt dùng chung kèm bổ sung host; System Owner cluster (.+) xác nhận$", r"Chỉ nên dùng chung khi bổ sung máy chủ; chúng tôi phối hợp với đơn vị quản lý cluster \1"),
-    (r"^Cân nhắc chuyển dự án sang cluster (.+)$", r"Chúng tôi khuyến nghị triển khai trên cluster \1"),
-    (r"^Duyệt thêm 1 host dự phòng cho cluster$", "Quý khách phê duyệt bổ sung 1 máy chủ dự phòng"),
-    (r"^Không cần host dự phòng thêm$", "Không cần bổ sung máy chủ dự phòng"),
-    (r"^Theo dõi; đưa mở rộng vào kỳ quy hoạch tài nguyên$", "Chúng tôi theo dõi và đề xuất mở rộng trong kỳ quy hoạch tiếp theo"),
+    (r"^Duyệt ngân sách (.+)$", r"Phê duyệt ngân sách \1"),
+    (r"^Duyệt chủ trương mua sắm \(chưa có báo giá\)$", "Phê duyệt chủ trương đầu tư; báo giá chi tiết gửi kèm"),
+    (r"^Duyệt cấp dung lượng lưu trữ$", "Xác nhận dung lượng lưu trữ cấp cho hệ thống"),
+    (r"^Thêm host hoặc hạ overcommit mục tiêu$", "Bổ sung host hoặc giảm tỷ lệ chia sẻ tài nguyên"),
+    (r"^Cân nhắc dùng chung thay vì mua mới$", "Có thể triển khai trên hạ tầng sẵn có nếu ưu tiên tiết kiệm chi phí"),
+    (r"^Bắt buộc bổ sung host$", "Cần đầu tư host mới theo đề xuất"),
+    (r"^Duyệt chủ trương dùng chung hạ tầng, thống nhất với System Owner cluster (.+)$", r"Phê duyệt dùng chung hạ tầng; phối hợp với đơn vị quản lý cụm \1"),
+    (r"^Chỉ duyệt dùng chung kèm bổ sung host; System Owner cluster (.+) xác nhận$", r"Chỉ dùng chung khi bổ sung host; phối hợp với đơn vị quản lý cụm \1"),
+    (r"^Cân nhắc chuyển dự án sang cluster (.+)$", r"Khuyến nghị triển khai trên cụm \1"),
+    (r"^Duyệt thêm 1 host dự phòng cho cluster$", "Phê duyệt bổ sung 1 host dự phòng"),
+    (r"^Không cần host dự phòng thêm$", "Không cần bổ sung host dự phòng"),
+    (r"^Theo dõi; đưa mở rộng vào kỳ quy hoạch tài nguyên$", "Theo dõi và đưa mở rộng vào kỳ quy hoạch tiếp theo"),
     (r"^Lập kế hoạch mở rộng ngay$", "Cần lập kế hoạch mở rộng ngay"),
     (r"^Không phải chi nếu dùng chung$", "Không phát sinh chi phí nếu dùng chung hạ tầng"),
     (r"^Phương án dự phòng nếu không dùng chung được$", "Phương án thay thế nếu không dùng chung được"),
-    (r"^Đạt với cấu hình đề xuất$", "Đã bao gồm trong cấu hình đề xuất"),
-    (r"^Cần tăng đĩa cục bộ mỗi host$", "Chúng tôi sẽ bổ sung ổ đĩa cho mỗi máy chủ"),
+    (r"^Đạt với cấu hình đề xuất$", "Đã gồm trong cấu hình đề xuất"),
+    (r"^Cần tăng đĩa cục bộ mỗi host$", "Cần bổ sung ổ đĩa cho mỗi host"),
+    (r"^Đạt dự phòng N\+(\d+)$", r"Đạt dự phòng N+\1"),
 ]
 
 
@@ -54,7 +52,7 @@ def _si_voice(text: str) -> str:
 def _gb(v: Optional[float]) -> str:
     if v is None:
         return "—"
-    return f"{fmt_num(v / 1024, 1)} TB" if v >= 1024 else f"{fmt_int(v)} GB"
+    return f"{fmt_num(v / 1024, 1)} TiB" if v >= 1024 else f"{fmt_int(v)} GB"
 
 
 def _money(v: Optional[float], currency: str) -> str:
@@ -86,14 +84,15 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
                           "decision": "Duyệt cấp dung lượng lưu trữ", "time": "Cùng đợt lắp host"})
         else:
             st = best["storage"]
-            items.append({"pri": "tb", "title": f"Đĩa cục bộ ~{_gb(st.get('perHostNeededGB'))}/host (tổng {_gb(d['storageNeededGB'])}, hệ số bảo vệ ×{p['storage_protection_factor']:g})",
+            items.append({"pri": "tb", "title": f"vSAN: ~{_gb(st.get('perHostNeededGB'))} thô / host (tổng {_gb(d['storageNeededGB'])}, hệ số bảo vệ ×{p['storage_protection_factor']:g})",
                           "decision": "Đạt với cấu hình đề xuất" if st.get("ok") else "Cần tăng đĩa cục bộ mỗi host", "time": "Trong cấu hình host"})
             if st.get("ok") is False:
                 status_cls = "warn"
         f = best["failure"]
         if best["redundancy"] and f["ok"]:
-            items.append({"pri": "info", "title": f"Mất {best['redundancy']} host vẫn chạy được: CPU {fmt_pct(f['cpuPct'], 0)} · RAM {fmt_pct(f['ramPct'], 0)} năng lực mục tiêu",
-                          "decision": f"Đạt dự phòng N+{best['redundancy']}", "time": ""})
+            items.append({"pri": "info", "title": f"Mất {best['redundancy']} host vẫn chạy được: CPU {fmt_pct(f['cpuPct'], 0)} · RAM {fmt_pct(f['ramPct'], 0)}"
+                                   + (" — sát mức tối đa" if f.get("atLimit") else ""),
+                          "decision": f"Đạt dự phòng N+{best['redundancy']}" + (" (sát ngưỡng)" if f.get("atLimit") else ""), "time": ""})
         elif best["redundancy"]:
             status_cls = "warn"
             items.append({"pri": "cao", "title": f"Chưa đạt dự phòng N+{best['redundancy']}", "decision": "Thêm host hoặc hạ overcommit mục tiêu", "time": ""})
@@ -120,21 +119,23 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
                f'<span class="rec-sum-text"><b>{esc(it["title"])}</b> → {esc(it["decision"])}{time_html}</span></li>')
 
     stats = [
-        {"label": "VM yêu cầu", "value": fmt_int(d["vmCount"]), "sub": f"TB {fmt_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} / VM", "cls": "na"},
+        {"label": "VM yêu cầu", "value": fmt_int(d["vmCount"]), "sub": f"trung bình {fmt_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} / VM", "cls": "na"},
         {"label": "vCPU", "value": f"{fmt_int(d['vcpu'])} → {fmt_int(d['vcpuPlanned'])}", "sub": f"sau +{p['growth_pct']:g}% tăng trưởng", "cls": "na"},
-        {"label": "RAM (GB)", "value": f"{fmt_int(d['ramGB'])} → {fmt_int(d['ramPlannedGB'])}", "sub": f"sau tăng trưởng · overcommit {p['ram_ratio']:g}x", "cls": "na"},
+        {"label": "RAM (GB)", "value": f"{fmt_int(d['ramGB'])} → {fmt_int(d['ramPlannedGB'])}", "sub": f"sau tăng trưởng · tỷ lệ chia sẻ {p['ram_ratio']:g} : 1", "cls": "na"},
         {"label": "Host đề xuất", "value": f"{best['hostsTotal']} host" if best else "—",
          "sub": (f"{best['profile']['name']} · N+{best['redundancy']}" if best else ""), "cls": "ok" if best else "na"},
-        {"label": "SAN cần cấp" if p["storage_mode"] == "san" else "Lưu trữ cục bộ", "value": _gb(d["storageNeededGB"]),
-         "sub": f"từ {_gb(d['diskGB'])} yêu cầu", "cls": "na"},
+        {"label": "SAN cần cấp" if p["storage_mode"] == "san" else "vSAN (dung lượng thô)", "value": _gb(d["storageNeededGB"]),
+         "sub": f"từ {_gb(d['diskGB'])} dữ liệu", "cls": "na"},
     ]
+    if best and best["failure"].get("atLimit"):
+        status_cls = "warn"
     fg, bg = STATUS_COLOR[status_cls]
     headline = result["recommendation"]["headline"] if best else "Chưa có VM nào trong danh sách yêu cầu."
     return f"""
     <div class="exec-brief {status_cls}">
       <div class="exec-brief-head">
         <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{status_label}</span>
-        <span class="exec-brief-title">{'Tổng kết — giải pháp đề xuất &amp; hạng mục cần Quý khách quyết định' if si else 'Tổng kết — đề xuất &amp; quyết định đề nghị'}</span>
+        <span class="exec-brief-title">{'Giải pháp đề xuất &amp; hạng mục cần quyết định' if si else 'Tổng kết — đề xuất &amp; quyết định đề nghị'}</span>
       </div>
       <div class="exec-brief-headline">{esc(headline)}</div>
       <ol class="rec-sum">{li}</ol>
@@ -143,7 +144,7 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
 
 
 def _comparison_table(result: Dict[str, Any], currency: str) -> str:
-    rows = result["results"]
+    rows = [r for r in result["results"] if not r.get("suggested")]
     local = result["params"]["storage_mode"] == "local"
     any_price = any(r["budget"] is not None for r in rows)
     body = ""
@@ -185,7 +186,7 @@ def _assumptions_html(result: Dict[str, Any]) -> str:
       <div class="small-note" style="margin-top:4px;">Cách tính: số host = max(host theo CPU, host theo RAM) + dự phòng N+{p['redundancy']}, tối thiểu {p['min_hosts']} host.
       Host theo CPU = vCPU yêu cầu (sau tăng trưởng) ÷ [(cores − {p['reserve_cores']:g}) × HT {p['ht_factor']:g} × {p['cpu_ratio']:g}x × {p['max_util_pct']:g}%];
       host theo RAM = RAM yêu cầu ÷ [(RAM host − {p['reserve_ram_gb']:g} GB) × {p['ram_ratio']:g}x × {p['max_util_pct']:g}%].
-      Phương án đề xuất: ít host nhất → ngân sách thấp nhất → hiệu suất dùng cao nhất. Overcommit thực tế sau khi lắp luôn thấp hơn mục tiêu vì đã trừ headroom và dự phòng.</div>
+      Phương án đề xuất: ít host nhất → chi phí thấp nhất (TCO, ngân sách hoặc số core license) → không sát ngưỡng → điểm tổng hợp cao nhất. Overcommit thực tế sau khi lắp luôn thấp hơn mục tiêu vì đã trừ vùng an toàn và dự phòng.</div>
     </div>"""
 
 
@@ -318,7 +319,7 @@ def _reuse_summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], e
 
     tgt_cls = "ok" if (target and _feasible(target)) else ("crit" if (not target or target.get("cls") == "crit") else "warn")
     stats = [
-        {"label": "VM yêu cầu", "value": fmt_int(d["vmCount"]), "sub": f"TB {fmt_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} / VM", "cls": "na"},
+        {"label": "VM yêu cầu", "value": fmt_int(d["vmCount"]), "sub": f"trung bình {fmt_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} / VM", "cls": "na"},
         {"label": "vCPU", "value": f"{fmt_int(d['vcpu'])} → {fmt_int(d['vcpuPlanned'])}", "sub": f"sau +{p['growth_pct']:g}% tăng trưởng", "cls": "na"},
         {"label": "RAM (GB)", "value": f"{fmt_int(d['ramGB'])} → {fmt_int(d['ramPlannedGB'])}", "sub": "sau tăng trưởng", "cls": "na"},
         {"label": "Cluster tiếp nhận", "value": target["name"] if target else "Không có",
@@ -332,7 +333,7 @@ def _reuse_summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], e
     <div class="exec-brief {status_cls}">
       <div class="exec-brief-head">
         <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{status_label}</span>
-        <span class="exec-brief-title">{'Tổng kết — giải pháp đề xuất &amp; hạng mục cần Quý khách quyết định' if si else 'Tổng kết — đề xuất &amp; quyết định đề nghị'}</span>
+        <span class="exec-brief-title">{'Giải pháp đề xuất &amp; hạng mục cần quyết định' if si else 'Tổng kết — đề xuất &amp; quyết định đề nghị'}</span>
       </div>
       <div class="exec-brief-headline">{esc(headline)}</div>
       <ol class="rec-sum">{li}</ol>
@@ -435,477 +436,10 @@ def render_brief_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, pro
 
 
 
-# ===========================================================================
-# Full consulting report ("Báo cáo tư vấn sizing") — cover, TOC and chaptered
-# analysis with charts. Built for delivery to customers / partners, so every
-# label that names the issuer is white-label (prepared_org, customer, code).
-# ===========================================================================
-SEV_PILL = {"critical": ("crit", "Nghiêm trọng"), "warning": ("warn", "Cảnh báo"), "info": ("na", "Lưu ý"), "ok": ("ok", "Đạt")}
-READINESS_TXT = {"ok": ("ok", "SẴN SÀNG TRIỂN KHAI"), "warn": ("warn", "TRIỂN KHAI ĐƯỢC · CẦN LƯU Ý"), "crit": ("crit", "CẦN XỬ LÝ RỦI RO")}
-
-
-def _fmt_dec(v: Optional[float], d: int = 1) -> str:
-    return "—" if v is None else fmt_num(v, d)
-
-
-def _legend(items: List[tuple]) -> str:
-    return '<div class="legend">' + "".join(
-        f'<span><span class="dot" style="background:{c};"></span>{esc(t)}</span>' for c, t in items) + "</div>"
-
-
-def _capacity_segments(r: Dict[str, Any], d: Dict[str, Any], p: Dict[str, Any]) -> List[Dict[str, Any]]:
-    n, red, n_fail = r["hostsTotal"], r["redundancy"], r["failure"]["hostsLeft"]
-    util = max(0.05, min(1.0, p["max_util_pct"] / 100.0))
-    ph, prof = r["perHost"], r["profile"]
-    rows = []
-    for label, total, usable_host, req, planned in (
-        ("CPU", prof["cores"] * max(1.0, p["ht_factor"]) * p["cpu_ratio"] * n, ph["logicalCpu"] * p["cpu_ratio"], d["vcpu"], d["vcpuPlanned"]),
-        ("RAM", prof["ramGB"] * p["ram_ratio"] * n, ph["usableRamGB"] * p["ram_ratio"], d["ramGB"], d["ramPlannedGB"]),
-    ):
-        rows.append({"label": label, "segments": [
-            {"key": "request", "label": "Yêu cầu của dự án", "value": req},
-            {"key": "growth", "label": "Dự phòng tăng trưởng", "value": planned - req},
-            {"key": "free", "label": "Còn trống (sau N+x)", "value": max(0.0, usable_host * n_fail * util - planned)},
-            {"key": "headroom", "label": f"Headroom {100 - p['max_util_pct']:g}%", "value": usable_host * n_fail * (1 - util)},
-            {"key": "redundancy", "label": f"Dự phòng N+{red}", "value": usable_host * red},
-            {"key": "esxi", "label": "ESXi", "value": max(0.0, total - usable_host * n)},
-        ]})
-    return rows
-
-
-def _cover(result, best, params, *, title, customer, prepared_org, prepared_by, doc_code, generated_at, logo_html, currency, mode) -> str:
-    d = result["demand"]
-    a = result["analysis"]
-    cls, txt = READINESS_TXT.get(a.get("readiness") or "ok")
-    fg, bg = STATUS_COLOR[cls]
-    tco = best["advisory"]["costs"]["tco"] if best else None
-    tiles = [
-        ("VM yêu cầu", fmt_int(d["vmCount"]), f"{fmt_int(d['vcpu'])} vCPU · {_gb(d['ramGB'])} RAM"),
-        ("Host đề xuất", f"{best['hostsTotal']}" if best else "—", f"{best['profile']['name']} · N+{best['redundancy']}" if best else ""),
-        (f"TCO {params.horizon_years} năm" if tco else "Lưu trữ cần cấp", money_short(tco, currency) if tco else _gb(d["storageNeededGB"]),
-         "phần cứng + license" if tco else ("SAN dùng chung" if params.storage_mode == "san" else "cục bộ / vSAN")),
-        ("Rủi ro / lưu ý", f"{a['findingCounts'].get('critical', 0)} / {a['findingCounts'].get('warning', 0)}", "nghiêm trọng / cảnh báo"),
-    ]
-    tiles_html = "".join(f'<div class="cv-tile"><div class="cv-tile-label">{esc(l)}</div><div class="cv-tile-value">{esc(v)}</div><div class="cv-tile-sub">{esc(s)}</div></div>' for l, v, s in tiles)
-    meta = [("Dự án / hệ thống", params.environment or "—"), ("Khách hàng", customer or "—"),
-            ("Đơn vị tư vấn", prepared_org or "—"), ("Người lập", prepared_by or "—"),
-            ("Mã tài liệu", doc_code or "—"), ("Ngày lập", generated_at or "—"),
-            ("Phạm vi", "Tận dụng hạ tầng hiện hữu + trang bị mới" if mode == "reuse" else "Trang bị mới máy chủ vật lý")]
-    meta_html = "".join(f"<tr><td>{esc(k)}</td><td><b>{esc(v)}</b></td></tr>" for k, v in meta)
-    toc = [("sec-summary", "Tóm tắt điều hành"), ("sec-workload", "Phân tích nhu cầu workload"),
-           ("sec-options", "So sánh phương án cấu hình"), ("sec-design", "Thiết kế đề xuất chi tiết"),
-           ("sec-sensitivity", "Độ nhạy & dự báo tăng trưởng"), ("sec-risks", "Rủi ro & khuyến nghị"),
-           ("sec-roadmap", "Lộ trình triển khai"), ("sec-method", "Giả định & phương pháp"), ("sec-appendix", "Phụ lục — Danh sách VM")]
-    if mode == "reuse":
-        toc.insert(1, ("sec-existing", "Hạ tầng hiện hữu — khả năng tiếp nhận"))
-    toc_html = "".join(f'<li><a href="#{i}">{esc(t)}</a></li>' for i, t in toc)
-
-    # Key conclusions — fills the cover with the few facts a decision maker reads first.
-    keys: List[str] = []
-    if best:
-        keys.append(f"Ràng buộc chính <b>{esc(best['binding'])}</b>: {best['hostsForCpu']} host theo CPU, {best['hostsForRam']} host theo RAM, "
-                    f"+{best['redundancy']} dự phòng → <b>{best['hostsTotal']} host</b>.")
-        f = best["failure"]
-        if best["redundancy"] and f["cpuPct"] is not None:
-            keys.append((f"Mất {best['redundancy']} host vẫn vận hành: CPU {fmt_pct(f['cpuPct'], 0)} · RAM {fmt_pct(f['ramPct'], 0)} năng lực mục tiêu."
-                         if f["ok"] else f"<b>Chưa đạt N+{best['redundancy']}</b>: khi mất host, tải vượt năng lực mục tiêu."))
-        keys.append(f"Lưu trữ cần cấp <b>{_gb(d['storageNeededGB'])}</b> "
-                    + ("trên SAN dùng chung." if params.storage_mode == "san" else f"cục bộ / vSAN (~{_gb(best['storage'].get('perHostNeededGB'))}/host)."))
-        proj = a.get("projection")
-        if proj:
-            keys.append(f"Tăng trưởng {proj['annualGrowthPct']:g}%/năm: " + (f"cần mở rộng vào <b>năm thứ {proj['expandYear']}</b>." if proj["expandYear"] is not None
-                                                                            else f"đủ năng lực trong <b>{proj['years']} năm</b> dự báo."))
-        warn = [x["title"] for x in a["findings"] if x["severity"] in ("critical", "warning")]
-        if warn:
-            keys.append("Cần lưu ý: " + esc("; ".join(warn[:2])) + ("…" if len(warn) > 2 else "."))
-    keys_html = "".join(f"<li>{k}</li>" for k in keys)
-    return f"""
-<div class="cover-page">
-  <div class="cv-top">
-    <div class="cv-brand">{esc(prepared_org) if prepared_org else 'Infrastructure Capacity Advisory'}</div>
-    {logo_html}
-  </div>
-  <div class="cv-main">
-    <div class="eyebrow">Báo cáo tư vấn · Sizing hạ tầng ảo hoá VMware vSphere</div>
-    <div class="cv-title">{esc(title)}</div>
-    <div class="cv-sub">{esc(result['recommendation']['headline']) if best else 'Chưa có VM trong danh sách yêu cầu.'}</div>
-    <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{txt}</span>
-    <div class="cv-tiles">{tiles_html}</div>
-    {f'<div class="cv-keys"><div class="cv-h">Kết luận chính</div><ul>{keys_html}</ul></div>' if keys_html else ''}
-  </div>
-  <div class="two-col cv-bottom">
-    <div><div class="cv-h">Thông tin tài liệu</div><table class="cv-meta">{meta_html}</table></div>
-    <div><div class="cv-h">Nội dung</div><ol class="toc">{toc_html}</ol></div>
-  </div>
-  <div class="cv-foot">Báo cáo được lập dựa trên danh sách máy ảo Quý khách cung cấp và các giả định tại mục "Giả định & phương pháp". Cấu hình và chi phí chính xác sẽ được chúng tôi chốt trong báo giá chính thức.
-  {('Bảo mật — chỉ dùng nội bộ ' + esc(customer) + '.') if customer else 'Bảo mật — chỉ dùng nội bộ.'}</div>
-</div>"""
-
-
-def _section(sec_id: str, num: int, title: str, sub: str, body: str, cls: str = "") -> str:
-    sub_html = f'<div class="section-sub">{sub}</div>' if sub else ""
-    return f'<div class="section {cls}" id="{sec_id}"><div class="section-title"><span class="sec-num">{num}</span>{esc(title)}</div>{sub_html}{body}</div>'
-
-
-def _gauges(best: Dict[str, Any], p: Dict[str, Any]) -> str:
-    util = p["max_util_pct"]
-    zones = ((0.0, util, "ok"), (util, 100.0, "warn"))
-    f = best["failure"]
-    items = [
-        (best["after"]["cpuUtilPct"], "CPU · vận hành", f"{best['hostsTotal']} host"),
-        (best["after"]["ramUtilPct"], "RAM · vận hành", f"{best['hostsTotal']} host"),
-        (f["cpuPct"], f"CPU · mất {best['redundancy']} host", f"{f['hostsLeft']} host còn lại"),
-        (f["ramPct"], f"RAM · mất {best['redundancy']} host", f"{f['hostsLeft']} host còn lại"),
-    ]
-    cards = ""
-    for pct, top, cap in items:
-        cls = "na" if pct is None else ("ok" if pct <= util else ("warn" if pct <= 100 else "crit"))
-        color = COLORS[STATUS_COLOR[cls][0]] if cls != "na" else COLORS["faint"]
-        cards += f'<div class="gauge-card {cls}">{svg_gauge(pct, color, size=118, label_top=top, caption=cap, zones=zones)}</div>'
-    return f'<div class="gauge-row">{cards}</div>'
-
-
-def _findings_table(fnd: List[Dict[str, str]], limit: Optional[int] = None) -> str:
-    rows = ""
-    for x in fnd[:limit] if limit else fnd:
-        cls, lbl = SEV_PILL.get(x["severity"], ("na", x["severity"]))
-        rows += (f'<tr><td>{_pill(lbl, cls)}</td><td style="white-space:nowrap;color:{COLORS["muted"]};">{esc(x["area"])}</td>'
-                 f'<td><b>{esc(x["title"])}</b><div style="color:{COLORS["muted"]};font-size:8.2px;">{esc(x["detail"])}</div></td>'
-                 f'<td style="font-size:8.4px;">{esc(x["action"])}</td></tr>')
-    return f"""<table class="findings-table"><thead><tr><th style="width:62px;">Mức độ</th><th style="width:70px;">Lĩnh vực</th><th>Nhận định</th><th style="width:34%;">Khuyến nghị</th></tr></thead><tbody>{rows}</tbody></table>"""
-
-
-def _workload_section(result: Dict[str, Any], params) -> str:
-    d, a = result["demand"], result["analysis"]
-    wl = a["workload"]
-    bucket_colors = ["#bfdbfe", "#60a5fa", "#2681FF", "#1d4ed8", "#074B9B"]
-    segs = [{"label": b["label"], "value": b["count"], "color": bucket_colors[i]} for i, b in enumerate(wl["sizeBuckets"])]
-    donut = svg_donut(segs, size=118, center_label=fmt_int(d["vmCount"]), center_sub="VM")
-    leg = "".join(f'<div class="radar-legend-item"><span class="radar-swatch" style="background:{s["color"]};"></span>{esc(s["label"])} — <b>{fmt_int(s["value"])}</b> VM</div>'
-                  for s in segs if s["value"])
-    top = [{"label": g["name"], "a": g["vcpuShare"], "b": g["ramShare"]} for g in wl["topGroups"][:8]]
-    wf = a["waterfall"]
-    wf_cpu = svg_waterfall(wf["cpu"], width=330, height=165, unit="vCPU")
-    wf_ram = svg_waterfall(wf["ram"], width=330, height=165, unit="GB RAM")
-    lg = wl["largestVm"] or {}
-    char_note = {
-        "compute": "Chúng tôi ưu tiên máy chủ có CPU nhiều core, dung lượng RAM vừa phải.",
-        "balanced": "Cấu hình máy chủ 2 CPU phổ thông với tỷ lệ RAM/core trung bình là phù hợp.",
-        "memory": "Chúng tôi ưu tiên máy chủ dung lượng RAM lớn — RAM là yếu tố quyết định số lượng máy chủ.",
-    }[wl["character"]]
-    kpis = f"""<div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">VM · nhóm cấu hình</div><div class="kpi-value">{fmt_int(d['vmCount'])}</div><div class="kpi-sub">{wl['groupCount']} nhóm · {wl['paretoLines']} nhóm chiếm 80% RAM</div></div>
-      <div class="kpi-card"><div class="kpi-label">Tổng vCPU / RAM</div><div class="kpi-value">{fmt_int(d['vcpu'])} / {_gb(d['ramGB'])}</div><div class="kpi-sub">TB {fmt_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} mỗi VM</div></div>
-      <div class="kpi-card"><div class="kpi-label">Tỷ lệ RAM / vCPU</div><div class="kpi-value">{fmt_num(wl['ramPerVcpu'], 1)} GB</div><div class="kpi-sub">{esc(wl['characterLabel'])}</div></div>
-      <div class="kpi-card"><div class="kpi-label">VM lớn nhất</div><div class="kpi-value">{fmt_num(lg.get('vcpu'), 0)} vCPU</div><div class="kpi-sub">{esc(lg.get('name') or '—')} · {_gb(lg.get('ramGB') or 0)} RAM</div></div>
-    </div>"""
-    return f"""{kpis}
-    <div class="chart-row" style="margin-top:8px;">
-      <div class="chart-card"><div class="chart-card-title">Phân bố kích thước VM</div>
-        <div style="display:flex;gap:10px;align-items:center;">{donut}<div>{leg}</div></div></div>
-      <div class="chart-card"><div class="chart-card-title">Nhóm VM chiếm tài nguyên lớn nhất (% tổng)</div>{svg_dual_hbars(top, width=330)}
-        {_legend([(COLORS['primary'], '% vCPU'), (COLORS['accent'], '% RAM')])}</div>
-    </div>
-    <div class="chart-row" style="margin-top:8px;">
-      <div class="chart-card"><div class="chart-card-title">Từ yêu cầu đến năng lực lắp đặt — CPU</div>{wf_cpu}</div>
-      <div class="chart-card"><div class="chart-card-title">Từ yêu cầu đến năng lực lắp đặt — RAM</div>{wf_ram}</div>
-    </div>
-    <div class="insight-box" style="margin-top:8px;"><b>Nhận xét của chúng tôi:</b> hệ thống của Quý khách {esc(wl['characterLabel'][0].lower() + wl['characterLabel'][1:])}, trung bình {fmt_num(wl['ramPerVcpu'], 1)} GB RAM cho mỗi vCPU. {esc(char_note)}
-    {(' Danh sách có ' + str(len(wl['dbLike'])) + ' nhóm cơ sở dữ liệu / middleware (' + esc(', '.join(wl['dbLike'][:4])) + ') — chúng tôi sẽ dành tài nguyên ưu tiên cho các máy ảo này.') if wl['dbLike'] else ''}
-    Biểu đồ "Từ yêu cầu đến năng lực lắp đặt" cho thấy phần tài nguyên được cộng thêm ở mỗi bước (dự phòng tăng trưởng, vùng an toàn); cột cuối là tổng năng lực của giải pháp đề xuất, đã gồm máy chủ dự phòng.</div>"""
-
-
-def _options_section(result: Dict[str, Any], currency: str) -> str:
-    rows = sorted(result["results"], key=lambda x: x["rank"] or 99)
-    labels = [r["profile"]["name"] for r in rows]
-    hosts_chart = svg_bar_chart(labels, [
-        {"name": "Theo CPU", "color": COLORS["primary"], "values": [r["hostsForCpu"] for r in rows]},
-        {"name": "Theo RAM", "color": COLORS["accent"], "values": [r["hostsForRam"] for r in rows]},
-        {"name": "Tổng (gồm N+x)", "color": COLORS["primary_dark"], "values": [r["hostsTotal"] for r in rows]},
-    ], width=330, height=170)
-    axes = result["analysis"]["scoreAxes"]
-    radar_series = []
-    for i, r in enumerate(rows):
-        sc = r["advisory"].get("scores")
-        if not sc:
-            continue
-        radar_series.append({"name": r["profile"]["name"], "color": SERIES_COLORS[i % len(SERIES_COLORS)], "values": [sc[ax["key"]] for ax in axes]})
-    radar = svg_radar_chart([ax["label"] for ax in axes], radar_series[:5], size=196)
-    radar_leg = "".join(f'<div class="radar-legend-item" style="white-space:nowrap;"><span class="radar-swatch" style="background:{s["color"]};"></span><span>{esc(s["name"])}<br/><b>{fmt_num(sum(s["values"]) / len(s["values"]), 0)}</b>/100 điểm</span></div>' for s in radar_series[:5])
-    score_rows = ""
-    for r in rows:
-        sc = r["advisory"].get("scores") or {}
-        tds = "".join(f'<td style="text-align:center;">{fmt_num(sc.get(ax["key"]), 0)}</td>' for ax in axes)
-        style = f' style="background:{COLORS["ok_bg"]};font-weight:700;"' if r["recommended"] else ""
-        score_rows += f'<tr{style}><td>{esc(r["profile"]["name"])}</td>{tds}<td style="text-align:center;font-weight:800;">{fmt_num(r["advisory"].get("scoreTotal"), 0)}</td></tr>'
-    score_table = (f'<table class="score-table"><thead><tr><th>Cấu hình</th>' + "".join(f'<th style="text-align:center;">{esc(ax["label"])}</th>' for ax in axes)
-                   + f'<th style="text-align:center;">Điểm TB</th></tr></thead><tbody>{score_rows}</tbody></table>')
-    cost_html = ""
-    if any(r["advisory"]["costs"]["tco"] for r in rows):
-        yrs = rows[0]["advisory"]["costs"]["years"]
-        cost_rows = [{"label": r["profile"]["name"], "hw": r["advisory"]["costs"]["hardware"], "lic": r["advisory"]["costs"]["license"], "best": r["recommended"]} for r in rows]
-        unit_rows = ""
-        for r in rows:
-            c = r["advisory"]["costs"]
-            unit_rows += (f'<tr><td>{esc(r["profile"]["name"])}{" " + _pill("Đề xuất", "ok") if r["recommended"] else ""}</td>'
-                          f'<td style="text-align:right;">{money_short(c["hardware"], currency)}</td><td style="text-align:right;">{money_short(c["license"], currency)}</td>'
-                          f'<td style="text-align:right;font-weight:700;">{money_short(c["tco"], currency)}</td><td style="text-align:right;">{money_short(c["perVm"], currency)}</td>'
-                          f'<td style="text-align:right;">{money_short(c["perVmMonth"], currency)}</td><td style="text-align:right;">{money_short(c["perVcpu"], currency)}</td></tr>')
-        cost_html = f"""
-    <div class="chart-row" style="margin-top:8px;">
-      <div class="chart-card" style="flex:0.9;"><div class="chart-card-title">TCO {yrs} năm theo phương án</div>{svg_cost_bars(cost_rows, currency, width=300)}
-        {_legend([(COLORS['primary'], 'Phần cứng'), (COLORS['accent'] + '8c', f'License {yrs} năm')])}</div>
-      <div class="chart-card" style="flex:1.1;"><div class="chart-card-title">Chi phí đơn vị</div>
-        <table class="mini-table"><thead><tr><th>Cấu hình</th><th style="text-align:right;">Phần cứng</th><th style="text-align:right;">License</th><th style="text-align:right;">TCO</th><th style="text-align:right;">/ VM</th><th style="text-align:right;">/ VM / tháng</th><th style="text-align:right;">/ vCPU</th></tr></thead><tbody>{unit_rows}</tbody></table></div>
-    </div>"""
-    return f"""
-    <div class="chart-row">
-      <div class="chart-card"><div class="chart-card-title">Số host cần theo từng ràng buộc</div>{hosts_chart}
-        {_legend([(COLORS['primary'], 'Theo CPU'), (COLORS['accent'], 'Theo RAM'), (COLORS['primary_dark'], 'Tổng gồm N+x')])}</div>
-      <div class="chart-card"><div class="chart-card-title">Bảng điểm đa tiêu chí (0–100, cao = tốt)</div>
-        <div style="display:flex;gap:8px;align-items:center;">{radar}<div>{radar_leg}</div></div></div>
-    </div>
-    <div style="margin-top:8px;">{_comparison_table(result, currency)}</div>
-    <div style="margin-top:8px;">{score_table}</div>
-    <div class="small-note">Điểm: <b>Số host</b> &amp; <b>Chi phí</b> so với phương án tốt nhất (chi phí theo TCO nếu có đơn giá, nếu không theo số core license);
-    <b>Hiệu suất</b> = mức dùng tài nguyên ràng buộc khi mất host dự phòng; <b>Cân bằng</b> = độ lệch giữa mức dùng CPU và RAM; <b>Chịu lỗi</b> = mức tải khi mất host;
-    <b>Mở rộng</b> = dư địa tăng trưởng thêm; <b>NUMA</b> = tỷ lệ VM nằm gọn trong một socket.</div>
-    {cost_html}"""
-
-
-def _design_section(result: Dict[str, Any], best: Dict[str, Any], params) -> str:
-    d, p = result["demand"], result["params"]
-    prof, ph, adv = best["profile"], best["perHost"], best["advisory"]
-    numa, bal, lic, run = adv["numa"], adv["balance"], adv["license"], adv["runway"]
-    spec = [
-        ("Cấu hình host", f"{prof['sockets']} socket × {prof['coresPerSocket']} cores = {prof['cores']} cores · {_gb(prof['ramGB'])} RAM" + (f" · {_gb(prof['diskGB'])} đĩa" if p["storage_mode"] == "local" else "")),
-        ("Số host", f"{best['hostsTotal']} (= {best['hostsBase']} theo tải + {best['redundancy']} dự phòng" + (f", tối thiểu {p['min_hosts']}" if best["hostsTotal"] > best["hostsBase"] + best["redundancy"] else "") + ")"),
-        ("Năng lực mỗi host", f"{fmt_num(ph['usableCores'], 0)} cores khả dụng · {fmt_num(ph['logicalCpu'], 0)} pCPU logic · {_gb(ph['usableRamGB'])} RAM khả dụng"),
-        ("Năng lực quy hoạch / host", f"{fmt_num(ph['vcpuCapacity'], 0)} vCPU · {_gb(ph['vramCapacityGB'])} vRAM (ở {p['cpu_ratio']:g}x / {p['ram_ratio']:g}x, dùng tối đa {p['max_util_pct']:g}%)"),
-        ("Tổng cluster", f"{fmt_int(best['totals']['cores'])} cores · {fmt_int(best['totals']['logicalCpu'])} pCPU logic · {_gb(best['totals']['ramGB'])} RAM"),
-        ("Overcommit thực tế", f"CPU {fmt_num(best['after']['cpuOvercommit'], 2, 'x')} · RAM {fmt_num(best['after']['ramOvercommit'], 2, 'x')} (mục tiêu {p['cpu_ratio']:g}x / {p['ram_ratio']:g}x)"),
-        ("NUMA", f"{fmt_int(prof['coresPerSocket'])} cores · {_gb(numa['ramPerSocketGB'])} mỗi socket — " + ("mọi VM nằm gọn trong 1 NUMA node" if numa["ok"] else f"{len(numa['wideCpu']) + len(numa['wideRam'])} nhóm VM trải nhiều NUMA node")),
-        ("License (theo core)", f"{fmt_int(lic['coresTotal'])} core ({fmt_int(lic['coresPerHost'])}/host, tối thiểu {params.license_min_cores_per_socket}/socket)" + (f" · {fmt_int(lic['paddedCores'])} core trả thừa" if lic["paddedCores"] else "")),
-        ("Dư địa tăng trưởng", ("—" if run["extraGrowthPct"] is None else f"thêm ~{fmt_num(max(0, run['extraGrowthPct']), 0)}% tải ngoài +{p['growth_pct']:g}% đã dự phòng (≈ {fmt_int(best['spare']['extraAvgVms'] or 0)} VM cỡ TB) mà vẫn giữ N+{best['redundancy']}")),
-        ("Lưu trữ", (f"SAN: {_gb(d['storageNeededGB'])} (gồm tăng trưởng + {p['storage_overhead_pct']:g}% overhead)" if p["storage_mode"] == "san"
-                     else f"Cục bộ / vSAN: {_gb(d['storageNeededGB'])} tổng · ~{_gb(best['storage'].get('perHostNeededGB'))}/host (×{p['storage_protection_factor']:g} bảo vệ)")),
-    ]
-    spec_html = "".join(f'<tr><td style="width:150px;color:{COLORS["muted"]};font-weight:700;">{esc(k)}</td><td>{esc(v)}</td></tr>' for k, v in spec)
-    stack = svg_stack_bars(_capacity_segments(best, d, p), width=680)
-    seg_leg = _legend([(SEG_COLORS["request"], "Yêu cầu dự án"), (SEG_COLORS["growth"], "Dự phòng tăng trưởng"), (SEG_COLORS["free"], "Còn trống"),
-                       (SEG_COLORS["headroom"], f"Headroom {100 - p['max_util_pct']:g}%"), (SEG_COLORS["redundancy"], f"Dự phòng N+{best['redundancy']}"),
-                       (SEG_COLORS["esxi"], "ESXi")])
-    bal_txt = ""
-    if bal["strandedCpuPct"] >= 15 and bal["idealRamPerHostGB"]:
-        bal_txt = f"RAM là yếu tố quyết định số máy chủ: khi RAM đã dùng hết mức an toàn, khoảng {fmt_num(bal['strandedCpuPct'], 0)}% CPU vẫn còn trống. Với hệ thống này, cấu hình cân đối là khoảng <b>{_gb(bal['idealRamPerHostGB'])} RAM</b> cho {prof['cores']} core mỗi máy chủ."
-    elif bal["strandedRamPct"] >= 15 and bal["idealCoresPerHost"]:
-        bal_txt = f"CPU là yếu tố quyết định số máy chủ: khi CPU đã dùng hết mức an toàn, khoảng {fmt_num(bal['strandedRamPct'], 0)}% RAM vẫn còn trống. Cấu hình cân đối là khoảng <b>{fmt_num(bal['idealCoresPerHost'], 0)} core</b> cho {_gb(prof['ramGB'])} RAM mỗi máy chủ."
-    else:
-        bal_txt = f"CPU ({fmt_num(bal['cpuUtilPct'], 0)}%) và RAM ({fmt_num(bal['ramUtilPct'], 0)}%) được khai thác cân đối — Quý khách không phải trả tiền cho tài nguyên bị bỏ trống."
-    return f"""
-    <table class="spec-table">{spec_html}</table>
-    <div class="chart-card" style="margin-top:8px;"><div class="chart-card-title">Phân bổ năng lực cluster đề xuất (quy đổi ở overcommit mục tiêu)</div>{stack}{seg_leg}</div>
-    <div class="insight-box" style="margin-top:8px;"><b>Cân đối CPU / RAM.</b> {bal_txt}</div>"""
-
-
-def _sensitivity_section(result: Dict[str, Any], best_idx: int) -> str:
-    a = result["analysis"]
-    sens, proj = a["sensitivity"], a["projection"]
-
-    def chart(key: str, fmt, title: str, note: str) -> str:
-        sw = sens[key]
-        xs = sw["x"]
-        cur = xs.index(sw["current"]) if sw["current"] in xs else None
-        series = [{"name": s["name"], "color": SERIES_COLORS[i % len(SERIES_COLORS)], "values": s["hosts"]} for i, s in enumerate(sw["series"])]
-        return (f'<div class="chart-card"><div class="chart-card-title">{esc(title)}</div>'
-                f'{svg_lines([fmt(x) for x in xs], series, width=330, height=150, current_idx=cur, y_label="host")}'
-                f'<div class="small-note" style="margin-top:2px;">{esc(note)}</div></div>')
-
-    leg = _legend([(SERIES_COLORS[i % len(SERIES_COLORS)], s["name"]) for i, s in enumerate(sens["growth"]["series"])])
-    pts = proj["points"] if proj else []
-    proj_note = (f"Với mức tăng trưởng {proj['annualGrowthPct']:g}%/năm, {proj['installed']} máy chủ đề xuất " +
-                 (f"đáp ứng đến hết năm thứ {proj['expandYear'] - 1}; chúng tôi sẽ cùng Quý khách lên kế hoạch mở rộng cho năm thứ {proj['expandYear']}." if proj["expandYear"] is not None
-                  else f"đáp ứng đủ trong toàn bộ {proj['years']} năm dự báo.")) if proj else ""
-    return f"""
-    <div class="chart-row">
-      {chart('growth', lambda x: f"{x:g}%", 'Số máy chủ theo mức dự phòng tăng trưởng', 'Giúp Quý khách thấy ngân sách thay đổi ra sao nếu hệ thống tăng trưởng nhanh hơn dự kiến.')}
-      {chart('cpuRatio', lambda x: f"{x:g}x", 'Số máy chủ theo tỷ lệ chia sẻ CPU', 'Đường nằm ngang nghĩa là RAM quyết định số máy chủ — tăng chia sẻ CPU không giúp giảm máy chủ.')}
-    </div>
-    {leg}
-    <div class="chart-row" style="margin-top:8px;">
-      {chart('maxUtil', lambda x: f"{x:g}%", 'Số máy chủ theo mức sử dụng tối đa', 'Chừa vùng an toàn càng lớn thì hệ thống càng ổn định nhưng cần nhiều máy chủ hơn.')}
-      <div class="chart-card"><div class="chart-card-title">Dự báo số máy chủ cần theo năm — {esc(result['results'][best_idx]['profile']['name'])}</div>
-        {svg_projection(pts, proj['installed'] if proj else 0, width=330, height=150)}
-        <div class="small-note" style="margin-top:2px;">{esc(proj_note)}</div></div>
-    </div>"""
-
-
-def _existing_chart(existing: List[Dict[str, Any]]) -> str:
-    rows = existing[:10]
-    labels = [e["name"] for e in rows]
-    val = lambda e, k: e.get(k) if e.get(k) is not None else 0  # noqa: E731
-    cpu = svg_bar_chart(labels, [
-        {"name": "Trước", "color": "#93c5fd", "values": [val(e, "cpuBefore") for e in rows]},
-        {"name": "Sau", "color": COLORS["primary"], "values": [val(e, "cpuAfter") for e in rows]},
-    ], width=330, height=165, threshold=100, threshold_label="Ngưỡng", unit="%")
-    ram = svg_bar_chart(labels, [
-        {"name": "Trước", "color": "#67e8f9", "values": [val(e, "ramBefore") for e in rows]},
-        {"name": "Sau", "color": COLORS["accent"], "values": [val(e, "ramAfter") for e in rows]},
-    ], width=330, height=165, threshold=100, threshold_label="Ngưỡng", unit="%")
-    return f"""<div class="chart-row" style="margin-bottom:8px;">
-      <div class="chart-card"><div class="chart-card-title">CPU % ngưỡng chính sách — trước / sau tiếp nhận</div>{cpu}{_legend([("#93c5fd", "Trước"), (COLORS["primary"], "Sau tiếp nhận")])}</div>
-      <div class="chart-card"><div class="chart-card-title">RAM % ngưỡng chính sách — trước / sau tiếp nhận</div>{ram}{_legend([("#67e8f9", "Trước"), (COLORS["accent"], "Sau tiếp nhận")])}</div>
-    </div>"""
-
-
-def _thresholds_html(result: Dict[str, Any]) -> str:
-    th = (result.get("analysis") or {}).get("thresholds") or {}
-    defaults = sizing_advisory.AdvisoryThresholds().__dict__
-    cells = ""
-    for key, label, unit in sizing_advisory.THRESHOLD_META:
-        v = th.get(key, defaults.get(key))
-        if key == "db_keywords":
-            continue
-        changed = v != defaults.get(key)
-        val = f"{v:g}" if isinstance(v, (int, float)) else str(v)
-        cells += (f'<tr><td>{esc(label)}</td><td style="text-align:right;white-space:nowrap;{"font-weight:700;color:" + COLORS["primary_dark"] + ";" if changed else ""}">'
-                  f'{esc(val)} {esc(unit)}{" *" if changed else ""}</td></tr>')
-    kw = th.get("db_keywords", defaults["db_keywords"])
-    return f"""<div class="chart-card soft" style="margin-top:8px;font-size:8.6px;">
-      <div class="chart-card-title">Ngưỡng tư vấn áp dụng</div>
-      <table class="spec-table">{cells}</table>
-      <div class="small-note">Từ khoá nhận diện VM CSDL / middleware: {esc(kw)}. Dấu * = đã điều chỉnh so với mặc định.</div>
-    </div>"""
-
-
-def _roadmap_html(steps: List[Dict[str, str]]) -> str:
-    rows = "".join(f'<tr><td style="white-space:nowrap;"><b>{esc(s["phase"])}</b></td><td style="white-space:nowrap;color:{COLORS["muted"]};">{esc(s["when"])}</td><td>{esc(s["what"])}</td></tr>' for s in steps)
-    return f'<table class="roadmap-table"><thead><tr><th>Giai đoạn</th><th>Thời điểm</th><th>Nội dung</th></tr></thead><tbody>{rows}</tbody></table>'
-
-
-def _full_css() -> str:
-    return f"""
-@page cover {{ margin:14mm 14mm 14mm 14mm; @top-left {{ content:none; }} @top-right {{ content:none; }} @bottom-left {{ content:none; }} @bottom-right {{ content:none; }} }}
-.cover-page {{ page:cover; position:relative; height:266mm; page-break-after:always; }}
-.cv-top {{ display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid {COLORS['primary_dark']}; padding-bottom:8px; min-height:42px; }}
-.cv-top .cover-logo {{ max-height:46px; max-width:170px; }}
-.cv-brand {{ font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:{COLORS['primary_dark']}; }}
-.cv-main {{ margin-top:30mm; }}
-.cv-title {{ font-size:28px; font-weight:800; color:{COLORS['primary_dark']}; line-height:1.2; margin:4px 0 10px; }}
-.cv-sub {{ font-size:11.5px; color:{COLORS['ink']}; line-height:1.5; margin-bottom:10px; max-width:160mm; }}
-.cv-tiles {{ display:flex; gap:8px; margin-top:14px; }}
-.cv-keys {{ margin-top:14px; border:1px solid {COLORS['border']}; border-left:4px solid {COLORS['primary_dark']}; border-radius:0 6px 6px 0; background:{COLORS['surface']}; padding:9px 14px 7px; }}
-.cv-keys ul {{ margin:2px 0 0; padding-left:15px; font-size:9.8px; line-height:1.6; }}
-.cv-keys b {{ color:{COLORS['primary_dark']}; }}
-.cv-tile {{ flex:1; border:1px solid {COLORS['border']}; border-top:3px solid {COLORS['primary']}; border-radius:4px; padding:8px 10px; background:{COLORS['surface']}; }}
-.cv-tile-label {{ font-size:7.6px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:{COLORS['muted']}; }}
-.cv-tile-value {{ font-size:18px; font-weight:800; color:{COLORS['ink']}; margin-top:2px; }}
-.cv-tile-sub {{ font-size:8px; color:{COLORS['muted']}; }}
-.cv-bottom {{ position:absolute; left:0; right:0; bottom:13mm; gap:22px; }}
-.cv-h {{ font-size:8.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:{COLORS['accent']}; margin-bottom:4px; }}
-.cv-meta td {{ border-bottom:1px solid {COLORS['divider']}; padding:3px 4px; font-size:9px; }}
-.cv-meta tr:nth-child(even) {{ background:transparent; }}
-.cv-meta td:first-child {{ color:{COLORS['muted']}; width:110px; }}
-ol.toc {{ margin:0; padding-left:16px; font-size:9.6px; line-height:1.85; }}
-ol.toc a {{ color:{COLORS['ink']}; text-decoration:none; }}
-ol.toc a::after {{ content: leader('.') target-counter(attr(href), page); color:{COLORS['muted']}; }}
-.cv-foot {{ position:absolute; left:0; right:0; bottom:0; font-size:7.8px; color:{COLORS['faint']}; border-top:1px solid {COLORS['divider']}; padding-top:6px; }}
-.sec-num {{ display:inline-block; min-width:16px; height:16px; line-height:16px; text-align:center; border-radius:3px; background:{COLORS['primary_dark']}; color:#fff; font-size:9px; margin-right:6px; }}
-.section.page {{ page-break-before:always; }}
-.chart-row, .chart-card, .kpi-grid, .gauge-row, .insight-box, .exec-brief, .cv-keys, .spec-table, .score-table, .sz-keep {{ break-inside:avoid; page-break-inside:avoid; }}
-.section {{ margin-top:18px; }}
-.section-title {{ break-after:avoid; page-break-after:avoid; }}
-.section-sub {{ break-after:avoid; page-break-after:avoid; }}
-.spec-table td {{ font-size:9px; padding:4px 6px; }}
-.findings-table td {{ vertical-align:top; font-size:8.8px; }}
-.score-table th, .score-table td {{ font-size:8px; padding:3.5px 5px; }}
-.mini-table th, .mini-table td {{ font-size:7.8px; padding:3px 4px; white-space:nowrap; }}
-.roadmap-table td {{ vertical-align:top; }}
-.decision-table td {{ vertical-align:middle; }}
-.appendix-table td {{ font-size:8.3px; padding:3.5px 6px; }}
-"""
-
-
-def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, profiles: List[sizing.HostProfile],
-                     existing: Optional[List[Dict[str, Any]]] = None, policy_txt: str = "", currency: str = "VND",
-                     logo_data_url: Optional[str] = None, prepared_by: str = "", mode: str = "new",
-                     target_cluster: Optional[str] = None, include_new: bool = True, include_existing: bool = True,
-                     customer_name: str = "", prepared_org: str = "", document_code: str = "") -> str:
-    result = sizing.build_sizing(vms, params, profiles)
-    best_idx = result["recommendedIndex"]
-    best = result["results"][best_idx] if best_idx is not None else None
-    existing = existing or []
-    generated_at = _now_str()
-    env_name = params.environment.strip()
-    project = env_name or "dự án mới"
-    title = "Đề xuất cấu hình máy chủ" + (f" — {env_name}" if env_name else "")
-    logo_html = f'<img class="cover-logo" src="{logo_data_url}" alt="logo"/>' if logo_data_url else ""
-    a = result["analysis"]
-    vm_dicts = [{"name": v.name, "qty": v.qty, "vcpu": v.vcpu, "ramGB": v.ram_gb, "diskGB": v.disk_gb, "note": v.note} for v in vms]
-
-    cover = _cover(result, best, params, title=title, customer=customer_name, prepared_org=prepared_org, prepared_by=prepared_by,
-                   doc_code=document_code, generated_at=generated_at, logo_html=logo_html, currency=currency, mode=mode)
-
-    target = _pick_target(existing, target_cluster) if mode == "reuse" else None
-    summary = (_reuse_summary_box(result, best, existing, target, include_new, currency, project, si=True) if mode == "reuse"
-               else _summary_box(result, best, existing if include_existing else [], currency, si=True))
-    top_findings = [x for x in a["findings"] if x["severity"] in ("critical", "warning")][:4]
-    summary_body = summary
-    if best:
-        summary_body += f'<div class="section-sub" style="margin:10px 0 4px 0;">Mức sử dụng tài nguyên của giải pháp đề xuất — khi vận hành bình thường và khi {best["redundancy"]} máy chủ gặp sự cố (vạch chia = ngưỡng dùng tối đa {params.max_util_pct:g}%).</div>'
-        summary_body += _gauges(best, result["params"])
-    if top_findings:
-        summary_body += '<div class="section-sub" style="margin:6px 0 4px 0;">Những điểm chúng tôi lưu ý Quý khách (chi tiết tại mục Rủi ro &amp; khuyến nghị):</div>' + _findings_table(top_findings)
-
-    n = 1
-    sections = [_section("sec-summary", n, "Tóm tắt điều hành", "", summary_body, "breakable")]
-    if mode == "reuse":
-        n += 1
-        if existing:
-            body = (_existing_chart(existing) + _existing_table(existing, policy_txt, highlight=target["name"] if target else None)
-                    + (_target_detail(target, result["demand"]) if target else ""))
-        else:
-            body = '<div class="small-note" style="font-size:9px;">Không có dữ liệu cluster hiện hữu (chưa đồng bộ vCenter hoặc chưa import host/VM).</div>'
-        sections.append(_section("sec-existing", n, "Hạ tầng hiện hữu — khả năng tiếp nhận dự án",
-                                 "Chúng tôi đánh giá khả năng tiếp nhận hệ thống mới trên các cluster Quý khách đang vận hành; dòng tô màu là cluster được đề xuất.", body, "breakable"))
-    n += 1
-    sections.append(_section("sec-workload", n, "Phân tích nhu cầu workload",
-                             "Chúng tôi phân tích danh sách máy ảo Quý khách cung cấp theo kích thước, tỷ lệ RAM/CPU và mức sử dụng tài nguyên để chọn cấu hình máy chủ phù hợp.",
-                             _workload_section(result, params), "breakable"))
-    if best and (mode != "reuse" or include_new):
-        n += 1
-        sections.append(_section("sec-options", n, "So sánh phương án cấu hình" + (" (phương án B — trang bị mới)" if mode == "reuse" else ""),
-                                 f"Chúng tôi so sánh {len(result['results'])} cấu hình máy chủ; dòng tô xanh là phương án chúng tôi đề xuất (ưu tiên {'tổng chi phí thấp nhất' if params.optimize_for == 'cost' else 'ít máy chủ nhất, sau đó đến chi phí'}).",
-                                 _options_section(result, currency) + f'<div class="insight-box" style="margin-top:8px;"><b>Vì sao chúng tôi chọn phương án này.</b> {esc(result["recommendation"]["detail"])}</div>', "breakable"))
-        n += 1
-        sections.append(_section("sec-design", n, f"Thiết kế đề xuất chi tiết — {best['profile']['name']}",
-                                 "Thông số giải pháp, cách tài nguyên được phân bổ và các kiểm tra kỹ thuật chúng tôi đã thực hiện.",
-                                 _design_section(result, best, params), "breakable"))
-        n += 1
-        sections.append(_section("sec-sensitivity", n, "Độ nhạy & dự báo tăng trưởng",
-                                 "Số máy chủ thay đổi ra sao khi các giả định thay đổi, và thời điểm Quý khách cần mở rộng.",
-                                 _sensitivity_section(result, best_idx), "breakable"))
-    n += 1
-    sections.append(_section("sec-risks", n, "Rủi ro & khuyến nghị",
-                             f"{a['findingCounts'].get('critical', 0)} nghiêm trọng · {a['findingCounts'].get('warning', 0)} cảnh báo · {a['findingCounts'].get('info', 0)} lưu ý · {a['findingCounts'].get('ok', 0)} đạt.",
-                             _findings_table(a["findings"]) if a["findings"] else '<div class="small-note">Không có nhận định.</div>', "breakable"))
-    n += 1
-    sections.append(_section("sec-roadmap", n, "Lộ trình triển khai", "Các bước chúng tôi đề xuất để đưa hệ thống vào vận hành.", _roadmap_html(a["nextSteps"]), "breakable"))
-    n += 1
-    sections.append(_section("sec-method", n, "Giả định & phương pháp", "", _assumptions_html(result) + _thresholds_html(result), "breakable"))
-    n += 1
-    sections.append(_section("sec-appendix", n, "Phụ lục — Danh sách máy ảo", "Theo thông tin Quý khách cung cấp.",
-                             _vm_table(vm_dicts, result["demand"])
-                             + f'<div class="small-note">Báo cáo được lập dựa trên các giả định nêu trên; cấu hình, số lượng và chi phí chính xác sẽ được chúng tôi xác nhận cùng Quý khách trong báo giá chính thức.{(" Người lập: " + esc(prepared_by) + ".") if prepared_by else ""}</div>',
-                             "page breakable"))
-
-    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"/><style>{_base_css('Báo cáo tư vấn sizing', generated_at)}{_exec_visual_css()}{_planning_css()}{_full_css()}</style></head>
-<body>{cover}{''.join(sections)}</body></html>"""
-
-
 def render_sizing_html(*args, detail: str = "full", **kwargs) -> str:
     if detail == "brief":
         return render_brief_html(*args, **kwargs)
+    from .report_sizing_full import render_full_html
     return render_full_html(*args, **kwargs)
 
 

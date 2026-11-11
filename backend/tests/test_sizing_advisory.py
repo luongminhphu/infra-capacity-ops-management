@@ -93,25 +93,25 @@ def test_pdf_html_renders_all_sections():
     from app import report_sizing
     html = report_sizing.render_sizing_html(_vms(), sizing.SizingParams(license_price_per_core=3.5e6), _profiles(),
                                             customer_name="ACME", prepared_org="Partner", document_code="SZ-1")
-    for sec in ("sec-summary", "sec-workload", "sec-options", "sec-design", "sec-sensitivity", "sec-risks", "sec-roadmap", "sec-appendix"):
+    for sec in ("sec-summary", "sec-scope", "sec-demand", "sec-options", "sec-design", "sec-scale", "sec-risks", "sec-plan", "app-vms"):
         assert f'id="{sec}"' in html
     assert "ACME" in html and "Partner" in html and "<svg" in html
     brief = report_sizing.render_sizing_html(_vms(), sizing.SizingParams(), _profiles(), detail="brief")
-    assert "sec-workload" not in brief
+    assert "sec-demand" not in brief
 
 
 def test_custom_thresholds_change_findings_and_classification():
     from app.sizing_advisory import AdvisoryThresholds
     base = sizing.build_sizing(_vms(), sizing.SizingParams(), _profiles())
     assert base["analysis"]["workload"]["character"] == "memory"
-    assert any(f["area"] == "Cân bằng tài nguyên" and f["severity"] == "warning" for f in base["analysis"]["findings"])
+    assert any(f["area"] == "Cân đối tài nguyên" and f["severity"] == "warning" for f in base["analysis"]["findings"])
 
     th = {"memory_min_gb_per_vcpu": 10, "stranded_warn_pct": 90, "db_keywords": "oracle"}
     r = sizing.build_sizing(_vms(), sizing.SizingParams(advisory=th), _profiles())
     a = r["analysis"]
     assert a["workload"]["character"] == "balanced"
     assert a["workload"]["dbLike"] == ["DB-BIG"]
-    assert not any(f["area"] == "Cân bằng tài nguyên" and f["severity"] == "warning" for f in a["findings"])
+    assert not any(f["area"] == "Cân đối tài nguyên" and f["severity"] == "warning" for f in a["findings"])
     assert a["thresholds"]["stranded_warn_pct"] == 90
     assert r["params"]["advisory"]["memory_min_gb_per_vcpu"] == 10
     # unknown keys ignored, dataclass instance accepted
@@ -137,3 +137,70 @@ def test_excel_dashboard_workbook():
     # minimal input (no prices, no analysis extras) must still build
     small = sizing.build_sizing([sizing.VmSpec(name="x", qty=1, vcpu=2, ram_gb=4)], sizing.SizingParams(), _profiles((None, None, None)))
     excel_sizing.build_workbook(small, [{"name": "x", "qty": 1, "vcpu": 2, "ramGB": 4, "diskGB": 0}], {})
+
+
+# --- Scenario from a real review (AVEVA PI on vSAN): 16 VM · 158 vCPU · 512 GB · 12 100 GB ----------------
+def _pi_case(**kw):
+    rows = [("PI Data Archive", 2, 16, 64, 2000, "primary/secondary"), ("PI AF Server", 2, 8, 32, 500, ""),
+            ("PI Vision", 2, 8, 32, 300, ""), ("PI Interface", 2, 8, 16, 200, ""), ("SETPOINT Connector Node", 1, 8, 32, 300, ""),
+            ("Domain Controller", 2, 4, 16, 200, "AD DS"), ("Backup Server", 1, 8, 32, 4000, "Veeam"),
+            ("EWS VM", 2, 16, 48, 500, "EWS VM: engineering"), ("Jump Host", 2, 11, 16, 200, "")]
+    vms = [sizing.VmSpec(name=a, qty=b, vcpu=c, ram_gb=d, disk_gb=e, note=f) for a, b, c, d, e, f in rows]
+    profs = [sizing.HostProfile(name="2×32C / 384 GB", sockets=2, cores_per_socket=32, ram_gb=384, disk_gb=12000),
+             sizing.HostProfile(name="2×32C / 512 GB", sockets=2, cores_per_socket=32, ram_gb=512, disk_gb=12000)]
+    base = dict(cpu_ratio=4, growth_pct=15, storage_mode="local", storage_overhead_pct=15, storage_protection_factor=2.0)
+    base.update(kw)
+    return sizing.build_sizing(vms, sizing.SizingParams(**base), profs)
+
+
+def test_tight_option_is_not_recommended_and_flagged():
+    r = _pi_case()
+    by = {x["profile"]["name"]: x for x in r["results"]}
+    tight, roomy = by["2×32C / 384 GB"], by["2×32C / 512 GB"]
+    assert tight["failure"]["atLimit"] and round(tight["failure"]["ramPct"]) == 80 and tight["spare"]["extraAvgVms"] == 0
+    assert roomy["recommended"] and round(roomy["failure"]["ramPct"]) == 59 and roomy["spare"]["extraAvgVms"] == 6
+    assert abs(roomy["vcpuPerCore"] - 158 * 1.15 / 192) < 1e-6
+    assert "sát ngưỡng" in r["recommendation"]["why"]
+
+
+def test_fewer_core_variant_suggested_but_not_recommended():
+    r = _pi_case()
+    sug = [x for x in r["results"] if x.get("suggested")]
+    assert any(x["profile"]["coresPerSocket"] == 16 and x["advisory"]["license"]["coresTotal"] == 96 for x in sug)
+    assert all(not x["recommended"] and x["rank"] is None for x in sug)
+
+
+def test_workload_specific_rules():
+    r = _pi_case()
+    wl = r["analysis"]["workload"]
+    assert "PI Data Archive" in wl["dbLike"]
+    assert wl["dcCount"] == 2 and wl["backupVms"] == ["Backup Server"]
+    titles = " | ".join(f["title"] for f in r["analysis"]["findings"])
+    assert "Domain Controller" in titles and "backup" in titles.lower()
+    assert "vSAN 3 host" in titles and "Dự trữ dung lượng vSAN" in titles and "HA cần lưu trữ dùng chung" in titles
+
+
+def test_expand_text_consistent():
+    r = _pi_case(annual_growth_pct=40, horizon_years=4)
+    pr = r["analysis"]["projection"]
+    assert pr["expandYear"] is not None
+    assert f"cần mở rộng trước năm thứ {pr['expandYear']}" in r["analysis"]["expandText"] or "ngay trong năm thứ 1" in r["analysis"]["expandText"]
+    assert any(r["analysis"]["expandText"] == f["detail"] for f in r["analysis"]["findings"])
+
+
+def test_full_report_structure_and_vn_numbers():
+    from app import report_sizing_full
+    r = _pi_case()
+    vms = [sizing.VmSpec(name="PI Data Archive", qty=2, vcpu=16, ram_gb=64, disk_gb=2000)]
+    html = report_sizing_full.render_full_html(vms, sizing.SizingParams(storage_mode="local", storage_protection_factor=2.0),
+                                               [sizing.HostProfile(name="2×32C / 512 GB", sockets=2, cores_per_socket=32, ram_gb=512, disk_gb=12000)],
+                                               customer_name="CMC", customer_contact="Ms. Hung", prepared_org="ioBox Solutions",
+                                               version="1.1", approved_by="B", document_code="X-1")
+    for sec in ("sec-summary", "sec-scope", "sec-demand", "sec-options", "sec-design", "sec-scale", "sec-risks", "sec-plan",
+                "sec-method", "app-vms", "app-thresholds", "app-glossary"):
+        assert f'id="{sec}"' in html
+    assert "ioBox Solutions · Đề xuất cấu hình máy chủ – CMC" in html and "Ms. Hung" in html and "Phiên bản 1.1" in html
+    assert "radar" not in html.lower() or "svg_radar" not in html
+    assert report_sizing_full.vn("12,100.5 GB và 0.95 : 1, 2×32C") == "12.100,5 GB và 0,95 : 1, 2×32C"
+    assert report_sizing_full._clean_note("EWS VM", "EWS VM: Engineering") == "Engineering"
+    assert r["results"]

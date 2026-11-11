@@ -486,6 +486,7 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sz-compare td.num,.sz-compare th{white-space:nowrap;}
 .sz-compare td.num{text-align:right;}
 .sz-compare tr.sz-best td{background:var(--green-a8);}
+.sz-compare tr.sz-suggested td{font-style:italic;color:var(--text-secondary);}
 .sz-compare td.sz-hosts{font-size:var(--fs-body-sm);}
 .sz-headline .sz-detail{margin-top:var(--space-1);color:var(--text-primary);font-weight:var(--fw-regular);}
 .sz-param-group{margin-top:var(--space-4);}
@@ -501,7 +502,9 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sz-adv-thresholds .field.sz-adv-wide{grid-column:1 / -1;}
 .sz-adv-thresholds #btnSzAdvReset{margin-top:var(--space-2);}
 .sz-two{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);}
-.sz-pdf-panel .planning-field input{width:100%;}
+.sz-pdf-panel .planning-field input,.sz-pdf-panel .planning-field textarea{width:100%;}
+.sz-pdf-panel .planning-field textarea{min-height:56px;resize:vertical;font:inherit;padding:var(--space-1) var(--space-2);border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--field-bg);color:var(--text-primary);}
+.sz-pdf-panel{max-height:70vh;overflow:auto;}
 .sz-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);margin-bottom:var(--space-3);}
 .sz-chart-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));}
 .sz-chart{border:1px solid var(--border);border-radius:var(--radius-sm,8px);padding:var(--space-3);background:var(--surface,transparent);min-width:0;}
