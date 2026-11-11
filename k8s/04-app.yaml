@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vco-app
-  namespace: infra-ops
+  namespace: cattle-monitoring-system
   labels:
     app: vco-app
 spec:
@@ -22,6 +22,11 @@ spec:
       #   imagePullSecrets:
       #     - name: ghcr-pull-secret
       # và tạo secret đó theo hướng dẫn trong README.md.
+      # Đợi Postgres sẵn sàng trước khi app khởi động (tránh crash-loop lúc cụm vừa lên).
+      initContainers:
+        - name: wait-postgres
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h vco-postgres -p 5432 -q; do echo 'waiting for postgres'; sleep 3; done"]
       containers:
         - name: app
           # Sửa lại đúng tên image mà workflow .github/workflows/build-push.yml đã đẩy lên,
@@ -41,23 +46,22 @@ spec:
             httpGet: { path: /api/health, port: 8000 }
             initialDelaySeconds: 20
             periodSeconds: 20
-          # Xác thực chứng chỉ NetBackup (NETBACKUP_i_VERIFY_SSL="true"): mount CA vào pod
-          #   kubectl create configmap nbu-ca -n infra-ops --from-file=ca.pem=./nbu-ca.pem
-          # rồi bỏ comment 2 khối dưới và đặt NETBACKUP_1_CA_CERT="/etc/netbackup-ca/ca.pem".
-          # volumeMounts:
-          #   - { name: nbu-ca, mountPath: /etc/netbackup-ca, readOnly: true }
+          # CA của NetBackup (ConfigMap nbu-ca, tạo bằng k8s/nbu-ca.sh) cho NETBACKUP_1_CA_CERT.
+          volumeMounts:
+            - { name: nbu-ca, mountPath: /etc/netbackup-ca, readOnly: true }
           resources:
             requests: { cpu: "100m", memory: "256Mi" }
             limits: { cpu: "1", memory: "512Mi" }
-      # volumes:
-      #   - name: nbu-ca
-      #     configMap: { name: nbu-ca }
+      volumes:
+        - name: nbu-ca
+          # optional: pod vẫn chạy khi chưa tạo ConfigMap (đồng bộ NetBackup sẽ báo thiếu file CA).
+          configMap: { name: nbu-ca, optional: true }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: vco-app
-  namespace: infra-ops
+  namespace: cattle-monitoring-system
 spec:
   type: NodePort
   selector:

@@ -1,7 +1,0 @@
-# KHÔNG cần áp dụng file này — namespace `infra-ops` đã được tạo sẵn qua
-# KubeSphere Console (Project infra-ops, xem link cluster của bạn). Giữ file
-# này chỉ để tham chiếu/đối chiếu tên.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: infra-ops

@@ -267,3 +267,36 @@ def test_error_detail_from_json_and_html():
     assert client._error_detail(j) == "Invalid filter (errorCode 9973)"
     h = urllib.error.HTTPError("u", 400, "", {}, io.BytesIO(b"<html><body><h1>HTTP Status 400 - Bad Request</h1></body></html>"))
     assert client._error_detail(h) == "HTTP Status 400 - Bad Request"
+
+
+def test_backup_scope_rules_and_coverage():
+    rules = [{"vcenterKey": "vc1", "cluster": "PROD-A"}, {"vcenterKey": "vc2"}, {"vcenterKey": "vc1", "cluster": "MIX", "host": "esx9"}]
+    assert analysis.in_scope({"vcenterKey": "vc1", "cluster": "PROD-A", "host": "esx1"}, rules)
+    assert analysis.in_scope({"vcenterKey": "vc2", "cluster": "ANY", "host": "x"}, rules)          # whole vCenter
+    assert analysis.in_scope({"vcenterKey": "vc1", "cluster": "MIX", "host": "esx9"}, rules)      # single host
+    assert not analysis.in_scope({"vcenterKey": "vc1", "cluster": "MIX", "host": "esx1"}, rules)
+    assert not analysis.in_scope({"vcenterKey": "vc1", "cluster": "DEV", "host": "esx1"}, rules)
+    assert analysis.in_scope({"vcenterKey": "vc1", "cluster": "DEV"}, [])                        # no rules = everything
+    vms = [{"vm": "prod-app", "isPoweredOn": True, "vcenterKey": "vc1", "cluster": "PROD-A", "host": "esx1"},
+           {"vm": "dev-app", "isPoweredOn": True, "vcenterKey": "vc1", "cluster": "DEV", "host": "esx5"},
+           {"vm": "dr-db", "isPoweredOn": True, "vcenterKey": "vc2", "cluster": "DR", "host": "esx7"}]
+    jobs = [_job(1, "prod-app", 0, 5)]
+    r = analysis.analyze(jobs, [], [], [], vms, analysis.BackupThresholds(), NOW, days=7,
+                         scope=[{"vcenterKey": "vc1", "cluster": "PROD-A"}, {"vcenterKey": "vc2", "cluster": "DR"}])
+    cov = r["coverage"]
+    assert cov["scopeActive"] and cov["outOfScope"] == 1 and cov["total"] == 2
+    assert cov["protected"] == 1 and [v["vm"] for v in cov["unprotectedVms"]] == ["dr-db"]   # dev-app no longer flagged
+    assert "vc1 / PROD-A" in cov["scopeLabel"] and "vc2 / DR" in cov["scopeLabel"]
+
+
+def test_scope_api_roundtrip():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with TestClient(app) as c:
+        assert c.post("/api/auth/login", json={"username": "admin", "password": "Admin12345!"}).status_code == 200
+        rules = [{"vcenterKey": "vc1", "cluster": "PROD-A"}, {"vcenterKey": "vc2", "cluster": "PROD-B"}, {"vcenterKey": "vc2", "cluster": "PROD-B"}]
+        out = c.put("/api/backup/scope", json={"rules": rules}).json()
+        assert out["rules"] == [{"vcenterKey": "vc1", "cluster": "PROD-A", "host": None}, {"vcenterKey": "vc2", "cluster": "PROD-B", "host": None}]
+        assert c.put("/api/backup/scope", json={"rules": [{"vcenterKey": "vc1", "host": "esx1"}]}).status_code == 400
+        assert c.get("/api/backup/scope").json()["rules"] == out["rules"]
+        assert c.put("/api/backup/scope", json={"rules": []}).json()["rules"] == []

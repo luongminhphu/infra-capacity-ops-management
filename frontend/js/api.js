@@ -217,6 +217,8 @@ const api = {
   bkSyncAll: () => apiRequest('/backup/sync-all', { method: 'POST' }),
   bkSummary: (server, days) => apiRequest(`/backup/summary?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`),
   bkJobs: (params) => { const qs = new URLSearchParams(); Object.entries(params || {}).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) qs.set(k, v); }); return apiRequest(`/backup/jobs?${qs}`); },
+  bkScope: () => apiRequest('/backup/scope'),
+  bkScopeSave: (rules) => apiRequest('/backup/scope', { method: 'PUT', body: JSON.stringify({ rules }) }),
   bkThresholds: () => apiRequest('/backup/thresholds'),
   bkThresholdsSave: (payload) => apiRequest('/backup/thresholds', { method: 'PUT', body: JSON.stringify(payload) }),
   bkReportPdf: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'Bao_cao_backup.pdf'),

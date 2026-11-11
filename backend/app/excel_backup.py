@@ -203,7 +203,13 @@ def _coverage(wb, r, subtitle) -> None:
     if not cov.get("available"):
         ws.cell(row=row, column=1, value="Chưa có dữ liệu inventory vCenter để đối chiếu.")
         return
-    row = _section(ws, row, "Theo cluster", 7)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
+    c = ws.cell(row=row, column=1, value=("Phạm vi cần backup: " + cov["scopeLabel"] + f" — {cov['outOfScope']} VM ngoài phạm vi không tính.")
+                if cov.get("scopeActive") else "Phạm vi cần backup: toàn bộ VM trong inventory vCenter.")
+    c.font = _font(10, True, NAVY)
+    c.alignment = Alignment(wrap_text=True, vertical="center")
+    ws.row_dimensions[row].height = 32
+    row = _section(ws, row + 2, "Theo cluster", 7)
     top = row
     last = _write_rows(ws, row, ["vCenter", "Cluster", "VM đang chạy", "Có backup", "Có job nhưng lỗi", "Chưa backup", "Độ phủ"],
                        [[c["vcenterKey"], c["cluster"], c["total"], c["protected"], c["failing"], c["unprotected"],
@@ -213,12 +219,12 @@ def _coverage(wb, r, subtitle) -> None:
     row = _section(ws, last + 2, "VM chưa có backup / backup lỗi", 7)
     top = row
     vms = cov["unprotectedVms"] + cov["failingVms"]
-    last = _write_rows(ws, row, ["VM", "vCenter", "Cluster", "IP", "vCPU", "RAM (GB)", "Tình trạng"],
-                       [[v["vm"], v["vcenterKey"], v["cluster"], v.get("ip"), v.get("vcpu"), v.get("ramGB"),
+    last = _write_rows(ws, row, ["VM", "vCenter", "Cluster", "Host", "IP", "vCPU", "RAM (GB)", "Tình trạng"],
+                       [[v["vm"], v["vcenterKey"], v["cluster"], v.get("host"), v.get("ip"), v.get("vcpu"), v.get("ramGB"),
                          "Chưa backup" if v["state"] == "unprotected" else "Có job nhưng lỗi"] for v in vms])
     if vms:
-        _table(ws, f"A{top}:G{last}", "VMChuaBackup")
-    _widths(ws, {"A": 32, "B": 14, "C": 22, "D": 16, "E": 8, "F": 10, "G": 18})
+        _table(ws, f"A{top}:H{last}", "VMChuaBackup")
+    _widths(ws, {"A": 32, "B": 14, "C": 22, "D": 26, "E": 16, "F": 8, "G": 10, "H": 18})
 
 
 def _jobs(wb, jobs: List[Dict[str, Any]], subtitle) -> None:
