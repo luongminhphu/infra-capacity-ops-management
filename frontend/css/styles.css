@@ -352,7 +352,7 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .legend-list{display:grid;gap:var(--space-2);font-size:var(--fs-caption);color:var(--text-secondary);margin-top:var(--space-4);}
 .legend-item{display:flex;align-items:center;gap:var(--space-2);}
 .legend-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
-.sim-shell{display:grid;gap:var(--space-4);}
+.sim-shell{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-4);min-width:0;}
 .sim-shell .sim-card{margin-bottom:0;}
 .scenario-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);}
 .scenario-btn{padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface-2);text-align:left;transition:background-color var(--transition),border-color var(--transition);}
