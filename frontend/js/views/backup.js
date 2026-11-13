@@ -450,7 +450,9 @@ function bkSchedule(s) {
       return `<td class="bk-night" title="${esc(tip)}"><span class="bk-cell ${m.cls} ${c.expected === 'full' ? 'is-full' : ''}">${m.sym}</span></td>`;
     }).join('');
     const src = r.source === 'netbackup' ? bkPill('na', 'NetBackup') : r.source === 'fixed' ? bkPill('warn', 'Khung cố định') : bkPill('ok', 'Thủ công');
-    const pols = r.source === 'netbackup' ? '' : `<span class="muted-sub bk-wrap">${r.policies.length ? esc(r.policies.join(', ')) : '<b class="tone-warn">Chưa gán policy</b>'}</span>`;
+    const pols = (r.source === 'netbackup' || r.source === 'fixed' ? '' : `<span class="muted-sub bk-wrap">${r.policies.length ? esc(r.policies.join(', ')) : '<b class="tone-warn">Chưa gán policy</b>'}</span>`)
+      + (r.scheduleNotes || []).map(n => `<span class="muted-sub bk-wrap tone-warn">${esc(n)}</span>`).join('')
+      + (r.calendar && Object.keys(r.calendar).length ? `<span class="muted-sub">Lịch theo ngày trong tháng: ${Object.entries(r.calendar).map(([k, c]) => `${k === 'full' ? 'Full' : 'Incr'} ngày ${[...(c.monthDays || []), ...(c.lastDayOfMonth ? ['cuối tháng'] : [])].join(', ') || (c.dates || []).join(', ')}`).join(' · ')}</span>` : '');
     const full = r.source === 'fixed' ? 'Mỗi đêm (không xét Full / Incr)' : r.fullEveryDays ? `Full mỗi ${r.fullEveryDays} ngày` : `Full ${bkDaysTxt(r.fullDays)}`;
     const extra = [r.retentionIssues && r.retentionIssues.length ? `<span class="pill warn" title="${esc(r.retentionIssues.join('; '))}">Retention lệch</span>` : ''].join('');
     return `<tr><td><b>${esc(r.system)}</b> ${src}${pols}</td>

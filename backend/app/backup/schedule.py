@@ -156,17 +156,34 @@ def expected_type(rule: Dict[str, Any], day: dt.date) -> Optional[str]:
     wd = day.weekday()
     if rule.get("anyType"):                  # fixed window: every night, Full / Incremental not checked
         return "any" if wd in (rule.get("incrDays") or []) else None
-    if wd in (rule.get("fullDays") or []):
+    if _calendar_hit(rule, "full", day) or wd in (rule.get("fullDays") or []):
         return "full"
-    if wd in (rule.get("incrDays") or []):
+    if _calendar_hit(rule, "incr", day) or wd in (rule.get("incrDays") or []):
         return "incr"
     return None
 
 
+def _calendar_hit(rule: Dict[str, Any], kind: str, night: dt.date) -> bool:
+    """Calendar schedule by day of month / last day of month / specific dates. The run date is the
+    night's date, or the next day when the window opens after midnight (before the cut-off)."""
+    cal = (rule.get("calendar") or {}).get(kind)
+    if not cal:
+        return False
+    run = night + dt.timedelta(days=1 if cal.get("afterMidnight") else 0)
+    return (run.day in (cal.get("monthDays") or []) or (cal.get("lastDayOfMonth") and (run + dt.timedelta(days=1)).month != run.month)
+            or run.isoformat() in (cal.get("dates") or []))
+
+
 def rule_rpo_hours(rule: Dict[str, Any], grace_minutes: int) -> Optional[float]:
     days = sorted(set((rule.get("fullDays") or []) + (rule.get("incrDays") or [])))
-    if not days or not rule.get("startTime") or not rule.get("endTime"):
+    if not rule.get("startTime") or not rule.get("endTime"):
         return None
+    if not days:   # only monthly calendar / "Full every N days" schedules
+        gap = rule.get("fullEveryDays") or (31 if rule.get("calendar") else None)
+        if not gap:
+            return None
+        s, e = window(rule, dt.date(2024, 1, 1))
+        return gap * 24 + (e - s).total_seconds() / 3600.0 + grace_minutes / 60.0
     gaps = [((days[(i + 1) % len(days)] - d) % 7) or 7 for i, d in enumerate(days)]
     monday = dt.date(2024, 1, 1)
     win_h = max((lambda w: (w[1] - w[0]).total_seconds() / 3600.0)(window(rule, monday + dt.timedelta(days=d))) for d in days)
@@ -195,6 +212,8 @@ def derive_rule(policy: Dict[str, Any], cutoff_hour: int = 12) -> Optional[Dict[
     win: Dict[int, Dict[str, str]] = {}
     full_every = None
     full_names, retention = [], None
+    calendar: Dict[str, Dict[str, Any]] = {}
+    notes: List[str] = []
     for sch in policy.get("schedules") or []:
         kind = sch.get("type")
         if kind not in ("FULL", "INCR"):
@@ -206,7 +225,19 @@ def derive_rule(policy: Dict[str, Any], cutoff_hour: int = 12) -> Optional[Dict[
         first_start = min((w["startMin"] for w in sch.get("windows") or []), default=cutoff_hour * 60)
         freq = sch.get("frequencySec") or 0
         if sch.get("kind") == "Calendar":
-            days = {night_of(d, first_start) for d in sch.get("calendarDays") or []} or set(win_days)
+            days = {night_of(d, first_start) for d in sch.get("calendarDays") or []}
+            if sch.get("monthDays") or sch.get("lastDayOfMonth") or sch.get("specificDates"):
+                cal = calendar.setdefault("full" if kind == "FULL" else "incr", {"monthDays": [], "lastDayOfMonth": False, "dates": []})
+                cal["monthDays"] = sorted(set(cal["monthDays"]) | set(sch.get("monthDays") or []))
+                cal["lastDayOfMonth"] = cal["lastDayOfMonth"] or bool(sch.get("lastDayOfMonth"))
+                cal["dates"] = sorted(set(cal["dates"]) | set(sch.get("specificDates") or []))
+                cal["afterMidnight"] = first_start < cutoff_hour * 60
+                if win_days:
+                    w0 = next(iter(win_days.values()))
+                    cal["window"] = {"start": _hhmm(w0["startMin"]), "end": _hhmm(w0["startMin"] + w0["durationMin"])}
+            elif not days:
+                # Calendar schedule without any include date never runs on its own — not expected.
+                notes.append(f"{sch.get('name')}: lịch Calendar chưa chọn ngày chạy (không tính)")
         elif freq >= 6 * 86400 and len(win_days) > 1:
             days = set()
             if kind == "FULL":
@@ -225,14 +256,16 @@ def derive_rule(policy: Dict[str, Any], cutoff_hour: int = 12) -> Optional[Dict[
             if w and (kind == "FULL" or d not in win):
                 win[d] = {"start": _hhmm(w["startMin"]), "end": _hhmm(w["startMin"] + w["durationMin"])}
     incr_days -= full_days
-    if not full_days and not incr_days:
+    if not full_days and not incr_days and not calendar and not full_every:
         return None
     common = Counter((w["start"], w["end"]) for w in win.values()).most_common(1)
-    start, end = common[0][0] if common else ("20:00", "04:00")
+    cal_win = next((c["window"] for c in calendar.values() if c.get("window")), None)
+    start, end = common[0][0] if common else ((cal_win["start"], cal_win["end"]) if cal_win else ("20:00", "04:00"))
     return {"system": policy["name"], "policyPatterns": policy["name"], "exact": True, "source": "netbackup",
             "fullDays": sorted(full_days), "incrDays": sorted(incr_days), "startTime": start, "endTime": end,
             "windows": win, "fullEveryDays": full_every, "fullScheduleNames": [n for n in full_names if n],
-            "retentionDays": retention, "enabled": True, "note": None, "cutoffHour": cutoff_hour}
+            "retentionDays": retention, "enabled": True, "note": None, "cutoffHour": cutoff_hour,
+            "calendar": calendar, "scheduleNotes": notes}
 
 
 def validate_rule(r: Dict[str, Any]) -> Dict[str, Any]:

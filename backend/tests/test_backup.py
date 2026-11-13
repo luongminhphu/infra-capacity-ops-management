@@ -463,3 +463,29 @@ def test_fixed_window_mode():
     assert round(bs.rule_rpo_hours(res["rules"][0], 60)) == 33
     nb = bs.evaluate([], jobs, pols, _vn_utc(2026, 11, 6, 10), days=4, auto=True, mode="netbackup")
     assert nb["rules"][0]["source"] == "netbackup" and nb["rules"][0]["fullDays"] == [4]
+
+
+def test_schedule_from_real_policy_payload():
+    """Shape returned by the company's NetBackup: Calendar 'full-monthly' with no include dates (never runs
+    on its own) + Frequency 'full-daily' with a 02:14 → 05:30 window every day."""
+    from app.backup import schedule as bs
+    win = lambda start, dur: [{"dayOfWeek": d, "startSeconds": start, "durationSeconds": dur} for d in range(1, 8)]  # noqa: E731
+    empty = {"lastDayOfMonth": False, "recurringDaysOfMonth": [], "recurringDaysOfWeek": [], "specificDates": []}
+    pol = client.parse_policy({"id": "DB1", "attributes": {"policy": {"policyName": "DB1", "schedules": [
+        {"scheduleName": "full-monthly", "backupType": "Full Backup", "scheduleType": "Calendar", "frequencySeconds": 604800,
+         "startWindow": win(8040, 11759), "includeDates": empty},
+        {"scheduleName": "full-daily", "backupType": "Full Backup", "scheduleType": "Frequency", "frequencySeconds": 86400,
+         "startWindow": win(8100, 11699), "includeDates": empty}]}}})
+    rule = bs.derive_rule(pol)
+    assert rule["fullDays"] == list(range(7)) and rule["incrDays"] == []
+    assert rule["startTime"] == "02:15" and rule["endTime"] == "05:29"
+    assert rule["scheduleNotes"] == ["full-monthly: lịch Calendar chưa chọn ngày chạy (không tính)"]
+    s, e = bs.window(rule, dt.date(2026, 11, 2))            # night of Monday → Tuesday 02:15 – 05:29
+    assert (s.day, s.hour, s.minute, e.hour, e.minute) == (3, 2, 15, 5, 29)
+    # A real monthly calendar: Full on day 1 of each month at 02:14 → night of the last day of the previous month
+    monthly = bs.derive_rule(client.parse_policy({"id": "M", "attributes": {"policy": {"policyName": "M", "schedules": [
+        {"scheduleName": "full-monthly", "backupType": "Full Backup", "scheduleType": "Calendar", "startWindow": win(8040, 11759),
+         "includeDates": {**empty, "recurringDaysOfMonth": [1]}},
+        {"scheduleName": "incr", "backupType": "Differential Incremental Backup", "scheduleType": "Frequency",
+         "frequencySeconds": 86400, "startWindow": win(8040, 11759), "includeDates": empty}]}}}))
+    assert bs.expected_type(monthly, dt.date(2026, 10, 31)) == "full" and bs.expected_type(monthly, dt.date(2026, 11, 1)) == "incr"

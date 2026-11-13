@@ -16,6 +16,7 @@ stays None instead of failing the whole sync.
 import datetime as dt
 import json
 import logging
+import re
 import os
 import ssl
 import urllib.error
@@ -222,9 +223,18 @@ def parse_schedule(s: Dict[str, Any], retention: Optional[str] = None) -> Dict[s
                 cal_days.add((d + 5) % 7)
         except ValueError:
             continue
+    inc = s.get("includeDates") or {}
+    month_days = sorted({int(x) for x in (inc.get("recurringDaysOfMonth") or []) if str(x).strip().isdigit() and 1 <= int(x) <= 31})
+    dates = set()
+    for x in inc.get("specificDates") or []:
+        v = x.get("date") if isinstance(x, dict) else x
+        m = re.match(r"^(\d{4}-\d{2}-\d{2})", str(v or ""))
+        if m:
+            dates.add(m.group(1))
     return {"name": s.get("scheduleName"), "type": backup_kind(raw_type), "backupType": raw_type,
             "kind": "Calendar" if calendar else "Frequency", "frequencySec": _int(s.get("frequencySeconds")),
-            "retention": retention, "windows": windows, "calendarDays": sorted(cal_days)}
+            "retention": retention, "windows": windows, "calendarDays": sorted(cal_days),
+            "monthDays": month_days, "lastDayOfMonth": bool(inc.get("lastDayOfMonth")), "specificDates": sorted(dates)}
 
 
 def parse_policy(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
