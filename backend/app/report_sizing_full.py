@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from . import platforms, sizing
 from .report_view import customer_view
-from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc, html_to_pdf_bytes,
+from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc,
                          svg_bar_chart, svg_donut, svg_gauge)
 from .report_planning import _planning_css
 from .report_sizing import _existing_table, _pick_target, _reuse_summary_box, _summary_box, _target_detail
@@ -167,17 +167,6 @@ def _clean_note(name: str, note: str) -> str:
     if nm and nt.lower().startswith(nm.lower()):
         nt = nt[len(nm):].lstrip(" :-–—·").strip()
     return nt
-
-
-# ---------------------------------------------------------------------------
-# Cover
-# ---------------------------------------------------------------------------
-TOC_BASE = [("sec-summary", "1", "Tóm tắt"), ("sec-scope", "2", "Phạm vi & dữ liệu đầu vào"),
-            ("sec-demand", "3", "Nhu cầu tài nguyên"), ("sec-options", "4", "So sánh phương án"),
-            ("sec-design", "5", "Cấu hình đề xuất"), ("sec-scale", "6", "Khả năng mở rộng"),
-            ("sec-risks", "7", "Rủi ro & khuyến nghị"), ("sec-plan", "8", "Kế hoạch triển khai"),
-            ("sec-method", "9", "Giả định & cách tính"), ("app-vms", "A", "Phụ lục A. Danh sách máy ảo"),
-            ("app-glossary", "B", "Phụ lục B. Thuật ngữ")]
 
 
 def _cover(result, best, params, doc: Dict[str, str], logo_html: str, toc: List[tuple]) -> str:
@@ -1034,11 +1023,6 @@ table.cv-sign td {{ width:33.3%; border:1px solid {c['border']}; padding:5px 7px
 """
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-SECTION_KEYS = ["scope", "existing", "demand", "options", "scores", "tco", "design", "bom", "arch", "alloc", "scale",
-                "risks", "plan", "method", "vms", "glossary"]
 SEV_ORDER = {"critical": 0, "warning": 1, "info": 2, "ok": 3}
 
 
@@ -1185,5 +1169,3 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
 <body>{cover}{''.join(secs)}</body></html>"""
 
 
-def build_full_pdf(*args, **kwargs) -> bytes:
-    return html_to_pdf_bytes(render_full_html(*args, **kwargs))

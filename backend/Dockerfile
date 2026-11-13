@@ -25,6 +25,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-roboto \
     && rm -rf /var/lib/apt/lists/*
 
+# Commit the image was built from — shown by the MCP tools next to errors and timings,
+# so a regression can be tied to a release (set by .github/workflows/build-push.yml).
+ARG GIT_SHA=dev
+ENV APP_VERSION=$GIT_SHA
+
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

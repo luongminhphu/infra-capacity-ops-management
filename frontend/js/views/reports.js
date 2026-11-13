@@ -90,10 +90,10 @@ function rptRenderState() {
   if (sel && typeof bkState === 'function') {
     const servers = bkState().servers || [];
     const cur = rptOpt('bk.server', 'all');
-    sel.innerHTML = `<option value="all">Tất cả NetBackup (${servers.length})</option>`
+    sel.innerHTML = `<option value="all">Tất cả máy chủ backup (${servers.length})</option>`
       + servers.map(s => `<option value="${esc(s.key)}">${esc(s.name)}${s.demo ? ' · demo' : ''}</option>`).join('');
     sel.value = servers.some(s => s.key === cur) ? cur : 'all';
-    $$('#viewReports [data-report^="bk-"]').forEach(b => { b.disabled = !servers.length; b.title = servers.length ? '' : 'Chưa cấu hình NetBackup'; });
+    $$('#viewReports [data-report^="bk-"]').forEach(b => { b.disabled = !servers.length; b.title = servers.length ? '' : 'Chưa cấu hình máy chủ backup'; });
   }
   rptRenderBatch();
 }

@@ -131,7 +131,6 @@ PLATFORMS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-PLATFORM_KEYS = list(PLATFORMS)
 
 # Neutral concept → per-platform name (glossary mapping table).
 CONCEPTS: List[tuple] = [

@@ -67,15 +67,6 @@ SEVERITY_LABEL_VI = {"critical": "Nghiêm trọng", "warning": "Cảnh báo", "i
 # Canonical list of compliance-finding types, mirrored from capacity.build_compliance_findings().
 # Used to validate/label the optional report-export type filter (?types=... on /api/reports/pdf).
 ALL_FINDING_TYPES = ["host_cpu", "host_ram", "overcommit_cpu", "overcommit_ram", "vm_idle", "vm_off", "vm_overprovision"]
-FINDING_TYPE_LABEL_VI = {
-    "host_cpu": "Host CPU vượt ngưỡng",
-    "host_ram": "Host RAM vượt ngưỡng",
-    "overcommit_cpu": "Overcommit CPU vượt ngưỡng",
-    "overcommit_ram": "Overcommit RAM vượt ngưỡng",
-    "vm_idle": "VM idle lâu",
-    "vm_off": "VM tắt lâu",
-    "vm_overprovision": "VM over-provision",
-}
 
 
 def _finite(v) -> bool:
@@ -458,95 +449,6 @@ def svg_ranked_bar_chart(rows: List[Dict[str, Any]], width: int = 330, height: O
             bx = pad_l + plot_w + (30 if pct > max_scale else 22)
             parts.append(f'<circle cx="{bx}" cy="{bar_y+bar_h/2:.1f}" r="7" fill="{badge_color}"><title>{esc(badge_title)}</title></circle>')
             parts.append(f'<text x="{bx}" y="{bar_y+bar_h/2+2.8:.1f}" text-anchor="middle" font-size="7.5" font-weight="700" fill="#ffffff">{badge_n}<title>{esc(badge_title)}</title></text>')
-    parts.append('</svg>')
-    return "".join(parts)
-
-
-def svg_cluster_risk_chart(cluster_rows: List[Dict[str, Any]], metric: str, finding_counts: Dict[str, Dict[str, int]],
-                            width: int = 330, height: Optional[int] = None, name_max_len: int = 13) -> str:
-    """Cluster-specific wrapper around svg_ranked_bar_chart for a single
-    metric ('cpu' or 'ram'): colors each bar by that cluster's own risk
-    status and attaches a critical/warning finding-count badge at row end."""
-    pct_key = f"{metric}Pct"
-    status_key = f"{metric}Status"
-    rows = []
-    for c in cluster_rows:
-        if not _finite(c["model"].get(pct_key)):
-            continue
-        fc = finding_counts.get(c["name"]) or {}
-        crit_n, warn_n = fc.get("critical", 0), fc.get("warning", 0)
-        badge_title = "·".join(([f"{crit_n} nghiêm trọng"] if crit_n else []) + ([f"{warn_n} cảnh báo"] if warn_n else []))
-        rows.append({
-            "name": c["name"], "pct": c["model"][pct_key], "cls": c[status_key]["cls"],
-            "badge": (crit_n + warn_n) or None, "badge_crit": bool(crit_n), "badge_title": badge_title,
-        })
-    return svg_ranked_bar_chart(rows, width=width, height=height, name_max_len=name_max_len)
-
-
-def svg_radar_chart(categories: List[str], series: List[Dict[str, Any]], size: int = 232, max_value: float = 100.0, rings: int = 4) -> str:
-    """Radar/spider chart comparing several entities (clusters/hosts) across
-    the SAME set of 0-`max_value` metrics on one glance -- a deliberately
-    different chart family from the bars/gauges/donuts used elsewhere in this
-    report, so multi-metric comparisons don't all look like the same widget.
-
-    `categories`: axis labels in order, e.g. ["CPU", "RAM", "Storage"].
-    `series`: [{"name": str, "color": "#hex", "values": [float, ...]}] --
-      `values` aligned to `categories`; a value above `max_value` (e.g. an
-      over-threshold CPU/RAM %) is clamped to the outer ring, the same
-      "cap the fill, keep the real number in the legend" treatment used by
-      `bar_cell`/`svg_ranked_bar_chart`.
-    """
-    n = len(categories)
-    if n < 3 or not series:
-        return '<div style="color:#98a2b3;font-size:11px;padding:8px 0;">Kh\u00f4ng \u0111\u1ee7 d\u1eef li\u1ec7u \u0111\u1ec3 v\u1ebd bi\u1ec3u \u0111\u1ed3.</div>'
-    cx = cy = size / 2
-    r = size / 2 - 30
-
-    def axis_point(i: int, frac: float):
-        angle = -math.pi / 2 + i * 2 * math.pi / n
-        return cx + r * frac * math.cos(angle), cy + r * frac * math.sin(angle)
-
-    # The vertex layout is asymmetric for odd `n` (e.g. n=3 has one axis
-    # pointing straight up and two pointing down-ish), so a square size x size
-    # box centered on (cx, cy) leaves a lot of dead space on whichever side is
-    # shorter. Compute the actual bounding box from the outer label ring and
-    # crop the viewBox tightly to it (plus small text padding) instead.
-    label_pts = [axis_point(i, 1.2) for i in range(n)]
-    pad_x, pad_y = 20, 11
-    min_x = min(p[0] for p in label_pts) - pad_x
-    max_x = max(p[0] for p in label_pts) + pad_x
-    min_y = min(p[1] for p in label_pts) - pad_y
-    max_y = max(p[1] for p in label_pts) + pad_y
-    box_w = max_x - min_x
-    box_h = max_y - min_y
-
-    parts = [f'<svg width="{box_w:.0f}" height="{box_h:.0f}" viewBox="{min_x:.1f} {min_y:.1f} {box_w:.1f} {box_h:.1f}" font-family="Roboto, Noto Sans, sans-serif">']
-    outer_pts = " ".join(f"{axis_point(i, 1.0)[0]:.1f},{axis_point(i, 1.0)[1]:.1f}" for i in range(n))
-    parts.append(f'<polygon points="{outer_pts}" fill="{COLORS["surface2"]}" stroke="none"/>')
-    for ring in range(1, rings + 1):
-        frac = ring / rings
-        pts = " ".join(f"{axis_point(i, frac)[0]:.1f},{axis_point(i, frac)[1]:.1f}" for i in range(n))
-        parts.append(f'<polygon points="{pts}" fill="none" stroke="#ffffff" stroke-width="1.2"/>')
-        # Ring value label along the first (top) axis so the scale is readable.
-        rx, ry = axis_point(0, frac)
-        parts.append(f'<text x="{rx+4:.1f}" y="{ry+3:.1f}" font-size="6.8" fill="{COLORS["faint"]}">{max_value*frac:.0f}%</text>')
-    for i, cat in enumerate(categories):
-        x, y = axis_point(i, 1.0)
-        parts.append(f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="{COLORS["divider"]}" stroke-width="1"/>')
-        lx, ly = axis_point(i, 1.2)
-        parts.append(f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="middle" font-size="8.5" font-weight="700" fill="{COLORS["muted"]}">{esc(cat)}</text>')
-    for s in series:
-        vals = s.get("values", [])
-        color = s.get("color", COLORS["primary"])
-        pts = []
-        for i in range(n):
-            v = vals[i] if i < len(vals) and _finite(vals[i]) else 0
-            frac = max(0.0, min(1.0, v / max_value))
-            pts.append(axis_point(i, frac))
-        pts_str = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
-        parts.append(f'<polygon points="{pts_str}" fill="{color}26" stroke="{color}" stroke-width="1.7"/>')
-        for x, y in pts:
-            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.3" fill="{color}"/>')
     parts.append('</svg>')
     return "".join(parts)
 
@@ -1412,14 +1314,6 @@ def _management_brief(model: Dict[str, Any], cluster_rows: List[Dict[str, Any]],
             "decision_line": decision_line, "recommendations": recs, "binding": binding, "stats": stats}
 
 
-
-
-
-
-
-
-
-
 def build_management_brief(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]],
                            policy: capacity.Policy) -> Dict[str, Any]:
     """Compute the management brief (headline, key points, recommendations,
@@ -1440,15 +1334,6 @@ def build_management_brief(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]
         rec["index"] = i
         rec["priority_label"] = PRIORITY_LABEL_VI.get(rec["priority"], rec["priority"])
     return brief
-
-
-def _executive_insights(model: Dict[str, Any], cluster_rows: List[Dict[str, Any]],
-                        findings: List[Dict[str, Any]], policy: capacity.Policy) -> List[Dict[str, str]]:
-    """Backward-compatible flat view of the management brief (title/body/risk)."""
-    headroom = capacity.estimate_capacity_headroom(model, [], policy)
-    growth = capacity.estimate_growth_scenarios(model)
-    brief = _management_brief(model, cluster_rows, findings, policy, [], [], headroom, growth, [])
-    return [{"risk": r["priority"] == "cao", "title": r["title"], "body": f"{r['meaning']} {r['action']}"} for r in brief["recommendations"]]
 
 
 # ---------------------------------------------------------------------------
@@ -1680,16 +1565,6 @@ body.exec-compact.dense .page-2 .insight-box {{ padding:5px 9px; margin-bottom:3
 body.exec-compact.dense .page-2 .assumption-note {{ padding:4px 8px; margin-top:4px; }}
 body.exec-compact.dense .page-2 .small-note {{ margin-top:3px; }}
 """
-
-
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------

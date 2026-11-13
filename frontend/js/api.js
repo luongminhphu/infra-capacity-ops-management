@@ -43,6 +43,7 @@ const api = {
   login: (username, password) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
   me: () => apiRequest('/auth/me'),
+  authConfig: () => apiRequest('/auth/config'),
 
   listVcenters: () => apiRequest('/vcenters'),
   syncVcenter: (key) => apiRequest(`/vcenters/${encodeURIComponent(key)}/sync`, { method: 'POST' }),

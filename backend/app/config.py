@@ -4,11 +4,10 @@ Central configuration for Infra Capacity Ops backend.
 All secrets (vCenter passwords, JWT secret, admin bootstrap password) come from
 environment variables / .env — never hardcoded and never committed to git.
 """
-import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -76,7 +75,62 @@ class Settings(BaseSettings):
 
     cookie_secure: bool = Field(default=False)  # set True when served over HTTPS
 
+    # ---- Sign-in: local accounts and / or Microsoft Entra ID (OIDC) ----
+    # auth_mode: "local" (username / password only), "entra" (Entra ID only; local accounts listed in
+    # auth_breakglass_users still work as emergency access), "both".
+    auth_mode: str = Field(default="local")
+    auth_breakglass_users: str = Field(default="")          # comma separated local usernames, e.g. "admin"
+    entra_tenant_id: str = Field(default="")
+    entra_client_id: str = Field(default="")
+    entra_client_secret: str = Field(default="")            # Secret, never in the ConfigMap
+    entra_redirect_uri: str = Field(default="")             # https://<external url>/api/auth/oidc/callback
+    entra_post_logout_redirect_uri: str = Field(default="") # external URL of the app (optional)
+    entra_authority_host: str = Field(default="https://login.microsoftonline.com")
+    # MFA: enforced by Conditional Access; the app double-checks the "amr" claim.
+    # "if-present" = reject when amr is present without mfa · "strict" = amr must contain mfa · "off".
+    entra_require_mfa: str = Field(default="if-present")
+    entra_allowed_groups: str = Field(default="")           # optional: group object IDs (comma separated)
+    entra_allowed_roles: str = Field(default="")            # optional: app role values (comma separated)
+    entra_login_label: str = Field(default="Đăng nhập bằng Microsoft")
+
+    # ---- Admins (MCP server access) ----
+    # Local accounts that are admins (comma separated; empty = ADMIN_USERNAME).
+    admin_users: str = Field(default="")
+    # Entra app role values that make a user admin (checked at every Microsoft sign-in).
+    entra_admin_roles: str = Field(default="ICO.Admin")
+
+    # ---- MCP server (read-only app logs & performance for an AI client) ----
+    mcp_enabled: bool = Field(default=False)
+    mcp_token_max_days: int = Field(default=180)
+    mcp_mask_hosts: bool = Field(default=True)      # mask IPs / FQDNs in logs returned to the AI
+    mcp_allowed_origins: str = Field(default="")    # browser Origins allowed to call /mcp (none by default)
+    mcp_rate_per_minute: int = Field(default=120)
+
+    # ---- Observability (app logs + request / SQL timing kept by the app itself) ----
+    app_version: str = Field(default="dev")          # set at image build (GIT_SHA)
+    obs_retention_days: int = Field(default=30)
+    obs_slow_request_ms: int = Field(default=1000)
+    obs_slow_query_ms: int = Field(default=200)
+
+    def admin_user_list(self) -> List[str]:
+        names = [u.strip().lower() for u in self.admin_users.split(",") if u.strip()]
+        return names or [self.admin_username.strip().lower()]
+
+    def entra_admin_role_list(self) -> List[str]:
+        return [r.strip() for r in self.entra_admin_roles.split(",") if r.strip()]
+
+    def entra_enabled(self) -> bool:
+        return self.auth_mode in ("entra", "both") and bool(self.entra_tenant_id and self.entra_client_id and self.entra_redirect_uri)
+
+    def local_enabled(self) -> bool:
+        return self.auth_mode in ("local", "both")
+
+    def breakglass(self) -> List[str]:
+        return [u.strip().lower() for u in self.auth_breakglass_users.split(",") if u.strip()]
+
     poll_interval_minutes: int = Field(default=60)
+    # vCenters and backup servers polled at the same time (each in its own thread / DB session).
+    sync_concurrency: int = Field(default=4)
     enable_scheduler: bool = Field(default=True)
 
     # Compliance / overcommit default thresholds (mirrors the original client-side policy)

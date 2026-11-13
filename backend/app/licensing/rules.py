@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 
 from ..models import LicenseRuleSet
 
-PRODUCTS = ["windows_server", "vmware"]
 
 # --- Windows Server (core-based, 2016 and later) -----------------------------
 WS_DEFAULT_PARAMS: Dict[str, Any] = {

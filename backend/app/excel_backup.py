@@ -56,7 +56,7 @@ def _sheet(wb, title: str, heading: str, subtitle: str, ncols: int, landscape: b
 def _overview(wb, r: Dict[str, Any], servers: List[Dict[str, Any]], subtitle: str) -> None:
     ws = wb.active
     ws.title = "Tổng quan"
-    _sheet_title(ws, "Thống kê hiện trạng Backup — Veritas NetBackup", subtitle, 12)
+    _sheet_title(ws, "Thống kê hiện trạng Backup", subtitle, 12)
     _widths(ws, {c: 11 for c in "ABCDEFGHIJKL"})
     _print_setup(ws, landscape=False)
     k, th, cov = r["kpis"], r["thresholds"], r["coverage"]
@@ -153,7 +153,7 @@ def _schedule(wb, r, subtitle) -> None:
     for x in rules:
         full = ("Không xét" if x.get("source") == "fixed" else f"Mỗi {x['fullEveryDays']} ngày" if x.get("fullEveryDays")
                 else ", ".join(WD[d] for d in x["fullDays"]))
-        rows.append([x["system"], {"netbackup": "NetBackup", "fixed": "Khung cố định"}.get(x.get("source"), "Thủ công / Excel"), full,
+        rows.append([x["system"], {"netbackup": "Từ policy", "fixed": "Khung cố định"}.get(x.get("source"), "Thủ công / Excel"), full,
                      ", ".join(WD[d] for d in x["incrDays"]), f"{x['startTime']} → {x['endTime']}"]
                     + [SCHED_TXT.get(c.get("status"), "" if not c.get("expected") else "?") for c in x["nights"]]
                     + [(x["compliancePct"] / 100.0) if x.get("compliancePct") is not None else None])
@@ -178,7 +178,7 @@ def _schedule(wb, r, subtitle) -> None:
 
 
 def _failures(wb, r, subtitle) -> None:
-    ws, row = _sheet(wb, "Nguyên nhân lỗi", "Nguyên nhân lỗi theo nhóm và mã NetBackup", subtitle, 5)
+    ws, row = _sheet(wb, "Nguyên nhân lỗi", "Nguyên nhân lỗi theo nhóm và mã lỗi backup", subtitle, 5)
     row = _section(ws, row, "Theo nhóm nguyên nhân", 5)
     top = row
     last = _write_rows(ws, row, ["Nhóm", "Số job", "Số client", "Hướng xử lý"],

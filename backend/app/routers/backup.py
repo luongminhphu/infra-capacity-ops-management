@@ -11,6 +11,7 @@ from .. import data_access
 from ..backup import analysis
 from ..backup.client import NetBackupError
 from ..backup.collector import sync_netbackup
+from ..collectors.scheduler import sync_backups
 from ..config import get_settings
 from ..database import get_db
 from ..backup import schedule as bschedule
@@ -18,7 +19,8 @@ from ..models import AppSetting, BackupPolicySnapshot, BackupScheduleRule, Backu
 from ..security import get_current_user
 from ..timeutil import to_iso_utc
 
-router = APIRouter(prefix="/api/backup", tags=["backup"])
+from ..features import require_feature
+router = APIRouter(prefix="/api/backup", tags=["backup"], dependencies=[Depends(require_feature("backup"))])
 
 
 def _jsonable(v: Any) -> Any:
@@ -34,7 +36,7 @@ def _jsonable(v: Any) -> Any:
 def _cfg(key: str):
     cfg = next((c for c in get_settings().netbackups() if c.key == key), None)
     if not cfg:
-        raise HTTPException(404, "Không tìm thấy NetBackup server với key này")
+        raise HTTPException(404, "Không tìm thấy máy chủ backup với key này")
     return cfg
 
 
@@ -102,21 +104,16 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
     except NetBackupError as exc:
         raise HTTPException(502, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(502, f"Đồng bộ NetBackup thất bại: {exc}") from exc
+        raise HTTPException(502, f"Đồng bộ backup thất bại: {exc}") from exc
     return {"ok": True, "key": key, "jobs": run.jobs_fetched, "policies": run.policy_count, "pools": run.pool_count,
             "warning": run.error_message, "finishedAt": to_iso_utc(run.finished_at)}
 
 
 @router.post("/sync-all")
-def sync_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    out = []
-    for cfg in get_settings().netbackups():
-        try:
-            run = sync_netbackup(db, cfg)
-            out.append({"key": cfg.key, "ok": True, "jobs": run.jobs_fetched, "warning": run.error_message})
-        except Exception as exc:  # noqa: BLE001
-            out.append({"key": cfg.key, "ok": False, "error": str(exc)})
-    return {"results": out}
+def sync_all(user: User = Depends(get_current_user)):
+    # Every backup server in parallel, each in its own DB session.
+    results = sync_backups(get_settings())
+    return {"results": [{**r, "finishedAt": to_iso_utc(r["finishedAt"])} if r.get("ok") else r for r in results]}
 
 
 @router.get("/summary")
@@ -382,7 +379,7 @@ def _logo(db: Session) -> Optional[str]:
 
 def _scope_label(server: Optional[str]) -> str:
     if not server or server == "all":
-        return "Toàn bộ NetBackup"
+        return "Toàn bộ máy chủ backup"
     cfg = next((c for c in get_settings().netbackups() if c.key == server), None)
     return cfg.name if cfg else server
 
