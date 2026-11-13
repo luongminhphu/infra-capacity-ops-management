@@ -1823,6 +1823,7 @@ function renderActiveView() {
   else if (appState.view === 'sizing' && typeof renderSizingView === 'function') renderSizingView();
   else if (appState.view === 'licensing' && typeof renderLicensingView === 'function') renderLicensingView();
   else if (appState.view === 'backup' && typeof renderBackupView === 'function') renderBackupView();
+  else if (appState.view === 'reports' && typeof renderReportsView === 'function') renderReportsView();
   // reports / planning / settings are static forms bound once in app.js.
 }
 
@@ -1836,7 +1837,7 @@ function bindGlobalInteractions() {
   $('#hostFile').addEventListener('change', e => loadFileInput(e.target, 'hostsRaw'));
   $('#vmFile').addEventListener('change', e => loadFileInput(e.target, 'vmsRaw'));
   $('#btnLoadSample').addEventListener('click', loadSampleData);
-  $('#btnExportCsv').addEventListener('click', exportCsv);
+  const csvBtn = $('#btnExportCsv'); if (csvBtn) csvBtn.addEventListener('click', exportCsv);
 
   $('#btnResetAll').addEventListener('click', () => {
     appState.hostsRaw = []; appState.vmsRaw = []; appState.hosts = []; appState.vms = [];

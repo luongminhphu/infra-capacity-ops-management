@@ -68,7 +68,7 @@ const NAV_GROUPS = [
   ] },
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
-      desc: 'Xuất báo cáo PDF, dữ liệu CSV / Excel và cấu hình phạm vi, loại finding, logo cho báo cáo.', scope: ['vcenter'] },
+      desc: 'Mọi báo cáo PDF và dữ liệu Excel / CSV, nhóm theo chức năng: Capacity & vận hành, Quy hoạch & Sizing, License & Inventory, Backup.', scope: ['vcenter'] },
     { id: 'settings', view: 'settings', icon: 'settings', label: 'Cài đặt', title: 'Cài đặt',
       desc: 'Tiêu chí và ngưỡng đánh giá, nguồn dữ liệu vCenter và import thủ công.', scope: [] },
   ] },
@@ -742,18 +742,11 @@ function bindTopBarInteractions() {
   $('#loginForm').addEventListener('submit', handleLoginSubmit);
   $('#btnLogout').addEventListener('click', handleLogout);
   $('#btnSyncNow').addEventListener('click', handleSyncNow);
-  $('#btnExportPdfExec').addEventListener('click', e => handleExportPdf('executive', e.currentTarget));
-  $('#btnExportPdfTech').addEventListener('click', e => handleExportPdf('technical', e.currentTarget));
-  $('#btnExportPdfPlan').addEventListener('click', e => handleExportPdf('planning', e.currentTarget));
+  [['#btnExportPdfExec', 'executive'], ['#btnExportPdfTech', 'technical'], ['#btnExportPdfPlan', 'planning']].forEach(([sel, view]) => {
+    const b = $(sel); if (b) b.addEventListener('click', e => handleExportPdf(view, e.currentTarget));
+  });
   const planQuick = $('#btnExportPdfPlanQuick');
   if (planQuick) planQuick.addEventListener('click', e => handleExportPdf('planning', e.currentTarget));
-  const bkPdfBtn = $('#btnExportPdfBackup');
-  if (bkPdfBtn) bkPdfBtn.addEventListener('click', async e => {
-    const btn = e.currentTarget; const orig = btn.innerHTML; btn.disabled = true; btn.textContent = 'Đang tạo PDF...';
-    try { const st = bkState(); await api.bkReportPdf(st.server, st.days); }
-    catch (err) { showValidationBanner([`Không thể xuất báo cáo backup: ${err.message}`], []); }
-    finally { btn.disabled = false; btn.innerHTML = orig; }
-  });
   const licSummary = $('#btnExportPdfLicSummary');
   if (licSummary) licSummary.addEventListener('click', e => handleExportLicSummaryPdf(e.currentTarget));
   const saveThr = $('#btnSaveThresholds');

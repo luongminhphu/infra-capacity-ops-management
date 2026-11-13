@@ -224,7 +224,7 @@ const api = {
   bkSchedulesImport: (file) => { const fd = new FormData(); fd.append('file', file); return apiRequest('/backup/schedules/import', { method: 'POST', body: fd }); },
   bkThresholds: () => apiRequest('/backup/thresholds'),
   bkThresholdsSave: (payload) => apiRequest('/backup/thresholds', { method: 'PUT', body: JSON.stringify(payload) }),
-  bkReportPdf: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'Bao_cao_backup.pdf'),
+  bkReportPdf: (server, days, appendix = true) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7, appendix: appendix ? 'true' : 'false' })}`, { method: 'GET' }, 'Bao_cao_backup.pdf'),
   bkReportXlsx: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/xlsx?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'Thong_ke_backup.xlsx'),
 
   getLogo: () => apiRequest('/settings/logo'),
