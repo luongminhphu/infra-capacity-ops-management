@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
 from .. import data_access
@@ -47,53 +48,58 @@ def _known_vm_names(db: Session, settings: Settings) -> List[str]:
     return [v["vm"] for v in vms if v.get("vm")]
 
 
+def _job_columns(j: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "parent_job_id": j.get("parentJobId"), "job_type": j.get("jobType"), "category": j.get("category") or "other",
+        "policy_name": j.get("policyName"), "policy_type": j.get("policyType"), "schedule_name": j.get("scheduleName"),
+        "schedule_type": j.get("scheduleType"), "client_name": j.get("clientName"),
+        "client_key": nbu_client.client_key(j.get("clientName")), "state": j.get("state"), "status": j.get("status"),
+        "start_time": j.get("startTime"), "end_time": j.get("endTime"), "elapsed_sec": j.get("elapsedSec"),
+        "kbytes": j.get("kbytes"), "files": j.get("files"), "storage_unit": j.get("storageUnit"),
+        "media_server": j.get("mediaServer"),
+    }
+
+
 def _upsert_jobs(db: Session, key: str, jobs: List[Dict[str, Any]]) -> int:
+    """Insert new jobs in bulk; update existing ones only when something changed (the
+    overlap window re-reads thousands of finished, unchanged jobs on every poll)."""
     if not jobs:
         return 0
-    by_id = {j["jobId"]: j for j in jobs}
+    by_id = {j["jobId"]: _job_columns(j) for j in jobs}
     ids = list(by_id)
     existing: Dict[int, BackupJob] = {}
     for i in range(0, len(ids), 500):
         for row in db.query(BackupJob).filter(BackupJob.nbu_key == key, BackupJob.job_id.in_(ids[i:i + 500])).all():
             existing[row.job_id] = row
-    for jid, j in by_id.items():
-        row = existing.get(jid) or BackupJob(nbu_key=key, job_id=jid)
-        row.parent_job_id = j.get("parentJobId")
-        row.job_type = j.get("jobType")
-        row.category = j.get("category") or "other"
-        row.policy_name = j.get("policyName")
-        row.policy_type = j.get("policyType")
-        row.schedule_name = j.get("scheduleName")
-        row.schedule_type = j.get("scheduleType")
-        row.client_name = j.get("clientName")
-        row.client_key = nbu_client.client_key(j.get("clientName"))
-        row.state = j.get("state")
-        row.status = j.get("status")
-        row.start_time = j.get("startTime")
-        row.end_time = j.get("endTime")
-        row.elapsed_sec = j.get("elapsedSec")
-        row.kbytes = j.get("kbytes")
-        row.files = j.get("files")
-        row.storage_unit = j.get("storageUnit")
-        row.media_server = j.get("mediaServer")
-        row.updated_at = dt.datetime.utcnow()
-        if row.id is None:
-            db.add(row)
+    now = dt.datetime.utcnow()
+    new_rows = []
+    for jid, cols in by_id.items():
+        row = existing.get(jid)
+        if row is None:
+            new_rows.append({"nbu_key": key, "job_id": jid, "updated_at": now, **cols})
+            continue
+        changed = {k: v for k, v in cols.items() if getattr(row, k) != v}
+        if changed:
+            for k, v in changed.items():
+                setattr(row, k, v)
+            row.updated_at = now
+    if new_rows:
+        db.execute(insert(BackupJob), new_rows)
     return len(by_id)
 
 
 def _store_snapshot(db: Session, run: BackupSyncRun, key: str, policies: List[Dict[str, Any]], pools: List[Dict[str, Any]],
                     at: dt.datetime) -> None:
-    for p in policies:
-        db.add(BackupPolicySnapshot(
-            run_id=run.id, nbu_key=key, name=p["name"], policy_type=p.get("policyType"), active=p.get("active"),
-            clients_json=json.dumps(p.get("clients") or []), schedules_json=json.dumps(p.get("schedules") or []),
-            storage=p.get("storage"), selection=p.get("selection"), captured_at=at))
-    for s in pools:
-        db.add(BackupStorageSnapshot(
-            run_id=run.id, nbu_key=key, name=s["name"], storage_type=s.get("storageType"), total_bytes=s.get("totalBytes"),
-            used_bytes=s.get("usedBytes"), free_bytes=s.get("freeBytes"), high_water_pct=s.get("highWaterPct"),
-            state=s.get("state"), captured_at=at))
+    if policies:
+        db.execute(insert(BackupPolicySnapshot), [{
+            "run_id": run.id, "nbu_key": key, "name": p["name"], "policy_type": p.get("policyType"), "active": p.get("active"),
+            "clients_json": json.dumps(p.get("clients") or []), "schedules_json": json.dumps(p.get("schedules") or []),
+            "storage": p.get("storage"), "selection": p.get("selection"), "captured_at": at} for p in policies])
+    if pools:
+        db.execute(insert(BackupStorageSnapshot), [{
+            "run_id": run.id, "nbu_key": key, "name": s["name"], "storage_type": s.get("storageType"),
+            "total_bytes": s.get("totalBytes"), "used_bytes": s.get("usedBytes"), "free_bytes": s.get("freeBytes"),
+            "high_water_pct": s.get("highWaterPct"), "state": s.get("state"), "captured_at": at} for s in pools])
 
 
 def _demo_backfill_storage(db: Session, cfg: NetBackupConfig, now: dt.datetime, days: int = 45) -> None:

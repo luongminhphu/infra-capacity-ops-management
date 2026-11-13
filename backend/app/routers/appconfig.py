@@ -1,6 +1,6 @@
 """App-wide configuration editable by admins: login-screen logo and feature (module) toggles."""
 import base64
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel

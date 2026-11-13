@@ -52,7 +52,6 @@ READY = {"ok": ("SẴN SÀNG TRIỂN KHAI", OK, OK_BG), "warn": ("TRIỂN KHAI �
          "crit": ("CẦN XỬ LÝ RỦI RO", CRIT, CRIT_BG)}
 
 thin = Side(style="thin", color=LINE)
-BOX = Border(left=thin, right=thin, top=thin, bottom=thin)
 NUM = "#,##0"
 NUM1 = "#,##0.0"
 MONEY = "#,##0"

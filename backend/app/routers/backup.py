@@ -11,6 +11,7 @@ from .. import data_access
 from ..backup import analysis
 from ..backup.client import NetBackupError
 from ..backup.collector import sync_netbackup
+from ..collectors.scheduler import sync_backups
 from ..config import get_settings
 from ..database import get_db
 from ..backup import schedule as bschedule
@@ -109,15 +110,10 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
 
 
 @router.post("/sync-all")
-def sync_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    out = []
-    for cfg in get_settings().netbackups():
-        try:
-            run = sync_netbackup(db, cfg)
-            out.append({"key": cfg.key, "ok": True, "jobs": run.jobs_fetched, "warning": run.error_message})
-        except Exception as exc:  # noqa: BLE001
-            out.append({"key": cfg.key, "ok": False, "error": str(exc)})
-    return {"results": out}
+def sync_all(user: User = Depends(get_current_user)):
+    # Every backup server in parallel, each in its own DB session.
+    results = sync_backups(get_settings())
+    return {"results": [{**r, "finishedAt": to_iso_utc(r["finishedAt"])} if r.get("ok") else r for r in results]}
 
 
 @router.get("/summary")

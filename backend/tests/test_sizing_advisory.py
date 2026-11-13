@@ -212,7 +212,7 @@ def test_platform_vocabulary_and_licensing():
     from app import platforms, report_sizing_full
     vms = [sizing.VmSpec(name="APP", qty=6, vcpu=8, ram_gb=32, disk_gb=200), sizing.VmSpec(name="Domain Controller", qty=2, vcpu=2, ram_gb=8)]
     prof = [sizing.HostProfile(name="2×16C / 512 GB", sockets=2, cores_per_socket=16, ram_gb=512, disk_gb=8000)]
-    for key in platforms.PLATFORM_KEYS:
+    for key in platforms.PLATFORMS:
         pf = platforms.PLATFORMS[key]
         p = sizing.SizingParams(platform=key, storage_mode="local", storage_protection_factor=2.0,
                                 license_min_cores_per_socket=pf["license_min_per_socket"], reserve_ram_gb=pf["reserve"]["ram_gb"])

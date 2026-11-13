@@ -29,6 +29,7 @@ from ..config import NetBackupConfig
 logger = logging.getLogger("vco.netbackup")
 
 PAGE_LIMIT = 100
+POLICY_WORKERS = 8          # parallel policy-detail GETs (read-only, small responses)
 MAX_JOB_PAGES = 300      # 30 000 jobs per sync at most
 MAX_POLICIES = 400
 
@@ -423,21 +424,26 @@ class NetBackupClient:
         return out
 
     def fetch_policies(self) -> List[Dict[str, Any]]:
+        """Policy list, then each policy's detail (schedules, clients) — the details are
+        independent GETs, fetched POLICY_WORKERS at a time instead of one by one."""
+        from concurrent.futures import ThreadPoolExecutor
+
         hdr = {"X-NetBackup-Policy-Use-Generic-Schema": "true"}
         res = self.get("/config/policies", headers=hdr)
-        out = []
-        for it in ((res or {}).get("data") or [])[:MAX_POLICIES]:
+        items = ((res or {}).get("data") or [])[:MAX_POLICIES]
+
+        def detail(it: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             name = it.get("id") or ((it.get("attributes") or {}).get("policy") or {}).get("policyName")
-            detail = it
+            full = it
             if name:
                 try:
-                    detail = (self.get(f"/config/policies/{urllib.parse.quote(str(name), safe='')}", headers=hdr) or {}).get("data") or it
+                    full = (self.get(f"/config/policies/{urllib.parse.quote(str(name), safe='')}", headers=hdr) or {}).get("data") or it
                 except NetBackupError as exc:
                     logger.warning("Policy %s detail unavailable: %s", name, exc)
-            p = parse_policy(detail)
-            if p:
-                out.append(p)
-        return out
+            return parse_policy(full)
+
+        with ThreadPoolExecutor(max_workers=POLICY_WORKERS) as pool:
+            return [p for p in pool.map(detail, items) if p]
 
     def fetch_disk_pools(self) -> List[Dict[str, Any]]:
         res = self.get("/storage/disk-pools")

@@ -5,7 +5,6 @@ Executive/Technical views, compliance engine, historical trend — before real
 vCenter credentials are wired in. Clearly surfaced in the UI as demo data.
 """
 import hashlib
-import math
 import random
 import time
 import uuid

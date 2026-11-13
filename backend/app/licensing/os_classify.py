@@ -23,7 +23,6 @@ CATEGORY_LABEL = {
     "appliance": "Appliance",
     "other_unknown": "Other / Unknown",
 }
-CONFIDENCE_ORDER = {"confirmed": 4, "high": 3, "medium": 2, "low": 1, "none": 0}
 
 # Appliance markers in VM names (VMware / common vendor virtual appliances).
 _APPLIANCE_NAME_RE = re.compile(

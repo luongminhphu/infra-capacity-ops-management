@@ -4,14 +4,13 @@ row dicts the frontend/capacity engine expects, and figure out "latest data
 per source" (each live vCenter's most recent successful run, plus the most
 recent manual import, combined).
 """
-import datetime as dt
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from . import capacity
 from .config import Settings
-from .models import AppSetting, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, VmSnapshot
+from .models import AppSetting, HostSnapshot, SnapshotRun, VmSnapshot
 from .timeutil import to_iso_utc
 
 
@@ -130,11 +129,3 @@ def get_latest_grouped(db: Session, include_import: bool = True) -> Dict[str, An
     return {"hosts": host_rows, "vms": vm_rows, "byVcenter": by_vcenter, "runMeta": run_meta}
 
 
-def get_findings_for_run(db: Session, run: SnapshotRun) -> List[Dict[str, Any]]:
-    return [
-        {
-            "severity": f.severity, "type": f.type, "typeLabel": f.type_label, "entity": f.entity,
-            "cluster": f.cluster, "metric": f.metric, "recommendation": f.recommendation,
-        }
-        for f in run.findings
-    ]

@@ -1,11 +1,10 @@
-import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import data_access
 from ..config import get_settings
-from ..collectors.scheduler import sync_vcenter
+from ..collectors.scheduler import sync_vcenter, sync_vcenters, vcenter_result
 from ..database import get_db
 from ..models import SnapshotRun, User
 from ..security import get_current_user
@@ -52,21 +51,12 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Đồng bộ thất bại: {exc}") from exc
-    return {
-        "ok": True, "runId": run.id, "vcenterKey": key,
-        "hostCount": len(run.hosts), "vmCount": len(run.vms), "findingCount": len(run.findings),
-        "finishedAt": to_iso_utc(run.finished_at),
-    }
+    out = vcenter_result(cfg, run)
+    return {**out, "finishedAt": to_iso_utc(out["finishedAt"])}
 
 
 @router.post("/sync-all")
-def sync_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    settings = get_settings()
-    results = []
-    for cfg in settings.vcenters():
-        try:
-            run = sync_vcenter(db, cfg, settings)
-            results.append({"vcenterKey": cfg.key, "ok": True, "hostCount": len(run.hosts), "vmCount": len(run.vms)})
-        except Exception as exc:  # noqa: BLE001
-            results.append({"vcenterKey": cfg.key, "ok": False, "error": str(exc)})
-    return {"results": results}
+def sync_all(user: User = Depends(get_current_user)):
+    # Every vCenter in parallel, each in its own DB session.
+    results = sync_vcenters(get_settings())
+    return {"results": [{**r, "finishedAt": to_iso_utc(r["finishedAt"])} if r.get("ok") else r for r in results]}

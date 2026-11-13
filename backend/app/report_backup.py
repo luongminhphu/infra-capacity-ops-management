@@ -216,7 +216,7 @@ def _schedule(r: Dict[str, Any]) -> str:
 
 def _failures(r: Dict[str, Any]) -> str:
     if not r["topCodes"]:
-        return f"""
+        return """
   <div class="section"><div class="section-title"><span class="sec-num">3</span>Nguyên nhân lỗi</div>
   <div class="small-note" style="font-size:9px;">Không có job lỗi trong kỳ.</div></div>"""
     bars = svg_hbars([{"label": g["short"], "value": g["count"], "color": COLORS["crit"] if i == 0 else COLORS["warn"],
@@ -257,7 +257,7 @@ def _clients(r: Dict[str, Any]) -> str:
 def _coverage(r: Dict[str, Any]) -> str:
     cov, th = r["coverage"], r["thresholds"]
     if not cov.get("available"):
-        return f"""
+        return """
   <div class="section"><div class="section-title"><span class="sec-num">5</span>Độ phủ backup máy ảo</div>
   <div class="small-note" style="font-size:9px;">Chưa có dữ liệu inventory vCenter để đối chiếu — đồng bộ vCenter trước khi xuất báo cáo.</div></div>"""
     scope_txt = f"<b>Phạm vi cần backup:</b> {esc(cov['scopeLabel'])}. " if cov.get("scopeActive") else ""

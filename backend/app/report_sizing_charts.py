@@ -247,35 +247,6 @@ def svg_projection(points: List[Dict[str, Any]], installed: int, width: int = 33
     return "".join(parts)
 
 
-def svg_stack_bars(rows: List[Dict[str, Any]], width: int = 680, label_w: int = 70) -> str:
-    """100% stacked horizontal bars. rows: [{label, segments:[{key, label, value}]}]."""
-    if not rows:
-        return EMPTY
-    row_h = 26
-    plot_w = width - label_w - 6
-    h = len(rows) * row_h + 2
-    parts = [f'<svg width="{width}" height="{h}" viewBox="0 0 {width} {h}" {FONT}>']
-    for i, r in enumerate(rows):
-        y = 2 + i * row_h
-        bh = row_h - 8
-        total = sum(max(0.0, s["value"]) for s in r["segments"]) or 1.0
-        parts.append(f'<text x="{label_w - 6}" y="{y + bh / 2 + 3.5:.1f}" text-anchor="end" font-size="8.6" font-weight="700" fill="{COLORS["ink"]}">{esc(r["label"])}</text>')
-        x = label_w
-        for s in r["segments"]:
-            w = max(0.0, s["value"]) / total * plot_w
-            if w <= 0:
-                continue
-            parts.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="{bh}" fill="{SEG_COLORS.get(s["key"], COLORS["faint"])}"><title>{esc(s["label"])}</title></rect>')
-            pct = s["value"] / total * 100
-            if w > 26:
-                fg = "#ffffff" if s["key"] == "request" else COLORS["ink"]
-                parts.append(f'<text x="{x + w / 2:.1f}" y="{y + bh / 2 + 3:.1f}" text-anchor="middle" font-size="7.4" font-weight="700" fill="{fg}">{pct:.0f}%</text>')
-            x += w
-        parts.append(f'<rect x="{label_w}" y="{y}" width="{plot_w}" height="{bh}" fill="none" stroke="{COLORS["border"]}" rx="2"/>')
-    parts.append("</svg>")
-    return "".join(parts)
-
-
 COST_COLORS = {"hw": "#2681FF", "war": "#f59e0b", "lic": "#0891b2"}
 
 

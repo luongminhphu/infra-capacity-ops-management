@@ -813,6 +813,12 @@ kubectl diff -k k8s/
 
 ## Lưu ý về dữ liệu lịch sử & polling
 
+**Hiệu năng đồng bộ**: mỗi chu kỳ, các vCenter và máy chủ backup được đồng bộ **song song**
+(`SYNC_CONCURRENCY`, mặc định 4). Inventory vCenter được đọc theo lô bằng PropertyCollector (vài lời gọi
+cho mỗi loại đối tượng thay vì một lời gọi cho từng thuộc tính của từng VM; tự quay về cách đọc cũ nếu
+vCenter từ chối); thời gian idle / tắt máy của VM tính từ snapshot trước trong một truy vấn; snapshot ghi
+bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job không đổi không bị ghi lại.
+
 - Mỗi lần đồng bộ (thủ công qua "Đồng bộ ngay"/"Sync all", hoặc tự động theo
   `POLL_INTERVAL_MINUTES`, mặc định 60 phút) tạo một `SnapshotRun` mới trong Postgres — đây là
   nguồn dữ liệu cho biểu đồ xu hướng (Executive View), panel "Biến động tài nguyên theo thời

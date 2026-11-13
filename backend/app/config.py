@@ -4,11 +4,10 @@ Central configuration for Infra Capacity Ops backend.
 All secrets (vCenter passwords, JWT secret, admin bootstrap password) come from
 environment variables / .env — never hardcoded and never committed to git.
 """
-import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -130,6 +129,8 @@ class Settings(BaseSettings):
         return [u.strip().lower() for u in self.auth_breakglass_users.split(",") if u.strip()]
 
     poll_interval_minutes: int = Field(default=60)
+    # vCenters and backup servers polled at the same time (each in its own thread / DB session).
+    sync_concurrency: int = Field(default=4)
     enable_scheduler: bool = Field(default=True)
 
     # Compliance / overcommit default thresholds (mirrors the original client-side policy)
