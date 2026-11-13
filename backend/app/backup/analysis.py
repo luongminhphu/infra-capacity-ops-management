@@ -30,6 +30,7 @@ from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from ..timeutil import VN_TZ
+from . import schedule as bs
 from . import status_codes as sc
 from .client import client_key
 
@@ -52,6 +53,11 @@ class BackupThresholds:
     window_end_hour: int = 7
     coverage_days: int = 7
     coverage_exclude: str = "vCLS,template,tmpl"
+    schedule_grace_minutes: int = 60
+    backup_day_cutoff_hour: int = 12
+    schedule_mode: str = "netbackup"
+    fixed_window_start: str = "20:00"
+    fixed_window_end: str = "04:00"
 
 
 THRESHOLD_META = [
@@ -68,6 +74,11 @@ THRESHOLD_META = [
     ("window_end_hour", "Giờ kết thúc cửa sổ backup đêm (giờ VN)", "giờ"),
     ("coverage_days", "VM được coi là có backup nếu thành công trong vòng", "ngày"),
     ("coverage_exclude", "Bỏ qua VM có tên chứa (phân cách bởi dấu phẩy)", ""),
+    ("schedule_grace_minutes", "Ân hạn sau giờ kết thúc cửa sổ trong lịch backup", "phút"),
+    ("backup_day_cutoff_hour", "Mốc tính ngày backup — job bắt đầu trước giờ này thuộc đêm hôm trước", "giờ"),
+    ("schedule_mode", "Cách lấy lịch kiểm tra: netbackup = đọc schedule của policy (không có thì dùng khung cố định) · fixed = khung cố định cho mọi policy", ""),
+    ("fixed_window_start", "Khung cố định — giờ bắt đầu (HH:MM)", ""),
+    ("fixed_window_end", "Khung cố định — giờ kết thúc, hôm sau nếu nhỏ hơn giờ bắt đầu (HH:MM)", ""),
 ]
 
 
@@ -133,7 +144,8 @@ def _linreg_slope(points: List[Tuple[float, float]]) -> Optional[float]:
 # ---------------------------------------------------------------------------
 def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage: List[Dict[str, Any]],
             storage_history: List[Dict[str, Any]], vms: Optional[List[Dict[str, Any]]], th: BackupThresholds,
-            now: dt.datetime, days: int = 7, scope: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+            now: dt.datetime, days: int = 7, scope: Optional[List[Dict[str, Any]]] = None,
+            schedules: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """jobs: dicts with nbuKey, jobId, parentJobId, jobType, category, policyName, policyType, scheduleType,
     clientName, clientKey, state, status, startTime, endTime, elapsedSec, kbytes (≥ LOOKBACK_DAYS of history)."""
     start = now - dt.timedelta(days=days)
@@ -150,13 +162,23 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
     data24 = sum(_tb(j["kbytes"]) for j in done24 if (j["status"] or 0) <= 1)
     running = [j for j in backup_all if j["status"] is None and (j["startTime"] or now) >= now - dt.timedelta(days=7)]
 
-    # -- daily trend (VN calendar days) --------------------------------------
+    # -- backup schedule (SLA per system) ------------------------------------
+    cutoff = th.backup_day_cutoff_hour
+    sched = bs.evaluate(schedules or [], backup_all, policies, now, days, th.schedule_grace_minutes, cutoff, auto=True,
+                        mode="fixed" if str(th.schedule_mode).strip().lower() == "fixed" else "netbackup",
+                        fixed_start=th.fixed_window_start, fixed_end=th.fixed_window_end)
+    covered: Dict[str, str] = sched["covered"]
+    rule_rpo = {r["system"]: r["rpoHours"] for r in sched["rules"] if r.get("rpoHours")}
+    policy_rpo = {p: rule_rpo[sysname] for p, sysname in covered.items() if sysname in rule_rpo}
+
+    # -- daily trend (backup nights: a job before the cut-off hour belongs to the previous night)
     daily_map: Dict[str, Dict[str, float]] = {}
+    today_night = bs.backup_day(now, cutoff)
     for d in range(days - 1, -1, -1):
-        key = _vn(now - dt.timedelta(days=d)).strftime("%Y-%m-%d")
+        key = (today_night - dt.timedelta(days=d)).isoformat()
         daily_map[key] = {"success": 0, "partial": 0, "failed": 0, "tb": 0.0}
     for j in done:
-        k = _vn(j["startTime"]).strftime("%Y-%m-%d")
+        k = bs.backup_day(j["startTime"], cutoff).isoformat()
         if k in daily_map:
             o = sc.outcome(j["status"])
             daily_map[k][o] += 1
@@ -212,16 +234,20 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
         win_fail = sum(1 for j in win if j["status"] > 1)
         name = (last or (js[0] if js else None) or {}).get("clientName") or ck
         pols = sorted({j["policyName"] for j in js if j["policyName"]} | set(active_clients.get(ck, [])))
+        # RPO follows the schedule of the client's system (daily ≈ 33 h, weekly ≈ 177 h); else the global target
+        sched_rpo = [policy_rpo[p] for p in pols if p in policy_rpo]
+        rpo = min(sched_rpo) if sched_rpo else th.rpo_hours
+        rpo_crit = rpo + max(0.0, th.rpo_crit_hours - th.rpo_hours)
         if not js_done:
             status, label, note = "crit", "Không có job", "Có trong policy đang bật nhưng không có job backup nào trong 35 ngày."
         elif not last_ok:
             status, label, note = "crit", "Chưa backup được", f"Không có bản backup thành công trong {LOOKBACK_DAYS} ngày; lỗi gần nhất: {sc.describe(last['status'])}."
-        elif consec >= th.consecutive_fail or (hrs or 0) > th.rpo_crit_hours:
+        elif consec >= th.consecutive_fail or (hrs or 0) > rpo_crit:
             status, label = "crit", ("Lỗi liên tiếp" if consec >= th.consecutive_fail else "Quá RPO")
             note = f"{consec} lần lỗi liên tiếp" if consec else ""
             note = (note + "; " if note else "") + f"bản backup thành công gần nhất cách đây {hrs:.0f} giờ."
-        elif hrs > th.rpo_hours:
-            status, label, note = "warn", "Quá RPO", f"Bản backup thành công gần nhất cách đây {hrs:.0f} giờ (RPO {th.rpo_hours:.0f} giờ)."
+        elif hrs > rpo:
+            status, label, note = "warn", "Quá RPO", f"Bản backup thành công gần nhất cách đây {hrs:.0f} giờ (RPO {rpo:.0f} giờ{' theo lịch' if sched_rpo else ''})."
         elif last["status"] > 1:
             status, label, note = "warn", "Lỗi lần gần nhất", sc.describe(last["status"])
         elif last["status"] == 1:
@@ -234,11 +260,12 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
             "lastStatusText": sc.describe(last["status"]) if last else "—",
             "lastSuccessAt": (last_ok["endTime"] or last_ok["startTime"]) if last_ok else None,
             "hoursSinceSuccess": round(hrs, 1) if hrs is not None else None, "consecutiveFail": consec,
+            "rpoHours": round(rpo, 1), "system": next((covered[p] for p in pols if p in covered), None),
             "jobs": len(win), "failed": win_fail, "tb": round(sum(_tb(j["kbytes"]) for j in win if j["status"] <= 1), 3),
             "status": status, "statusLabel": label, "note": note,
         })
     clients.sort(key=lambda c: ({"crit": 0, "warn": 1, "ok": 2}[c["status"]], -(c["hoursSinceSuccess"] or 1e9), c["client"]))
-    rpo_ok = sum(1 for c in clients if c["hoursSinceSuccess"] is not None and c["hoursSinceSuccess"] <= th.rpo_hours)
+    rpo_ok = sum(1 for c in clients if c["hoursSinceSuccess"] is not None and c["hoursSinceSuccess"] <= c["rpoHours"])
 
     # -- policy table --------------------------------------------------------
     pol_jobs: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
@@ -260,8 +287,8 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
         freq = min([s.get("frequencySec") or 86400 for s in p.get("schedules") or []] or [86400])
         if p.get("active") is False:
             st, lbl = "na", "Không hoạt động"
-        elif not lr or _hours(lr, now) > max(48.0, freq / 1800.0):
-            st, lbl = "crit", "Không chạy"
+        elif k[1] not in covered and (not lr or _hours(lr, now) > max(48.0, freq / 1800.0)):
+            st, lbl = "crit", "Không chạy"   # policies under a schedule are checked night by night instead
         elif js and _pct(len(js) - f, len(js)) < th.success_crit_pct:
             st, lbl = "crit", "Lỗi nhiều"
         elif f:
@@ -331,7 +358,7 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
     overrun = []
     for j in done:
         s, e = _vn(j["startTime"]), _vn(j["endTime"])
-        if not e:
+        if not e or j.get("policyName") in covered:   # scheduled policies: "late" per night in the schedule check
             continue
         night = s.hour >= 18 or s.hour < th.window_end_hour
         end_limit = (s if s.hour < th.window_end_hour else s + dt.timedelta(days=1)).replace(hour=th.window_end_hour, minute=0, second=0)
@@ -407,6 +434,13 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
         if coverage["failing"]:
             findings.append(_finding("warning", "Độ phủ VM", f"{coverage['failing']} VM", f"{coverage['failing']} VM có job nhưng chưa backup thành công trong {th.coverage_days} ngày",
                                      ", ".join(v["vm"] for v in coverage["failingVms"][:10]), "Xem lỗi job snapshot / backup của từng VM."))
+    for sev, sysname, title, detail, action in sched["findings"]:
+        findings.append(_finding(sev, "Lịch backup", sysname, title, detail, action))
+    if sched["configured"] and sched["unmappedPolicies"]:
+        findings.append(_finding("info", "Lịch backup", f"{len(sched['unmappedPolicies'])} policy",
+                                 f"{len(sched['unmappedPolicies'])} policy chưa thuộc lịch backup nào",
+                                 ", ".join(sched["unmappedPolicies"][:10]),
+                                 "Gán policy vào hệ thống tương ứng ở trang Lịch & tuân thủ, hoặc bỏ qua nếu không cần theo dõi lịch."))
     findings.sort(key=lambda f: SEV_ORDER[f["severity"]])
     counts = {k: sum(1 for f in findings if f["severity"] == k) for k in SEV_ORDER}
     readiness = "crit" if counts["critical"] else ("warn" if counts["warning"] else "ok")
@@ -423,6 +457,7 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
         "storageMaxPct": worst_pool["usedPct"] if worst_pool else None, "storageMaxName": worst_pool["name"] if worst_pool else None,
         "copyJobs": len(copies), "copyFailed": len(copy_failed), "copyRate": _pct(len(copies) - len(copy_failed), len(copies)),
         "coveragePct": coverage.get("pct"), "longJobs": len(long_jobs), "windowOverrun": len(overrun),
+        "scheduleCompliancePct": sched["compliancePct"], "scheduleNights": sched["evaluated"],
         "avgDurationMin": round(sum(j["elapsedSec"] or 0 for j in done) / len(done) / 60, 1) if done else None,
     }
     return {
@@ -431,7 +466,8 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
         "kpis": kpis, "daily": daily, "failureGroups": failure_groups, "topCodes": top_codes,
         "clients": clients, "policies": policy_rows, "storage": storage_rows,
         "storageTrend": {"dates": trend_dates, "series": trend_series},
-        "longJobs": long_jobs, "coverage": coverage, "findings": findings, "findingCounts": counts,
+        "longJobs": long_jobs, "coverage": coverage, "schedule": {k: v for k, v in sched.items() if k != "findings"},
+        "findings": findings, "findingCounts": counts,
         "readiness": readiness, "headline": _headline(kpis, th, coverage, days),
         "failedJobs": [_job_brief(j) for j in sorted(failed, key=lambda j: j["startTime"], reverse=True)[:500]],
     }
@@ -544,6 +580,8 @@ def _headline(k: Dict[str, Any], th: BackupThresholds, cov: Dict[str, Any], days
     if not k["jobs"]:
         return "Chưa có dữ liệu job backup trong kỳ — kiểm tra kết nối NetBackup hoặc chạy đồng bộ."
     parts = [f"Tỷ lệ backup thành công {days} ngày {_fmt(k['successRate'])}% (mục tiêu {_fmt(th.success_target_pct, 0)}%)"]
+    if k.get("scheduleCompliancePct") is not None:
+        parts.append(f"{_fmt(k['scheduleCompliancePct'])}% đêm backup đúng lịch")
     if k["clients"]:
         parts.append(f"{_fmt(k['rpoCompliancePct'])}% client đạt RPO {_fmt(th.rpo_hours, 0)} giờ")
     if k["clientsCrit"]:
@@ -560,7 +598,8 @@ def _headline(k: Dict[str, Any], th: BackupThresholds, cov: Dict[str, Any], days
 # ---------------------------------------------------------------------------
 def _job_dict(r) -> Dict[str, Any]:
     return {"nbuKey": r.nbu_key, "jobId": r.job_id, "parentJobId": r.parent_job_id, "jobType": r.job_type, "category": r.category,
-            "policyName": r.policy_name, "policyType": r.policy_type, "scheduleType": r.schedule_type, "clientName": r.client_name,
+            "policyName": r.policy_name, "policyType": r.policy_type, "scheduleType": r.schedule_type,
+            "scheduleName": r.schedule_name, "clientName": r.client_name,
             "clientKey": r.client_key, "state": r.state, "status": r.status, "startTime": r.start_time, "endTime": r.end_time,
             "elapsedSec": r.elapsed_sec, "kbytes": r.kbytes}
 
@@ -598,10 +637,11 @@ def _storage_dict(s) -> Dict[str, Any]:
 
 def build_report(db, keys: Optional[List[str]] = None, days: int = 7, th: Optional[BackupThresholds] = None,
                  vms: Optional[List[Dict[str, Any]]] = None, now: Optional[dt.datetime] = None,
-                 scope: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                 scope: Optional[List[Dict[str, Any]]] = None,
+                 schedules: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     now = now or dt.datetime.utcnow()
     inp = load_inputs(db, keys, now, days)
-    return analyze(inp["jobs"], inp["policies"], inp["storage"], inp["history"], vms, th or BackupThresholds(), now, days, scope)
+    return analyze(inp["jobs"], inp["policies"], inp["storage"], inp["history"], vms, th or BackupThresholds(), now, days, scope, schedules)
 
 
 def iter_jobs(db, keys: Optional[List[str]], since: dt.datetime) -> Iterable[Dict[str, Any]]:

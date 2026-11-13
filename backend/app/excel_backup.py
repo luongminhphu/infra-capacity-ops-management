@@ -129,6 +129,54 @@ def _daily(wb, r, subtitle) -> None:
     _widths(ws, {"A": 14, "B": 12, "C": 12, "D": 10, "E": 16, "F": 14})
 
 
+SCHED_TXT = {"ok": "Đạt", "partial": "Một phần", "late": "Trễ", "wrongtype": "Sai loại", "failed": "Lỗi", "missing": "Thiếu",
+             "running": "Đang chạy", "pending": "Chưa đến lịch"}
+WD = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+
+
+def _schedule(wb, r, subtitle) -> None:
+    sc = r.get("schedule") or {}
+    nights = sc.get("nights") or []
+    ws, row = _sheet(wb, "Lịch & tuân thủ", "Tuân thủ lịch backup theo từng đêm", subtitle, 6 + len(nights))
+    rules = sc.get("rules") or []
+    if not rules:
+        ws.cell(row=row, column=1, value="Chưa có lịch backup.")
+        return
+    ws.cell(row=row, column=1, value=(f"Tuân thủ: {sc.get('compliancePct')}% đêm đạt ({sc.get('evaluated')} đêm có lịch). Đêm tính từ "
+                                      f"{sc.get('cutoffHour')}:00 đến trước {sc.get('cutoffHour')}:00 hôm sau; trễ khi xong sau giờ kết thúc + "
+                                      f"{sc.get('graceMinutes')} phút.")).font = _font(10, True, NAVY)
+    row += 2
+    import datetime as _dt
+    head = ["Hệ thống / policy", "Nguồn lịch", "Full", "Incremental", "Cửa sổ"] + [
+        f"{WD[_dt.date.fromisoformat(d).weekday()]} {d[8:10]}/{d[5:7]}" for d in nights] + ["Tuân thủ"]
+    rows = []
+    for x in rules:
+        full = ("Không xét" if x.get("source") == "fixed" else f"Mỗi {x['fullEveryDays']} ngày" if x.get("fullEveryDays")
+                else ", ".join(WD[d] for d in x["fullDays"]))
+        rows.append([x["system"], {"netbackup": "NetBackup", "fixed": "Khung cố định"}.get(x.get("source"), "Thủ công / Excel"), full,
+                     ", ".join(WD[d] for d in x["incrDays"]), f"{x['startTime']} → {x['endTime']}"]
+                    + [SCHED_TXT.get(c.get("status"), "" if not c.get("expected") else "?") for c in x["nights"]]
+                    + [(x["compliancePct"] / 100.0) if x.get("compliancePct") is not None else None])
+    last = _write_rows(ws, row, head, rows, fmts={len(head): "0.0%"})
+    from openpyxl.utils import get_column_letter
+    rng = f"F{row + 1}:{get_column_letter(5 + len(nights))}{last}"
+    _status_rules(ws, rng)
+    for txt, fg, bg in (("Trễ", WARN, WARN_BG), ("Sai loại", WARN, WARN_BG), ("Thiếu", CRIT, CRIT_BG)):
+        ws.conditional_formatting.add(rng, CellIsRule(operator="equal", formula=[f'"{txt}"'], font=Font(color=fg, bold=True), fill=_fill(bg)))
+    _widths(ws, {"A": 24, "B": 16, "C": 12, "D": 22, "E": 14})
+    for i in range(len(nights)):
+        ws.column_dimensions[get_column_letter(6 + i)].width = 10
+    ws.freeze_panes = ws[f"F{row + 1}"]
+    # Detail of nights that are not OK
+    row = _section(ws, last + 2, "Các đêm chưa đạt", 6)
+    detail = [[x["system"], c["date"], "Full" if c.get("expected") == "full" else "Incremental", SCHED_TXT.get(c["status"], ""), c.get("detail", "")]
+              for x in rules for c in x["nights"] if c.get("status") in ("late", "wrongtype", "failed", "missing", "partial")]
+    top = row
+    l2 = _write_rows(ws, row, ["Hệ thống / policy", "Đêm", "Loại", "Kết quả", "Chi tiết"], detail, wrap_cols=(5,))
+    if detail:
+        _table(ws, f"A{top}:E{l2}", "DemChuaDat", "TableStyleLight9")
+
+
 def _failures(wb, r, subtitle) -> None:
     ws, row = _sheet(wb, "Nguyên nhân lỗi", "Nguyên nhân lỗi theo nhóm và mã NetBackup", subtitle, 5)
     row = _section(ws, row, "Theo nhóm nguyên nhân", 5)
@@ -250,6 +298,7 @@ def build_backup_xlsx(r: Dict[str, Any], jobs: List[Dict[str, Any]], servers: Li
     wb = Workbook()
     _overview(wb, r, servers, subtitle)
     _daily(wb, r, subtitle)
+    _schedule(wb, r, subtitle)
     _failures(wb, r, subtitle)
     _clients(wb, r, subtitle)
     _policies(wb, r, subtitle)

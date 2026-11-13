@@ -57,6 +57,8 @@ const NAV_GROUPS = [
       desc: 'Lần backup thành công gần nhất, lỗi liên tiếp và đánh giá RPO của từng client.', scope: [] },
     { id: 'bk-jobs', view: 'backup', sub: 'jobs', icon: 'list-checks', label: 'Job backup', title: 'Job backup',
       desc: 'Danh sách job theo kết quả, loại job, client, policy và mã lỗi NetBackup.', scope: [] },
+    { id: 'bk-schedule', view: 'backup', sub: 'schedule', icon: 'calendar-check', label: 'Lịch & tuân thủ', title: 'Lịch backup & tuân thủ',
+      desc: 'Đối chiếu từng đêm backup với lịch (đọc từ schedule của policy NetBackup hoặc khai báo / import Excel): đạt, trễ, sai loại, lỗi, thiếu.', scope: [] },
     { id: 'bk-coverage', view: 'backup', sub: 'coverage', icon: 'shield-check', label: 'Độ phủ VM', title: 'Độ phủ backup VM',
       desc: 'Đối chiếu VM trong vCenter với client NetBackup: VM chưa có backup hoặc backup lỗi.', scope: [] },
     { id: 'bk-storage', view: 'backup', sub: 'storage', icon: 'hard-drive', label: 'Storage & policy', title: 'Storage & policy',

@@ -64,8 +64,8 @@ def test_analysis_rates_rpo_and_coverage():
         _job(3, "vm-ok", 0, 10, parent=2, ptype="VMware"),
         # fs03: two failures in a row after an old success → consecutive failure (critical)
         _job(10, "fs03", 0, 80), _job(11, "fs03", 58, 50), _job(12, "fs03", 58, 26),
-        # db01: last success 30 h ago → over RPO (warning)
-        _job(20, "db01.corp.local", 0, 31),
+        # db01: last success 40 h ago → over the nightly RPO (fixed window 20:00→04:00: 24 + 8 + 1 = 33 h)
+        _job(20, "db01.corp.local", 0, 41),
         # app02: partial success only
         _job(30, "app02", 1, 5),
     ]
@@ -319,3 +319,147 @@ def test_ensure_schema_retries_concurrent_create(monkeypatch):
     monkeypatch.setattr("time.sleep", lambda s: None)
     database.ensure_schema()
     assert calls["n"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Backup schedule (nightly window 20:00 → 04:00 next day)
+# ---------------------------------------------------------------------------
+def _vn_utc(y, m, d, hh, mm=0):
+    """VN local time → naive UTC (how job times are stored)."""
+    return dt.datetime(y, m, d, hh, mm) - dt.timedelta(hours=7)
+
+
+def _sjob(jid, client_name, status, start, end, stype="DIFFERENTIAL_INCREMENTAL", policy="CORE-EQ-DB"):
+    return {"nbuKey": "n1", "jobId": jid, "parentJobId": None, "jobType": "BACKUP", "category": "backup", "policyName": policy,
+            "policyType": "Standard", "scheduleType": stype, "clientName": client_name, "clientKey": client.client_key(client_name),
+            "state": "DONE" if status is not None else "ACTIVE", "status": status, "startTime": start, "endTime": end,
+            "elapsedSec": 3600, "kbytes": 1024 ** 2}
+
+
+def test_schedule_excel_import_and_rules():
+    from app.backup import schedule as bs
+    import io
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    def block(row, name, full, start, end, ret, incr=True):
+        ws.cell(row=row, column=2, value=name)
+        for i, d in enumerate(days):
+            ws.cell(row=row + 2, column=2 + i, value=d)
+            col = chr(66 + i)
+            ws.cell(row=row + 3, column=2 + i, value=f'=IF({col}{row + 2}=$K${row + 2},"Full Backup","{"Incremental" if incr else ""}")')
+            ws.cell(row=row + 4, column=2 + i, value=f'=IF({col}{row + 3}="","","Restore point")')
+        for k, (label, val) in enumerate([("Full Backup", full), ("Full backup Retention (days)", ret), ("Date of creation", None),
+                                          ("Start time", dt.time(*start)), ("End Time", dt.time(*end))]):
+            ws.cell(row=row + 2 + k, column=10, value=label)
+            ws.cell(row=row + 2 + k, column=11, value=val)
+    block(2, "P-CORE-EQUITY", "Friday", (20, 0), (4, 0), 14)
+    block(12, "OTBK-TRADE", "Thursday", (22, 0), (4, 0), 90, incr=False)
+    buf = io.BytesIO()
+    wb.save(buf)
+    rules = {r["system"]: r for r in bs.parse_schedule_xlsx(buf.getvalue())}
+    assert set(rules) == {"P-CORE-EQUITY", "OTBK-TRADE"}
+    eq, ot = rules["P-CORE-EQUITY"], rules["OTBK-TRADE"]
+    assert eq["fullDays"] == [4] and eq["incrDays"] == [0, 1, 2, 3, 5, 6] and eq["startTime"] == "20:00" and eq["endTime"] == "04:00"
+    assert ot["fullDays"] == [3] and ot["incrDays"] == [] and ot["retentionDays"] == 90
+    assert round(bs.rule_rpo_hours(eq, 60)) == 33 and round(bs.rule_rpo_hours(ot, 60)) == 175
+    assert bs.retention_days("2 weeks") == 14 and bs.retention_days("90 days") == 90
+    assert bs.policy_matches({"policyPatterns": "core-eq-*, VM-TRADE"}, "CORE-EQ-DB") and not bs.policy_matches({"policyPatterns": ""}, "X")
+
+
+def test_schedule_nightly_compliance_across_midnight():
+    from app.backup import schedule as bs
+    rule = bs.validate_rule({"system": "P-CORE-EQUITY", "policyPatterns": "CORE-EQ-*", "fullDays": "Friday",
+                             "incrDays": "Mon,Tue,Wed,Thu,Sat,Sun", "startTime": "20:00", "endTime": "04:00", "retentionDays": 14})
+    # Nights of Mon 2026-11-02 .. Sun 11-08, evaluated on Mon 11-09 at 10:00 VN
+    jobs = [
+        _sjob(1, "db1", 0, _vn_utc(2026, 11, 2, 20), _vn_utc(2026, 11, 3, 1)),                 # Mon ok
+        _sjob(2, "db1", 0, _vn_utc(2026, 11, 4, 0, 30), _vn_utc(2026, 11, 4, 3)),              # Tue night, started after midnight → still Tue
+        _sjob(3, "db1", 0, _vn_utc(2026, 11, 4, 20), _vn_utc(2026, 11, 5, 6)),                 # Wed: ends 06:00 > 04:00 + 1h → late
+        _sjob(4, "db1", 58, _vn_utc(2026, 11, 5, 20), _vn_utc(2026, 11, 5, 21)),               # Thu: fails …
+        _sjob(5, "db1", 0, _vn_utc(2026, 11, 5, 22), _vn_utc(2026, 11, 6, 2)),                 # … retried OK same night → ok
+        _sjob(6, "db1", 0, _vn_utc(2026, 11, 6, 20), _vn_utc(2026, 11, 7, 3)),                 # Fri: incremental only → wrong type
+        _sjob(7, "db1", 13, _vn_utc(2026, 11, 7, 20), _vn_utc(2026, 11, 7, 22)),               # Sat: failed
+        # Sun: nothing → missing
+    ]
+    now = _vn_utc(2026, 11, 9, 10)
+    res = bs.evaluate([rule], jobs, [{"name": "CORE-EQ-DB", "schedules": [{"name": "Full", "type": "FULL", "retention": "1 weeks"}]}],
+                      now, days=7, grace_minutes=60)
+    r = res["rules"][0]
+    by = {c["date"]: c["status"] for c in r["nights"]}
+    assert by == {"2026-11-02": "ok", "2026-11-03": "ok", "2026-11-04": "late", "2026-11-05": "ok", "2026-11-06": "wrongtype",
+                  "2026-11-07": "failed", "2026-11-08": "missing"}   # at 10:00 Monday the latest night is Sunday
+    assert r["compliancePct"] == round(3 * 100 / 7, 1) and r["evaluated"] == 7
+    assert r["retentionIssues"] == ["CORE-EQ-DB/Full: 1 weeks"]
+    titles = " | ".join(f[2] for f in res["findings"])
+    assert "2 đêm backup thiếu / lỗi" in titles and "đêm Full không chạy Full" in titles and "retention" in titles
+
+
+def test_weekly_schedule_rpo_not_flagged():
+    from app.backup import schedule as bs
+    rule = bs.validate_rule({"system": "OTBK-TRADE", "policyPatterns": "OTBK-*", "fullDays": "Thursday", "incrDays": "",
+                             "startTime": "22:00", "endTime": "04:00", "retentionDays": 90})
+    jobs = [_sjob(1, "otbk1", 0, _vn_utc(2026, 11, 5, 22), _vn_utc(2026, 11, 6, 2), stype="FULL", policy="OTBK-TRADE")]
+    now = _vn_utc(2026, 11, 10, 10)    # Tuesday, 104 h after the Thursday Full
+    r = analysis.analyze(jobs, [{"nbuKey": "n1", "name": "OTBK-TRADE", "policyType": "Standard", "active": True, "clients": [],
+                                  "schedules": []}], [], [], None, analysis.BackupThresholds(), now, days=7, schedules=[rule])
+    c = next(c for c in r["clients"] if c["key"] == "otbk1")
+    assert c["status"] == "ok" and c["rpoHours"] == 175.0
+    assert not any(p["statusLabel"] == "Không chạy" for p in r["policies"])
+    night = {n["date"]: n["status"] for n in r["schedule"]["rules"][0]["nights"]}
+    assert night["2026-11-05"] == "ok" and r["kpis"]["scheduleCompliancePct"] == 100.0
+
+
+def test_schedule_read_from_netbackup_policy():
+    """Generic-schema policy payload: Full = Calendar Friday 20:00 +8h, Incremental = Frequency 1 day
+    on the other nights; an Oracle policy whose window opens at 02:00 belongs to the previous night."""
+    from app.backup import schedule as bs
+    def win(days, start_h, hours=8):
+        return [{"dayOfWeek": d, "startSeconds": start_h * 3600, "durationSeconds": hours * 3600 if d in days else 0} for d in range(1, 8)]
+    pol = client.parse_policy({"type": "policy", "id": "CORE-EQ-DB", "attributes": {"policy": {
+        "policyName": "CORE-EQ-DB", "policyType": "Standard", "policyAttributes": {"active": True},
+        "schedules": [
+            {"scheduleName": "Full", "backupType": "Full Backup", "scheduleType": "Calendar",
+             "includeDates": {"recurringDaysOfWeek": ["1:6", "2:6", "3:6", "4:6", "5:6"]}, "startWindow": win([6], 20),
+             "backupCopies": {"copies": [{"retentionPeriod": {"value": 2, "unit": "WEEKS"}}]}},
+            {"scheduleName": "Incr", "backupType": "Differential Incremental Backup", "scheduleType": "Frequency",
+             "frequencySeconds": 86400, "startWindow": win([1, 2, 3, 4, 5, 7], 20)},
+        ]}}})
+    assert pol["schedules"][0]["type"] == "FULL" and pol["schedules"][0]["calendarDays"] == [4]
+    rule = bs.derive_rule(pol)
+    assert rule["fullDays"] == [4] and rule["incrDays"] == [0, 1, 2, 3, 5, 6]
+    assert rule["windows"][4] == {"start": "20:00", "end": "04:00"} and rule["retentionDays"] == 14
+    ora = bs.derive_rule(client.parse_policy({"id": "ORA", "attributes": {"policy": {"policyName": "ORA", "schedules": [
+        {"scheduleName": "Daily", "backupType": "Full Backup", "scheduleType": "Frequency", "frequencySeconds": 86400,
+         "startWindow": win([3], 2, 6)}]}}}))   # Tuesday 02:00 → night of Monday
+    assert ora["fullDays"] == [0]
+    s, e = bs.window(ora, dt.date(2026, 11, 2))
+    assert (s.day, s.hour, e.hour) == (3, 2, 8)
+    weekly_any = bs.derive_rule(client.parse_policy({"id": "W", "attributes": {"policy": {"policyName": "W", "schedules": [
+        {"scheduleName": "F", "backupType": "Full Backup", "scheduleType": "Frequency", "frequencySeconds": 604800,
+         "startWindow": win([1, 2, 3, 4, 5, 6, 7], 20)},
+        {"scheduleName": "I", "backupType": "Cumulative Incremental Backup", "scheduleType": "Frequency", "frequencySeconds": 86400,
+         "startWindow": win([1, 2, 3, 4, 5, 6, 7], 20)}]}}}))
+    assert weekly_any["fullEveryDays"] == 7 and weekly_any["fullDays"] == [] and len(weekly_any["incrDays"]) == 7
+    # evaluate(auto=True) picks the policy up without any manual schedule
+    jobs = [_sjob(1, "db1", 0, _vn_utc(2026, 11, 6, 20), _vn_utc(2026, 11, 7, 2), stype="FULL")]
+    res = bs.evaluate([], jobs, [pol], _vn_utc(2026, 11, 7, 10), days=1, auto=True)
+    assert res["rules"][0]["source"] == "netbackup" and res["rules"][0]["nights"][0]["status"] == "ok"
+
+
+def test_fixed_window_mode():
+    """Mode 'fixed': every active policy must succeed each night between 20:00 and 04:00 (+ grace)."""
+    from app.backup import schedule as bs
+    jobs = [_sjob(1, "a", 0, _vn_utc(2026, 11, 2, 21), _vn_utc(2026, 11, 3, 3), policy="P1"),
+            _sjob(2, "a", 0, _vn_utc(2026, 11, 3, 21), _vn_utc(2026, 11, 4, 6), policy="P1"),      # 06:00 > 04:00 + 1 h
+            _sjob(3, "a", 0, _vn_utc(2026, 11, 5, 1), _vn_utc(2026, 11, 5, 3), policy="P1")]       # 01:00 → night of 11-04
+    pols = [{"name": "P1", "active": True, "schedules": [{"name": "F", "type": "FULL", "kind": "Calendar", "calendarDays": [4],
+                                                          "windows": [{"day": 4, "startMin": 1200, "durationMin": 480}]}]},
+            {"name": "OLD", "active": False, "schedules": []}]
+    res = bs.evaluate([], jobs, pols, _vn_utc(2026, 11, 6, 10), days=4, auto=True, mode="fixed")
+    assert [r["system"] for r in res["rules"]] == ["P1"] and res["rules"][0]["source"] == "fixed"
+    assert [c["status"] for c in res["rules"][0]["nights"]] == ["ok", "late", "ok", "missing"]
+    assert round(bs.rule_rpo_hours(res["rules"][0], 60)) == 33
+    nb = bs.evaluate([], jobs, pols, _vn_utc(2026, 11, 6, 10), days=4, auto=True, mode="netbackup")
+    assert nb["rules"][0]["source"] == "netbackup" and nb["rules"][0]["fullDays"] == [4]

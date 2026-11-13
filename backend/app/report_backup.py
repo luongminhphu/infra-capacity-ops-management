@@ -112,6 +112,11 @@ def _summary(r: Dict[str, Any]) -> str:
     if k["clients"]:
         pts.append(f"<b>{vn(k['clientsCrit'], 0)}</b> client cần xử lý ngay, {vn(k['clientsWarn'], 0)} client cần theo dõi trên tổng {vn(k['clients'], 0)} client; "
                    f"{vn(k['rpoCompliancePct'])}% client có bản backup thành công trong {vn(th['rpo_hours'], 0)} giờ.")
+    sc = r.get("schedule") or {}
+    if sc.get("compliancePct") is not None:
+        bad = sum((x.get("counts") or {}).get(k, 0) for x in sc.get("rules", []) for k in ("failed", "missing"))
+        pts.append(f"Tuân thủ lịch backup: <b>{vn(sc['compliancePct'])}%</b> đêm đạt ({sc['evaluated']} đêm có lịch); "
+                   f"<b>{vn(bad, 0)}</b> đêm có client lỗi hoặc không chạy.")
     if r["failureGroups"]:
         g = r["failureGroups"][0]
         pts.append(f"Nguyên nhân lỗi nhiều nhất: <b>{esc(g['label'].lower())}</b> ({vn(g['count'], 0)} job, {vn(g['clientCount'], 0)} client).")
@@ -158,10 +163,61 @@ def _daily(r: Dict[str, Any]) -> str:
   </div>"""
 
 
+NIGHT = {"ok": ("ok", "✓"), "partial": ("warn", "½"), "late": ("warn", "T"), "wrongtype": ("warn", "S"),
+         "failed": ("crit", "✕"), "missing": ("crit", "!"), "running": ("na", "…"), "pending": ("na", "·")}
+WD = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+SRC_LABEL = {"netbackup": "NetBackup", "fixed": "Khung cố định", "manual": "Lịch thủ công"}
+
+
+def _schedule(r: Dict[str, Any]) -> str:
+    sc = r.get("schedule") or {}
+    unmapped = [x["system"] for x in sc.get("rules") or [] if not x.get("policies")]
+    rules = [x for x in sc.get("rules") or [] if x.get("policies")]
+    if not rules:
+        return """
+  <div class="section"><div class="section-title"><span class="sec-num">2</span>Tuân thủ lịch backup</div>
+  <div class="small-note" style="font-size:9px;">Chưa có lịch backup (không đọc được schedule của policy và chưa khai báo lịch thủ công).</div></div>"""
+    import datetime as _dt
+    nights = (sc.get("nights") or [])[-14:]
+    idx = len(sc.get("nights") or []) - len(nights)
+    head = "".join(f"<th style='text-align:center'>{WD[_dt.date.fromisoformat(d).weekday()]}<br/>{d[8:10]}/{d[5:7]}</th>" for d in nights)
+    rows = []
+    for x in rules:
+        cells = ""
+        for c in x["nights"][idx:]:
+            if not c.get("status"):
+                cells += f"<td style='text-align:center;color:{COLORS['faint']}'>{'?' if c.get('expected') else ''}</td>"
+                continue
+            cls, sym = NIGHT[c["status"]]
+            fg, bg = {"ok": ("ok", "ok_bg"), "warn": ("warn", "warn_bg"), "crit": ("crit", "crit_bg"), "na": ("na", "na_bg")}[cls]
+            border = "2px solid" if c.get("expected") == "full" else "1px solid"
+            cells += (f"<td style='text-align:center;padding:2px'><span style='display:inline-block;width:15px;line-height:13px;border-radius:3px;"
+                      f"font-weight:700;color:{COLORS[fg]};background:{COLORS[bg]};border:{border} {COLORS[fg]}'>{sym}</span></td>")
+        full = ("Mỗi đêm" if x.get("source") == "fixed" else f"Full mỗi {x['fullEveryDays']} ngày" if x.get("fullEveryDays")
+                else "Full " + (", ".join(WD[d] for d in x["fullDays"]) or "—"))
+        pct = x.get("compliancePct")
+        col = COLORS["ok"] if pct is not None and pct >= 95 else (COLORS["warn"] if pct is not None and pct >= 80 else COLORS["crit"])
+        rows.append(f"<tr><td><b>{esc(x['system'])}</b><div style='font-size:7px;color:{COLORS['muted']}'>{SRC_LABEL.get(x.get('source'), 'Lịch thủ công')}</div></td>"
+                    f"<td style='font-size:7.6px'>{full}<br/>{esc(x['startTime'])}→{esc(x['endTime'])}</td>{cells}"
+                    f"<td style='text-align:right'><b style='color:{col}'>{vn(pct)}%</b></td></tr>" if pct is not None else
+                    f"<tr><td><b>{esc(x['system'])}</b></td><td style='font-size:7.6px'>{full}<br/>{esc(x['startTime'])}→{esc(x['endTime'])}</td>{cells}<td>—</td></tr>")
+    legend = " · ".join(f"{s} {l}" for s, l in [("✓", "Đạt"), ("½", "Một phần"), ("T", "Trễ"), ("S", "Sai loại (đêm Full không chạy Full)"),
+                                                 ("✕", "Lỗi"), ("!", "Thiếu"), ("…", "Đang chạy"), ("·", "Chưa đến lịch")])
+    return f"""
+  <div class="section breakable">
+    <div class="section-title"><span class="sec-num">2</span>Tuân thủ lịch backup</div>
+    <div class="section-sub">Tỷ lệ đêm đạt: <b>{vn(sc.get('compliancePct'))}%</b> ({sc.get('evaluated', 0)} đêm có lịch). Mỗi đêm tính từ {sc.get('cutoffHour', 12)}:00 hôm đó đến trước {sc.get('cutoffHour', 12)}:00 hôm sau
+    (job 20:00 → 04:00 thuộc đêm bắt đầu). Đạt = mọi client thành công, đúng loại Full / Incremental, xong trước giờ kết thúc + {sc.get('graceMinutes', 60)} phút. Ô viền đậm = đêm Full.</div>
+    <table class="sched-grid"><thead><tr><th>Hệ thống / policy</th><th>Lịch</th>{head}<th style='text-align:right'>Tuân thủ</th></tr></thead><tbody>{''.join(rows)}</tbody></table>
+    <div class="small-note">{legend}</div>
+    {f'<div class="small-note">Lịch chưa gán policy NetBackup (chưa kiểm tra): {esc(", ".join(unmapped))}.</div>' if unmapped else ''}
+  </div>"""
+
+
 def _failures(r: Dict[str, Any]) -> str:
     if not r["topCodes"]:
         return f"""
-  <div class="section"><div class="section-title"><span class="sec-num">2</span>Nguyên nhân lỗi</div>
+  <div class="section"><div class="section-title"><span class="sec-num">3</span>Nguyên nhân lỗi</div>
   <div class="small-note" style="font-size:9px;">Không có job lỗi trong kỳ.</div></div>"""
     bars = svg_hbars([{"label": g["short"], "value": g["count"], "color": COLORS["crit"] if i == 0 else COLORS["warn"],
                        "text": f"{g['count']} job · {g['clientCount']} client"} for i, g in enumerate(r["failureGroups"])], width=330, label_w=118)
@@ -173,7 +229,7 @@ def _failures(r: Dict[str, Any]) -> str:
                    widths=["7%", "33%", "20%", "9%", "31%"])
     return f"""
   <div class="section">
-    <div class="section-title"><span class="sec-num">2</span>Nguyên nhân lỗi</div>
+    <div class="section-title"><span class="sec-num">3</span>Nguyên nhân lỗi</div>
     <div class="section-sub">Mã lỗi NetBackup được gom theo đầu mối xử lý để giao việc cho đúng bộ phận.</div>
     <div class="chart-row"><div class="chart-card"><div class="chart-card-title">Job lỗi theo nhóm nguyên nhân</div>{bars}</div>
       <div style="flex:1;font-size:8.6px;line-height:1.45;">{actions}</div></div>
@@ -190,7 +246,7 @@ def _clients(r: Dict[str, Any]) -> str:
     more = f'<div class="small-note">Còn {len(bad) - 60} client khác — xem file Excel.</div>' if len(bad) > 60 else ""
     return f"""
   <div class="section breakable">
-    <div class="section-title"><span class="sec-num">3</span>Client cần xử lý — RPO và lỗi lặp lại</div>
+    <div class="section-title"><span class="sec-num">4</span>Client cần xử lý — RPO và lỗi lặp lại</div>
     <div class="section-sub">{vn(len(bad), 0)} / {vn(len(r['clients']), 0)} client chưa đạt. Quá RPO: không có bản backup thành công trong {vn(th['rpo_hours'], 0)} giờ (nghiêm trọng khi quá {vn(th['rpo_crit_hours'], 0)} giờ hoặc lỗi liên tiếp từ {th['consecutive_fail']} lần).</div>
     {_table(["Client", "Policy", "Thành công gần nhất", "Đã qua", "Lỗi liên tiếp", "Kết quả lần cuối", "Đánh giá"], rows,
             widths=["18%", "18%", "13%", "9%", "8%", "22%", "12%"])}
@@ -202,7 +258,7 @@ def _coverage(r: Dict[str, Any]) -> str:
     cov, th = r["coverage"], r["thresholds"]
     if not cov.get("available"):
         return f"""
-  <div class="section"><div class="section-title"><span class="sec-num">4</span>Độ phủ backup máy ảo</div>
+  <div class="section"><div class="section-title"><span class="sec-num">5</span>Độ phủ backup máy ảo</div>
   <div class="small-note" style="font-size:9px;">Chưa có dữ liệu inventory vCenter để đối chiếu — đồng bộ vCenter trước khi xuất báo cáo.</div></div>"""
     scope_txt = f"<b>Phạm vi cần backup:</b> {esc(cov['scopeLabel'])}. " if cov.get("scopeActive") else ""
     out_txt = f", {vn(cov['outOfScope'], 0)} VM ngoài phạm vi" if cov.get("scopeActive") else ""
@@ -217,7 +273,7 @@ def _coverage(r: Dict[str, Any]) -> str:
              f'<b style="color:{COLORS["crit"]}">{vn(c["unprotected"], 0)}</b>' if c["unprotected"] else "0", vn(c["pct"]) + "%"] for c in cov["byCluster"]]
     return f"""
   <div class="section">
-    <div class="section-title"><span class="sec-num">4</span>Độ phủ backup máy ảo</div>
+    <div class="section-title"><span class="sec-num">5</span>Độ phủ backup máy ảo</div>
     <div class="section-sub">{scope_txt}Đối chiếu {vn(cov['total'], 0)} VM đang chạy {'trong phạm vi' if cov.get('scopeActive') else 'trong inventory vCenter'} với client NetBackup (theo tên VM, hostname guest hoặc IP).
     Có backup = thành công trong {th['coverage_days']} ngày. Không tính {vn(cov['poweredOff'], 0)} VM đang tắt và {vn(cov['excluded'], 0)} VM loại trừ theo tên{out_txt}.</div>
     <div class="chart-row">
@@ -243,7 +299,7 @@ def _storage(r: Dict[str, Any]) -> str:
                  f'{_legend([(x["color"], x["name"]) for x in series])}</div>')
     return f"""
   <div class="section">
-    <div class="section-title"><span class="sec-num">5</span>Dung lượng lưu trữ backup</div>
+    <div class="section-title"><span class="sec-num">6</span>Dung lượng lưu trữ backup</div>
     <div class="section-sub">Cảnh báo từ {vn(th['storage_warn_pct'], 0)}%, nghiêm trọng từ {vn(th['storage_crit_pct'], 0)}% hoặc khi dự kiến chạm ngưỡng high-water trong {th['storage_days_warn']} ngày (xu hướng tuyến tính 30 ngày).</div>
     {_table(["Disk pool", "Loại", "Trạng thái", "Tổng (TB)", "Đã dùng", "Còn trống", "% dùng", "TB/ngày", "Ngày tới HWM", "Đánh giá"], rows)}
     {chart}
@@ -256,7 +312,7 @@ def _policies(r: Dict[str, Any]) -> str:
              (vn(p["successRate"]) + "%") if p["successRate"] is not None else "—", _pill(p["statusLabel"], p["status"])] for p in r["policies"]]
     return f"""
   <div class="section breakable">
-    <div class="section-title"><span class="sec-num">6</span>Policy backup</div>
+    <div class="section-title"><span class="sec-num">7</span>Policy backup</div>
     <div class="section-sub">Policy đang bật mà không có job trong 48 giờ được đánh giá “Không chạy”. Số client của policy VMware lấy theo VM thực tế được backup (client chọn theo query).</div>
     {_table(["Policy", "Loại", "Hoạt động", "Client", "Chạy gần nhất", "Job", "Lỗi", "Tỷ lệ", "Đánh giá"], rows)}
   </div>"""
@@ -268,17 +324,27 @@ def _findings(r: Dict[str, Any]) -> str:
              esc(f["action"])] for f in r["findings"]]
     return f"""
   <div class="section breakable">
-    <div class="section-title"><span class="sec-num">7</span>Phát hiện &amp; khuyến nghị</div>
+    <div class="section-title"><span class="sec-num">8</span>Phát hiện &amp; khuyến nghị</div>
     {_table(["Mức độ", "Hạng mục", "Phát hiện", "Khuyến nghị"], rows, cls="decision-table", widths=["12%", "13%", "40%", "35%"])}
   </div>"""
 
 
 def _criteria(r: Dict[str, Any], servers: List[Dict[str, Any]]) -> str:
     th = r["thresholds"]
+    win = f"{th.get('fixed_window_start', '20:00')}–{th.get('fixed_window_end', '04:00')}"
+    if th.get("schedule_mode") == "fixed":
+        src = f"khung cố định {win} mỗi đêm cho mọi policy"
+    else:
+        src = f"đọc từ schedule của policy NetBackup (policy không suy ra được lịch: khung {win} mỗi đêm)"
+    if any(x.get("source") == "manual" for x in (r.get("schedule") or {}).get("rules", [])):
+        src += ", lịch thủ công / Excel được ưu tiên cho policy đã gán"
     items = [
         f"Tỷ lệ thành công = (thành công + thành công một phần) / job backup đã kết thúc trong kỳ; mục tiêu ≥ {vn(th['success_target_pct'], 0)}%, nghiêm trọng khi dưới {vn(th['success_crit_pct'], 0)}%.",
-        f"RPO client: thời gian từ bản backup thành công gần nhất; đạt khi ≤ {vn(th['rpo_hours'], 0)} giờ, nghiêm trọng khi > {vn(th['rpo_crit_hours'], 0)} giờ hoặc lỗi liên tiếp ≥ {th['consecutive_fail']} lần.",
-        f"Job chạy quá {vn(th['long_running_hours'], 0)} giờ hoặc chờ quá {vn(th['queued_hours'], 0)} giờ; job đêm kết thúc sau {th['window_end_hour']}:00 được ghi nhận tràn cửa sổ backup.",
+        f"RPO client theo lịch của policy (mỗi đêm ≈ 1 ngày + cửa sổ + ân hạn); policy không có lịch: ≤ {vn(th['rpo_hours'], 0)} giờ. Nghiêm trọng khi quá thêm {vn(th['rpo_crit_hours'] - th['rpo_hours'], 0)} giờ hoặc lỗi liên tiếp ≥ {th['consecutive_fail']} lần.",
+        f"Job chạy quá {vn(th['long_running_hours'], 0)} giờ hoặc chờ quá {vn(th['queued_hours'], 0)} giờ.",
+        f"Lịch backup: {src}; "
+        f"mỗi đêm tính từ {th['backup_day_cutoff_hour']}:00 đến trước {th['backup_day_cutoff_hour']}:00 hôm sau; trễ khi xong sau giờ kết thúc + {th['schedule_grace_minutes']} phút; "
+        f"RPO của client theo lịch hệ thống (hằng đêm ≈ 1 ngày + cửa sổ + ân hạn).",
         f"Disk pool: cảnh báo {vn(th['storage_warn_pct'], 0)}%, nghiêm trọng {vn(th['storage_crit_pct'], 0)}% hoặc chạm high-water trong {th['storage_days_warn']} ngày.",
         f"Độ phủ VM: VM đang chạy có bản backup thành công trong {th['coverage_days']} ngày; loại trừ VM có tên chứa “{esc(th['coverage_exclude'])}”"
         + (f"; chỉ tính hệ thống trong phạm vi cần backup: {esc(r['coverage'].get('scopeLabel'))}." if r["coverage"].get("scopeActive") else "."),
@@ -287,7 +353,7 @@ def _criteria(r: Dict[str, Any], servers: List[Dict[str, Any]]) -> str:
                     for s in servers) or "—"
     return f"""
   <div class="section">
-    <div class="section-title"><span class="sec-num">8</span>Tiêu chí đánh giá &amp; nguồn dữ liệu</div>
+    <div class="section-title"><span class="sec-num">9</span>Tiêu chí đánh giá &amp; nguồn dữ liệu</div>
     <ul class="brief-list">{''.join(f'<li>{x}</li>' for x in items)}</ul>
     <div class="assumption-note">Nguồn: NetBackup REST API qua tài khoản chỉ đọc — {src}. Inventory VM: lần đồng bộ vCenter gần nhất.</div>
   </div>"""
@@ -322,6 +388,7 @@ def _css() -> str:
 .appendix-table th, .appendix-table td {{ font-size:7.6px; padding:3px 5px; }}
 .appendix-table td {{ word-break:break-word; }}
 .meta-row {{ margin-bottom:8px; }}
+.sched-grid th, .sched-grid td {{ font-size:7.6px; padding:3px 3px; }}
 """
 
 
@@ -330,7 +397,7 @@ def render_backup_html(r: Dict[str, Any], servers: List[Dict[str, Any]], scope_l
     generated = _now_str()
     logo = f'<img class="cover-logo" src="{logo_data_url}" alt="logo"/>' if logo_data_url else ""
     p = r["period"]
-    body = (_summary(r) + _daily(r) + _failures(r) + _clients(r) + _coverage(r) + _storage(r) + _policies(r)
+    body = (_summary(r) + _daily(r) + _schedule(r) + _failures(r) + _clients(r) + _coverage(r) + _storage(r) + _policies(r)
             + _findings(r) + _criteria(r, servers) + (_appendix(r) if appendix else ""))
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8"/><style>{_base_css('Báo cáo hiện trạng backup', generated)}{_exec_visual_css()}{_css()}</style></head>
 <body>

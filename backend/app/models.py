@@ -355,3 +355,24 @@ class BackupScopeRule(Base):
     host = Column(String(255), nullable=True)      # null = whole cluster
     updated_by = Column(String(64), nullable=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class BackupScheduleRule(Base):
+    """Approved backup schedule of one system (e.g. P-CORE-EQUITY): which NetBackup policies
+    belong to it (names or glob patterns), Full / Incremental weekdays (Mon = 0), the nightly
+    window (start → end, may cross midnight) and Full retention. Drives the nightly
+    compliance check and the per-system RPO."""
+    __tablename__ = "backup_schedule_rules"
+
+    id = Column(Integer, primary_key=True)
+    system = Column(String(128), nullable=False, unique=True)
+    policy_patterns = Column(Text, nullable=True)        # "P-CORE-EQ-*, VM-COREEQ" — comma separated, * wildcard
+    full_days = Column(String(32), nullable=False, default="")   # "4" = Friday
+    incr_days = Column(String(32), nullable=False, default="")   # "0,1,2,3,5,6"
+    start_time = Column(String(5), nullable=False)       # "20:00"
+    end_time = Column(String(5), nullable=False)         # "04:00" (next day when <= start)
+    retention_days = Column(Integer, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    note = Column(Text, nullable=True)
+    updated_by = Column(String(64), nullable=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

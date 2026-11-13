@@ -18,7 +18,7 @@ function bkState() {
       sub: 'overview', server: 'all', days: 7, servers: null, summary: null, jobs: null, thresholds: null,
       loading: false, error: null, bound: false, charts: {},
       clientFilter: { status: 'all', q: '' }, jobFilter: { outcome: 'failed', category: 'backup', q: '' }, covFilter: { state: 'unprotected', q: '', vc: 'all', cl: 'all' },
-      scope: null, scopeEdit: null,
+      scope: null, scopeEdit: null, sched: null, schedMsg: '',
       lastKey: null, loadedAt: 0,
     };
   }
@@ -421,6 +421,112 @@ function bkScopeKeysOf(vc, cl) {
   return out;
 }
 
+/* ---------- Backup schedule & nightly compliance ---------- */
+const BK_DAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+const BK_NIGHT = {
+  ok: { cls: 'ok', sym: '✓', label: 'Đạt' }, partial: { cls: 'warn', sym: '½', label: 'Một phần' },
+  late: { cls: 'warn', sym: 'T', label: 'Trễ' }, wrongtype: { cls: 'warn', sym: 'S', label: 'Sai loại' },
+  failed: { cls: 'crit', sym: '✕', label: 'Lỗi' }, missing: { cls: 'crit', sym: '!', label: 'Thiếu' },
+  running: { cls: 'na', sym: '…', label: 'Đang chạy' }, pending: { cls: 'na', sym: '·', label: 'Chưa đến lịch' },
+};
+const bkDaysTxt = (arr) => (arr || []).length === 7 ? 'Hằng ngày' : (arr || []).map(d => BK_DAYS[d]).join(', ') || '—';
+
+function bkSchedule(s) {
+  const st = bkState();
+  const sc = s.schedule || { rules: [], nights: [] };
+  const nights = sc.nights || [];
+  const counts = {};
+  (sc.rules || []).forEach(r => Object.entries(r.counts || {}).forEach(([k, v]) => { counts[k] = (counts[k] || 0) + v; }));
+  const nbN = (sc.rules || []).filter(r => r.source === 'netbackup').length;
+  const fxN = (sc.rules || []).filter(r => r.source === 'fixed').length;
+  const manN = (sc.rules || []).filter(r => r.source === 'manual').length;
+  const head = nights.map(d => { const dt = new Date(d + 'T00:00:00'); const wd = (dt.getDay() + 6) % 7;
+    return `<th class="bk-night-h" title="Đêm ${d}">${BK_DAYS[wd]}<span class="muted-sub">${d.slice(8, 10)}/${d.slice(5, 7)}</span></th>`; }).join('');
+  const rows = (sc.rules || []).map(r => {
+    const cells = r.nights.map(c => {
+      if (!c.status) return `<td class="bk-night ${c.expected ? '' : 'off'}" title="${esc(c.detail || 'Không có lịch')}">${c.expected ? '<span class="muted">?</span>' : ''}</td>`;
+      const m = BK_NIGHT[c.status];
+      const tip = `${c.date} · ${c.expected === 'full' ? 'Full' : c.expected === 'any' ? 'Khung cố định' : 'Incremental'} · ${m.label}${c.detail ? ' — ' + c.detail : ''}`;
+      return `<td class="bk-night" title="${esc(tip)}"><span class="bk-cell ${m.cls} ${c.expected === 'full' ? 'is-full' : ''}">${m.sym}</span></td>`;
+    }).join('');
+    const src = r.source === 'netbackup' ? bkPill('na', 'NetBackup') : r.source === 'fixed' ? bkPill('warn', 'Khung cố định') : bkPill('ok', 'Thủ công');
+    const pols = r.source === 'netbackup' ? '' : `<span class="muted-sub bk-wrap">${r.policies.length ? esc(r.policies.join(', ')) : '<b class="tone-warn">Chưa gán policy</b>'}</span>`;
+    const full = r.source === 'fixed' ? 'Mỗi đêm (không xét Full / Incr)' : r.fullEveryDays ? `Full mỗi ${r.fullEveryDays} ngày` : `Full ${bkDaysTxt(r.fullDays)}`;
+    const extra = [r.retentionIssues && r.retentionIssues.length ? `<span class="pill warn" title="${esc(r.retentionIssues.join('; '))}">Retention lệch</span>` : ''].join('');
+    return `<tr><td><b>${esc(r.system)}</b> ${src}${pols}</td>
+      <td class="wrap">${full}<span class="muted-sub">${r.source === 'fixed' ? '' : 'Incr ' + bkDaysTxt(r.incrDays) + ' · '}${esc(r.startTime)}→${esc(r.endTime)}${r.retentionDays ? ' · giữ Full ' + r.retentionDays + ' ngày' : ''}</span></td>
+      ${cells}<td class="num"><b class="${r.compliancePct === null ? '' : r.compliancePct >= 95 ? 'tone-ok' : r.compliancePct >= 80 ? 'tone-warn' : 'tone-crit'}">${bkPct(r.compliancePct)}</b>
+      <span class="muted-sub">${r.counts.ok || 0}/${r.evaluated} đêm</span></td><td class="num">${r.rpoHours ? bkNum(r.rpoHours) + ' giờ' : '—'}</td><td>${extra}</td></tr>`;
+  }).join('');
+  const legend = Object.entries(BK_NIGHT).map(([k, m]) => `<span class="bk-legend-item"><span class="bk-cell ${m.cls}">${m.sym}</span>${m.label}${counts[k] ? ` (${counts[k]})` : ''}</span>`).join('')
+    + '<span class="bk-legend-item"><span class="bk-cell ok is-full">✓</span>Đêm Full (viền đậm)</span>';
+  const unm = (sc.unmappedPolicies || []);
+  return `
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="label">Tuân thủ lịch</div><div class="value ${sc.compliancePct === null ? '' : sc.compliancePct >= 95 ? 'tone-ok' : sc.compliancePct >= 80 ? 'tone-warn' : 'tone-crit'}">${bkPct(sc.compliancePct)}</div><div class="sub">${counts.ok || 0} / ${sc.evaluated || 0} đêm đạt trong ${nights.length} đêm gần nhất</div></div>
+      <div class="kpi-card"><div class="label">Lỗi / thiếu</div><div class="value ${(counts.failed || 0) + (counts.missing || 0) ? 'tone-crit' : 'tone-ok'}">${bkNum((counts.failed || 0) + (counts.missing || 0))}</div><div class="sub">${counts.failed || 0} đêm có client lỗi · ${counts.missing || 0} đêm không chạy</div></div>
+      <div class="kpi-card"><div class="label">Trễ / sai loại</div><div class="value ${(counts.late || 0) + (counts.wrongtype || 0) ? 'tone-warn' : 'tone-ok'}">${bkNum((counts.late || 0) + (counts.wrongtype || 0))}</div><div class="sub">Kết thúc sau giờ kết thúc + ${sc.graceMinutes} phút · đêm Full không chạy Full</div></div>
+      <div class="kpi-card"><div class="label">Nguồn lịch</div><div class="value">${bkNum((sc.rules || []).length)}</div><div class="sub">${sc.mode === 'fixed' ? 'Chế độ khung cố định' : 'Chế độ đọc từ NetBackup'} · ${nbN} theo NetBackup · ${fxN} theo khung ${esc(sc.fixedWindow || '')} · ${manN} thủ công / Excel</div></div>
+    </div>
+    <section class="table-card">
+      <div class="panel-head"><div><div class="panel-title">Tuân thủ lịch theo từng đêm</div>
+        <p class="panel-sub">Mỗi đêm backup tính từ ${sc.cutoffHour}:00 hôm đó đến trước ${sc.cutoffHour}:00 hôm sau — job chạy qua nửa đêm (20:00 → 04:00) thuộc đêm bắt đầu. Đạt = mọi client có bản backup thành công, đúng loại (Full / Incremental), xong trước giờ kết thúc + ${sc.graceMinutes} phút. Di chuột lên ô để xem chi tiết.</p></div></div>
+      <div class="bk-legend">${legend}</div>
+      <div class="table-scroll"><table class="data-table bk-sched-table"><thead><tr><th>Hệ thống / policy</th><th>Lịch</th>${head}<th>Tuân thủ</th><th>RPO</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${nights.length + 5}" class="empty-note">Chưa có lịch nào — đồng bộ NetBackup (lịch đọc tự động từ policy) hoặc khai báo lịch bên dưới.</td></tr>`}</tbody></table></div>
+      ${unm.length ? `<div class="row-count">Policy chưa có lịch (không có schedule Full / Incremental có cửa sổ, hoặc đã tắt tự đọc): ${esc(unm.slice(0, 20).join(', '))}${unm.length > 20 ? '…' : ''}</div>` : ''}
+    </section>
+    ${bkScheduleEditor()}`;
+}
+
+function bkScheduleEditor() {
+  const st = bkState();
+  const ed = st.sched;
+  if (!ed) {
+    return `<section class="table-card"><div class="panel-head"><div><div class="panel-title">Lịch thủ công / import Excel</div>
+      <p class="panel-sub">Mặc định lịch được đọc tự động từ schedule của từng policy NetBackup. Khai báo thủ công khi muốn gom nhiều policy thành một hệ thống, hoặc áp lịch đã duyệt khác với cấu hình NetBackup — lịch thủ công được ưu tiên cho các policy nó bao gồm.</p></div>
+      <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="sched-open"><i data-lucide="calendar-cog"></i>Quản lý lịch thủ công</button></div></div></section>`;
+  }
+  const dayBoxes = (i, field, days) => BK_DAYS.map((d, k) => `<label class="bk-day"><input type="checkbox" data-sched="${i}" data-field="${field}" data-day="${k}" ${days.includes(k) ? 'checked' : ''}/>${d}</label>`).join('');
+  const rows = ed.rules.map((r, i) => `<tr>
+    <td><input type="text" data-sched="${i}" data-field="system" value="${esc(r.system)}" placeholder="Tên hệ thống"/></td>
+    <td><input type="text" data-sched="${i}" data-field="policyPatterns" value="${esc(r.policyPatterns || '')}" placeholder="vd P-CORE-EQ-*, VM-EQUITY"/>
+      <span class="muted-sub bk-wrap">${(r.policies || []).length ? esc(r.policies.join(', ')) : '<b class="tone-warn">Chưa khớp policy nào</b>'}</span></td>
+    <td class="bk-days">${dayBoxes(i, 'fullDays', r.fullDays)}</td><td class="bk-days">${dayBoxes(i, 'incrDays', r.incrDays)}</td>
+    <td><input type="text" class="bk-hhmm" data-sched="${i}" data-field="startTime" value="${esc(r.startTime)}" placeholder="20:00" maxlength="5"/></td>
+    <td><input type="text" class="bk-hhmm" data-sched="${i}" data-field="endTime" value="${esc(r.endTime)}" placeholder="04:00" maxlength="5"/></td>
+    <td><input type="number" min="0" data-sched="${i}" data-field="retentionDays" value="${r.retentionDays ?? ''}" style="width:70px"/></td>
+    <td><input type="checkbox" data-sched="${i}" data-field="enabled" ${r.enabled ? 'checked' : ''}/></td>
+    <td><button class="btn btn-ghost btn-sm" type="button" data-bk-action="sched-del" data-i="${i}">Xoá</button></td></tr>`).join('');
+  return `<section class="table-card">
+    <div class="panel-head"><div><div class="panel-title">Lịch thủ công / import Excel</div>
+      <p class="panel-sub">Cột “Policy”: tên policy NetBackup thuộc hệ thống, phân cách bằng dấu phẩy, dùng * cho mẫu tên. Import file theo mẫu HSC-Backup-Management (tên hệ thống, Monday…Sunday, Full Backup, Start time / End Time, Retention): hệ thống đã có giữ nguyên phần gán policy.</p></div>
+      <div class="panel-toolbar">
+        <label class="btn btn-secondary btn-sm"><i data-lucide="upload"></i>Import Excel<input type="file" accept=".xlsx" data-bk-action="sched-import" hidden/></label>
+        <button class="btn btn-secondary btn-sm" type="button" data-bk-action="sched-add">Thêm hệ thống</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-bk-action="sched-close">Đóng</button>
+        <button class="btn btn-primary btn-sm" type="button" data-bk-action="sched-save">Lưu lịch</button>
+      </div></div>
+    ${st.schedMsg ? `<p class="logo-upload-hint">${esc(st.schedMsg)}</p>` : ''}
+    <div class="table-scroll"><table class="data-table bk-sched-edit"><thead><tr><th>Hệ thống</th><th>Policy</th><th>Ngày Full</th><th>Ngày Incremental</th><th>Bắt đầu</th><th>Kết thúc</th><th>Giữ Full (ngày)</th><th>Bật</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="9" class="empty-note">Chưa có lịch thủ công — đang dùng lịch đọc từ NetBackup.</td></tr>'}</tbody></table></div>
+    ${ed.unmappedPolicies && ed.unmappedPolicies.length ? `<div class="row-count">Policy chưa thuộc lịch thủ công nào: ${esc(ed.unmappedPolicies.slice(0, 30).join(', '))}</div>` : ''}
+  </section>`;
+}
+
+async function bkScheduleOpen() {
+  const st = bkState();
+  try { st.sched = await api.bkSchedules(); st.schedMsg = ''; }
+  catch (err) { bkSetStatus(`Không tải được lịch: ${err.message}`, true); return; }
+  renderBackupBody();
+}
+
+function bkScheduleCollect() {
+  const st = bkState();
+  return st.sched.rules.map(r => ({ system: r.system, policyPatterns: r.policyPatterns || '', fullDays: r.fullDays, incrDays: r.incrDays,
+    startTime: r.startTime, endTime: r.endTime, retentionDays: r.retentionDays === '' ? null : r.retentionDays, enabled: r.enabled, note: r.note || null }));
+}
+
 function bkStorage(s) {
   const pools = (s.storage || []).map(p => `<tr><td><b>${esc(p.name)}</b><span class="muted-sub">${esc(p.nbuKey)}</span></td><td>${esc(p.type || '—')}</td><td>${esc(p.state || '—')}</td>
     <td class="num">${bkNum(p.totalTB, 1)}</td><td class="num">${bkNum(p.usedTB, 1)}</td><td class="num">${bkNum(p.freeTB, 1)}</td>
@@ -456,8 +562,11 @@ function bkConfig() {
   const form = t ? t.meta.map(m => {
     const v = t.values[m.key], d = t.defaults[m.key];
     const isText = typeof d === 'string';
+    const input = m.key === 'schedule_mode'
+      ? `<select id="bkTh_${m.key}" data-bk-th="${m.key}"><option value="netbackup" ${v === 'netbackup' ? 'selected' : ''}>Đọc lịch từ policy NetBackup (khung cố định khi không có)</option><option value="fixed" ${v === 'fixed' ? 'selected' : ''}>Khung cố định cho mọi policy</option></select>`
+      : `<input id="bkTh_${m.key}" data-bk-th="${m.key}" type="${isText ? 'text' : 'number'}" ${isText ? '' : 'min="0" step="any"'} value="${esc(String(v))}"/>`;
     return `<div class="field"><label for="bkTh_${m.key}">${esc(m.label)}${m.unit ? ` (${esc(m.unit)})` : ''}</label>
-      <input id="bkTh_${m.key}" data-bk-th="${m.key}" type="${isText ? 'text' : 'number'}" ${isText ? '' : 'min="0" step="any"'} value="${esc(String(v))}"/>
+      ${input}
       <span class="muted-sub">Mặc định: ${esc(String(d))}</span></div>`;
   }).join('') : '<div class="empty-note">Đang tải…</div>';
   return `
@@ -488,7 +597,7 @@ function renderBackupBody() {
     body.innerHTML = `<section class="table-card"><div class="empty-state">Chưa cấu hình NetBackup. Khai báo <code>NETBACKUP_1_HOST</code> + <code>NETBACKUP_1_API_KEY</code> (hoặc <code>NETBACKUP_1_DEMO=true</code>) rồi khởi động lại ứng dụng — xem trang <a href="#/bk-config" data-nav-link="bk-config">Nguồn &amp; ngưỡng</a>.</div></section>`;
     return;
   }
-  const html = { overview: bkOverview, clients: bkClients, coverage: bkCoverage, storage: bkStorage }[st.sub];
+  const html = { overview: bkOverview, clients: bkClients, coverage: bkCoverage, storage: bkStorage, schedule: bkSchedule }[st.sub];
   body.innerHTML = st.sub === 'jobs' ? bkJobs() : html(s);
   body.querySelectorAll('input[data-tri="some"]').forEach(i => { i.indeterminate = true; });
   refreshIcons();
@@ -557,8 +666,29 @@ function bindBackupBody() {
       if (inp) { inp.focus(); try { inp.setSelectionRange(pos, pos); } catch { /* ignore */ } }
     }, 250);
   });
-  body.addEventListener('change', e => {
+  body.addEventListener('change', async e => {
     const t = e.target;
+    if (t.dataset.sched !== undefined && st.sched) {
+      const r = st.sched.rules[Number(t.dataset.sched)];
+      const f = t.dataset.field;
+      if (f === 'fullDays' || f === 'incrDays') {
+        const k = Number(t.dataset.day);
+        r[f] = t.checked ? [...new Set([...r[f], k])].sort() : r[f].filter(x => x !== k);
+        if (t.checked) { const other = f === 'fullDays' ? 'incrDays' : 'fullDays'; r[other] = r[other].filter(x => x !== k); renderBackupBody(); }
+      } else if (f === 'enabled') r.enabled = t.checked;
+      else if (f === 'retentionDays') r.retentionDays = t.value === '' ? '' : Number(t.value);
+      else r[f] = t.value;
+      return;
+    }
+    if (t.dataset.bkAction === 'sched-import' && t.files && t.files[0]) {
+      try {
+        st.sched = await api.bkSchedulesImport(t.files[0]);
+        st.schedMsg = `Đã import ${st.sched.imported.length} hệ thống: ${st.sched.imported.join(', ')}. Gán policy cho từng hệ thống rồi bấm Lưu lịch.`;
+        await bkLoad(true);
+      } catch (err) { st.schedMsg = `Import thất bại: ${err.message}`; }
+      renderBackupBody();
+      return;
+    }
     if (st.scopeEdit && (t.matches('[data-sc-mode]') || t.matches('[data-sc-vc]') || t.matches('[data-sc-cl]') || t.matches('[data-sc-host]'))) {
       if (t.matches('[data-sc-mode]')) st.scopeEdit.mode = t.value;
       else if (t.dataset.scVc) bkScopeSetMany(bkScopeKeysOf(t.dataset.scVc), t.checked);
@@ -595,6 +725,20 @@ function bindBackupBody() {
     }
     if (!a) return;
     const act = a.dataset.bkAction;
+    if (act === 'sched-open') { await bkScheduleOpen(); return; }
+    if (act === 'sched-close') { st.sched = null; renderBackupBody(); return; }
+    if (act === 'sched-add') { st.sched.rules.push({ system: '', policyPatterns: '', fullDays: [4], incrDays: [0, 1, 2, 3, 5, 6], startTime: '20:00', endTime: '04:00', retentionDays: 14, enabled: true, policies: [] }); renderBackupBody(); return; }
+    if (act === 'sched-del') { st.sched.rules.splice(Number(a.dataset.i), 1); renderBackupBody(); return; }
+    if (act === 'sched-save') {
+      a.disabled = true;
+      try {
+        st.sched = await api.bkSchedulesSave(bkScheduleCollect());
+        st.schedMsg = 'Đã lưu lịch.';
+        await bkLoad(true);
+      } catch (err) { st.schedMsg = `Không lưu được: ${err.message}`; }
+      renderBackupBody();
+      return;
+    }
     if (act === 'scope-edit') {
       try { st.scope = await api.bkScope(); } catch (err) { bkSetStatus(`Không tải được phạm vi: ${err.message}`, true); return; }
       bkScopeStartEdit(); renderBackupBody(); bkScopeRerender(); return;
