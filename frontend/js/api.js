@@ -101,7 +101,7 @@ const api = {
     const blob = await res.blob();
     const cd = res.headers.get('Content-Disposition') || '';
     const match = /filename="?([^";]+)"?/.exec(cd);
-    const filename = match ? match[1] : `vco_report_${view}_${Date.now()}.pdf`;
+    const filename = match ? match[1] : `ico_report_${view}_${Date.now()}.pdf`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = filename;
@@ -159,9 +159,9 @@ const api = {
   getSizingDefaults: () => apiRequest('/sizing/defaults'),
   calcSizing: (payload) => apiRequest('/sizing/calc', { method: 'POST', body: JSON.stringify(payload) }),
   importSizingFile: (file) => { const fd = new FormData(); fd.append('file', file, file.name); return apiRequest('/sizing/import', { method: 'POST', body: fd }); },
-  downloadSizingTemplate: () => api._downloadBlob(`${API_BASE}/sizing/template`, { method: 'GET' }, 'VCO_Sizing_mau.xlsx'),
-  downloadSizingPdf: (payload) => api._downloadBlob(`${API_BASE}/sizing/pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'VCO_De_xuat_cau_hinh_may_chu.pdf'),
-  downloadSizingXlsx: (payload) => api._downloadBlob(`${API_BASE}/sizing/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'VCO_Sizing.xlsx'),
+  downloadSizingTemplate: () => api._downloadBlob(`${API_BASE}/sizing/template`, { method: 'GET' }, 'ICO_Sizing_mau.xlsx'),
+  downloadSizingPdf: (payload) => api._downloadBlob(`${API_BASE}/sizing/pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'ICO_De_xuat_cau_hinh_may_chu.pdf'),
+  downloadSizingXlsx: (payload) => api._downloadBlob(`${API_BASE}/sizing/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'ICO_Sizing.xlsx'),
 
   _downloadBlob: async (url, options, fallbackName) => {
     const res = await fetch(url, { credentials: 'include', ...options });
@@ -191,7 +191,7 @@ const api = {
   licClusters: (vcenter) => apiRequest(`/licensing/clusters?${new URLSearchParams({ vcenter: vcenter || 'all' })}`),
   licInventory: (vcenter, cluster, clusters) => apiRequest(`/licensing/inventory?${api._licQs(vcenter, cluster, clusters)}`),
   licAssess: (vcenter, cluster, clusters) => apiRequest(`/licensing/assess?${api._licQs(vcenter, cluster, clusters)}`),
-  licReportPdf: (vcenter, cluster, clusters, snapshotId) => { const qs = api._licQs(vcenter, cluster, clusters); if (snapshotId) qs.set('snapshot', snapshotId); return api._downloadBlob(`${API_BASE}/licensing/report/pdf?${qs}`, { method: 'GET' }, 'VCO_License_executive_summary.pdf'); },
+  licReportPdf: (vcenter, cluster, clusters, snapshotId) => { const qs = api._licQs(vcenter, cluster, clusters); if (snapshotId) qs.set('snapshot', snapshotId); return api._downloadBlob(`${API_BASE}/licensing/report/pdf?${qs}`, { method: 'GET' }, 'ICO_License_executive_summary.pdf'); },
   licRules: () => apiRequest('/licensing/rules'),
   licRuleVersion: (id, payload) => apiRequest(`/licensing/rules/${id}/versions`, { method: 'POST', body: JSON.stringify(payload) }),
   licRuleActivate: (id) => apiRequest(`/licensing/rules/${id}/activate`, { method: 'POST' }),
@@ -224,8 +224,8 @@ const api = {
   bkSchedulesImport: (file) => { const fd = new FormData(); fd.append('file', file); return apiRequest('/backup/schedules/import', { method: 'POST', body: fd }); },
   bkThresholds: () => apiRequest('/backup/thresholds'),
   bkThresholdsSave: (payload) => apiRequest('/backup/thresholds', { method: 'PUT', body: JSON.stringify(payload) }),
-  bkReportPdf: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'Bao_cao_backup.pdf'),
-  bkReportXlsx: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/xlsx?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'Thong_ke_backup.xlsx'),
+  bkReportPdf: (server, days, appendix = true) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7, appendix: appendix ? 'true' : 'false' })}`, { method: 'GET' }, 'ICO_Bao_cao_backup.pdf'),
+  bkReportXlsx: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/xlsx?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'ICO_Thong_ke_backup.xlsx'),
 
   getLogo: () => apiRequest('/settings/logo'),
   saveLogo: (dataUrl, filename) => apiRequest('/settings/logo', { method: 'PUT', body: JSON.stringify({ data_url: dataUrl, filename }) }),

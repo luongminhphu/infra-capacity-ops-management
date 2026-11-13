@@ -228,7 +228,7 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
         raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
     label = _ascii_slug(params.environment, fallback="")
     kind = ("tan_dung_hien_huu" if payload.mode == "reuse" else "trang_bi_moi") + ("_rut_gon" if payload.detail == "brief" else "")
-    filename = f"VCO_De_xuat_cau_hinh_may_chu_{(label + '_') if label else ''}{kind}_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    filename = f"ICO_De_xuat_cau_hinh_may_chu_{(label + '_') if label else ''}{kind}_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     return StreamingResponse(iter([pdf_bytes]), media_type="application/pdf", headers=_attachment_headers(filename))
 
 
@@ -344,7 +344,7 @@ def sizing_template(user: User = Depends(get_current_user)):
     ]:
         guide.append([line])
     guide.column_dimensions["A"].width = 110
-    return _xlsx_response(wb, "VCO_Sizing_mau_danh_sach_VM")
+    return _xlsx_response(wb, "ICO_Sizing_mau_danh_sach_VM")
 
 
 @router.post("/export")
@@ -363,5 +363,5 @@ def sizing_export(payload: SizingPayload, user: User = Depends(get_current_user)
     vms = [v.model_dump() for v in payload.vms]
     wb = excel_sizing.build_workbook(result, vms, meta)
     params = result["params"]
-    base = "VCO_Sizing" + (("_" + _ascii_slug(params.get("environment"), fallback="")) if (params.get("environment") or "").strip() else "")
+    base = "ICO_Sizing" + (("_" + _ascii_slug(params.get("environment"), fallback="")) if (params.get("environment") or "").strip() else "")
     return _xlsx_response(wb, base)

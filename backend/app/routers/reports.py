@@ -122,7 +122,7 @@ def export_pdf(
         raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
 
     label = {"executive": "van_hanh", "technical": "ky_thuat", "planning": "quy_hoach"}[view]
-    filename = f"vco_report_{label}_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    filename = f"ico_report_{label}_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return StreamingResponse(
         iter([pdf_bytes]),
         media_type="application/pdf",

@@ -757,3 +757,29 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .bk-sched-edit input.bk-hhmm{width:72px;min-width:72px;}
 .bk-days{white-space:nowrap;}
 .bk-day{display:inline-flex;align-items:center;gap:2px;margin-right:6px;font-size:var(--fs-caption);cursor:pointer;}
+
+/* ── Trung tâm báo cáo ──────────────────────────────────────────────── */
+.rpt-filter{display:flex;flex-wrap:wrap;gap:var(--space-2);}
+.rpt-chip{display:inline-flex;align-items:center;gap:6px;height:var(--control-h-sm);padding:0 var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface-2);color:var(--text-secondary);font-size:var(--fs-caption);cursor:pointer;}
+.rpt-chip svg{width:14px;height:14px;}
+.rpt-chip:hover{color:var(--text-primary);}
+.rpt-chip.active{background:var(--blue-a12);border-color:var(--brand);color:var(--brand);font-weight:var(--fw-semibold);}
+.rpt-group .panel-title{display:flex;align-items:center;gap:var(--space-2);}
+.rpt-group .panel-title svg{width:18px;height:18px;color:var(--brand);}
+.rpt-state{margin-top:var(--space-2);font-size:var(--fs-caption);color:var(--text-secondary);}
+.report-card-actions .btn svg{width:14px;height:14px;}
+.report-card .btn:disabled{opacity:.5;cursor:not-allowed;}
+.rpt-opts{border:1px dashed var(--border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--fs-caption);}
+.rpt-opts>summary{cursor:pointer;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px;font-weight:var(--fw-medium);}
+.rpt-opts>summary svg{width:14px;height:14px;}
+.rpt-opts[open]>summary{margin-bottom:var(--space-2);color:var(--text-primary);}
+.rpt-opts .field{margin-bottom:var(--space-2);}
+.rpt-opts .field span{font-size:var(--fs-caption);color:var(--text-secondary);}
+.rpt-opts select,.rpt-opts input[type=text],.rpt-opts input[type=number]{height:var(--control-h-sm);font-size:var(--fs-caption);}
+.rpt-opt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--space-3);}
+.rpt-opt-note{font-size:var(--fs-micro);color:var(--text-secondary);margin:2px 0 0;}
+.rpt-batch .rpt-batch-on{display:none;}
+.rpt-batch.is-on .rpt-batch-on{display:inline-flex;}
+.rpt-batch-mode [data-report]{outline:1px dashed var(--border-strong);outline-offset:2px;}
+.rpt-batch-mode [data-report].rpt-picked{outline:2px solid var(--brand);background:var(--blue-a12);color:var(--brand);}
+.rpt-batch-mode [data-report].rpt-picked::before{content:"✓ ";}

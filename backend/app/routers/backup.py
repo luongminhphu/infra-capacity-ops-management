@@ -399,7 +399,7 @@ def report_pdf(server: Optional[str] = Query(default="all"), days: int = Query(d
     servers = [_server_public(c, db) for c in get_settings().netbackups() if not _keys(server) or c.key in _keys(server)]
     pdf = report_backup.build_backup_pdf(res, servers, _scope_label(server), logo_data_url=_logo(db), appendix=appendix)
     return StreamingResponse(iter([pdf]), media_type="application/pdf",
-                             headers={"Content-Disposition": f'attachment; filename="{_fname("Bao_cao_backup", days, "pdf")}"'})
+                             headers={"Content-Disposition": f'attachment; filename="{_fname("ICO_Bao_cao_backup", days, "pdf")}"'})
 
 
 @router.get("/report/xlsx")
@@ -412,5 +412,5 @@ def report_xlsx(server: Optional[str] = Query(default="all"), days: int = Query(
     servers = [_server_public(c, db) for c in get_settings().netbackups() if not _keys(server) or c.key in _keys(server)]
     data = excel_backup.build_backup_xlsx(res, jobs_rows, servers, _scope_label(server))
     return StreamingResponse(iter([data]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                             headers={"Content-Disposition": f'attachment; filename="{_fname("Thong_ke_backup", days, "xlsx")}"'})
+                             headers={"Content-Disposition": f'attachment; filename="{_fname("ICO_Thong_ke_backup", days, "xlsx")}"'})
 

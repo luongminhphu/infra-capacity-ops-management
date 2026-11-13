@@ -56,7 +56,7 @@ def export_csv(
             writer.writerow([f.get(k) for k in fields])
 
     buf.seek(0)
-    filename = f"vco_{type}_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"ico_{type}_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="text/csv",

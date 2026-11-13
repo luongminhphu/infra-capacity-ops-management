@@ -558,86 +558,205 @@
       <section id="viewReports" class="view-section hidden">
         <div class="reports-layout">
           <div class="reports-main">
-            <section class="panel">
+            <section class="panel rpt-intro">
+              <div class="panel-head panel-head-tight">
+                <div><div class="panel-title">Trung tâm báo cáo</div><p class="panel-sub">Mọi báo cáo PDF và dữ liệu Excel / CSV của hệ thống, nhóm theo chức năng. Mở “Tuỳ chọn” trên từng báo cáo để tinh chỉnh (được ghi nhớ cho lần sau); bật “Chọn nhiều” để xuất nhiều báo cáo một lần.</p></div>
+                <div class="panel-toolbar rpt-batch" id="rptBatch">
+                  <button class="btn btn-secondary btn-sm" type="button" data-rpt-batch="toggle"><i data-lucide="list-checks"></i>Chọn nhiều</button>
+                  <span class="rpt-batch-on muted" id="rptBatchCount">Đã chọn 0</span>
+                  <button class="btn btn-ghost btn-sm rpt-batch-on" type="button" data-rpt-batch="clear">Bỏ chọn</button>
+                  <button class="btn btn-primary btn-sm rpt-batch-on" type="button" data-rpt-batch="run"><i data-lucide="download"></i>Xuất các báo cáo đã chọn</button>
+                </div>
+              </div>
+              <div class="rpt-filter" id="rptFilter" role="tablist" aria-label="Lọc nhóm báo cáo">
+                <button type="button" class="rpt-chip active" data-rpt-group="all">Tất cả</button>
+                <button type="button" class="rpt-chip" data-rpt-group="capacity"><i data-lucide="layout-dashboard"></i>Capacity &amp; vận hành</button>
+                <button type="button" class="rpt-chip" data-rpt-group="planning"><i data-lucide="calendar-range"></i>Quy hoạch &amp; Sizing</button>
+                <button type="button" class="rpt-chip" data-rpt-group="license"><i data-lucide="badge-check"></i>License &amp; Inventory</button>
+                <button type="button" class="rpt-chip" data-rpt-group="backup"><i data-lucide="database-backup"></i>Backup</button>
+              </div>
+            </section>
+
+            <!-- Capacity & vận hành -->
+            <section class="panel rpt-group" data-rpt-group="capacity">
               <div class="panel-head">
-                <div><div class="panel-title">Báo cáo PDF</div><p class="panel-sub">Khổ A4, tiếng Việt. Phạm vi vCenter theo bộ lọc phía trên; phạm vi cluster/host, loại finding và logo theo tùy chọn bên phải.</p></div>
+                <div><div class="panel-title"><i data-lucide="layout-dashboard"></i>Capacity &amp; vận hành</div>
+                  <p class="panel-sub">Phạm vi: vCenter trên thanh lọc phía trên; cluster / host và loại finding theo tuỳ chọn bên phải.</p></div>
               </div>
               <div class="report-grid">
                 <article class="report-card">
                   <div class="report-card-icon"><i data-lucide="briefcase"></i></div>
-                  <div class="report-card-body">
-                    <div class="report-card-title">Báo cáo Vận hành</div>
-                    <p class="report-card-desc">2–3 trang: tình trạng capacity, rủi ro, đề xuất và nội dung cần phê duyệt theo System Owner của từng cluster.</p>
-                  </div>
-                  <button class="btn btn-primary btn-sm" id="btnExportPdfExec" type="button">Xuất PDF</button>
+                  <div class="report-card-body"><div class="report-card-title">Báo cáo Vận hành</div>
+                    <p class="report-card-desc">2–3 trang: tình trạng capacity, rủi ro, đề xuất và nội dung cần phê duyệt theo System Owner của từng cluster.</p></div>
+
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <label class="field"><span>Tiêu chí Storage</span><select data-opt="exec.storage"><option value="setting">Theo cài đặt hiện tại</option><option value="1">Có đánh giá Storage</option><option value="0">Không đánh giá Storage</option></select></label>
+                    <label class="field"><span>Xu hướng &amp; biến động VM</span><select data-opt="exec.months"><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12" selected>12 tháng</option></select></label>
+                    <p class="rpt-opt-note">Cluster / host và loại finding: khung bên phải.</p>
+                  </details>
+                  <div class="report-card-actions"><button class="btn btn-primary btn-sm" type="button" data-report="cap-exec"><i data-lucide="file-text"></i>PDF</button></div>
                 </article>
                 <article class="report-card">
                   <div class="report-card-icon"><i data-lucide="file-cog"></i></div>
-                  <div class="report-card-body">
-                    <div class="report-card-title">Báo cáo Kỹ thuật</div>
-                    <p class="report-card-desc">Chi tiết host, cluster, compliance findings và phụ lục biến động VM để đội vận hành đối soát.</p>
-                  </div>
-                  <button class="btn btn-secondary btn-sm" id="btnExportPdfTech" type="button">Xuất PDF</button>
+                  <div class="report-card-body"><div class="report-card-title">Báo cáo Kỹ thuật</div>
+                    <p class="report-card-desc">Chi tiết host, cluster, compliance findings, xu hướng và phụ lục biến động VM để đội vận hành đối soát.</p></div>
+
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <label class="field"><span>Tiêu chí Storage</span><select data-opt="tech.storage"><option value="setting">Theo cài đặt hiện tại</option><option value="1">Có đánh giá Storage</option><option value="0">Không đánh giá Storage</option></select></label>
+                    <label class="field"><span>Xu hướng &amp; biến động VM</span><select data-opt="tech.months"><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12" selected>12 tháng</option></select></label>
+                    <p class="rpt-opt-note">Cluster / host và loại finding: khung bên phải.</p>
+                  </details>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="cap-tech"><i data-lucide="file-text"></i>PDF</button></div>
                 </article>
                 <article class="report-card">
-                  <div class="report-card-icon"><i data-lucide="calendar-range"></i></div>
-                  <div class="report-card-body">
-                    <div class="report-card-title">Quy hoạch tài nguyên</div>
-                    <p class="report-card-desc">Dự phóng tăng trưởng và thời điểm bổ sung node; chỉnh giả định trong trang Quy hoạch tài nguyên.</p>
-                  </div>
+                  <div class="report-card-icon"><i data-lucide="server"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Danh sách host &amp; VM</div>
+                    <p class="report-card-desc">Inventory host (CPU, RAM, mức dùng) và VM (cấu hình, trạng thái, IP, datastore) theo phạm vi đang chọn.</p></div>
                   <div class="report-card-actions">
-                    <button class="btn btn-secondary btn-sm" id="btnExportPdfPlanQuick" type="button">Xuất PDF</button>
-                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="planning">Giả định</button>
-                  </div>
-                </article>
-                <article class="report-card">
-                  <div class="report-card-icon"><i data-lucide="badge-check"></i></div>
-                  <div class="report-card-body">
-                    <div class="report-card-title">Tổng quan license theo cluster</div>
-                    <p class="report-card-desc">Executive summary nhu cầu license VMware và Windows Server theo phạm vi cluster đã chọn trong trang Đánh giá license.</p>
-                  </div>
-                  <div class="report-card-actions">
-                    <button class="btn btn-secondary btn-sm" id="btnExportPdfLicSummary" type="button">Xuất PDF</button>
-                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="lic-assess">Phạm vi</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="inv-hosts"><i data-lucide="sheet"></i>Excel host</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="inv-vms"><i data-lucide="sheet"></i>Excel VM</button>
                   </div>
                 </article>
                 <article class="report-card">
-                  <div class="report-card-icon"><i data-lucide="database-backup"></i></div>
-                  <div class="report-card-body">
-                    <div class="report-card-title">Hiện trạng Backup (NetBackup)</div>
-                    <p class="report-card-desc">Tỷ lệ thành công, RPO theo client, nguyên nhân lỗi, độ phủ backup VM, disk pool và policy — PDF và Excel thống kê.</p>
-                  </div>
+                  <div class="report-card-icon"><i data-lucide="shield-alert"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Dữ liệu tổng hợp &amp; compliance</div>
+                    <p class="report-card-desc">Một file CSV gồm host, VM và compliance findings (kèm mã đối soát) để xử lý tiếp bằng công cụ khác.</p></div>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="cap-csv"><i data-lucide="download"></i>CSV</button></div>
+                </article>
+              </div>
+            </section>
+
+            <!-- Quy hoạch & Sizing -->
+            <section class="panel rpt-group" data-rpt-group="planning">
+              <div class="panel-head">
+                <div><div class="panel-title"><i data-lucide="calendar-range"></i>Quy hoạch &amp; Sizing</div>
+                  <p class="panel-sub">Dùng giả định đã nhập ở trang Quy hoạch tài nguyên và dữ liệu sizing gần nhất (danh sách VM, cấu hình host ứng viên, tuỳ chỉnh báo cáo).</p></div>
+              </div>
+              <div class="report-grid">
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="trending-up"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Quy hoạch tài nguyên</div>
+                    <p class="report-card-desc">Dự phóng tăng trưởng CPU / RAM và thời điểm cần bổ sung node cho từng cluster.</p></div>
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <div class="rpt-opt-grid">
+                      <label class="field"><span>Tầm dự phóng</span><select data-opt="plan.horizon"><option value="12">12 tháng</option><option value="24">24 tháng</option><option value="36" selected>36 tháng</option><option value="48">48 tháng</option><option value="60">60 tháng</option></select></label>
+                      <label class="field"><span>Tăng trưởng %/quý (thấp, cơ sở, cao)</span><input type="text" data-opt="plan.growth" value="5,10,20"/></label>
+                      <label class="field"><span>Mua sắm + triển khai (tháng)</span><input type="number" min="0" max="12" data-opt="plan.lead" value="3"/></label>
+                      <label class="field"><span>Mục tiêu (% ngưỡng)</span><input type="number" min="50" max="100" data-opt="plan.target" value="80"/></label>
+                      <label class="field"><span>Node mới: cores</span><input type="number" min="1" data-opt="plan.nodeCores" placeholder="theo host lớn nhất"/></label>
+                      <label class="field"><span>Node mới: RAM (GB)</span><input type="number" min="1" data-opt="plan.nodeRam" placeholder="theo host lớn nhất"/></label>
+                    </div>
+                    <p class="rpt-opt-note">Phạm vi cluster / host: khung bên phải. <button class="btn btn-ghost btn-sm" type="button" data-rpt-plan-sync>Lấy từ trang Quy hoạch</button></p>
+                  </details>
                   <div class="report-card-actions">
-                    <button class="btn btn-secondary btn-sm" id="btnExportPdfBackup" type="button">Xuất PDF</button>
-                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-overview">Mở Backup</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="plan-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="planning">Trang quy hoạch</button>
                   </div>
                 </article>
                 <article class="report-card">
                   <div class="report-card-icon"><i data-lucide="calculator"></i></div>
-                  <div class="report-card-body">
-                    <div class="report-card-title">Đề xuất cấu hình máy chủ</div>
-                    <p class="report-card-desc">Tạo từ trang Sizing máy chủ sau khi nhập danh sách VM và cấu hình host ứng viên.</p>
+                  <div class="report-card-body"><div class="report-card-title">Đề xuất cấu hình máy chủ (Sizing)</div>
+                    <p class="report-card-desc">Báo cáo tư vấn đầy đủ hoặc rút gọn và Excel dạng dashboard từ lần sizing gần nhất.</p>
+                    <p class="rpt-state" id="rptSizingState">—</p></div>
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <label class="field"><span>Hướng đề xuất (PDF)</span><select data-opt="sizing.mode"><option value="new">Đầu tư máy chủ mới</option><option value="reuse">Tận dụng cluster hiện có</option></select></label>
+                    <p class="rpt-opt-note">Phương án, số host, mục hiển thị, kết luận và ghi chú: panel “Tuỳ chỉnh báo cáo” ở trang Sizing — áp dụng cho cả xuất tại đây.</p>
+                  </details>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="sizing-full"><i data-lucide="file-text"></i>PDF đầy đủ</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="sizing-brief"><i data-lucide="file-text"></i>PDF rút gọn</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="sizing-xlsx"><i data-lucide="sheet"></i>Excel</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="sizing">Mở Sizing</button>
                   </div>
-                  <button class="btn btn-secondary btn-sm" type="button" data-nav-link="sizing">Mở Sizing</button>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="file-spreadsheet"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Mẫu nhập liệu Sizing</div>
+                    <p class="report-card-desc">File Excel mẫu để khách hàng / dự án điền danh sách VM, sau đó import ở trang Sizing.</p></div>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="sizing-template"><i data-lucide="download"></i>Excel mẫu</button></div>
                 </article>
               </div>
             </section>
 
-            <section class="panel">
+            <!-- License & Inventory -->
+            <section class="panel rpt-group" data-rpt-group="license">
               <div class="panel-head">
-                <div><div class="panel-title">Xuất dữ liệu</div><p class="panel-sub">Theo phạm vi vCenter/cluster/host đang chọn.</p></div>
+                <div><div class="panel-title"><i data-lucide="badge-check"></i>License &amp; Inventory</div>
+                  <p class="panel-sub">Phạm vi: vCenter trên thanh lọc và các cluster đã chọn ở trang Đánh giá license (đợt mua).</p></div>
               </div>
-              <div class="export-row">
-                <button class="btn btn-secondary" id="btnExportCsv" type="button"><i data-lucide="download"></i>CSV tổng hợp (host, VM, findings)</button>
-                <button class="btn btn-secondary" id="btnExportHostsXlsx2" type="button"><i data-lucide="download"></i>Excel danh sách host</button>
-                <button class="btn btn-secondary" id="btnExportVmsXlsx2" type="button"><i data-lucide="download"></i>Excel danh sách VM</button>
+              <div class="report-grid">
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="badge-check"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Tổng quan license theo cluster</div>
+                    <p class="report-card-desc">Executive summary nhu cầu license VMware per-core và Windows Server, so với entitlement và rule đang áp dụng.</p></div>
+                  <details class="rpt-opts" data-rpt-lic-opts><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <label class="field"><span>Dữ liệu (PDF)</span><select data-opt="lic.snapshot" id="rptLicSnapshot"><option value="">Hiện tại (theo phạm vi đang chọn)</option></select></label>
+                    <p class="rpt-opt-note">Snapshot: kết quả đã lưu tại một thời điểm, xuất đúng như lúc lưu để đối chiếu.</p>
+                  </details>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="lic-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="lic-assess"><i data-lucide="sheet"></i>Excel chi tiết</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="lic-assess">Phạm vi</button>
+                  </div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="cpu"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">ESXi &amp; phần cứng</div>
+                    <p class="report-card-desc">Model, phiên bản ESXi, socket, physical core, logical thread, RAM, HA / DRS và số core tính license của từng host.</p></div>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="lic-hw"><i data-lucide="sheet"></i>Excel</button></div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="app-window"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Hệ điều hành guest</div>
+                    <p class="report-card-desc">Phân loại OS của từng VM (Windows Server, Linux, khác), nguồn và độ tin cậy — cơ sở tính license Windows Server.</p></div>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="lic-os"><i data-lucide="sheet"></i>Excel</button></div>
+                </article>
               </div>
             </section>
+
+            <!-- Backup -->
+            <section class="panel rpt-group" data-rpt-group="backup">
+              <div class="panel-head">
+                <div><div class="panel-title"><i data-lucide="database-backup"></i>Backup (Veritas NetBackup)</div>
+                  <p class="panel-sub">Phạm vi cần backup, ngưỡng và lịch kiểm tra theo cấu hình ở các trang Backup.</p></div>
+                <div class="panel-toolbar">
+                  <select id="rptBkServer" data-opt="bk.server" title="NetBackup server"><option value="all">Tất cả NetBackup</option></select>
+                  <select id="rptBkDays" data-opt="bk.days" title="Kỳ thống kê">
+                    <option value="1">24 giờ qua</option><option value="7" selected>7 ngày qua</option><option value="14">14 ngày qua</option>
+                    <option value="30">30 ngày qua</option><option value="60">60 ngày qua</option><option value="90">90 ngày qua</option>
+                  </select>
+                </div>
+              </div>
+              <div class="report-grid">
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="file-check"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Báo cáo hiện trạng Backup</div>
+                    <p class="report-card-desc">Tóm tắt điều hành, kết quả theo đêm, tuân thủ lịch, nguyên nhân lỗi, RPO client, độ phủ VM, storage, policy, phát hiện &amp; khuyến nghị.</p></div>
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <label class="finding-filter-item"><input type="checkbox" data-opt="bk.appendix" checked/><span>Kèm phụ lục (job lỗi, VM chưa backup)</span></label>
+                  </details>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="bk-pdf"><i data-lucide="file-text"></i>PDF</button></div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="sheet"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Thống kê backup</div>
+                    <p class="report-card-desc">Excel nhiều sheet: tổng quan, theo đêm, lịch &amp; tuân thủ, nguyên nhân lỗi, client &amp; RPO, policy, storage, độ phủ VM và toàn bộ job trong kỳ.</p></div>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="bk-xlsx"><i data-lucide="sheet"></i>Excel</button></div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="calendar-check"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Tuân thủ lịch backup</div>
+                    <p class="report-card-desc">Lưới tuân thủ theo từng đêm (đạt, trễ, sai loại, lỗi, thiếu) — có trong mục 2 của PDF và sheet “Lịch &amp; tuân thủ” của Excel.</p></div>
+                  <div class="report-card-actions"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-schedule">Xem lịch &amp; tuân thủ</button></div>
+                </article>
+              </div>
+            </section>
+            <p class="logo-upload-hint hidden" id="rptStatus" role="status" aria-live="polite"></p>
           </div>
 
           <aside class="reports-side">
             <section class="side-card side-card-static">
-              <h4>Phạm vi báo cáo</h4>
+              <h4>Phạm vi báo cáo Capacity</h4>
               <p class="side-hint" id="scopeFilterSummary">Toàn bộ cluster</p>
               <div class="scope-quick-group" id="scopeQuickGroup">
                 <button type="button" class="scope-quick-btn" data-scope-quick="all">Toàn dự án</button>
@@ -656,7 +775,7 @@
             </section>
 
             <section class="side-card side-card-static">
-              <h4>Loại finding trong PDF</h4>
+              <h4>Loại finding (PDF Vận hành / Kỹ thuật)</h4>
               <p class="side-hint" id="pdfFindingFilterSummary">Tất cả loại</p>
               <label class="finding-filter-item finding-filter-all">
                 <input type="checkbox" id="pdfFindingTypeAll" checked>
@@ -775,6 +894,7 @@
 <script src="js/views/sizing.js?v=__ASSET_V__"></script>
 <script src="js/views/licensing.js?v=__ASSET_V__"></script>
 <script src="js/views/backup.js?v=__ASSET_V__"></script>
+<script src="js/views/reports.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>
