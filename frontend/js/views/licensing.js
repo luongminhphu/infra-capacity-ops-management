@@ -759,13 +759,13 @@ async function licExportHardware() {
   const st = licState();
   const cols = [['vcenterKey', 'vCenter'], ['cluster', 'Cluster'], ['host', 'Host'], ['vendor', 'Vendor'], ['model', 'Model'], ['esxiVersion', 'ESXi version'], ['esxiBuild', 'ESXi build'], ['cpuModel', 'CPU model'], ['sockets', 'CPU socket'], ['cores', 'Physical core'], ['threads', 'Logical thread'], ['ramGB', 'RAM GB'], ['vmCount', 'Số VM'], ['clusterHa', 'HA'], ['clusterDrs', 'DRS'], ['wsLicensableCores', 'WS licensable core'], ['vmwareCores', 'VMware core'], ['flags', 'Giả định']].map(([key, label]) => ({ key, label }));
   const rows = st.inv.hosts.map(h => ({ ...h, clusterHa: licBool(h.clusterHa), clusterDrs: licBool(h.clusterDrs), flags: (h.flags || []).join(', ') }));
-  await api.downloadXlsx({ filename: `VCO_ESXi_inventory_${licScopeSlug()}`, sheets: [{ name: 'ESXi hosts', columns: cols, rows }] });
+  await api.downloadXlsx({ filename: `ICO_ESXi_inventory_${licScopeSlug()}`, sheets: [{ name: 'ESXi hosts', columns: cols, rows }] });
 }
 
 async function licExportOs() {
   const rows = licFilteredVms().map(v => ({ vcenterKey: v.vcenterKey, cluster: v.cluster, host: v.host, vm: v.vm, ipAddress: v.ipAddress || '', hostname: v.os.evidence?.guestHostname || '', power: v.isPoweredOn ? 'Bật' : 'Tắt', vcpu: v.vcpu, ramGB: v.ramGB, category: v.os.categoryLabel, osVersion: v.os.osVersion || '', osEdition: v.os.osEdition || '', source: LIC_SOURCE_LABEL[v.os.source] || v.os.source, confidence: LIC_CONF_LABEL[v.os.confidence] || v.os.confidence, guestId: v.os.evidence?.guestId || '', guestFullName: v.os.evidence?.guestFullName || '', toolsGuestFullName: v.os.evidence?.toolsGuestFullName || '', toolsStatus: v.os.evidence?.toolsStatus || '', note: v.os.note || '' }));
   const cols = [['vcenterKey', 'vCenter'], ['cluster', 'Cluster'], ['host', 'Host'], ['vm', 'VM'], ['ipAddress', 'IP address'], ['hostname', 'Hostname (guest)'], ['power', 'Trạng thái'], ['vcpu', 'vCPU'], ['ramGB', 'RAM GB'], ['category', 'Phân loại'], ['osVersion', 'OS version'], ['osEdition', 'Edition'], ['source', 'Nguồn'], ['confidence', 'Độ tin cậy'], ['guestId', 'guestId'], ['guestFullName', 'Cấu hình VM'], ['toolsGuestFullName', 'VMware Tools'], ['toolsStatus', 'Tools status'], ['note', 'Ghi chú']].map(([key, label]) => ({ key, label }));
-  await api.downloadXlsx({ filename: `VCO_VM_OS_inventory_${licScopeSlug()}`, sheets: [{ name: 'VM OS', columns: cols, rows }] });
+  await api.downloadXlsx({ filename: `ICO_VM_OS_inventory_${licScopeSlug()}`, sheets: [{ name: 'VM OS', columns: cols, rows }] });
 }
 
 async function licExportAssess() {
@@ -792,7 +792,7 @@ async function licExportAssess() {
   const hcols = [['vcenterKey', 'vCenter'], ['cluster', 'Cluster'], ['host', 'Host'], ['model', 'Model'], ['esxiVersion', 'ESXi'], ['sockets', 'Socket'], ['cores', 'Physical core'], ['threads', 'Logical thread'], ['wsLicensableCores', 'WS licensable core'], ['vmwareCores', 'VMware core'], ['wsVmsOnHost', 'WS VM trên host'], ['vmCount', 'VM']].map(([key, label]) => ({ key, label }));
   const ents = (a.entitlementsUsed || []).map(e => ({ product: e.label || e.product, kind: LIC_KIND_LABEL[e.kind || 'owned'], metric: e.metric, quantity: e.quantity, unitPrice: e.unitPrice, currency: e.currency, hasSa: licBool(e.hasSa), scope: `${e.scopeVcenter || 'Tất cả'} / ${e.scopeCluster || 'Tất cả'}`, note: e.note || '' }));
   const ecols = [['product', 'Sản phẩm'], ['kind', 'Tình trạng'], ['metric', 'Đơn vị'], ['quantity', 'Số lượng'], ['unitPrice', 'Đơn giá'], ['currency', 'Tiền tệ'], ['hasSa', 'SA'], ['scope', 'Phạm vi'], ['note', 'Ghi chú']].map(([key, label]) => ({ key, label }));
-  await api.downloadXlsx({ filename: `VCO_License_assessment_${licScopeSlug()}${st.viewingSnapshot ? '_snapshot' + st.viewingSnapshot.id : ''}`, sheets: [
+  await api.downloadXlsx({ filename: `ICO_License_assessment_${licScopeSlug()}${st.viewingSnapshot ? '_snapshot' + st.viewingSnapshot.id : ''}`, sheets: [
     { name: 'Tóm tắt', columns: [{ key: 'k', label: 'Chỉ tiêu' }, { key: 'v', label: 'Giá trị' }], rows: summary },
     { name: 'Theo cluster', columns: ccols, rows: clusters }, { name: 'Theo host', columns: hcols, rows: a.hosts }, { name: 'Entitlement', columns: ecols, rows: ents },
   ] });
@@ -802,7 +802,7 @@ async function licExportWhatif() {
   const r = licState().whatif.result; if (!r) return;
   const rows = Object.entries(r.delta).filter(([, x]) => x && x.before !== null && x.before !== undefined).map(([k, x]) => ({ k, before: x.before, after: x.after, delta: x.delta }));
   const cap = r.capacityAfter.map((a, i) => ({ cluster: a.cluster, hostsBefore: r.capacityBefore[i].hosts, hostsAfter: a.hosts, cpuBefore: r.capacityBefore[i].cpuPct, cpuAfter: a.cpuPct, ramBefore: r.capacityBefore[i].ramPct, ramAfter: a.ramPct, haBefore: r.capacityBefore[i].haSurvives, haAfter: a.haSurvives }));
-  await api.downloadXlsx({ filename: `VCO_License_whatif_${licScopeSlug()}`, sheets: [
+  await api.downloadXlsx({ filename: `ICO_License_whatif_${licScopeSlug()}`, sheets: [
     { name: 'Kịch bản', columns: [{ key: 'k', label: 'Mục' }, { key: 'v', label: 'Giá trị' }], rows: [{ k: 'Mô tả', v: r.description }, { k: 'Kết luận capacity', v: r.capacityVerdict }, { k: 'Đề xuất được', v: r.recommendable ? 'Có' : 'Không' }, ...r.insights.map((x, i) => ({ k: `Insight ${i + 1}`, v: x }))] },
     { name: 'License delta', columns: [{ key: 'k', label: 'Chỉ số' }, { key: 'before', label: 'Trước' }, { key: 'after', label: 'Sau' }, { key: 'delta', label: 'Δ' }], rows },
     { name: 'Capacity', columns: [{ key: 'cluster', label: 'Cluster' }, { key: 'hostsBefore', label: 'Host trước' }, { key: 'hostsAfter', label: 'Host sau' }, { key: 'cpuBefore', label: 'CPU % trước' }, { key: 'cpuAfter', label: 'CPU % sau' }, { key: 'ramBefore', label: 'RAM % trước' }, { key: 'ramAfter', label: 'RAM % sau' }, { key: 'haBefore', label: 'N+1 trước' }, { key: 'haAfter', label: 'N+1 sau' }], rows: cap },

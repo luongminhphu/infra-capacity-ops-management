@@ -1688,7 +1688,7 @@ async function exportInventoryXlsx(kind, btn) {
         cpuPct: num(h.cpuPct, 1), ramUsedGB: num(h.ramUsedGB, 1), ramPct: num(h.ramPct, 1),
         cpuOvercommit: num(h.cpuOvercommit, 2), ramOvercommit: num(h.ramOvercommit, 2), vmCount: num(h.vmCount), status: h.overall.text,
       }));
-      payload = { filename: 'vco_hosts', sheets: [{ name: 'Hosts', rows, columns: [
+      payload = { filename: 'ico_hosts', sheets: [{ name: 'Hosts', rows, columns: [
         { key: 'cluster', label: 'Cluster' }, { key: 'host', label: 'Host' }, { key: 'cores', label: 'CPU Cores', fmt: 'int' },
         { key: 'ramGB', label: 'RAM GB', fmt: 'num1' }, { key: 'vcpuUsed', label: 'vCPU dùng', fmt: 'int' },
         { key: 'cpuPct', label: 'CPU % (theo overcommit)', fmt: 'pct' }, { key: 'ramUsedGB', label: 'RAM dùng GB', fmt: 'num1' },
@@ -1703,7 +1703,7 @@ async function exportInventoryXlsx(kind, btn) {
         lastActivityDays: v.isPoweredOn ? num(v.lastActivityDays) : null,
         powerOffDays: !v.isPoweredOn ? num(v.powerOffDays) : null,
       }));
-      payload = { filename: 'vco_vms', sheets: [{ name: 'VMs', rows, columns: [
+      payload = { filename: 'ico_vms', sheets: [{ name: 'VMs', rows, columns: [
         { key: 'cluster', label: 'Cluster' }, { key: 'host', label: 'Host' }, { key: 'vm', label: 'VM' }, { key: 'powerState', label: 'Power' },
         { key: 'ipAddress', label: 'IP' }, { key: 'vcpu', label: 'vCPU', fmt: 'int' }, { key: 'ramGB', label: 'RAM GB', fmt: 'num1' },
         { key: 'diskProvGB', label: 'Disk Prov GB', fmt: 'num1' }, { key: 'diskUsedGB', label: 'Disk Used GB', fmt: 'num1' },
@@ -1767,7 +1767,7 @@ function exportCsv() {
   sections.push(['Code','Severity','Type','Entity','Cluster','Metric','Recommendation'].join(','));
   compliance.forEach(f => sections.push([f.code,f.severity,f.typeLabel,f.entity,f.cluster,f.metric,f.recommendation].map(csvEscape).join(',')));
 
-  downloadBlob(`vmware-capacity-export-${Date.now()}.csv`, sections.join('\n'), 'text/csv;charset=utf-8');
+  downloadBlob(`ico-capacity-export-${Date.now()}.csv`, sections.join('\n'), 'text/csv;charset=utf-8');
 }
 
 /* =========================================================

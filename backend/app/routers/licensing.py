@@ -537,7 +537,7 @@ def report_pdf(vcenter: Optional[str] = Query(default="all"), cluster: Optional[
         raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
     sc = result.get("scope") or {}
     label = "_".join(_ascii_slug(c) for c in (sc.get("clusters") or [])[:3]) or (_ascii_slug(vcenter) if vcenter and vcenter != "all" else "tat_ca")
-    filename = f"VCO_License_executive_summary_{label}{('_snapshot' + str(snapshot)) if snapshot else ''}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    filename = f"ICO_License_executive_summary_{label}{('_snapshot' + str(snapshot)) if snapshot else ''}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     from urllib.parse import quote
     headers = {"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"}
     return StreamingResponse(iter([pdf_bytes]), media_type="application/pdf", headers=headers)
