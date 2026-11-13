@@ -326,10 +326,30 @@ Thanh đầu trang chọn **NetBackup server** và **kỳ thống kê** (24 gi�
    cluster / vCenter sẽ tự bao gồm host thêm sau này. Nên chọn theo cluster — chọn theo host sẽ bỏ sót
    VM khi DRS / vMotion chuyển VM sang host khác. API: `GET|PUT /api/backup/scope`.
 
-**Báo cáo PDF “Hiện trạng Backup”**: tóm tắt điều hành → 1 kết quả theo ngày → 2 nguyên nhân lỗi →
-3 client cần xử lý → 4 độ phủ VM → 5 dung lượng lưu trữ → 6 policy → 7 phát hiện & khuyến nghị →
-8 tiêu chí & nguồn dữ liệu → Phụ lục A job lỗi, Phụ lục B VM chưa backup.
-**Excel “Thống kê backup”**: Tổng quan · Theo ngày (biểu đồ) · Nguyên nhân lỗi · Client & RPO · Policy ·
+**Lịch backup & tuân thủ** (trang *Backup → Lịch & tuân thủ*): mỗi đêm của mỗi policy được đối chiếu với lịch.
+- **Đêm backup** tính từ 12:00 hôm đó đến trước 12:00 hôm sau (chỉnh được): job 20:00 → 04:00, job lỡ sang sau nửa đêm
+  hay bản Full xong sáng thứ 7 đều thuộc đêm bắt đầu.
+- **Nguồn lịch**, theo thứ tự ưu tiên:
+  1. *Lịch thủ công / import Excel* (mẫu HSC-Backup-Management: tên hệ thống, Monday…Sunday, Full Backup, Start time,
+     End Time, retention) — một hệ thống gom nhiều policy theo tên hoặc mẫu `*`.
+  2. *Chế độ `netbackup` (mặc định)*: đọc từ schedule của policy qua API (`backupType`, Calendar / Frequency,
+     `startWindow`, `includeDates`, retention): ngày Full, ngày Incremental, cửa sổ từng ngày; cửa sổ mở trước 12:00
+     (vd 02:00) thuộc đêm hôm trước; Full “mỗi tuần, cửa sổ nhiều ngày” được kiểm tra là có Full trong 7 ngày.
+     Policy không suy ra được lịch dùng khung cố định.
+  3. *Khung cố định* (mặc định 20:00 → 04:00 hôm sau): mỗi đêm phải có backup thành công trong khung, không xét
+     Full / Incremental. Chế độ `fixed` áp khung này cho mọi policy (policy chạy theo tuần sẽ bị báo thiếu các đêm khác).
+- **Kết quả mỗi đêm:** Đạt · Một phần (status 1) · Trễ (xong sau giờ kết thúc + ân hạn 60 phút) · Sai loại (đêm Full
+  không chạy Full) · Lỗi (còn client lỗi cuối đêm) · Thiếu (không có job khi cửa sổ đã đóng) · Đang chạy · Chưa đến lịch.
+- **RPO client theo lịch** (hằng đêm ≈ 24 h + độ dài cửa sổ + ân hạn ≈ 33 h; theo tuần ≈ 175 h), cảnh báo
+  “Policy không chạy” và “tràn cửa sổ” chung không áp cho policy đã có lịch; retention bản Full trên NetBackup được
+  đối chiếu với lịch thủ công.
+- Ngưỡng ở trang Nguồn & ngưỡng: `schedule_mode`, `fixed_window_start` / `fixed_window_end`, `schedule_grace_minutes`,
+  `backup_day_cutoff_hour`. API: `GET|PUT /api/backup/schedules`, `POST /api/backup/schedules/import`.
+
+**Báo cáo PDF “Hiện trạng Backup”**: tóm tắt điều hành → 1 kết quả theo đêm → 2 tuân thủ lịch → 3 nguyên nhân lỗi →
+4 client cần xử lý → 5 độ phủ VM → 6 dung lượng lưu trữ → 7 policy → 8 phát hiện & khuyến nghị →
+9 tiêu chí & nguồn dữ liệu → Phụ lục A job lỗi, Phụ lục B VM chưa backup.
+**Excel “Thống kê backup”**: Tổng quan · Theo ngày (biểu đồ) · Lịch & tuân thủ · Nguyên nhân lỗi · Client & RPO · Policy ·
 Storage · Độ phủ VM · Job (toàn bộ job trong kỳ) — mỗi bảng là Excel Table để lọc / pivot.
 
 **Thu thập dữ liệu** (`backend/app/backup/`): mỗi lần đồng bộ đọc job từ lần trước trừ 48 giờ chồng
@@ -343,7 +363,8 @@ không làm hỏng cả lần đồng bộ.
 
 API backend: `GET /api/backup/servers`, `POST /api/backup/servers/{key}/sync`, `POST /api/backup/sync-all`,
 `GET /api/backup/summary?server=&days=`, `GET /api/backup/jobs`, `GET|PUT /api/backup/thresholds`,
-`GET /api/backup/report/pdf`, `GET /api/backup/report/xlsx`.
+`GET /api/backup/report/pdf`, `GET /api/backup/report/xlsx`, `GET|PUT /api/backup/schedules`,
+`POST /api/backup/schedules/import`.
 
 ### Mã đối soát (ticket code) — dẫn chứng cho từng khuyến nghị
 

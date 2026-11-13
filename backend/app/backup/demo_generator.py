@@ -184,14 +184,37 @@ def policies_payload(cfg: NetBackupConfig, vm_names: List[str]) -> List[Dict[str
             # VMware Intelligent Policy: clients are discovered by query, not listed.
             "clients": [] if is_vm else [{"hostName": c} for c in p["clients"]],
             "backupSelections": {"selections": [p["query"]] if is_vm else ["ALL_LOCAL_DRIVES" if p["type"] == "MS-Windows" else "/"]},
-            "schedules": [
-                {"scheduleName": "Full-Weekly", "scheduleType": "FULL", "frequencySeconds": 604800,
-                 "backupCopies": {"copies": [{"retentionPeriod": {"value": 5, "unit": "WEEKS"}}]}},
-                {"scheduleName": "Diff-Daily", "scheduleType": "DIFFERENTIAL_INCREMENTAL", "frequencySeconds": 86400,
-                 "backupCopies": {"copies": [{"retentionPeriod": {"value": 14, "unit": "DAYS"}}]}},
-            ],
+            "schedules": _demo_schedules(p),
         }}})
     return out
+
+
+def _nb_dow(weekday: int) -> int:
+    """Python weekday (Mon = 0) → NetBackup dayOfWeek (1 = Sunday … 7 = Saturday)."""
+    return (weekday + 1) % 7 + 1
+
+
+def _demo_schedules(p: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Schedules as the NetBackup REST API returns them: Full = Calendar on the full day, Incremental =
+    Frequency 1 day on the other days; 8 h windows in the primary server's local time (VN = UTC+7)."""
+    vn_start = (p["hour"] + 7) % 24
+    shift = 1 if p["hour"] + 7 >= 24 else 0              # a UTC evening start can be the next VN calendar day
+    full_wd = (p["fullDay"] + shift) % 7
+    def windows(days):
+        return [{"dayOfWeek": _nb_dow(d), "startSeconds": vn_start * 3600, "durationSeconds": 8 * 3600 if d in days else 0}
+                for d in range(7)]
+    if p["type"] == "NBU-Catalog":
+        return [{"scheduleName": "Catalog-Daily", "backupType": "Full Backup", "scheduleType": "Frequency",
+                 "frequencySeconds": 86400, "startWindow": windows(range(7)),
+                 "backupCopies": {"copies": [{"retentionPeriod": {"value": 2, "unit": "WEEKS"}}]}}]
+    return [
+        {"scheduleName": "Full-Weekly", "backupType": "Full Backup", "scheduleType": "Calendar",
+         "includeDates": {"recurringDaysOfWeek": [f"{w}:{_nb_dow(full_wd)}" for w in range(1, 6)]},
+         "startWindow": windows([full_wd]), "backupCopies": {"copies": [{"retentionPeriod": {"value": 5, "unit": "WEEKS"}}]}},
+        {"scheduleName": "Diff-Daily", "backupType": "Differential Incremental Backup", "scheduleType": "Frequency",
+         "frequencySeconds": 86400, "startWindow": windows([d for d in range(7) if d != full_wd]),
+         "backupCopies": {"copies": [{"retentionPeriod": {"value": 14, "unit": "DAYS"}}]}},
+    ]
 
 
 POOLS = [

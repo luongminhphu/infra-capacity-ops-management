@@ -2,7 +2,7 @@
 import datetime as dt
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -13,7 +13,8 @@ from ..backup.client import NetBackupError
 from ..backup.collector import sync_netbackup
 from ..config import get_settings
 from ..database import get_db
-from ..models import AppSetting, BackupScopeRule, BackupSyncRun, ReportLogo, User
+from ..backup import schedule as bschedule
+from ..models import AppSetting, BackupPolicySnapshot, BackupScheduleRule, BackupScopeRule, BackupSyncRun, ReportLogo, User
 from ..security import get_current_user
 from ..timeutil import to_iso_utc
 
@@ -72,8 +73,20 @@ def scope_rules(db: Session) -> List[Dict[str, Any]]:
             for r in db.query(BackupScopeRule).order_by(BackupScopeRule.vcenter_key, BackupScopeRule.cluster, BackupScopeRule.host).all()]
 
 
+def _csv_days(v: Optional[str]) -> List[int]:
+    return [int(x) for x in (v or "").split(",") if x.strip().isdigit()]
+
+
+def schedule_rules(db: Session) -> List[Dict[str, Any]]:
+    return [{"id": r.id, "system": r.system, "policyPatterns": r.policy_patterns or "", "fullDays": _csv_days(r.full_days),
+             "incrDays": _csv_days(r.incr_days), "startTime": r.start_time, "endTime": r.end_time,
+             "retentionDays": r.retention_days, "enabled": bool(r.enabled), "note": r.note}
+            for r in db.query(BackupScheduleRule).order_by(BackupScheduleRule.system).all()]
+
+
 def build_summary(db: Session, server: Optional[str], days: int) -> Dict[str, Any]:
-    return analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=_vms(db), scope=scope_rules(db))
+    return analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=_vms(db), scope=scope_rules(db),
+                                 schedules=schedule_rules(db))
 
 
 @router.get("/servers")
@@ -206,6 +219,109 @@ def put_scope(payload: ScopeIn, db: Session = Depends(get_db), user: User = Depe
     return {"rules": rules, "label": analysis.scope_label(rules), "tree": _scope_tree(db)}
 
 
+# ---------------------------------------------------------------------------
+# Backup schedule per system (SLA) — drives the nightly compliance check
+# ---------------------------------------------------------------------------
+class ScheduleRuleIn(BaseModel):
+    system: str
+    policyPatterns: Optional[str] = ""
+    fullDays: Any = []
+    incrDays: Any = []
+    startTime: str
+    endTime: str
+    retentionDays: Optional[Any] = None
+    enabled: bool = True
+    note: Optional[str] = None
+
+
+class SchedulesIn(BaseModel):
+    rules: List[ScheduleRuleIn] = []
+
+
+def _known_policies(db: Session) -> List[str]:
+    """Policy names from the latest snapshot of every NetBackup server, plus names seen in jobs."""
+    from ..models import BackupJob
+    names = set()
+    for (k,) in db.query(BackupSyncRun.nbu_key).distinct().all():
+        run = (db.query(BackupSyncRun).filter(BackupSyncRun.nbu_key == k, BackupSyncRun.status == "ok", BackupSyncRun.policy_count > 0)
+               .order_by(BackupSyncRun.started_at.desc()).first())
+        if run:
+            names |= {p.name for p in db.query(BackupPolicySnapshot.name).filter(BackupPolicySnapshot.run_id == run.id).all()}
+    since = dt.datetime.utcnow() - dt.timedelta(days=35)
+    names |= {r[0] for r in db.query(BackupJob.policy_name).filter(BackupJob.start_time >= since, BackupJob.category == "backup")
+              .distinct().all() if r[0]}
+    return sorted(n for n in names if not n.startswith("SLP_"))
+
+
+def _schedules_out(db: Session) -> Dict[str, Any]:
+    rules = schedule_rules(db)
+    policies = _known_policies(db)
+    for r in rules:
+        r["policies"] = [p for p in policies if bschedule.policy_matches(r, p)]
+        r["rpoHours"] = bschedule.rule_rpo_hours(r, thresholds(db).schedule_grace_minutes)
+    mapped = {p for r in rules for p in r["policies"]}
+    return {"rules": rules, "policies": policies, "unmappedPolicies": [p for p in policies if p not in mapped],
+            "dayNames": bschedule.DAY_NAMES}
+
+
+def _save_rules(db: Session, rules: List[Dict[str, Any]], user: User) -> None:
+    seen = set()
+    for r in rules:
+        key = r["system"].lower()
+        if key in seen:
+            raise HTTPException(400, f"Trùng tên hệ thống: {r['system']}")
+        seen.add(key)
+    db.query(BackupScheduleRule).delete()
+    for r in rules:
+        db.add(BackupScheduleRule(system=r["system"], policy_patterns=r["policyPatterns"], full_days=",".join(map(str, r["fullDays"])),
+                                  incr_days=",".join(map(str, r["incrDays"])), start_time=r["startTime"], end_time=r["endTime"],
+                                  retention_days=r["retentionDays"], enabled=r["enabled"], note=r["note"],
+                                  updated_by=getattr(user, "username", None)))
+    db.commit()
+
+
+@router.get("/schedules")
+def get_schedules(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return _schedules_out(db)
+
+
+@router.put("/schedules")
+def put_schedules(payload: SchedulesIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    try:
+        rules = [bschedule.validate_rule(r.model_dump()) for r in payload.rules]
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    _save_rules(db, rules, user)
+    return _schedules_out(db)
+
+
+@router.post("/schedules/import")
+async def import_schedules(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Load the schedule workbook (HSC-Backup-Management template). Systems already defined keep
+    their policy mapping; systems not in the file are kept unchanged."""
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "File quá lớn (tối đa 5 MB)")
+    try:
+        parsed = bschedule.parse_schedule_xlsx(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 — not an xlsx / corrupt workbook
+        raise HTTPException(400, f"Không đọc được file Excel: {exc}") from exc
+    current = {r["system"].lower(): r for r in schedule_rules(db)}
+    for r in parsed:
+        old = current.pop(r["system"].lower(), None)
+        if old:
+            r["policyPatterns"] = old["policyPatterns"]
+            r["enabled"] = old["enabled"]
+            r["note"] = old["note"]
+    merged = parsed + [bschedule.validate_rule(r) for r in current.values()]
+    _save_rules(db, merged, user)
+    out = _schedules_out(db)
+    out["imported"] = [r["system"] for r in parsed]
+    return out
+
+
 class ThresholdsIn(BaseModel):
     success_target_pct: Optional[float] = None
     success_crit_pct: Optional[float] = None
@@ -220,6 +336,11 @@ class ThresholdsIn(BaseModel):
     window_end_hour: Optional[int] = None
     coverage_days: Optional[int] = None
     coverage_exclude: Optional[str] = None
+    schedule_grace_minutes: Optional[int] = None
+    backup_day_cutoff_hour: Optional[int] = None
+    schedule_mode: Optional[str] = None
+    fixed_window_start: Optional[str] = None
+    fixed_window_end: Optional[str] = None
 
 
 def _thresholds_out(th: analysis.BackupThresholds) -> Dict[str, Any]:
@@ -238,6 +359,12 @@ def put_thresholds(payload: ThresholdsIn, db: Session = Depends(get_db), user: U
     for k, v in payload.model_dump(exclude_none=True).items():
         if isinstance(v, (int, float)) and v < 0:
             raise HTTPException(400, f"Giá trị {k} không hợp lệ")
+        if k == "schedule_mode" and str(v).strip().lower() not in ("netbackup", "fixed"):
+            raise HTTPException(400, "schedule_mode chỉ nhận 'netbackup' hoặc 'fixed'")
+        if k in ("fixed_window_start", "fixed_window_end"):
+            v = bschedule.parse_hhmm(v)
+            if not v:
+                raise HTTPException(400, f"{k} phải có dạng HH:MM")
         key = "backup_" + k
         row = db.query(AppSetting).filter(AppSetting.key == key).first()
         if row:

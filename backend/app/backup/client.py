@@ -16,6 +16,7 @@ stays None instead of failing the whole sync.
 import datetime as dt
 import json
 import logging
+import re
 import os
 import ssl
 import urllib.error
@@ -186,6 +187,56 @@ def _iso_duration(v: str) -> Optional[float]:
     return d * 86400 + h * 3600 + mi * 60 + s
 
 
+def backup_kind(text: Any) -> str:
+    """'Full Backup' / 'FULL' → FULL; 'Differential Incremental Backup' / 'CUMULATIVE_INCREMENTAL' → INCR; else OTHER."""
+    t = str(text or "").upper().replace("_", " ")
+    if "FULL" in t:
+        return "FULL"
+    if "INCREMENTAL" in t or "INCR" in t or "DIFF" in t or "CUMUL" in t:
+        return "INCR"
+    return "OTHER"
+
+
+def parse_schedule(s: Dict[str, Any], retention: Optional[str] = None) -> Dict[str, Any]:
+    """One policy schedule (generic schema). NetBackup: `backupType` = 'Full Backup' / 'Differential
+    Incremental Backup' / …, `scheduleType` = 'Frequency' | 'Calendar' (older payloads put the backup
+    type in `scheduleType`), `startWindow` = [{dayOfWeek 1 = Sunday … 7 = Saturday, startSeconds,
+    durationSeconds}], `includeDates.recurringDaysOfWeek` = ['week:day', …] for calendar schedules."""
+    raw_type = s.get("backupType") or s.get("scheduleType")
+    sched_kind = str(s.get("scheduleType") or "")
+    calendar = sched_kind.lower() == "calendar" or bool(((s.get("includeDates") or {}).get("recurringDaysOfWeek")))
+    windows = []
+    for w in s.get("startWindow") or []:
+        if not isinstance(w, dict):
+            continue
+        dur = _int(w.get("durationSeconds")) or 0
+        dow = _int(w.get("dayOfWeek"))
+        if dur <= 0 or dow is None or not 1 <= dow <= 7:
+            continue
+        start = _int(w.get("startSeconds")) or 0
+        windows.append({"day": (dow + 5) % 7, "startMin": start // 60, "durationMin": dur // 60})  # Sunday(1) → 6, Monday(2) → 0
+    cal_days = set()
+    for entry in ((s.get("includeDates") or {}).get("recurringDaysOfWeek") or []):
+        try:
+            d = int(str(entry).split(":")[-1])
+            if 1 <= d <= 7:
+                cal_days.add((d + 5) % 7)
+        except ValueError:
+            continue
+    inc = s.get("includeDates") or {}
+    month_days = sorted({int(x) for x in (inc.get("recurringDaysOfMonth") or []) if str(x).strip().isdigit() and 1 <= int(x) <= 31})
+    dates = set()
+    for x in inc.get("specificDates") or []:
+        v = x.get("date") if isinstance(x, dict) else x
+        m = re.match(r"^(\d{4}-\d{2}-\d{2})", str(v or ""))
+        if m:
+            dates.add(m.group(1))
+    return {"name": s.get("scheduleName"), "type": backup_kind(raw_type), "backupType": raw_type,
+            "kind": "Calendar" if calendar else "Frequency", "frequencySec": _int(s.get("frequencySeconds")),
+            "retention": retention, "windows": windows, "calendarDays": sorted(cal_days),
+            "monthDays": month_days, "lastDayOfMonth": bool(inc.get("lastDayOfMonth")), "specificDates": sorted(dates)}
+
+
 def parse_policy(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     attrs = item.get("attributes") or {}
     pol = attrs.get("policy") or attrs
@@ -203,8 +254,7 @@ def parse_policy(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         rp = (copies[0].get("retentionPeriod") if copies and isinstance(copies[0], dict) else None) or s.get("retentionPeriod")
         if isinstance(rp, dict) and rp.get("value") is not None:
             ret = f"{rp.get('value')} {str(rp.get('unit', '')).lower()}".strip()
-        schedules.append({"name": s.get("scheduleName"), "type": s.get("scheduleType"),
-                          "frequencySec": _int(s.get("frequencySeconds")), "retention": ret})
+        schedules.append(parse_schedule(s, ret))
     sel = (pol.get("backupSelections") or {}).get("selections") or []
     active = pa.get("active")
     if active is None and "active" in pol:
