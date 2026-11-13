@@ -15,7 +15,8 @@ from ..database import get_db
 from ..models import ReportLogo, User
 from ..security import get_current_user
 
-router = APIRouter(prefix="/api/sizing", tags=["sizing"])
+from ..features import require_feature
+router = APIRouter(prefix="/api/sizing", tags=["sizing"], dependencies=[Depends(require_feature("sizing"))])
 
 MAX_VMS = 5000
 MAX_PROFILES = 8

@@ -18,7 +18,8 @@ from ..models import AppSetting, BackupPolicySnapshot, BackupScheduleRule, Backu
 from ..security import get_current_user
 from ..timeutil import to_iso_utc
 
-router = APIRouter(prefix="/api/backup", tags=["backup"])
+from ..features import require_feature
+router = APIRouter(prefix="/api/backup", tags=["backup"], dependencies=[Depends(require_feature("backup"))])
 
 
 def _jsonable(v: Any) -> Any:
@@ -34,7 +35,7 @@ def _jsonable(v: Any) -> Any:
 def _cfg(key: str):
     cfg = next((c for c in get_settings().netbackups() if c.key == key), None)
     if not cfg:
-        raise HTTPException(404, "Không tìm thấy NetBackup server với key này")
+        raise HTTPException(404, "Không tìm thấy máy chủ backup với key này")
     return cfg
 
 
@@ -102,7 +103,7 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
     except NetBackupError as exc:
         raise HTTPException(502, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(502, f"Đồng bộ NetBackup thất bại: {exc}") from exc
+        raise HTTPException(502, f"Đồng bộ backup thất bại: {exc}") from exc
     return {"ok": True, "key": key, "jobs": run.jobs_fetched, "policies": run.policy_count, "pools": run.pool_count,
             "warning": run.error_message, "finishedAt": to_iso_utc(run.finished_at)}
 
@@ -382,7 +383,7 @@ def _logo(db: Session) -> Optional[str]:
 
 def _scope_label(server: Optional[str]) -> str:
     if not server or server == "all":
-        return "Toàn bộ NetBackup"
+        return "Toàn bộ máy chủ backup"
     cfg = next((c for c in get_settings().netbackups() if c.key == server), None)
     return cfg.name if cfg else server
 

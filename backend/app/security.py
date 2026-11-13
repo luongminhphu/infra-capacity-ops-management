@@ -69,6 +69,19 @@ def local_login_allowed(user: User) -> bool:
     return s.local_enabled() or user.username.lower() in s.breakglass()
 
 
+def is_admin(user: User) -> bool:
+    """Entra users: app role in ENTRA_ADMIN_ROLES (refreshed at each sign-in). Local: ADMIN_USERS."""
+    if (user.auth_source or "local") == "entra":
+        return bool(user.is_admin)
+    return local_login_allowed(user) and user.username.lower() in get_settings().admin_user_list()
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if not is_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chỉ quản trị viên mới được dùng chức năng này")
+    return user
+
+
 def ensure_bootstrap_admin(db: Session):
     """Create the first admin user from env vars if the users table is empty."""
     settings = get_settings()

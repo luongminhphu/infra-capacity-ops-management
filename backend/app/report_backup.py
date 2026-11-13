@@ -166,7 +166,7 @@ def _daily(r: Dict[str, Any]) -> str:
 NIGHT = {"ok": ("ok", "✓"), "partial": ("warn", "½"), "late": ("warn", "T"), "wrongtype": ("warn", "S"),
          "failed": ("crit", "✕"), "missing": ("crit", "!"), "running": ("na", "…"), "pending": ("na", "·")}
 WD = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
-SRC_LABEL = {"netbackup": "NetBackup", "fixed": "Khung cố định", "manual": "Lịch thủ công"}
+SRC_LABEL = {"netbackup": "Từ policy", "fixed": "Khung cố định", "manual": "Lịch thủ công"}
 
 
 def _schedule(r: Dict[str, Any]) -> str:
@@ -230,7 +230,7 @@ def _failures(r: Dict[str, Any]) -> str:
     return f"""
   <div class="section">
     <div class="section-title"><span class="sec-num">3</span>Nguyên nhân lỗi</div>
-    <div class="section-sub">Mã lỗi NetBackup được gom theo đầu mối xử lý để giao việc cho đúng bộ phận.</div>
+    <div class="section-sub">Mã lỗi backup được gom theo đầu mối xử lý để giao việc cho đúng bộ phận.</div>
     <div class="chart-row"><div class="chart-card"><div class="chart-card-title">Job lỗi theo nhóm nguyên nhân</div>{bars}</div>
       <div style="flex:1;font-size:8.6px;line-height:1.45;">{actions}</div></div>
     <div style="margin-top:8px;">{codes}</div>
@@ -355,7 +355,7 @@ def _criteria(r: Dict[str, Any], servers: List[Dict[str, Any]]) -> str:
   <div class="section">
     <div class="section-title"><span class="sec-num">9</span>Tiêu chí đánh giá &amp; nguồn dữ liệu</div>
     <ul class="brief-list">{''.join(f'<li>{x}</li>' for x in items)}</ul>
-    <div class="assumption-note">Nguồn: NetBackup REST API qua tài khoản chỉ đọc — {src}. Inventory VM: lần đồng bộ vCenter gần nhất.</div>
+    <div class="assumption-note">Nguồn: REST API của hệ thống backup qua tài khoản chỉ đọc — {src}. Inventory VM: lần đồng bộ vCenter gần nhất.</div>
   </div>"""
 
 
@@ -404,7 +404,7 @@ def render_backup_html(r: Dict[str, Any], servers: List[Dict[str, Any]], scope_l
   <div class="cover-header">
     <div>
       <div class="eyebrow">Infrastructure Capacity Ops · Backup · {esc(scope_label)} · {esc(generated.split(' ')[-1])}</div>
-      <div class="cover-title" style="margin-bottom:6px;">Báo cáo hiện trạng Backup — Veritas NetBackup</div>
+      <div class="cover-title" style="margin-bottom:6px;">Báo cáo hiện trạng Backup</div>
       <div class="meta-row"><span>Kỳ báo cáo: <b>{_t(p['from'], '%d/%m/%Y')} – {_t(p['to'], '%d/%m/%Y')}</b> ({p['days']} ngày)</span>
         <span>Phạm vi: <b>{esc(scope_label)}</b></span><span>Lập lúc: <b>{esc(generated)}</b></span></div>
     </div>

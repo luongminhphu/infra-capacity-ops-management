@@ -16,6 +16,7 @@ class UserOut(BaseModel):
 
     username: str
     display_name: Optional[str] = None
+    is_admin: bool = False
 
 
 class ImportPayload(BaseModel):

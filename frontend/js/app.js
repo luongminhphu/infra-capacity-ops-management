@@ -35,36 +35,36 @@ const NAV_GROUPS = [
       desc: 'Phân loại guest OS (Windows Server, Linux, khác) làm cơ sở tính license Windows Server.', scope: ['vcenter', 'cluster'] },
   ] },
   { label: 'Quy hoạch', items: [
-    { id: 'whatif', view: 'whatif', icon: 'git-branch', label: 'What-if capacity', title: 'What-if capacity',
+    { id: 'whatif', feature: 'whatif', view: 'whatif', icon: 'git-branch', label: 'What-if capacity', title: 'What-if capacity',
       desc: 'Mô phỏng thêm / nâng cấp host, thêm / resize VM, decommission VM idle và kịch bản mẫu.', scope: ['vcenter'] },
-    { id: 'sizing', view: 'sizing', icon: 'calculator', label: 'Sizing máy chủ', title: 'Sizing máy chủ',
+    { id: 'sizing', feature: 'sizing', view: 'sizing', icon: 'calculator', label: 'Sizing máy chủ', title: 'Sizing máy chủ',
       desc: 'Từ danh sách VM của dự án mới tính số host vật lý cần mua theo từng cấu hình ứng viên.', scope: ['vcenter'] },
-    { id: 'planning', view: 'planning', icon: 'calendar-range', label: 'Quy hoạch tài nguyên', title: 'Quy hoạch tài nguyên',
+    { id: 'planning', feature: 'planning', view: 'planning', icon: 'calendar-range', label: 'Quy hoạch tài nguyên', title: 'Quy hoạch tài nguyên',
       desc: 'Dự phóng tăng trưởng CPU/RAM và thời điểm cần bổ sung node máy chủ cho từng cluster.', scope: ['vcenter'] },
   ] },
   { label: 'License', items: [
-    { id: 'lic-assess', view: 'licensing', sub: 'assess', icon: 'badge-check', label: 'Đánh giá license', title: 'Đánh giá license',
+    { id: 'lic-assess', feature: 'license', view: 'licensing', sub: 'assess', icon: 'badge-check', label: 'Đánh giá license', title: 'Đánh giá license',
       desc: 'Nhu cầu license VMware per-core và Windows Server theo cluster, so với entitlement và rule đang áp dụng.', scope: ['vcenter', 'cluster'] },
-    { id: 'lic-whatif', view: 'licensing', sub: 'whatif', icon: 'sliders-horizontal', label: 'What-if license', title: 'What-if license',
+    { id: 'lic-whatif', feature: 'license', view: 'licensing', sub: 'whatif', icon: 'sliders-horizontal', label: 'What-if license', title: 'What-if license',
       desc: 'Ảnh hưởng license khi thêm / giảm / nâng cấp host, thêm VM hoặc chuyển workload.', scope: ['vcenter', 'cluster'] },
-    { id: 'lic-snapshots', view: 'licensing', sub: 'snapshots', icon: 'camera', label: 'Snapshot license', title: 'Snapshot license',
+    { id: 'lic-snapshots', feature: 'license', view: 'licensing', sub: 'snapshots', icon: 'camera', label: 'Snapshot license', title: 'Snapshot license',
       desc: 'Lưu kết quả đánh giá tại một thời điểm để đối chiếu, tái lập hoặc xuất PDF.', scope: ['vcenter', 'cluster'] },
   ] },
   { label: 'Backup', items: [
-    { id: 'bk-overview', view: 'backup', sub: 'overview', icon: 'database-backup', label: 'Tổng quan backup', title: 'Tổng quan backup',
-      desc: 'Tỷ lệ backup thành công, RPO, nguyên nhân lỗi và phát hiện từ Veritas NetBackup (tài khoản chỉ đọc).', scope: [] },
-    { id: 'bk-clients', view: 'backup', sub: 'clients', icon: 'monitor-check', label: 'Client & RPO', title: 'Client & RPO',
+    { id: 'bk-overview', feature: 'backup', view: 'backup', sub: 'overview', icon: 'database-backup', label: 'Tổng quan backup', title: 'Tổng quan backup',
+      desc: 'Tỷ lệ backup thành công, RPO, nguyên nhân lỗi và phát hiện từ hệ thống backup (tài khoản chỉ đọc).', scope: [] },
+    { id: 'bk-clients', feature: 'backup', view: 'backup', sub: 'clients', icon: 'monitor-check', label: 'Client & RPO', title: 'Client & RPO',
       desc: 'Lần backup thành công gần nhất, lỗi liên tiếp và đánh giá RPO của từng client.', scope: [] },
-    { id: 'bk-jobs', view: 'backup', sub: 'jobs', icon: 'list-checks', label: 'Job backup', title: 'Job backup',
-      desc: 'Danh sách job theo kết quả, loại job, client, policy và mã lỗi NetBackup.', scope: [] },
-    { id: 'bk-schedule', view: 'backup', sub: 'schedule', icon: 'calendar-check', label: 'Lịch & tuân thủ', title: 'Lịch backup & tuân thủ',
-      desc: 'Đối chiếu từng đêm backup với lịch (đọc từ schedule của policy NetBackup hoặc khai báo / import Excel): đạt, trễ, sai loại, lỗi, thiếu.', scope: [] },
-    { id: 'bk-coverage', view: 'backup', sub: 'coverage', icon: 'shield-check', label: 'Độ phủ VM', title: 'Độ phủ backup VM',
-      desc: 'Đối chiếu VM trong vCenter với client NetBackup: VM chưa có backup hoặc backup lỗi.', scope: [] },
-    { id: 'bk-storage', view: 'backup', sub: 'storage', icon: 'hard-drive', label: 'Storage & policy', title: 'Storage & policy',
+    { id: 'bk-jobs', feature: 'backup', view: 'backup', sub: 'jobs', icon: 'list-checks', label: 'Job backup', title: 'Job backup',
+      desc: 'Danh sách job theo kết quả, loại job, client, policy và mã lỗi backup.', scope: [] },
+    { id: 'bk-schedule', feature: 'backup', view: 'backup', sub: 'schedule', icon: 'calendar-check', label: 'Lịch & tuân thủ', title: 'Lịch backup & tuân thủ',
+      desc: 'Đối chiếu từng đêm backup với lịch (đọc từ schedule của policy backup hoặc khai báo / import Excel): đạt, trễ, sai loại, lỗi, thiếu.', scope: [] },
+    { id: 'bk-coverage', feature: 'backup', view: 'backup', sub: 'coverage', icon: 'shield-check', label: 'Độ phủ VM', title: 'Độ phủ backup VM',
+      desc: 'Đối chiếu VM trong vCenter với client backup: VM chưa có backup hoặc backup lỗi.', scope: [] },
+    { id: 'bk-storage', feature: 'backup', view: 'backup', sub: 'storage', icon: 'hard-drive', label: 'Storage & policy', title: 'Storage & policy',
       desc: 'Dung lượng disk pool, xu hướng và số ngày tới ngưỡng high-water; tình trạng từng policy.', scope: [] },
-    { id: 'bk-config', view: 'backup', sub: 'config', icon: 'sliders-horizontal', label: 'Nguồn & ngưỡng', title: 'Nguồn NetBackup & ngưỡng',
-      desc: 'Trạng thái kết nối NetBackup, hướng dẫn tài khoản chỉ đọc và ngưỡng giám sát backup.', scope: [] },
+    { id: 'bk-config', feature: 'backup', view: 'backup', sub: 'config', icon: 'sliders-horizontal', label: 'Nguồn & ngưỡng', title: 'Nguồn backup & ngưỡng',
+      desc: 'Trạng thái kết nối máy chủ backup, hướng dẫn tài khoản chỉ đọc và ngưỡng giám sát backup.', scope: [] },
   ] },
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
@@ -77,6 +77,32 @@ const NAV_ITEMS = {};
 NAV_GROUPS.forEach(g => g.items.forEach(it => { NAV_ITEMS[it.id] = it; }));
 let activeNavId = 'dashboard';
 
+/* Modules switched off in Settings → Tính năng disappear from the menu, routes and report centre. */
+let appFeatures = {};
+let currentUser = null;
+const featureOn = (f) => !f || appFeatures[f] !== false;
+const navItemVisible = (id) => !!NAV_ITEMS[id] && featureOn(NAV_ITEMS[id].feature);
+
+function applyFeatures(features) {
+  appFeatures = features || {};
+  renderSidebarNav();
+  // Report centre: hide groups whose modules are all off.
+  const groupOn = { backup: featureOn('backup'), planning: featureOn('sizing') || featureOn('planning') };
+  Object.entries(groupOn).forEach(([g, on]) => {
+    $$(`[data-rpt-group="${g}"]`).forEach(el => el.classList.toggle('feature-off', !on));
+  });
+  if (!navItemVisible(currentNavId())) {
+    history.replaceState(null, '', '#/dashboard');
+    applyInitialRoute();
+  }
+  syncNavState();
+}
+
+async function loadFeatures() {
+  try { const r = await apiRequest('/settings/features'); applyFeatures(r.features); }
+  catch (err) { applyFeatures({}); }
+}
+
 function refreshIcons() {
   if (window.lucide && typeof lucide.createIcons === 'function') {
     try { lucide.createIcons(); } catch (err) { /* ignore */ }
@@ -86,15 +112,19 @@ function refreshIcons() {
 function renderSidebarNav() {
   const nav = $('#mainNav');
   if (!nav) return;
-  nav.innerHTML = NAV_GROUPS.map(g => `
+  nav.innerHTML = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(it => featureOn(it.feature)) }))
+    .filter(g => g.items.length).map(g => `
     <div class="nav-group">
       <div class="nav-group-label">${esc(g.label)}</div>
       ${g.items.map(it => `<button type="button" class="nav-item" data-nav="${it.id}" title="${esc(it.desc)}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></button>`).join('')}
     </div>`).join('');
-  nav.addEventListener('click', e => {
-    const btn = e.target.closest('[data-nav]');
-    if (btn) navigateTo(btn.dataset.nav);
-  });
+  if (!nav.dataset.bound) {
+    nav.dataset.bound = '1';
+    nav.addEventListener('click', e => {
+      const btn = e.target.closest('[data-nav]');
+      if (btn) navigateTo(btn.dataset.nav);
+    });
+  }
   refreshIcons();
 }
 
@@ -144,7 +174,7 @@ function updateScopeControls(item) {
 function closeSidebar() { document.body.classList.remove('nav-open'); }
 
 function navigateTo(id) {
-  const item = NAV_ITEMS[id] || NAV_ITEMS.dashboard;
+  const item = navItemVisible(id) ? NAV_ITEMS[id] : NAV_ITEMS.dashboard;
   appState.view = item.view;
   appState.perspective = item.view === 'executive' ? 'executive' : 'technical';
   if (item.view === 'licensing' && typeof licState === 'function') licState().sub = item.sub || 'hardware';
@@ -158,7 +188,7 @@ function navigateTo(id) {
 
 function navIdFromHash() {
   const m = /^#\/([a-z-]+)/.exec(location.hash || '');
-  return m && NAV_ITEMS[m[1]] ? m[1] : null;
+  return m && navItemVisible(m[1]) ? m[1] : null;
 }
 
 /* Apply the hash route to state without rendering (used before the first data load). */
@@ -181,6 +211,7 @@ function bindNavigation() {
   window.addEventListener('hashchange', () => {
     const id = navIdFromHash();
     if (id && id !== activeNavId) navigateTo(id);
+    else if (!id) syncNavState();   // unknown or switched-off page: restore the current one
   });
   const open = $('#btnSidebarOpen'), close = $('#btnSidebarClose'), scrim = $('#sidebarScrim');
   if (open) open.addEventListener('click', () => document.body.classList.add('nav-open'));
@@ -218,6 +249,7 @@ async function handleLoginSubmit(e) {
   btn.textContent = 'Đang đăng nhập...';
   try {
     const user = await api.login(username, password);
+    currentUser = user;
     $('#currentUserLabel').textContent = user.displayName || user.username;
     showAppShell();
     await initAppData();
@@ -238,6 +270,7 @@ async function handleLogout() {
 
 /* ---------- Login options (local password / Microsoft Entra ID) ---------- */
 async function setupLoginOptions() {
+  loadLoginBranding();
   const params = new URLSearchParams(window.location.search);
   const loginError = params.get('login_error');
   if (loginError) {
@@ -753,6 +786,8 @@ async function persistImportIfReady() {
 /* ---------- Bootstrap ---------- */
 async function initAppData() {
   applyInitialRoute();
+  await loadFeatures();
+  if (typeof initAdminSettings === 'function') initAdminSettings(currentUser);
   try {
     const policy = await api.getSettings();
     if (policy) {
@@ -807,10 +842,12 @@ async function bootstrap() {
   bindNavigation();
   bindGlobalInteractions();
   bindTopBarInteractions();
+  applyInitialRoute();   // keep the page from the URL (#/settings…) across reloads
   syncNavState();
   refreshIcons();
   try {
     const user = await api.me();
+    currentUser = user;
     $('#currentUserLabel').textContent = user.displayName || user.username;
     showAppShell();
     await initAppData();

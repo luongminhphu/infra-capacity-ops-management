@@ -930,6 +930,81 @@ biến môi trường này; nhớ thêm `ico-postgres` và dải IP nội bộ v
   Lỗi `AADSTS50011` = redirect URI không khớp từng ký tự với bước 2.1; `AADSTS7000215` = client secret
   sai/hết hạn.
 
+## Cài đặt: bật / tắt tính năng và logo màn hình đăng nhập
+
+**Cài đặt → Tính năng**: công tắc gạt cho từng module — Backup, License, Sizing máy chủ, Quy hoạch tài
+nguyên, What-if capacity. Tắt một module sẽ ẩn mục đó khỏi menu, trang và nhóm báo cáo tương ứng trong
+Trung tâm báo cáo cho **mọi người dùng** (API `/api/backup/*` và `/api/sizing/*` trả 404 khi tắt).
+Dữ liệu và việc thu thập (vd đồng bộ NetBackup) vẫn chạy, bật lại là có đủ lịch sử.
+
+**Cài đặt → Logo màn hình đăng nhập**: ảnh PNG/JPEG/WEBP/SVG ≤ 2MB, hiển thị trên màn hình đăng nhập
+thay cho biểu tượng mặc định. Tách biệt với logo trang bìa báo cáo PDF. SVG chứa script / liên kết ngoài
+bị từ chối vì logo hiển thị cho cả người chưa đăng nhập.
+
+Chỉ **quản trị viên** được thay đổi hai mục này (xem "Quản trị viên" bên dưới).
+
+## AI / MCP server — AI phân tích log & hiệu suất của app (chỉ đọc)
+
+ICO có sẵn một **MCP server chỉ đọc** tại `/mcp` (Model Context Protocol, Streamable HTTP). AI client
+như **Claude Code** dùng nó để đọc log và số liệu hiệu suất **của chính ứng dụng**, phân tích nguyên
+nhân và đề xuất sửa code kèm bằng chứng. Quy trình thay đổi không đổi:
+
+```
+AI (Claude Code + MCP ico) ─ đọc log/hiệu suất ─▶ đề xuất + sửa code trên nhánh ─▶ Pull request
+   ─▶ bạn review & merge ─▶ GitHub Actions build image ─▶ bạn Redeploy thủ công trên Rancher
+```
+
+MCP **không** có công cụ ghi / sửa / chạy lệnh, **không** trả dữ liệu hạ tầng (VM, host, policy backup,
+license…). Hostname / IP nội bộ trong log được thay bằng mã `<host:a1b2c3>` / `<ip:…>` (`MCP_MASK_HOSTS`).
+
+### Dữ liệu app tự thu thập
+
+| Nguồn | Lưu ở đâu | Thời gian giữ |
+|---|---|---|
+| Log WARNING / ERROR (kèm traceback) | bảng `app_logs` | `OBS_RETENTION_DAYS` (30 ngày) |
+| Log INFO | bộ nhớ (5.000 bản ghi gần nhất) | đến lần restart |
+| Thời gian xử lý từng API (theo route, 5 phút/khối: số request, 4xx/5xx, histogram độ trễ, thời gian DB, số query) | `perf_buckets` | 30 ngày |
+| Request chậm (> `OBS_SLOW_REQUEST_MS`) hoặc ≥ 100 SQL query (nghi N+1) | bộ nhớ | đến lần restart |
+| SQL chậm (> `OBS_SLOW_QUERY_MS`), đã chuẩn hoá, **không** có tham số | bộ nhớ | đến lần restart |
+| Lần đồng bộ vCenter / backup (trạng thái, thời lượng, lỗi) | bảng sẵn có | như cũ |
+
+Mật khẩu, client secret, API key, JWT, bearer token, `password=…`, mật khẩu trong URL DB và giá trị của mọi
+biến môi trường `*PASSWORD*` / `*SECRET*` / `*TOKEN*` / `*API_KEY*` được che **trước khi lưu** vào DB.
+Mỗi bản ghi có `APP_VERSION` (commit của image) để gắn lỗi / chậm với từng lần deploy.
+
+### Công cụ MCP
+
+`app_overview`, `search_logs`, `error_summary`, `endpoint_performance`, `performance_trend`,
+`slow_requests`, `slow_queries`, `sync_history`; prompt mẫu `health_review`, `error_triage`.
+
+### Quản trị viên
+
+- Tài khoản cục bộ: liệt kê trong `ADMIN_USERS` (mặc định `admin`).
+- Tài khoản Entra ID: có app role `ICO.Admin` (`ENTRA_ADMIN_ROLES`). Tạo role này trong App registration →
+  App roles, gán cho nhóm quản trị ở Enterprise application → Users and groups. Quyền admin được cập nhật
+  mỗi lần đăng nhập; mất role thì mọi token MCP của người đó bị thu hồi ngay ở lần đăng nhập kế tiếp.
+
+### Bật và kết nối
+
+1. ConfigMap `ico-config`: `MCP_ENABLED: "true"` → apply → Redeploy `ico-app` trên Rancher.
+2. Đăng nhập bằng tài khoản admin → **Cài đặt → AI / MCP server → Tạo token** (30/90/180 ngày). Token chỉ
+   hiển thị **một lần**; app chỉ lưu SHA-256. Có thể thu hồi bất cứ lúc nào; mọi lần gọi công cụ được ghi
+   vào **Nhật ký truy cập MCP**.
+3. Trên máy chạy Claude Code (trong repo `infra-capacity-ops-management`):
+
+```bash
+claude mcp add --transport http ico http://<node>:30080/mcp --header "Authorization: Bearer <token>"
+```
+
+4. Hỏi Claude, ví dụ: *"Dùng prompt health_review của ico, phân tích 24h qua và đề xuất sửa; nếu cần sửa code
+   thì tạo nhánh và mở pull request."*
+
+**Đường truy cập**: khuyến nghị gọi `/mcp` **trong mạng nội bộ / VPN quản trị** (NodePort `30080`).
+App Proxy với Entra pre-authentication chặn client không có trình duyệt, nên nếu Claude Code chạy ngoài mạng
+nội bộ, publish thêm một ứng dụng App Proxy riêng cho đường dẫn `/mcp/` với *Pre Authentication =
+Passthrough* (bảo vệ bằng token MCP, rate limit `MCP_RATE_PER_MINUTE`) — cân nhắc kỹ vì endpoint khi đó
+ra Internet. Request có header `Origin` lạ (từ trình duyệt) bị từ chối.
+
 ## Bảo mật
 
 - Đăng nhập bằng Microsoft Entra ID (OIDC + PKCE, MFA qua Conditional Access, App Proxy
@@ -941,6 +1016,8 @@ biến môi trường này; nhớ thêm `ico-postgres` và dải IP nội bộ v
   `.gitignore`), không commit vào Git.
 - Tài khoản vCenter chỉ cần quyền **Read-Only** — không có rủi ro ứng dụng vô tình thay đổi cấu
   hình hạ tầng.
+- MCP server chỉ đọc, chỉ admin dùng được, token cá nhân có hạn (lưu SHA-256), thu hồi được, mọi lần gọi
+  được audit; log được che secret trước khi lưu và che hostname/IP trước khi trả cho AI.
 - Tài khoản NetBackup chỉ cần role **View** (Jobs, Policies, Storage); API key / mật khẩu chỉ nằm
   trong `.env` / Secret, app chỉ gọi API GET (cộng `/login`, `/logout` khi không dùng API key).
 

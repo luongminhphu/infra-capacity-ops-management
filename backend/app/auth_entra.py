@@ -145,6 +145,8 @@ def validate_id_token(s: Settings, id_token: str, nonce: str, access_token: Opti
     if mode == "if-present" and isinstance(amr, list) and amr and "mfa" not in amr:
         raise EntraError("Đăng nhập chưa qua xác thực đa yếu tố (MFA).")
     groups, roles = _csv(s.entra_allowed_groups), _csv(s.entra_allowed_roles)
+    if roles:
+        roles = roles + s.entra_admin_role_list()     # admins are always allowed in
     if groups or roles:
         if groups and "_claim_names" in claims and "groups" in (claims.get("_claim_names") or {}):
             raise EntraError("Tài khoản thuộc quá nhiều nhóm để kiểm tra trong token — dùng app role thay cho nhóm.")

@@ -94,6 +94,32 @@ class Settings(BaseSettings):
     entra_allowed_roles: str = Field(default="")            # optional: app role values (comma separated)
     entra_login_label: str = Field(default="Đăng nhập bằng Microsoft")
 
+    # ---- Admins (MCP server access) ----
+    # Local accounts that are admins (comma separated; empty = ADMIN_USERNAME).
+    admin_users: str = Field(default="")
+    # Entra app role values that make a user admin (checked at every Microsoft sign-in).
+    entra_admin_roles: str = Field(default="ICO.Admin")
+
+    # ---- MCP server (read-only app logs & performance for an AI client) ----
+    mcp_enabled: bool = Field(default=False)
+    mcp_token_max_days: int = Field(default=180)
+    mcp_mask_hosts: bool = Field(default=True)      # mask IPs / FQDNs in logs returned to the AI
+    mcp_allowed_origins: str = Field(default="")    # browser Origins allowed to call /mcp (none by default)
+    mcp_rate_per_minute: int = Field(default=120)
+
+    # ---- Observability (app logs + request / SQL timing kept by the app itself) ----
+    app_version: str = Field(default="dev")          # set at image build (GIT_SHA)
+    obs_retention_days: int = Field(default=30)
+    obs_slow_request_ms: int = Field(default=1000)
+    obs_slow_query_ms: int = Field(default=200)
+
+    def admin_user_list(self) -> List[str]:
+        names = [u.strip().lower() for u in self.admin_users.split(",") if u.strip()]
+        return names or [self.admin_username.strip().lower()]
+
+    def entra_admin_role_list(self) -> List[str]:
+        return [r.strip() for r in self.entra_admin_roles.split(",") if r.strip()]
+
     def entra_enabled(self) -> bool:
         return self.auth_mode in ("entra", "both") and bool(self.entra_tenant_id and self.entra_client_id and self.entra_redirect_uri)
 

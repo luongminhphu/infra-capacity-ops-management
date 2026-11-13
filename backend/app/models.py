@@ -25,6 +25,73 @@ class User(Base):
     external_id = Column(String(64), nullable=True, index=True)   # Entra object id (oid)
     email = Column(String(255), nullable=True)
     last_login_at = Column(DateTime, nullable=True)
+    # Entra users: refreshed from the app roles in the ID token at every sign-in (ENTRA_ADMIN_ROLES).
+    # Local users: decided by ADMIN_USERS instead, this column is ignored.
+    is_admin = Column(Boolean, nullable=False, default=False)
+
+
+class ApiToken(Base):
+    """Personal bearer token of an admin for the MCP endpoint. Only the SHA-256 is stored."""
+    __tablename__ = "api_tokens"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    prefix = Column(String(16), nullable=False)          # first characters, to recognise the token
+    scope = Column(String(32), nullable=False, default="mcp")
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True)
+    at = Column(DateTime, nullable=False, default=utcnow, index=True)
+    username = Column(String(255), nullable=True)
+    action = Column(String(64), nullable=False, index=True)    # mcp.tool, mcp.token.create, ...
+    detail = Column(Text, nullable=True)                       # JSON
+    client_ip = Column(String(64), nullable=True)
+
+
+class AppLog(Base):
+    """WARNING and above from the app's own loggers (secrets redacted before storing)."""
+    __tablename__ = "app_logs"
+
+    id = Column(Integer, primary_key=True)
+    at = Column(DateTime, nullable=False, index=True)
+    level = Column(String(10), nullable=False, index=True)
+    logger = Column(String(128), nullable=False)
+    message = Column(Text, nullable=False)
+    exc_type = Column(String(128), nullable=True)
+    traceback = Column(Text, nullable=True)
+    fingerprint = Column(String(40), nullable=False, index=True)   # groups repeats of the same error
+    app_version = Column(String(64), nullable=True)
+
+
+class PerfBucket(Base):
+    """Request timings aggregated per 5 minutes and route template."""
+    __tablename__ = "perf_buckets"
+    __table_args__ = (UniqueConstraint("bucket_start", "method", "route", name="uq_perf_bucket"),)
+
+    id = Column(Integer, primary_key=True)
+    bucket_start = Column(DateTime, nullable=False, index=True)
+    method = Column(String(8), nullable=False)
+    route = Column(String(255), nullable=False)
+    count = Column(Integer, nullable=False, default=0)
+    errors_5xx = Column(Integer, nullable=False, default=0)
+    errors_4xx = Column(Integer, nullable=False, default=0)
+    total_ms = Column(Float, nullable=False, default=0)
+    max_ms = Column(Float, nullable=False, default=0)
+    db_ms = Column(Float, nullable=False, default=0)
+    db_queries = Column(Integer, nullable=False, default=0)
+    histogram = Column(Text, nullable=False)          # JSON list of counts per latency bucket
+    app_version = Column(String(64), nullable=True)
 
 
 class SnapshotRun(Base):

@@ -30,6 +30,16 @@ data:
   ENTRA_ALLOWED_ROLES: ""             # tuỳ chọn: app role, vd "ICO.User,ICO.Admin"
   ENTRA_ALLOWED_GROUPS: ""            # tuỳ chọn: object ID nhóm
 
+  # ---- Quản trị viên & MCP server (AI đọc log / hiệu suất của app, chỉ đọc) ----
+  ADMIN_USERS: "admin"                # tài khoản cục bộ là admin (phân cách dấu phẩy)
+  ENTRA_ADMIN_ROLES: "ICO.Admin"      # app role Entra là admin (cập nhật mỗi lần đăng nhập)
+  MCP_ENABLED: "false"                # "true" để admin tạo token MCP trong Cài đặt → AI / MCP
+  MCP_MASK_HOSTS: "true"              # che hostname / IP nội bộ trong log trả cho AI
+  MCP_TOKEN_MAX_DAYS: "180"
+  OBS_RETENTION_DAYS: "30"            # giữ log WARNING+ và số liệu hiệu suất 30 ngày
+  OBS_SLOW_REQUEST_MS: "1000"
+  OBS_SLOW_QUERY_MS: "200"
+
   # ---- vCenter #1..#4 — phần KHÔNG nhạy cảm ----
   # Dùng chung tài khoản read-only infra.mon@vsphere.local trên cả 4 vCenter.
   # Đặt VCENTER_i_DEMO=true (không cần HOST thật) để chạy thử với dữ liệu giả lập

@@ -41,7 +41,7 @@ function bkSetStatus(msg, isErr) {
 
 async function bkLoadServers() {
   const st = bkState();
-  try { st.servers = await api.bkServers(); } catch (err) { st.servers = []; bkSetStatus(`Không tải được danh sách NetBackup: ${err.message}`, true); }
+  try { st.servers = await api.bkServers(); } catch (err) { st.servers = []; bkSetStatus(`Không tải được danh sách máy chủ backup: ${err.message}`, true); }
 }
 
 async function bkLoad(force) {
@@ -85,7 +85,7 @@ function renderBackupHead() {
   const head = $('#bkHead');
   if (!head) return;
   const servers = st.servers || [];
-  const opts = [`<option value="all">Tất cả NetBackup (${servers.length})</option>`]
+  const opts = [`<option value="all">Tất cả máy chủ backup (${servers.length})</option>`]
     .concat(servers.map(s => `<option value="${esc(s.key)}">${esc(s.name)}${s.demo ? ' · demo' : ''}</option>`)).join('');
   const chips = servers.map(s => {
     const cls = s.lastStatus === 'error' ? 'crit' : (s.lastStatus === 'ok' ? 'ok' : 'na');
@@ -95,14 +95,14 @@ function renderBackupHead() {
   head.innerHTML = `
     <div class="lic-head-row">
       <div class="panel-toolbar">
-        <select id="bkServer" title="NetBackup primary server">${opts}</select>
+        <select id="bkServer" title="Máy chủ backup">${opts}</select>
         <select id="bkDays" title="Kỳ thống kê">
           ${[1, 7, 14, 30, 60, 90].map(d => `<option value="${d}" ${d === st.days ? 'selected' : ''}>${d === 1 ? '24 giờ qua' : d + ' ngày qua'}</option>`).join('')}
         </select>
-        <span class="bk-chips">${chips || '<span class="pill na">Chưa cấu hình NetBackup</span>'}</span>
+        <span class="bk-chips">${chips || '<span class="pill na">Chưa cấu hình máy chủ backup</span>'}</span>
       </div>
       <div class="panel-toolbar">
-        <button class="btn btn-secondary btn-sm" id="bkSync" type="button"><i data-lucide="refresh-cw"></i>Đồng bộ NetBackup</button>
+        <button class="btn btn-secondary btn-sm" id="bkSync" type="button"><i data-lucide="refresh-cw"></i>Đồng bộ backup</button>
         <button class="btn btn-secondary btn-sm" id="bkXlsx" type="button"><i data-lucide="sheet"></i>Xuất Excel</button>
         <button class="btn btn-primary btn-sm" id="bkPdf" type="button"><i data-lucide="file-text"></i>Báo cáo PDF</button>
       </div>
@@ -132,7 +132,7 @@ function bindBackupHead() {
       try {
         const res = st.server === 'all' ? await api.bkSyncAll() : { results: [await api.bkSync(st.server)].map(r => ({ ...r, ok: true })) };
         const bad = (res.results || []).filter(r => !r.ok);
-        bkSetStatus(bad.length ? `Đồng bộ lỗi: ${bad.map(r => `${r.key}: ${r.error}`).join('; ')}` : `Đã đồng bộ NetBackup lúc ${new Date().toLocaleTimeString('vi-VN')}.`, bad.length > 0);
+        bkSetStatus(bad.length ? `Đồng bộ lỗi: ${bad.map(r => `${r.key}: ${r.error}`).join('; ')}` : `Đã đồng bộ backup lúc ${new Date().toLocaleTimeString('vi-VN')}.`, bad.length > 0);
         await bkLoad(true);
         renderBackupView();
       } catch (err) { bkSetStatus(`Đồng bộ thất bại: ${err.message}`, true); }
@@ -244,7 +244,7 @@ function bkJobs() {
   }
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Job backup</div><p class="panel-sub">Activity monitor của NetBackup trong kỳ đã chọn (lưu lịch sử theo mỗi lần đồng bộ).</p></div>
+      <div class="panel-head"><div><div class="panel-title">Job backup</div><p class="panel-sub">Job của máy chủ backup trong kỳ đã chọn (lưu lịch sử theo mỗi lần đồng bộ).</p></div>
         <div class="panel-toolbar">
           <select data-bk-filter="jobOutcome">${[['all', 'Mọi kết quả'], ['failed', 'Lỗi'], ['partial', 'Một phần'], ['success', 'Thành công'], ['running', 'Đang chạy']].map(([k, l]) => `<option value="${k}" ${f.outcome === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
           <select data-bk-filter="jobCategory">${[['backup', 'Backup'], ['copy', 'Nhân bản (DR)'], ['restore', 'Restore'], ['all', 'Mọi loại job']].map(([k, l]) => `<option value="${k}" ${f.category === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -273,7 +273,7 @@ function bkCoverage(s) {
   const k = [['VM đang chạy' + (cov.scopeActive ? ' (trong phạm vi)' : ''), bkNum(cov.total), `Không tính ${cov.poweredOff} VM tắt · ${cov.excluded} VM loại trừ theo tên${cov.scopeActive ? ` · ${cov.outOfScope} VM ngoài phạm vi` : ''}`],
              ['Có backup', bkNum(cov.protected), `Thành công trong ${s.thresholds.coverage_days} ngày · ${bkPct(cov.pct)}`],
              ['Có job nhưng lỗi', bkNum(cov.failing), 'Có trong policy / có job, chưa thành công'],
-             ['Chưa có backup', `<span class="${cov.unprotected ? 'tone-crit' : 'tone-ok'}">${bkNum(cov.unprotected)}</span>`, 'Không khớp client NetBackup nào']];
+             ['Chưa có backup', `<span class="${cov.unprotected ? 'tone-crit' : 'tone-ok'}">${bkNum(cov.unprotected)}</span>`, 'Không khớp client backup nào']];
   const filt = `<select data-bk-filter="covVc"><option value="all">Mọi vCenter</option>${vcOpts.map(x => `<option value="${esc(x)}" ${f.vc === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
           <select data-bk-filter="covCl"><option value="all">Mọi cluster</option>${clOpts.map(x => `<option value="${esc(x)}" ${f.cl === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
   return `
@@ -449,7 +449,7 @@ function bkSchedule(s) {
       const tip = `${c.date} · ${c.expected === 'full' ? 'Full' : c.expected === 'any' ? 'Khung cố định' : 'Incremental'} · ${m.label}${c.detail ? ' — ' + c.detail : ''}`;
       return `<td class="bk-night" title="${esc(tip)}"><span class="bk-cell ${m.cls} ${c.expected === 'full' ? 'is-full' : ''}">${m.sym}</span></td>`;
     }).join('');
-    const src = r.source === 'netbackup' ? bkPill('na', 'NetBackup') : r.source === 'fixed' ? bkPill('warn', 'Khung cố định') : bkPill('ok', 'Thủ công');
+    const src = r.source === 'netbackup' ? bkPill('na', 'Từ policy') : r.source === 'fixed' ? bkPill('warn', 'Khung cố định') : bkPill('ok', 'Thủ công');
     const pols = (r.source === 'netbackup' || r.source === 'fixed' ? '' : `<span class="muted-sub bk-wrap">${r.policies.length ? esc(r.policies.join(', ')) : '<b class="tone-warn">Chưa gán policy</b>'}</span>`)
       + (r.scheduleNotes || []).map(n => `<span class="muted-sub bk-wrap tone-warn">${esc(n)}</span>`).join('')
       + (r.calendar && Object.keys(r.calendar).length ? `<span class="muted-sub">Lịch theo ngày trong tháng: ${Object.entries(r.calendar).map(([k, c]) => `${k === 'full' ? 'Full' : 'Incr'} ngày ${[...(c.monthDays || []), ...(c.lastDayOfMonth ? ['cuối tháng'] : [])].join(', ') || (c.dates || []).join(', ')}`).join(' · ')}</span>` : '');
@@ -573,7 +573,7 @@ function bkConfig() {
   }).join('') : '<div class="empty-note">Đang tải…</div>';
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Nguồn NetBackup</div><p class="panel-sub">Cấu hình qua biến môi trường <code>NETBACKUP_i_*</code> (tối đa 4 primary server). Tự động đồng bộ cùng chu kỳ vCenter (POLL_INTERVAL_MINUTES).</p></div></div>
+      <div class="panel-head"><div><div class="panel-title">Máy chủ backup</div><p class="panel-sub">Cấu hình qua biến môi trường <code>NETBACKUP_i_*</code> (tối đa 4 primary server). Tự động đồng bộ cùng chu kỳ vCenter (POLL_INTERVAL_MINUTES).</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Server</th><th>Địa chỉ</th><th>Xác thực</th><th>API</th><th>Đồng bộ gần nhất</th><th>Trạng thái</th><th></th></tr></thead>
       <tbody>${servers || '<tr><td colspan="7" class="empty-note">Chưa cấu hình NetBackup. Thêm khối NETBACKUP_1_* vào .env / ConfigMap (đặt NETBACKUP_1_DEMO=true để chạy thử).</td></tr>'}</tbody></table></div>
       <div class="insight-box"><strong>Tài khoản chỉ đọc:</strong> tạo user dịch vụ trên NetBackup (ví dụ <code>svc_nbu_ro</code>), gán RBAC role tuỳ chỉnh chỉ có quyền <b>View</b> cho Jobs, Policies (NetBackup policies), Storage (disk pools / storage units) — không cấp quyền thao tác. Ưu tiên cấp <b>API key</b> cho user này (NetBackup 9.x trở lên) và khai báo ở <code>NETBACKUP_i_API_KEY</code>; app chỉ gọi các API GET. Chi tiết trong README.</div>
