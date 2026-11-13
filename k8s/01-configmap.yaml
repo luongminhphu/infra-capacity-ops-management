@@ -15,6 +15,21 @@ data:
   # datastore "% allocated" misleading); toggle in UI under "Tiêu chí đánh giá".
   INCLUDE_STORAGE: "false"
 
+  # ---- Đăng nhập Microsoft Entra ID (SSO + MFA, qua Microsoft Entra application proxy) ----
+  # AUTH_MODE: "local" (chỉ user/mật khẩu) · "both" (cả hai — dùng khi chuyển đổi) · "entra" (chỉ
+  # Microsoft; tài khoản cục bộ trong AUTH_BREAKGLASS_USERS vẫn đăng nhập được để cứu hộ).
+  # Khi bật Entra qua App Proxy (HTTPS) đặt COOKIE_SECURE: "true" ở trên.
+  # ENTRA_CLIENT_SECRET nằm trong Secret ico-secrets. Xem README mục "Đăng nhập Microsoft Entra ID".
+  AUTH_MODE: "local"
+  AUTH_BREAKGLASS_USERS: "admin"
+  ENTRA_TENANT_ID: ""                 # Directory (tenant) ID — GUID
+  ENTRA_CLIENT_ID: ""                 # Application (client) ID của app registration App Proxy
+  ENTRA_REDIRECT_URI: ""              # https://ico.<domain>/api/auth/oidc/callback (URL ngoài của App Proxy)
+  ENTRA_POST_LOGOUT_REDIRECT_URI: ""  # https://ico.<domain>/ (tuỳ chọn)
+  ENTRA_REQUIRE_MFA: "if-present"     # if-present · strict · off (MFA do Conditional Access ép buộc)
+  ENTRA_ALLOWED_ROLES: ""             # tuỳ chọn: app role, vd "ICO.User,ICO.Admin"
+  ENTRA_ALLOWED_GROUPS: ""            # tuỳ chọn: object ID nhóm
+
   # ---- vCenter #1..#4 — phần KHÔNG nhạy cảm ----
   # Dùng chung tài khoản read-only infra.mon@vsphere.local trên cả 4 vCenter.
   # Đặt VCENTER_i_DEMO=true (không cần HOST thật) để chạy thử với dữ liệu giả lập

@@ -30,10 +30,10 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(username: str) -> str:
+def create_access_token(username: str, source: str = "local") -> str:
     settings = get_settings()
     expire = dt.datetime.utcnow() + dt.timedelta(minutes=settings.jwt_expire_minutes)
-    payload = {"sub": username, "exp": expire}
+    payload = {"sub": username, "exp": expire, "src": source}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -58,7 +58,15 @@ def get_current_user(
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Người dùng không tồn tại")
+    if not local_login_allowed(user) and (user.auth_source or "local") == "local":
+        # AUTH_MODE=entra: local sessions issued earlier stop working, except break-glass accounts.
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tài khoản cục bộ đã bị tắt — đăng nhập bằng Microsoft")
     return user
+
+
+def local_login_allowed(user: User) -> bool:
+    s = get_settings()
+    return s.local_enabled() or user.username.lower() in s.breakglass()
 
 
 def ensure_bootstrap_admin(db: Session):

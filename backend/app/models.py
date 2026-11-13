@@ -16,10 +16,15 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-    username = Column(String(64), unique=True, nullable=False, index=True)
+    username = Column(String(255), unique=True, nullable=False, index=True)   # UPN can exceed 64 chars
     password_hash = Column(String(255), nullable=False)
     display_name = Column(String(128), nullable=True)
     created_at = Column(DateTime, default=utcnow)
+    # Sign-in source: "local" (password) or "entra" (Microsoft Entra ID, no usable password).
+    auth_source = Column(String(16), nullable=False, default="local")
+    external_id = Column(String(64), nullable=True, index=True)   # Entra object id (oid)
+    email = Column(String(255), nullable=True)
+    last_login_at = Column(DateTime, nullable=True)
 
 
 class SnapshotRun(Base):

@@ -47,8 +47,12 @@ def ensure_schema() -> None:
         "license_entitlements": [
             ("kind", "VARCHAR(16) NOT NULL DEFAULT 'owned'"),
         ],
+        "users": [
+            ("auth_source", "VARCHAR(16) NOT NULL DEFAULT 'local'"), ("external_id", "VARCHAR(64)"),
+            ("email", "VARCHAR(255)"), ("last_login_at", "TIMESTAMP"),
+        ],
     }
-    indexed = {"instance_uuid"}
+    indexed = {"instance_uuid", "external_id"}
     insp = inspect(engine)
     with engine.begin() as conn:
         for table, cols in additive.items():
@@ -60,6 +64,11 @@ def ensure_schema() -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
                     if name in indexed:
                         conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_{name} ON {table} ({name})"))
+        # Entra user principal names can be longer than the original 64-character username column.
+        if engine.dialect.name == "postgresql" and "users" in insp.get_table_names():
+            col = next((c for c in insp.get_columns("users") if c["name"] == "username"), None)
+            if col is not None and getattr(col["type"], "length", None) and col["type"].length < 255:
+                conn.execute(text("ALTER TABLE users ALTER COLUMN username TYPE VARCHAR(255)"))
 
 
 def get_db():

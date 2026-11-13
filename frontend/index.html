@@ -24,8 +24,15 @@
       </svg>
     </div>
     <h2>Infra Capacity Ops Management</h2>
-    <p class="lead">Đăng nhập để xem capacity, compliance và license của hạ tầng VMware.</p>
+    <p class="lead">Đăng nhập để theo dõi capacity, backup, compliance và license của hạ tầng.</p>
     <div id="loginError" role="alert"></div>
+    <a class="btn btn-primary btn-sso hidden" id="btnLoginEntra" href="/api/auth/oidc/login">
+      <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+      <span id="btnLoginEntraLabel">Đăng nhập bằng Microsoft</span>
+    </a>
+    <button class="login-alt hidden" type="button" id="btnShowLocalLogin">Tài khoản khẩn cấp (break-glass)</button>
+    <div class="login-divider hidden" id="loginDivider"><span>hoặc</span></div>
+    <div id="localLoginFields">
     <div class="login-field">
       <label for="loginUsername">Tên đăng nhập</label>
       <input type="text" id="loginUsername" autocomplete="username" required>
@@ -35,6 +42,7 @@
       <input type="password" id="loginPassword" autocomplete="current-password" required>
     </div>
     <button class="btn btn-primary" type="submit" id="btnLogin">Đăng nhập</button>
+    </div>
   </form>
 </div>
 

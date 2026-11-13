@@ -230,8 +230,49 @@ async function handleLoginSubmit(e) {
 }
 
 async function handleLogout() {
-  try { await api.logout(); } catch (err) { /* ignore */ }
+  let res = null;
+  try { res = await api.logout(); } catch (err) { /* ignore */ }
+  if (res && res.logoutUrl) { window.location.href = res.logoutUrl; return; }  // also end the Microsoft session
   showLoginScreen();
+}
+
+/* ---------- Login options (local password / Microsoft Entra ID) ---------- */
+async function setupLoginOptions() {
+  const params = new URLSearchParams(window.location.search);
+  const loginError = params.get('login_error');
+  if (loginError) {
+    $('#loginError').textContent = loginError;
+    params.delete('login_error');
+    const q = params.toString();
+    history.replaceState(null, '', window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+  }
+  let cfg = { local: true, entra: false };
+  try { cfg = await api.authConfig(); } catch (err) { /* keep local login */ }
+  const entraBtn = $('#btnLoginEntra');
+  const local = $('#localLoginFields');
+  if (cfg.entra) {
+    const next = window.location.pathname + window.location.search + window.location.hash;
+    entraBtn.href = '/api/auth/oidc/login?next=' + encodeURIComponent(next);
+    if (cfg.entraLabel) $('#btnLoginEntraLabel').textContent = cfg.entraLabel;
+    entraBtn.classList.remove('hidden');
+  }
+  const showLocal = () => {
+    local.classList.remove('hidden');
+    $('#btnShowLocalLogin').classList.add('hidden');
+    if (cfg.entra) $('#loginDivider').classList.remove('hidden');
+    $('#loginUsername').required = true; $('#loginPassword').required = true;
+  };
+  if (cfg.local || !cfg.entra) {
+    showLocal();
+  } else {
+    local.classList.add('hidden');
+    $('#loginUsername').required = false; $('#loginPassword').required = false;
+    if (cfg.breakglass) {
+      const alt = $('#btnShowLocalLogin');
+      alt.classList.remove('hidden');
+      alt.addEventListener('click', () => { showLocal(); $('#loginUsername').focus(); }, { once: true });
+    }
+  }
 }
 
 /* ---------- vCenter top bar ---------- */
@@ -778,4 +819,5 @@ async function bootstrap() {
   }
 }
 
+setupLoginOptions();
 bootstrap();
