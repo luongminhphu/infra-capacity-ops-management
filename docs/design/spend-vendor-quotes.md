@@ -1,6 +1,9 @@
 # Thiết kế: Nhà cung cấp & So sánh báo giá · Cải tạo văn phòng (hạ tầng IT)
 
-Trạng thái: **ĐỀ XUẤT — chờ duyệt**. Ngày 14/11/2026. Mở rộng module *Chi phí & Hợp đồng IT*
+Trạng thái: **ĐÃ CHỐT** 14/11/2026 theo trả lời của anh/chị:
+báo giá NCC chủ yếu là **PDF scan** (V1 cần AI đọc PDF); **cho phép** gửi báo giá tới Anthropic (vẫn qua công tắc
+admin); **3 khối** Cabling (gồm Hub) / Network / Video Conference; lịch sử **5 tầng FL3, FL11, FL12, FL6, FL7**;
+so sánh lịch sử theo **thực chi**; phiếu đánh giá NCC theo **mẫu EVALUATION FORM** đính kèm (mục 1.6). Mở rộng module *Chi phí & Hợp đồng IT*
 (`docs/design/spend-module.md`), dùng lại hạ tầng sẵn có: lưu file, kiểm tra file, audit, vai trò, AI provider,
 báo cáo PDF / Excel, tờ trình.
 
@@ -92,7 +95,7 @@ Mỗi lỗi lưu thành một dòng *phát hiện* (mã, mức độ, giá trị
 - **Nội dung / cấu hình**: so model, thông số chính, bảo hành, thời gian giao hàng, điều kiện thanh toán, hiệu lực báo
   giá. Phần so model / mã do code làm. Phần tóm tắt khác biệt kỹ thuật bằng lời do AI làm (tuỳ chọn) và luôn ghi rõ là
   "AI tóm tắt".
-- **Chấm điểm NCC** theo bộ tiêu chí cấu hình được. Mặc định lấy đúng bảng trong Mẫu B:
+- **Chấm điểm NCC**: xem **1.6 Phiếu đánh giá NCC** (thay cho đoạn dưới đây, giữ lại để đối chiếu). Trước khi có mẫu:
   - **A. Khung tiêu chuẩn (70%)**: Chất lượng sản phẩm / dịch vụ 15%, Giá thành 15%, Uy tín NCC 10%,
     Kinh nghiệm NCC 10%, Dịch vụ trước / sau bán hàng 10%, Tuân thủ an toàn thông tin 10%.
   - **B. Mở rộng (30%)**: Kinh nghiệm hỗ trợ hệ thống quan trọng 10%, Đội ngũ kỹ thuật & QLDA 5%,
@@ -102,6 +105,31 @@ Mỗi lỗi lưu thành một dòng *phát hiện* (mã, mức độ, giá trị
 - **Chọn NCC** (Duyệt): lưu lý do. Từ báo giá được chọn có thể tạo nhanh **hạng mục Capex** hoặc **khoản Opex**,
   **hợp đồng**, và đưa bảng so sánh + bảng điểm vào **tờ trình Mẫu B** (mục "Đánh giá nhà cung cấp",
   "Tổng hợp chi phí").
+
+### 1.6 Phiếu đánh giá NCC (theo EVALUATION FORM của công ty)
+
+Ba file mẫu (IT Facility / Network / Video Conference) cùng một cấu trúc; hệ thống dựng đúng cấu trúc này:
+
+- Đầu phiếu: *Bộ phận đánh giá* (mặc định ITD, cấu hình), *Ngày*, *Loại hình sản phẩm, dịch vụ* (= tên gói báo giá,
+  vd "Thi công hạ tầng mạng cho dự án Cải tạo văn phòng FL6"), *Kết luận lựa chọn* ("Đề xuất chọn VNT").
+- **A. Khung đánh giá tiêu chuẩn — 70%** (cố định): Chất lượng sản phẩm/dịch vụ 15%, Giá thành 15%, Mức độ uy tín NCC
+  10%, Kinh nghiệm NCC 10%, Dịch vụ trước/sau bán hàng 10%, Tuân thủ các quy định về bảo mật và an toàn thông tin 10%.
+- **B. Khung đánh giá mở rộng — 30%**: **tối thiểu 02, tối đa 04 tiêu chí** do bộ phận ghi theo loại dịch vụ; tổng
+  trọng số B = 30%. Gợi ý sẵn theo khối (lấy từ 3 mẫu, sửa được):
+  - Cabling: *Mức độ hiểu biết về hạ tầng cáp mạng của HSC*, *Linh hoạt xử lý các vấn đề phát sinh do thay đổi thiết
+    kế*, *Đáp ứng yêu cầu tiến độ dự án* (10% mỗi tiêu chí).
+  - Network: *Hiểu biết về mô hình kết nối mạng ở các dự án cải tạo trước đó*, *Hỗ trợ cho mượn thiết bị tương đương để
+    vận hành trước*, *Đáp ứng yêu cầu tiến độ dự án*.
+  - Video Conference: *Có kinh nghiệm tư vấn và triển khai các giải pháp VC*, *Hỗ trợ cho mượn thiết bị*, *Đáp ứng yêu
+    cầu tiến độ dự án*.
+- Điểm 1–10 cho từng NCC; **Total = Σ tỷ trọng × điểm**; **Loại đánh giá**: ≥ 8 → A, ≥ 7 → B, ≥ 6 → C, < 6 → không đạt
+  (đúng công thức `IFS` trong mẫu).
+- Ràng buộc kiểm tra khi lưu: tổng tỷ trọng = 100% (A = 70%, B = 30%), B có 2–4 tiêu chí, điểm nguyên / thập phân 1–10,
+  đủ điểm cho mọi NCC trước khi chốt.
+- **Gợi ý điểm Giá thành** từ báo giá: NCC rẻ nhất 10, các NCC khác giảm theo % cao hơn (người chấm được sửa).
+- **Xuất Excel đúng bố cục EVALUATION FORM** (giữ công thức Total và Loại đánh giá) để ký: *Người thực hiện đánh giá* /
+  *Trưởng Bộ phận phê duyệt*; và đưa bảng điểm vào tờ trình Mẫu B.
+- Tên NCC có **tên gọi khác** (alias): "Thakral One" trong file chi phí = "THRAKONE" trong phiếu đánh giá.
 
 ---
 
@@ -119,14 +147,13 @@ Mã `CTVP-<năm>-<số>`. Gồm:
 
 ### 2.2 Bốn khối chi phí
 
+**Đã chốt 3 khối** (đúng file hiện tại):
+
 | Khối | Nhóm chi phí chuẩn (khởi tạo từ file FL6, sửa được) | Chỉ số chuẩn hoá |
 |---|---|---|
-| **Thi công hạ tầng cáp** | Vật tư cáp đồng, cáp quang, ống PVC & phụ kiện, nhân công lắp đặt, di dời máy tính, quản lý dự án, phát sinh | đ / node, đ / NS |
-| **Phòng Hub** | Rack, sàn nâng, UPS, điều hoà, điện nguồn, access control, camera | đ / phòng hub, đ / node |
-| **Thiết bị mạng** | Access point, switch (L3, L2, gồm license), SFP / module, triển khai & dây nhảy | đ / node, đ / AP |
-| **Video Conference** | Thiết bị VC theo phòng, trình chiếu có dây / không dây, điện UPS cho phòng họp | đ / phòng họp (theo loại) |
-
-File hiện tại gộp *Cáp + Phòng Hub* thành "IT Facility". Báo cáo xuất ra có thể giữ đúng bố cục 3 khối đó (xem 2.6).
+| **Cabling (gồm Hub)** | Cabling materials, cáp quang, PVC conduit & accessories, rack cabinet, access control, camera, raise floor for hub room, UPS, air condition for hub room, install fee, điện nguồn UPS cho VC & tivi phòng họp, dịch vụ di dời máy tính, project management, phát sinh | đ / node, đ / NS |
+| **Network** | Access point, switch (L3 + L2 + license), SFP / module, chi phí triển khai thiết bị & vật tư dây nhảy | đ / node, đ / AP |
+| **Video Conference** | Theo từng phòng họp (VC / chỉ trình chiếu có dây – không dây) | đ / phòng họp (theo loại) |
 
 Mỗi khối có một **gói báo giá** (Module A) với 3 NCC. Dòng báo giá được **ghép vào nhóm chi phí chuẩn** theo từ khoá /
 danh sách tên gọi khác (ví dụ "CABLING MATERIALS", "Cáp mạng Cat6", "CommScope" → *Vật tư cáp đồng*), người dùng xác
@@ -243,9 +270,9 @@ tiêu chí, nhập lịch sử, xoá.
 
 | GĐ | Phạm vi |
 |---|---|
-| **V1** | Hồ sơ NCC; gói báo giá; upload 3 báo giá; đọc **Excel / Word**; sửa dòng + "Đã kiểm tra"; **kiểm tra công thức**; ghép dòng + ma trận + tổng; chấm điểm theo tiêu chí Mẫu B; chọn NCC; xuất Excel so sánh |
-| **V2** | Cải tạo văn phòng: dự án, 4 khối, nhóm chi phí chuẩn, quy mô / cấu hình; **nhập lịch sử từ file Summarize**; so sánh lịch sử theo nhóm + chỉ số + cảnh báo; xuất Excel đúng bố cục Summarize (có công thức) + PDF |
-| **V3** | AI đọc PDF / scan; AI tóm tắt khác biệt nội dung; đơn giá theo mặt hàng qua các năm; đưa dữ liệu vào tờ trình Mẫu B; tạo nhanh Capex / hợp đồng từ báo giá chọn |
+| **V1** | Hồ sơ NCC (+ tên gọi khác); gói báo giá; upload 3 báo giá; đọc **Excel / Word** và **PDF scan bằng AI** (Claude đọc PDF, theo công tắc admin); sửa dòng + "Đã kiểm tra"; **kiểm tra công thức**; ghép dòng + ma trận + tổng; **phiếu đánh giá NCC theo EVALUATION FORM** + xuất Excel đúng mẫu; chọn NCC; xuất Excel so sánh |
+| **V2** | Cải tạo văn phòng: dự án, **3 khối**, nhóm chi phí chuẩn, quy mô / cấu hình; **nhập lịch sử 5 tầng (FL3, FL11, FL12, FL6, FL7) từ file Summarize**; so sánh lịch sử theo **thực chi**, theo nhóm + chỉ số + cảnh báo; xuất Excel đúng bố cục Summarize (có công thức) + PDF |
+| **V3** | AI tóm tắt khác biệt nội dung / cấu hình giữa 3 báo giá; đơn giá theo mặt hàng qua các năm; đưa so sánh + phiếu đánh giá vào tờ trình Mẫu B; tạo nhanh Capex / hợp đồng từ báo giá chọn |
 
 Test bắt buộc (ví dụ): đọc lại đúng file FL6 → phát hiện #1 (lệch 98.356.266 = 39.760.848 + 58.596.418);
 chi phí / node FL6 Network = 15.225.897, FL12 = 11.801.788, FL3 = 10.138.000; dòng SL × đơn giá sai 1 chữ số bị bắt;
