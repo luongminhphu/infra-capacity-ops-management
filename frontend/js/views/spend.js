@@ -26,9 +26,11 @@ function spOpenLink(link) {
   if (/^CTVP-/.test(v) && typeof rnOpen === 'function') return rnOpen(v);
   return spOpenDetail(v);
 }
+const SP_ROUTE_RE = /^#\/(spend-|budget|procure|contracts|docs)/;
+if (!SP_ROUTE_RE.test(location.hash || '')) spPendingLink = null;
 window.addEventListener('hashchange', () => {
-  const m = SP_LINK_RE.exec(location.hash || '');
-  if (!m) return;
+  const m = SP_ROUTE_RE.test(location.hash || '') ? SP_LINK_RE.exec(location.hash || '') : null;
+  if (!m) { spPendingLink = null; return; }
   const link = { kind: m[1], value: m[2] };
   // Same page already shown: open now; otherwise after the page renders (renderSpendView).
   if (spState.meta && appState.view === 'spend' && !spState.rendering) spOpenLink(link);

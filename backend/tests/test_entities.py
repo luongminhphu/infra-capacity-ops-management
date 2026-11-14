@@ -15,6 +15,8 @@ VMS = [{"vm": "sql-prod-01", "cluster": "PRD", "host": "esx01.corp.local", "vcpu
 @pytest.fixture(autouse=True)
 def _data(app_, monkeypatch):
     from app import data_access
+    from app.routers import entities
+    entities._cache.clear()
     monkeypatch.setattr(data_access, "get_latest_combined", lambda db, keys=None, include_import=True: (HOSTS, VMS, []))
 
 
@@ -57,3 +59,23 @@ def test_vm_card_os_and_findings(app_):
     off = viewer.get("/api/entities/vm?name=old-app").json()
     assert any(f["typeLabel"] for f in off["findings"])                     # powered off for 120 days → finding
     assert viewer.get("/api/entities/vm?name=missing").status_code == 404
+
+
+def test_license_off_hides_os_and_esxi(app_, admin):
+    viewer = _login(app_, "viewer1")
+    admin.put("/api/settings/features", json={"features": {"license": False}})
+    try:
+        assert viewer.get("/api/entities/vm?name=sql-prod-01").json()["os"] is None
+        assert "esxiVersion" not in viewer.get("/api/entities/host?name=esx01.corp.local").json()["hardware"]
+    finally:
+        admin.put("/api/settings/features", json={"features": {"license": True}})
+
+
+def test_devices_like_is_escaped(app_, editor):
+    editor.post("/api/spend/opex", json=_opex(assets=[{"serial": "SN-X", "hostName": "esxA1.corp.local"}]))
+    from app.routers.entities import _devices_for_host
+    from app.database import SessionLocal
+    db = SessionLocal()
+    assert _devices_for_host(db, "esx_1") == [] and _devices_for_host(db, "esx%") == []
+    assert [d["serial"] for d in _devices_for_host(db, "esxa1")] == ["SN-X"]
+    db.close()

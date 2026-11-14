@@ -4,6 +4,8 @@ One object, one page: a host or a VM gathers what every module knows about it
 (capacity, hardware / ESXi, guest OS, backup, compliance, Opex warranty devices).
 Every part is filtered by the caller's features and roles; reads only."""
 import math
+import threading
+import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,6 +22,27 @@ from ..spend.roles import has_role
 
 router = APIRouter(prefix="/api", tags=["entities"])
 PER_TYPE = 8
+CACHE_SECONDS = 30
+_cache: Dict[str, Any] = {}
+_lock = threading.Lock()
+
+
+def _cached(name: str, ttl: float, fn):
+    """Small process cache: the latest snapshot and the backup report are read once per `ttl`
+    seconds whatever the number of searches / entity pages (one per keystroke)."""
+    now = time.monotonic()
+    with _lock:
+        hit = _cache.get(name)
+        if hit and now - hit[0] < ttl:
+            return hit[1]
+    val = fn()
+    with _lock:
+        _cache[name] = (time.monotonic(), val)
+    return val
+
+
+def _latest(db: Session):
+    return _cached("latest", CACHE_SECONDS, lambda: data_access.get_latest_combined(db, None)[:2])
 
 
 def _num(v):
@@ -45,7 +68,7 @@ def search(q: str = Query(min_length=2, max_length=80), user: User = Depends(get
         raise HTTPException(400, "Nhập ít nhất 2 ký tự.")
     features = get_features(db)
     out: List[Dict[str, Any]] = []
-    hosts, vms, _ = data_access.get_latest_combined(db, None)
+    hosts, vms = _latest(db)
     for h in hosts:
         if t in (h.get("host") or "").lower():
             out.append({"type": "host", "label": h["host"], "sub": f"Host · cluster {h.get('cluster') or '—'} · {h.get('vcenterKey') or 'import'}",
@@ -130,7 +153,8 @@ def _devices_for_host(db: Session, host: str) -> List[Dict[str, Any]]:
     from ..spend.models import OpexAsset, OpexItem
     short = host.split(".")[0].lower()
     rows = (db.query(OpexAsset, OpexItem).join(OpexItem, OpexItem.id == OpexAsset.opex_id)
-            .filter(or_(func.lower(OpexAsset.host_name) == host.lower(), func.lower(OpexAsset.host_name).like(short + ".%"),
+            .filter(or_(func.lower(OpexAsset.host_name) == host.lower(),
+                        func.lower(OpexAsset.host_name).startswith(short + ".", autoescape=True),
                         func.lower(OpexAsset.host_name) == short))
             .order_by(OpexItem.end_date.desc()).limit(50).all())
     return [{"code": o.code, "title": o.title, "serial": a.serial, "endDate": o.end_date.isoformat(), "status": o.status,
@@ -140,7 +164,7 @@ def _devices_for_host(db: Session, host: str) -> List[Dict[str, Any]]:
 @router.get("/entities/host")
 def host_card(name: str = Query(min_length=1, max_length=255), vcenter: str = Query(default="", max_length=64),
               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    hosts, vms, _ = data_access.get_latest_combined(db, None)
+    hosts, vms = _latest(db)
     h = _find(hosts, "host", name, vcenter)
     if not h:
         raise HTTPException(404, f"Không có host “{name}” trong dữ liệu mới nhất.")
@@ -148,13 +172,13 @@ def host_card(name: str = Query(min_length=1, max_length=255), vcenter: str = Qu
     row = next((r for r in capacity.build_host_rows([h], vms, policy)), {})
     cluster = next((c for c in capacity.build_cluster_rows([x for x in hosts if x.get("cluster") == h.get("cluster")],
                                                            [v for v in vms if v.get("cluster") == h.get("cluster")], policy)), None)
+    features = get_features(db)
     on_host = sorted((v for v in vms if v.get("host") == h["host"] and (v.get("vcenterKey") or "") == (h.get("vcenterKey") or "")),
                      key=lambda v: (not v.get("isPoweredOn"), v.get("vm") or ""))
-    features = get_features(db)
     out = {
         "type": "host", "name": h["host"], "vcenterKey": h.get("vcenterKey") or "", "cluster": h.get("cluster"),
-        "hardware": {k: h.get(k) for k in ("vendor", "model", "cpuModel", "cpuSockets", "cores", "cpuThreads", "ramGB",
-                                           "esxiVersion", "esxiBuild", "status")},
+        "hardware": {k: h.get(k) for k in ("vendor", "model", "cpuModel", "cpuSockets", "cores", "cpuThreads", "ramGB", "status",
+                                           *(("esxiVersion", "esxiBuild") if features.get("license") is not False else ()))},
         "capacity": {"vcpuUsed": row.get("vcpuUsed"), "ramUsedGB": row.get("ramUsedGB"), "cpuPct": _num(row.get("cpuPct")),
                      "ramPct": _num(row.get("ramPct")), "vmCount": row.get("vmCount"),
                      "overall": _status(row["overall"]) if row.get("overall") else None},
@@ -174,20 +198,22 @@ def vm_card(name: str = Query(min_length=1, max_length=255), vcenter: str = Quer
             user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from ..licensing import os_classify
     from .licensing import _overrides_map
-    hosts, vms, _ = data_access.get_latest_combined(db, None)
+    hosts, vms = _latest(db)
     v = _find(vms, "vm", name, vcenter)
     if not v:
         raise HTTPException(404, f"Không có VM “{name}” trong dữ liệu mới nhất.")
     policy = data_access.get_effective_policy(db, get_settings())
     features = get_features(db)
-    ov = _overrides_map(db).get(os_classify.override_key(v.get("vcenterKey"), v.get("instanceUuid"), v.get("vm")))
-    os_ = os_classify.classify_vm(v, ov)
+    os_ = None
+    if features.get("license") is not False:
+        ov = _overrides_map(db).get(os_classify.override_key(v.get("vcenterKey"), v.get("instanceUuid"), v.get("vm")))
+        os_ = os_classify.classify_vm(v, ov)
     out = {
         "type": "vm", "name": v["vm"], "vcenterKey": v.get("vcenterKey") or "", "cluster": v.get("cluster"), "host": v.get("host"),
         "config": {k: v.get(k) for k in ("powerState", "isPoweredOn", "vcpu", "ramGB", "diskProvGB", "diskUsedGB", "datastore",
                                          "ipAddress", "guestHostname", "toolsStatus", "lastActivityDays", "powerOffDays")},
         "os": {"category": os_.get("category"), "label": os_.get("categoryLabel"), "version": os_.get("osVersion"),
-               "edition": os_.get("osEdition"), "source": os_.get("source"), "overridden": bool(os_.get("overridden"))},
+               "edition": os_.get("osEdition"), "source": os_.get("source"), "overridden": bool(os_.get("overridden"))} if os_ else None,
         "findings": _findings_for(hosts, vms, policy, v["vm"]),
         "backup": _backup_for_vm(db, v) if features.get("backup") is not False else None,
     }
@@ -199,7 +225,7 @@ def _backup_for_vm(db: Session, v: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
     from ..backup.client import client_key
     from .backup import build_summary
-    rep = build_summary(db, "all", 7)
+    rep = _cached("backup", 60, lambda: build_summary(db, "all", 7))
     keys = {k for k in (client_key(v.get("vm")), client_key(v.get("guestHostname")), v.get("ipAddress")) if k}
     client = next((c for c in rep.get("clients") or [] if c.get("key") in keys), None)
     cov = rep.get("coverage") or {}
