@@ -573,9 +573,9 @@ function bkConfig() {
   }).join('') : '<div class="empty-note">Đang tải…</div>';
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Máy chủ backup</div><p class="panel-sub">Cấu hình qua biến môi trường <code>NETBACKUP_i_*</code> (tối đa 4 primary server). Tự động đồng bộ cùng chu kỳ vCenter (POLL_INTERVAL_MINUTES).</p></div></div>
+      <div class="panel-head"><div><div class="panel-title">Máy chủ backup</div><p class="panel-sub">Thêm / sửa máy chủ, thông tin đăng nhập và API key ở <a href="#/settings" data-nav-link="settings">Cài đặt → Kết nối nguồn dữ liệu</a> (cấu hình bằng biến <code>NETBACKUP_i_*</code> vẫn được hỗ trợ). Tự động đồng bộ cùng chu kỳ vCenter.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Server</th><th>Địa chỉ</th><th>Xác thực</th><th>API</th><th>Đồng bộ gần nhất</th><th>Trạng thái</th><th></th></tr></thead>
-      <tbody>${servers || '<tr><td colspan="7" class="empty-note">Chưa cấu hình NetBackup. Thêm khối NETBACKUP_1_* vào .env / ConfigMap (đặt NETBACKUP_1_DEMO=true để chạy thử).</td></tr>'}</tbody></table></div>
+      <tbody>${servers || '<tr><td colspan="7" class="empty-note">Chưa có máy chủ backup. Thêm ở Cài đặt → Kết nối nguồn dữ liệu (bật DEMO để chạy thử).</td></tr>'}</tbody></table></div>
       <div class="insight-box"><strong>Tài khoản chỉ đọc:</strong> tạo user dịch vụ trên NetBackup (ví dụ <code>svc_nbu_ro</code>), gán RBAC role tuỳ chỉnh chỉ có quyền <b>View</b> cho Jobs, Policies (NetBackup policies), Storage (disk pools / storage units) — không cấp quyền thao tác. Ưu tiên cấp <b>API key</b> cho user này (NetBackup 9.x trở lên) và khai báo ở <code>NETBACKUP_i_API_KEY</code>; app chỉ gọi các API GET. Chi tiết trong README.</div>
     </section>
     <section class="table-card">
@@ -596,7 +596,7 @@ function renderBackupBody() {
   const s = st.summary;
   if (!s) { body.innerHTML = '<div class="empty-note">Đang tải dữ liệu backup…</div>'; return; }
   if (!(st.servers || []).length) {
-    body.innerHTML = `<section class="table-card"><div class="empty-state">Chưa cấu hình NetBackup. Khai báo <code>NETBACKUP_1_HOST</code> + <code>NETBACKUP_1_API_KEY</code> (hoặc <code>NETBACKUP_1_DEMO=true</code>) rồi khởi động lại ứng dụng — xem trang <a href="#/bk-config" data-nav-link="bk-config">Nguồn &amp; ngưỡng</a>.</div></section>`;
+    body.innerHTML = `<section class="table-card"><div class="empty-state">Chưa có máy chủ backup. Thêm máy chủ ở <a href="#/settings" data-nav-link="settings">Cài đặt → Kết nối nguồn dữ liệu</a> (bật DEMO để chạy thử).</div></section>`;
     return;
   }
   const html = { overview: bkOverview, clients: bkClients, coverage: bkCoverage, storage: bkStorage, schedule: bkSchedule }[st.sub];

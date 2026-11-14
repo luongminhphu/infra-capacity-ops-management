@@ -448,3 +448,31 @@ class BackupScheduleRule(Base):
     note = Column(Text, nullable=True)
     updated_by = Column(String(64), nullable=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class DataSource(Base):
+    """A vCenter or NetBackup server added in Settings → Nguồn dữ liệu. Passwords / API keys
+    are stored encrypted (secrets_box.py) and are never returned by the API."""
+    __tablename__ = "data_sources"
+    __table_args__ = (UniqueConstraint("kind", "key", name="uq_data_source_kind_key"),)
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False, index=True)          # vcenter | netbackup
+    key = Column(String(64), nullable=False)                       # history is stored under this key: never changes
+    name = Column(String(128), nullable=False)
+    host = Column(String(255), nullable=False)
+    port = Column(Integer, nullable=False)
+    username = Column(String(255), nullable=True)
+    password_enc = Column(Text, nullable=True)
+    api_key_enc = Column(Text, nullable=True)
+    verify_ssl = Column(Boolean, nullable=False, default=False)
+    ca_pem = Column(Text, nullable=True)                           # CA chain, public data
+    demo = Column(Boolean, nullable=False, default=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    options = Column(Text, nullable=True)                          # JSON: NetBackup api_version, domain_type, ...
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_by = Column(String(255), nullable=True)
+    last_test_at = Column(DateTime, nullable=True)
+    last_test_ok = Column(Boolean, nullable=True)
+    last_test_message = Column(Text, nullable=True)

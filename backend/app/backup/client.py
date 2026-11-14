@@ -56,6 +56,14 @@ def nbu_ssl_context(cfg: NetBackupConfig) -> ssl.SSLContext:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
+    pem = (getattr(cfg, "ca_pem", "") or "").strip()
+    if pem:
+        try:
+            ctx = ssl.create_default_context(cadata=pem)
+        except ssl.SSLError as exc:
+            raise NetBackupError(f"Chứng chỉ CA NetBackup không hợp lệ: {exc}") from exc
+        ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+        return ctx
     cafile = (cfg.ca_cert or "").strip() or None
     if cafile and not os.path.isfile(cafile):
         raise NetBackupError(f"Không tìm thấy file CA NetBackup: {cafile} (NETBACKUP_i_CA_CERT).")

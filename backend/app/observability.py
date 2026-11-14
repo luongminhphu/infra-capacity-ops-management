@@ -70,6 +70,14 @@ def _secrets() -> List[str]:
     return _secret_values
 
 
+def register_secret(value: Optional[str]) -> None:
+    """Secrets that are not environment variables (e.g. passwords saved in Settings)."""
+    global _secret_values
+    if value and len(value) >= 6 and value not in _secrets():
+        with _lock:
+            _secret_values = sorted(set(_secrets()) | {value}, key=len, reverse=True)
+
+
 def redact(text: Optional[str]) -> str:
     if not text:
         return text or ""

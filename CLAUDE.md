@@ -1,7 +1,8 @@
 # CLAUDE.md — Infra Capacity Ops Management (ICO)
 
 Ứng dụng theo dõi capacity / compliance / what-if cho hạ tầng VMware và giám sát backup
-Veritas NetBackup. Đọc dữ liệu **chỉ đọc** từ tối đa 4 vCenter và 4 NetBackup primary server,
+Veritas NetBackup. Đọc dữ liệu **chỉ đọc** từ các vCenter và NetBackup primary server (khai báo ở
+Cài đặt → Kết nối nguồn dữ liệu, hoặc bằng biến `VCENTER_i_*` / `NETBACKUP_i_*`),
 lưu lịch sử vào PostgreSQL, hiển thị dashboard Điều hành / Kỹ thuật và xuất báo cáo PDF / Excel.
 Chi tiết nghiệp vụ nằm trong `README.md` (viết bằng tiếng Việt).
 
@@ -36,6 +37,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Thu thập vCenter | `backend/app/vcenter/client.py`, `vcenter/demo_generator.py` |
 | Thu thập NetBackup | `backend/app/backup/client.py`, `collector.py`, `status_codes.py`, `analysis.py`, `demo_generator.py` |
 | Lịch poll | `backend/app/collectors/scheduler.py` (thread pool, mỗi nguồn 1 DB session) |
+| Danh sách nguồn | `backend/app/sources.py` (biến môi trường + bảng `data_sources`, `Settings.vcenters()` / `netbackups()`), `secrets_box.py` (mã hoá), `routers/sources.py` |
 | Mô hình capacity + compliance | `backend/app/capacity.py` ⇄ `frontend/js/core.js` (**phải giữ khớp số liệu**) |
 | Quy hoạch / sizing / license | `planning.py`, `sizing.py`, `sizing_advisory.py`, `licensing/` |
 | Báo cáo PDF | `report_pdf.py` (helper dùng chung) + `report_*.py` |
@@ -72,6 +74,9 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
      (`esc()` trong Python, hàm escape sẵn có trong JS). Không để dữ liệu ngoài tạo ra URL mà
      WeasyPrint sẽ tải (`<img src>`, `url()`): logo chỉ dùng `data:` URL đã kiểm tra.
    - Không log hoặc trả về mật khẩu, API key, token. `MCP_MASK_HOSTS` mặc định che tên host.
+     Mật khẩu / API key lưu trong DB phải qua `secrets_box.encrypt()`; API chỉ trả `hasPassword` /
+     `hasApiKey`. Lấy danh sách nguồn bằng `get_settings().vcenters()` / `.netbackups()` (đã gộp và
+     giải mã), không đọc thẳng biến `VCENTER_i_*`.
    - Không commit `.env`, `k8s/02-secret.yaml`, chứng chỉ thật.
 8. **Hiệu năng**: đọc vCenter theo lô bằng PropertyCollector; ghi snapshot bằng bulk INSERT;
    tránh truy vấn lịch sử theo từng VM trong vòng lặp (N+1).

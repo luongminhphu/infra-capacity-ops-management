@@ -26,12 +26,14 @@ class VCenterConnectionError(RuntimeError):
     pass
 
 
-def _connect(cfg: VCenterConfig):
+def _connect(cfg: VCenterConfig, timeout: Optional[int] = None):
     context = None
     if not cfg.verify_ssl:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
+    elif getattr(cfg, "ca_pem", ""):
+        context = ssl.create_default_context(cadata=cfg.ca_pem)
     try:
         si = SmartConnect(
             host=cfg.host,
@@ -39,6 +41,7 @@ def _connect(cfg: VCenterConfig):
             user=cfg.username,
             pwd=cfg.password,
             sslContext=context,
+            httpConnectionTimeout=timeout,
         )
     except Exception as exc:  # noqa: BLE001 - surface a friendly, actionable error
         raise VCenterConnectionError(
@@ -238,6 +241,18 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
                            cfg.key, type(exc).__name__)
             fetched = [_retrieve_lazy(content, t, p) for t, p in specs]
         return build_rows(*fetched)
+    finally:
+        try:
+            Disconnect(si)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def test_connection(cfg: VCenterConfig, timeout: int = 20) -> str:
+    """Log in, read the product name, log out. Returns e.g. "VMware vCenter Server 8.0.2 build-22617221"."""
+    si = _connect(cfg, timeout=timeout)
+    try:
+        return si.content.about.fullName
     finally:
         try:
             Disconnect(si)

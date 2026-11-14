@@ -913,6 +913,55 @@
             <p class="logo-upload-status" id="loginLogoStatus"></p>
           </section>
 
+          <section class="panel hidden" id="sourcesPanel">
+            <div class="panel-head">
+              <div><div class="panel-title">Kết nối nguồn dữ liệu <span class="badge-admin">Admin</span></div>
+              <p class="panel-sub">Thêm vCenter và máy chủ backup NetBackup ngay trên giao diện: địa chỉ, tài khoản chỉ đọc, mật khẩu / API key (lưu mã hoá, không hiển thị lại). Thay đổi có hiệu lực ở lần đồng bộ kế tiếp, không cần khởi động lại.</p></div>
+              <div class="panel-toolbar">
+                <button class="btn btn-secondary btn-sm hidden" type="button" id="btnSrcImportEnv">Chuyển cấu hình biến môi trường vào giao diện</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-src-add="netbackup"><i data-lucide="plus"></i>Máy chủ backup</button>
+                <button class="btn btn-primary btn-sm" type="button" data-src-add="vcenter"><i data-lucide="plus"></i>vCenter</button>
+              </div>
+            </div>
+            <div class="insight-box src-warning hidden" id="srcKeyWarning"><strong>Chưa đặt SECRETS_KEY.</strong> Mật khẩu / API key đang được mã hoá bằng khoá suy ra từ JWT_SECRET. Thêm <code>SECRETS_KEY</code> (vd <code>openssl rand -hex 32</code>) vào Secret <code>ico-secrets</code> rồi nhập lại mật khẩu; nếu đổi JWT_SECRET khi chưa có SECRETS_KEY, các mật khẩu đã lưu phải nhập lại.</div>
+            <div class="table-scroll table-scroll-flat">
+              <table class="data-table" id="srcTable">
+                <thead><tr><th>Nguồn</th><th>Địa chỉ</th><th>Xác thực</th><th>Cấu hình từ</th><th>Kiểm tra gần nhất</th><th>Bật</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="criteria-status" id="srcStatus"></p>
+          </section>
+
+          <dialog class="src-dialog" id="srcDialog" aria-labelledby="srcDialogTitle">
+            <form method="dialog" id="srcForm" novalidate>
+              <div class="src-dialog-head"><div class="panel-title" id="srcDialogTitle">Thêm vCenter</div>
+                <button class="btn btn-ghost btn-sm" type="button" data-src-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
+              <div class="src-grid">
+                <div class="field"><label for="srcName">Tên hiển thị</label><input id="srcName" required maxlength="128" placeholder="vCenter HCM DC1"></div>
+                <div class="field"><label for="srcKey">Mã nguồn (không đổi được)</label><input id="srcKey" required maxlength="41" placeholder="vc-hcm-01" pattern="[a-z0-9][a-z0-9-]+"></div>
+                <div class="field"><label for="srcHost">Máy chủ (FQDN hoặc IP)</label><input id="srcHost" placeholder="vcenter01.corp.local" autocomplete="off"></div>
+                <div class="field"><label for="srcPort">Cổng</label><input id="srcPort" type="number" min="1" max="65535"></div>
+                <div class="field"><label for="srcUser">Tài khoản chỉ đọc</label><input id="srcUser" autocomplete="off" placeholder="infra.mon@vsphere.local"></div>
+                <div class="field"><label for="srcPassword">Mật khẩu</label><input id="srcPassword" type="password" autocomplete="new-password"></div>
+                <div class="field src-nbu"><label for="srcApiKey">API key (thay cho user / mật khẩu)</label><input id="srcApiKey" type="password" autocomplete="off"></div>
+                <div class="field src-nbu"><label for="srcApiVersion">API version</label><input id="srcApiVersion" placeholder="8.0 (NBU 10.0) · 12.0 (NBU 10.4)"></div>
+                <div class="field src-nbu"><label for="srcDomainType">Domain type</label><select id="srcDomainType"></select></div>
+                <div class="field src-nbu"><label for="srcDomainName">Domain name</label><input id="srcDomainName" placeholder="mặc định = tên máy chủ"></div>
+              </div>
+              <label class="finding-filter-item"><input type="checkbox" id="srcVerify"><span>Kiểm tra chứng chỉ TLS của máy chủ</span></label>
+              <div class="field src-ca hidden"><label for="srcCaPem">Chứng chỉ CA (PEM) — để trống nếu CA đã có trong hệ thống</label><textarea id="srcCaPem" rows="4" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
+              <label class="finding-filter-item"><input type="checkbox" id="srcDemo"><span>Chế độ DEMO (dữ liệu giả lập, không kết nối máy chủ)</span></label>
+              <p class="src-result" id="srcResult" role="status"></p>
+              <div class="src-dialog-actions">
+                <button class="btn btn-secondary btn-sm" type="button" id="btnSrcTest">Kiểm tra kết nối</button>
+                <span class="src-spacer"></span>
+                <button class="btn btn-ghost btn-sm" type="button" data-src-close>Huỷ</button>
+                <button class="btn btn-primary btn-sm" type="submit" id="btnSrcSave">Lưu</button>
+              </div>
+            </form>
+          </dialog>
+
           <section class="panel hidden" id="mcpPanel">
             <div class="panel-head">
               <div><div class="panel-title">AI / MCP server <span class="badge-admin">Admin</span></div>
@@ -959,6 +1008,7 @@
 <script src="js/views/backup.js?v=__ASSET_V__"></script>
 <script src="js/views/reports.js?v=__ASSET_V__"></script>
 <script src="js/views/admin.js?v=__ASSET_V__"></script>
+<script src="js/views/sources.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>
