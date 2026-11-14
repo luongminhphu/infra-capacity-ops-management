@@ -1,6 +1,6 @@
 # Thiết kế module "Chi phí & Hợp đồng IT" (`spend`)
 
-Trạng thái: **ĐỀ XUẤT — chờ duyệt**. Ngày 14/11/2026.
+Trạng thái: **ĐÃ DUYỆT** 14/11/2026 (câu 1–4, 6 theo đề xuất; câu 5 đổi: mẫu tờ trình tải lên tự do, xem §1.8).
 
 Tài liệu này theo quy trình 6 bước (ngữ cảnh → dữ liệu → lỗi → phân quyền → idempotence/đồng thời →
 quan sát) và kỷ luật mô hình dữ liệu (bất biến nằm trong schema). Code, tên bảng/cột viết tiếng Anh;
@@ -198,8 +198,16 @@ Một nhánh duy nhất được bảo đảm hai lớp:
 
 ### 1.8 Tờ trình và AI (GĐ5)
 
-- **`proposal_templates`**: id, kind CK ∈ `A, B`, name, file_id FK RESTRICT, placeholders text (danh sách
-  phát hiện được khi upload — dữ liệu suy ra, lưu cache để hiển thị), active, uploaded_by/at.
+- **`proposal_templates`**: id, kind CK ∈ `A, B`, name, description, file_id FK RESTRICT, outline_json text
+  (cấu trúc trích từ .docx khi upload: danh sách tiêu đề / đoạn / bảng theo thứ tự, kèm style — dữ liệu suy ra,
+  lưu cache để không phải đọc lại file mỗi lần), active, uploaded_by/at.
+  **Mẫu là file .docx bất kỳ do người dùng tải lên** (Cài đặt → Mẫu tờ trình → Thêm mẫu), không bắt buộc
+  placeholder. Khi soạn: AI nhận *outline* của mẫu + dữ liệu Opex/Capex, trả JSON nội dung cho từng phần
+  (theo chỉ số phần trong outline); hệ thống ghi nội dung vào **bản sao của chính file mẫu**, giữ nguyên
+  style, header/footer, logo. Mẫu A: phần thân ngắn (executive summary), chi tiết đưa vào phụ lục cuối file;
+  Mẫu B: chi tiết, so sánh phương án, NCC, chi phí. Nếu mẫu có placeholder `{{...}}` thì vẫn được thay đúng
+  chỗ (tuỳ chọn, không bắt buộc). Chế độ "Không dùng AI": điền các placeholder nếu có và chèn bảng dữ liệu
+  (mã, dịch vụ, NCC, thời hạn, số tiền) vào cuối văn bản để người soạn tự viết phần lời.
 - **`proposal_recipients`**: id, kind A/B, title (chức danh) NN, person_name NULL, sort_order, active.
 - **`proposals`**: id, code `TT-<năm>-<số>` UQ, kind, template_id FK RESTRICT, title, status CK ∈
   `draft, submitted, approved, rejected`, capex_project_id FK RESTRICT NULL, file_id FK NULL (bản .docx sinh ra),
@@ -448,7 +456,7 @@ quá hạn = VƯỢT NGƯỠNG (map theo cấu hình mốc).
 | **2. Capex + mapping** | Capex/hạng mục, xem trước + sinh Opex dự kiến, reconcile, xác nhận hàng loạt, trang Capex | Bảng §2.2 (1/3/5 năm, 29/02, biên NTC start_month=4), làm tròn tiền, sửa Capex không đè khoản đã xác nhận, xoá hạng mục |
 | **3. Báo cáo** | hàm `build_budget_report(filters)` dùng chung; dashboard; PDF (helper `report_pdf.py`); Excel (openpyxl); bộ lọc lưu được; Trung tâm báo cáo | Cùng bộ dữ liệu → tổng web = tổng Excel = tổng PDF; so sánh năm nay/năm sau; nhóm theo quý hết hạn; top NCC |
 | **4. Hợp đồng & version** | contracts/versions, upload với baseVersion, trích text, diff + tô màu theo bên, timeline, Final/Ký, job xoá file + huỷ, nhật ký xoá | 409 khi upload trên bản cũ; CK gắn đúng một Opex/Capex; chuyển trạng thái sai → 409; purge chỉ xoá version không phải Final, giữ metadata, tôn trọng huỷ; diff đánh dấu đúng version/bên |
-| **5. AI tờ trình** | mẫu A/B, người nhận, provider (none/anthropic/azure_openai), sinh .docx, lưu tờ trình, gắn hợp đồng | Chế độ none điền đủ placeholder; provider giả lập trả JSON hỏng → fallback; `allow_external=false` → không có request ra ngoài; key không bị trả về |
+| **5. AI tờ trình** | upload mẫu A/B (.docx tự do, trích outline), người nhận, provider (none/anthropic/azure_openai), sinh .docx, lưu tờ trình, gắn hợp đồng | Chế độ none điền đủ placeholder; provider giả lập trả JSON hỏng → fallback; `allow_external=false` → không có request ra ngoài; key không bị trả về |
 
 Mỗi GĐ cũng cập nhật `README.md` (mục mới) và `CLAUDE.md` (bản đồ code).
 
@@ -463,8 +471,7 @@ Mỗi GĐ cũng cập nhật `README.md` (mục mới) và `CLAUDE.md` (bản đ
    *Đề xuất: có.*
 4. **Xoá version cũ**: xoá cả văn bản trích xuất (`text_content`), chỉ giữ hash + metadata → sau khi xoá
    không so sánh được với version cũ nữa? *Đề xuất: có — nếu giữ text thì thực chất chưa xoá nội dung.*
-5. **Mẫu tờ trình**: dùng quy ước placeholder trong .docx — `{{ma_opex}}`, `{{tong_tien}}`, bảng
-   `{{#bang_chi_tiet}}…{{/bang_chi_tiet}}`, và vùng AI `{{ai:tom_tat}}`, `{{ai:so_sanh_phuong_an}}`…
-   (có hướng dẫn và nút kiểm tra mẫu)? *Đề xuất: có — chắc chắn hơn để AI tự đoán cấu trúc từ tiêu đề.*
+5. **Mẫu tờ trình**: ~~placeholder bắt buộc~~ → **đã quyết**: chức năng upload mẫu .docx tự do; AI đọc cấu
+   trúc mẫu và điền nội dung theo đó (§1.8).
 6. **Hình thức nhắc**: mỗi kênh nhận **một tin tổng hợp/ngày** liệt kê các khoản tới mốc (log vẫn theo
    từng khoản–mốc), thay vì mỗi khoản một tin? *Đề xuất: tổng hợp.*
