@@ -6,7 +6,7 @@
    ========================================================= */
 
 const spState = {
-  meta: null, list: null, counts: null, loading: false, error: null, bound: false,
+  sub: 'opex', meta: null, list: null, counts: null, loading: false, error: null, bound: false,
   filter: { fy: '', status: 'open', category: '', vendor: '', costCenter: '', q: '', page: 1 },
   hosts: null, current: null, settings: {},
 };
@@ -74,6 +74,7 @@ async function renderSpendView() {
     mount.innerHTML = `<div class="panel empty-note">${esc(err.message)}</div>`;
     return;
   }
+  if (spState.sub === 'capex' && typeof renderCapexPage === 'function') { await renderCapexPage(); return; }
   await spLoadList();
   spRenderPage();
   spBindPage();
@@ -233,7 +234,7 @@ async function spOpenDetail(code) {
       ${dl('Mã hợp đồng / PO', `${esc(it.contractRef || '—')} / ${esc(it.poRef || '—')}`)}
       ${dl('Cost center', esc(it.costCenterName || '—'))}
       ${dl('Người phụ trách', `${esc(it.ownerName)}${it.ownerEmail ? `<span class="muted-sub">${esc(it.ownerEmail)}</span>` : ''}`)}
-      ${dl('Nguồn gốc', `${esc(it.originLabel)}${it.renewedFromCode ? ` từ ${link(it.renewedFromCode)}` : ''}`)}
+      ${dl('Nguồn gốc', `${esc(it.originLabel)}${it.renewedFromCode ? ` từ ${link(it.renewedFromCode)}` : ''}${it.capexProjectCode ? ` — dự án <button class="btn btn-ghost btn-sm sp-link" type="button" data-cpx-goto="${esc(it.capexProjectCode)}">${esc(it.capexProjectCode)}</button>` : ''}${it.managedByCapex ? '<span class="muted-sub">Tự cập nhật theo Capex cho tới khi được xác nhận hoặc sửa tay</span>' : ''}`)}
       ${it.renewedToCode ? dl('Đã gia hạn sang', link(it.renewedToCode)) : ''}
       ${it.stopReason ? dl('Lý do ngừng', esc(it.stopReason)) : ''}
       ${it.confirmedBy ? dl('Xác nhận', `${esc(it.confirmedBy)} · ${esc(spTime(it.confirmedAt))}`) : ''}
@@ -258,6 +259,8 @@ async function spOpenDetail(code) {
   body$.onclick = async (e) => {
     const go = e.target.closest('[data-sp-goto]');
     if (go) return spOpenDetail(go.dataset.spGoto);
+    const cpx = e.target.closest('[data-cpx-goto]');
+    if (cpx && typeof cpxOpenDetail === 'function') return cpxOpenDetail(cpx.dataset.cpxGoto);
     const del = e.target.closest('[data-sp-detach]');
     if (del && confirm('Xoá file đính kèm này?')) {
       try { await apiRequest(`/spend/opex/${encodeURIComponent(it.code)}/attachments/${encodeURIComponent(del.dataset.spDetach)}`, { method: 'DELETE' }); spOpenDetail(it.code); }

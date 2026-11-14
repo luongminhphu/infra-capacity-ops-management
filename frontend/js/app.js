@@ -69,6 +69,8 @@ const NAV_GROUPS = [
   { label: 'Chi phí & Hợp đồng', items: [
     { id: 'spend-opex', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'opex', icon: 'wallet', label: 'Opex', title: 'Chi phí vận hành (Opex)',
       desc: 'Bảo hành, license, bảo trì, dịch vụ thuê ngoài theo năm tài chính; hạn hết hiệu lực và nhắc gia hạn.', scope: [] },
+    { id: 'spend-capex', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'capex', icon: 'package-plus', label: 'Capex', title: 'Dự án đầu tư (Capex)',
+      desc: 'Dự án mua mới gồm nhiều hạng mục; tự sinh Opex gia hạn bảo hành / license dự kiến cho các năm sau.', scope: [] },
   ] },
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
@@ -143,6 +145,11 @@ function currentNavId() {
     const hit = Object.values(NAV_ITEMS).find(it => it.view === 'licensing' && it.sub === sub);
     return hit ? hit.id : 'lic-hardware';
   }
+  if (appState.view === 'spend') {
+    const sub = (typeof spState !== 'undefined' && spState.sub) || 'opex';
+    const hitS = Object.values(NAV_ITEMS).find(it => it.view === 'spend' && it.sub === sub);
+    return hitS ? hitS.id : 'spend-opex';
+  }
   if (appState.view === 'backup') {
     const sub = (typeof bkState === 'function' ? bkState().sub : 'overview') || 'overview';
     const hitB = Object.values(NAV_ITEMS).find(it => it.view === 'backup' && it.sub === sub);
@@ -186,6 +193,7 @@ function navigateTo(id) {
   appState.perspective = item.view === 'executive' ? 'executive' : 'technical';
   if (item.view === 'licensing' && typeof licState === 'function') licState().sub = item.sub || 'hardware';
   if (item.view === 'backup' && typeof bkState === 'function') bkState().sub = item.sub || 'overview';
+  if (item.view === 'spend' && typeof spState !== 'undefined') spState.sub = item.sub || 'opex';
   closeSidebar();
   syncViewSections();
   renderActiveView();
@@ -206,6 +214,7 @@ function applyInitialRoute() {
   appState.perspective = item.view === 'executive' ? 'executive' : 'technical';
   if (item.view === 'licensing' && typeof licState === 'function') licState().sub = item.sub || 'hardware';
   if (item.view === 'backup' && typeof bkState === 'function') bkState().sub = item.sub || 'overview';
+  if (item.view === 'spend' && typeof spState !== 'undefined') spState.sub = item.sub || 'opex';
   syncViewSections();
 }
 
