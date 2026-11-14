@@ -178,8 +178,11 @@ def planning_result(
     host_rows, vm_rows, _ = data_access.get_latest_combined(db, _scope_keys(vcenter))
     if not host_rows:
         raise HTTPException(status_code=404, detail="Chưa có dữ liệu host để quy hoạch. Hãy đồng bộ hoặc import dữ liệu trước.")
+    import math
     try:
-        growth_list = [float(g) for g in _split_csv(growth) or []] or None
+        growth_list = [float(g) for g in (_split_csv(growth) or [])[:6]] or None
+        if growth_list and any(not math.isfinite(g) or not -50 <= g <= 500 for g in growth_list):
+            raise ValueError("tăng trưởng mỗi quý phải từ -50% đến 500%")
         params = planning.PlanningParams(horizon_months=horizon, growth=growth_list, node_cores=node_cores,
                                          node_ram_gb=node_ram, lead_months=lead, target_pct=target)
     except ValueError as exc:

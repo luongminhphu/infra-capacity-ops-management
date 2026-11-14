@@ -147,3 +147,51 @@ def test_planning_result_on_screen(admin):
     assert prd["nodes"] >= 1 and prd["firstNeedLabel"] and prd["hosts"] == 2
     assert len(d["totals"]) == len(d["scenarios"]) and d["recommendations"]["recommendations"] if isinstance(d["recommendations"], dict) else True
     assert admin.get("/api/reports/planning?lead=99").status_code == 422
+
+
+def test_hardening_inputs_and_retry(app_, admin, editor, monkeypatch):
+    from app.routers import home
+    r = editor.post("/api/inbox/ack", content=b'{"key": "x", "action": "snooze", "days": Infinity}', headers={"Content-Type": "application/json"})
+    assert r.status_code == 400
+    assert admin.get("/api/reports/planning?growth=inf").status_code == 400
+    assert admin.get("/api/reports/planning?growth=5,600").status_code == 400
+    assert editor.put("/api/me/prefs", json={"agendaDays": 7, "inboxFilter": {"level": "<x>", "source": "spend"}, "theme": "x"}).json() == \
+        {"inboxFilter": {"level": "", "source": "spend"}}
+    monkeypatch.setattr(home, "MAX_ACKS", 3)
+    for i in range(5):
+        assert editor.post("/api/inbox/ack", json={"key": f"k{i}", "action": "done"}).status_code == 200
+    db = SessionLocal()
+    assert db.query(InboxAck).filter_by(username="editor1").count() == 3
+    db.close()
+    # A forced refresh right after a computation reuses the cache (no recompute storm).
+    calls = []
+    monkeypatch.setattr(inbox, "PROVIDERS", [("capacity", lambda db: calls.append(1) or [], False)])
+    inbox.invalidate()
+    editor.get("/api/inbox?fresh=true")
+    editor.get("/api/inbox?fresh=true")
+    assert len(calls) == 1
+
+
+def test_ops_alerts_respect_features_and_retry_failed_sends(app_, admin, monkeypatch):
+    monkeypatch.setattr(inbox, "PROVIDERS", [("capacity", inbox.capacity_items, False), ("backup", lambda db: [
+        inbox.item("backup", "bad", "bk|x", "Độ phủ 50%", feature="backup", push=True)], False)])
+    db = SessionLocal()
+    db.query(SpendNotifyChannel).delete()
+    db.add(SpendNotifyChannel(kind="discord", name="ops", enabled=True, ops_alerts=True, created_by="t",
+                              webhook_enc=secrets_box.encrypt("https://discord.com/api/webhooks/123456789012345678/abcDEF_-1")))
+    db.commit()
+    from app.spend.notify import NotifyError
+
+    def boom(url, payload):
+        raise NotifyError("Discord trả mã HTTP 500.")
+    assert ops_alerts.check_and_notify(db, post=boom) == {"new": 2, "resolved": 0, "sent": 0, "failed": 1}
+    posts = []
+    admin.put("/api/settings/features", json={"features": {"backup": False}})
+    r = ops_alerts.check_and_notify(db, post=lambda u, p: posts.append(p))
+    assert r["new"] == 1 and "Độ phủ" not in posts[0]["content"]          # retried capacity; backup is switched off
+    admin.put("/api/settings/features", json={"features": {"backup": True}})
+    long = [{"level": "bad", "title": "x" * 300} for _ in range(20)]
+    assert len(ops_alerts.messages(long, [])) >= 4 and all(len(m) <= 1900 for m in ops_alerts.messages(long, []))
+    db.query(SpendNotifyChannel).delete()
+    db.commit()
+    db.close()

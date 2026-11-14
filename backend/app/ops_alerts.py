@@ -22,14 +22,25 @@ def _channels(db: Session):
                                                SpendNotifyChannel.ops_alerts.is_(True)).all()
 
 
-def message(new: List[Dict[str, Any]], resolved: List[OpsAlertState]) -> str:
+def messages(new: List[Dict[str, Any]], resolved: List[OpsAlertState], limit: int = 1900) -> List[str]:
+    """Discord messages (≤ 2000 characters each); a long list is split, nothing is dropped."""
     from .spend.notify import discord_escape
-    lines = ["**ICO — cảnh báo vận hành (mức 90%)**"]
-    for it in new:
-        lines.append(f"• [{inbox.LEVEL_LABELS[it['level']]}] {discord_escape(it['title'])}")
-    for r in resolved:
-        lines.append(f"• Đã hết: {discord_escape(r.title)}")
-    return "\n".join(lines)[:1900]
+    head = "**ICO — cảnh báo vận hành (mức 90%)**"
+    lines = [f"• [{inbox.LEVEL_LABELS[it['level']]}] {discord_escape(it['title'])}" for it in new] + \
+            [f"• Đã hết: {discord_escape(r.title)}" for r in resolved]
+    out, cur = [], head
+    for ln in lines:
+        if len(cur) + 1 + len(ln) > limit:
+            out.append(cur)
+            cur = head + " (tiếp)"
+        cur += "\n" + ln[:limit - 40]
+    out.append(cur)
+    return out
+
+
+def _today():
+    from .spend.fiscal import today_vn
+    return today_vn()
 
 
 def check_and_notify(db: Session, post=None) -> Dict[str, int]:
@@ -37,8 +48,11 @@ def check_and_notify(db: Session, post=None) -> Dict[str, int]:
     channel for the new ones (and the cleared ones). Returns counters."""
     from .spend.notify import NotifyError, _post_json, validate_discord_url
     post = post or _post_json
-    items, _ = inbox.collect(db, use_cache=False)
-    current = {it["key"]: it for it in items if it.get("push") and it["source"] in ("capacity", "backup")}
+    from .features import get_features
+    items, _ = inbox._compute(db, _today())
+    features = get_features(db)
+    current = {it["key"]: it for it in items if it.get("push") and it["source"] in ("capacity", "backup")
+               and not (it.get("feature") and features.get(it["feature"]) is False)}
     states = {s.key: s for s in db.query(OpsAlertState).all()}
     now = dt.datetime.utcnow()
     new = [it for k, it in current.items() if not (states.get(k) and states[k].active)]
@@ -54,12 +68,13 @@ def check_and_notify(db: Session, post=None) -> Dict[str, int]:
     for s in resolved:
         s.active, s.resolved_at = False, now
     sent = failed = 0
-    if new or resolved:
-        text = message(new, resolved)
-        for ch in _channels(db):
+    channels = _channels(db)
+    if (new or resolved) and channels:
+        for ch in channels:
             try:
                 url = validate_discord_url(secrets_box.decrypt(ch.webhook_enc))
-                post(url, {"content": text, "allowed_mentions": {"parse": []}, "username": "ICO cảnh báo"})
+                for text in messages(new, resolved):
+                    post(url, {"content": text, "allowed_mentions": {"parse": []}, "username": "ICO cảnh báo"})
                 sent += 1
             except (NotifyError, secrets_box.SecretUnreadable, ValueError) as exc:
                 failed += 1
@@ -69,6 +84,10 @@ def check_and_notify(db: Session, post=None) -> Dict[str, int]:
         if sent:
             for s in rows.values():
                 s.last_sent_at = now
+        else:
+            # every channel failed: keep the new alerts un-armed so the next cycle retries them
+            for s in rows.values():
+                s.active = False
     db.commit()
     inbox.invalidate()
     return {"new": len(new), "resolved": len(resolved), "sent": sent, "failed": failed}

@@ -16,7 +16,20 @@ from ..spend.roles import has_role
 
 router = APIRouter(prefix="/api", tags=["home"])
 MAX_PREFS_BYTES = 4096
-PREF_KEYS = {"theme", "inboxFilter", "inboxSources", "agendaDays"}
+MAX_ACKS = 500
+
+
+def _clean_prefs(data: Dict[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    if data.get("theme") in ("dark", "light"):
+        out["theme"] = data["theme"]
+    f = data.get("inboxFilter")
+    if isinstance(f, dict):
+        out["inboxFilter"] = {"level": f.get("level") if f.get("level") in ("", *inbox.LEVELS) else "",
+                              "source": f.get("source") if f.get("source") in ("", *inbox.SOURCE_LABELS) else ""}
+    if data.get("agendaDays") in (30, 60, 120, 180, 365):
+        out["agendaDays"] = data["agendaDays"]
+    return out
 
 
 def _iso(d: Optional[dt.date]) -> Optional[str]:
@@ -77,11 +90,15 @@ def ack_item(data: Dict[str, Any] = Body(...), user: User = Depends(get_current_
     if action == "snooze":
         try:
             days = int(data.get("days") or 7)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             raise HTTPException(400, "Số ngày tạm ẩn không hợp lệ.") from None
         if not 1 <= days <= 90:
             raise HTTPException(400, "Tạm ẩn từ 1 đến 90 ngày.")
         until = today_vn() + dt.timedelta(days=days)
+    if row is None and db.query(InboxAck).filter_by(username=user.username).count() >= MAX_ACKS:
+        # keep the table small: forget the oldest marks of this user first
+        oldest = db.query(InboxAck).filter_by(username=user.username).order_by(InboxAck.created_at).first()
+        db.delete(oldest)
     row = row or InboxAck(username=user.username, item_key=key)
     row.state, row.until, row.created_at = action, until, dt.datetime.utcnow()
     db.add(row)
@@ -148,10 +165,10 @@ def get_prefs(user: User = Depends(get_current_user), db: Session = Depends(get_
 
 @router.put("/me/prefs")
 def put_prefs(data: Dict[str, Any] = Body(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    clean = {k: v for k, v in data.items() if k in PREF_KEYS}
-    raw = json.dumps(clean, ensure_ascii=False)
-    if len(raw.encode()) > MAX_PREFS_BYTES:
+    if len(json.dumps(data, ensure_ascii=False, default=str).encode()) > MAX_PREFS_BYTES:
         raise HTTPException(413, "Tuỳ chọn quá lớn.")
+    clean = _clean_prefs(data)
+    raw = json.dumps(clean, ensure_ascii=False)
     row = db.get(UserPref, user.username) or UserPref(username=user.username)
     row.data, row.updated_at = raw, dt.datetime.utcnow()
     db.add(row)

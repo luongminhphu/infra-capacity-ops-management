@@ -164,17 +164,27 @@ PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
 
 _cache: Dict[str, Any] = {"at": 0.0, "items": None, "errors": []}
 _lock = threading.Lock()
+_compute_lock = threading.Lock()
+MIN_REFRESH_SECONDS = 10
 
 
 def collect(db: Session, today: Optional[dt.date] = None, use_cache: bool = True) -> Tuple[List[Dict[str, Any]], List[str]]:
     """All items of every module (unfiltered), cached for CACHE_SECONDS. A failing provider is
     reported, never blocks the others."""
     from .spend.fiscal import today_vn
-    now = time.monotonic()
     with _lock:
-        if use_cache and _cache["items"] is not None and now - _cache["at"] < CACHE_SECONDS:
+        age = time.monotonic() - _cache["at"]
+        # A forced refresh is ignored while the cache is younger than MIN_REFRESH_SECONDS.
+        if _cache["items"] is not None and (age < MIN_REFRESH_SECONDS or (use_cache and age < CACHE_SECONDS)):
             return _cache["items"], _cache["errors"]
-    today = today or today_vn()
+    with _compute_lock:                  # single flight: concurrent callers wait for one recompute
+        with _lock:
+            if _cache["items"] is not None and time.monotonic() - _cache["at"] < MIN_REFRESH_SECONDS:
+                return _cache["items"], _cache["errors"]
+        return _compute(db, today or today_vn())
+
+
+def _compute(db: Session, today: dt.date) -> Tuple[List[Dict[str, Any]], List[str]]:
     items, errors = [], []
     for name, fn, wants_today in PROVIDERS:
         try:
