@@ -93,7 +93,7 @@ function payBind(code) {
   const base = `/spend/contracts/${encodeURIComponent(code)}/payments`;
   const run = async (fn) => { try { await fn(); await payRender(code); } catch (err) { spMsg(err.message); } };
   const ids = (v) => v.split(':').map(encodeURIComponent);
-  mount.onclick = (e) => {
+  mount.onclick = async (e) => {
     const t = (s) => e.target.closest(s);
     let b;
     if (t('#payNew')) { payState.editing = 'new'; return payRender(code); }
@@ -110,10 +110,10 @@ function payBind(code) {
       });
     }
     if ((b = t('[data-pay-edit]'))) { payState.editing = `edit:${b.dataset.payEdit}`; return payRender(code); }
-    if ((b = t('[data-pay-del]')) && confirm('Xoá đợt thanh toán này cùng checklist hồ sơ?')) return run(() => apiRequest(`${base}/${encodeURIComponent(b.dataset.payDel)}`, { method: 'DELETE' }));
+    if ((b = t('[data-pay-del]')) && await uiConfirm('Xoá đợt thanh toán này cùng checklist hồ sơ?')) return run(() => apiRequest(`${base}/${encodeURIComponent(b.dataset.payDel)}`, { method: 'DELETE' }));
     if ((b = t('[data-pay-submit]'))) return run(() => apiRequest(`${base}/${encodeURIComponent(b.dataset.paySubmit)}/submit`, { method: 'POST' }));
     if ((b = t('[data-pay-reopen]'))) return run(() => apiRequest(`${base}/${encodeURIComponent(b.dataset.payReopen)}/reopen`, { method: 'POST' }));
-    if ((b = t('[data-pay-unpay]')) && confirm('Huỷ ghi nhận thanh toán của đợt này?')) return run(() => apiRequest(`${base}/${encodeURIComponent(b.dataset.payUnpay)}/unpay`, { method: 'POST' }));
+    if ((b = t('[data-pay-unpay]')) && await uiConfirm('Huỷ ghi nhận thanh toán của đợt này?')) return run(() => apiRequest(`${base}/${encodeURIComponent(b.dataset.payUnpay)}/unpay`, { method: 'POST' }));
     if ((b = t('[data-pay-paid]'))) { payState.editing = `paid:${b.dataset.payPaid}`; payState.open.add(Number(b.dataset.payPaid)); return payRender(code); }
     if ((b = t('[data-pay-paid-save]'))) {
       return run(async () => {

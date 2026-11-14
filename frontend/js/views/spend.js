@@ -28,7 +28,7 @@ const spTime = (iso) => {
   const s = String(iso), d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(s) ? s : `${s}Z`);
   return isNaN(d) ? s : d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 };
-const spPill = (tone, label) => `<span class="pill ${esc(tone)}">${esc(label)}</span>`;
+const spPill = (tone, label) => uiPill(tone, label);
 const spOpt = (value, label, sel) => `<option value="${esc(value)}"${String(sel) === String(value) ? ' selected' : ''}>${esc(label)}</option>`;
 const SP_CYCLES = [['yearly', 'Hằng năm'], ['quarterly', 'Hằng quý'], ['monthly', 'Hằng tháng'], ['one_time', 'Một lần']];
 const SP_STATUS_FILTER = [['open', 'Cần theo dõi (dự kiến + hiệu lực)'], ['expiring', 'Sắp hết hạn'], ['overdue', 'Quá hạn'],
@@ -274,7 +274,7 @@ async function spOpenDetail(code) {
     if (e.target.closest('[data-pp-new-for]') && typeof ppOpenCreate === 'function') return ppOpenCreate({ opexCodes: [it.code], subject: it.title });
     if (e.target.closest('[data-ct-new-for]') && typeof ctOpenCreate === 'function') return ctOpenCreate({ kind: 'opex', code: it.code, title: `Hợp đồng ${it.title}` });
     const del = e.target.closest('[data-sp-detach]');
-    if (del && confirm('Xoá file đính kèm này?')) {
+    if (del && await uiConfirm('Xoá file đính kèm này?')) {
       try { await apiRequest(`/spend/opex/${encodeURIComponent(it.code)}/attachments/${encodeURIComponent(del.dataset.spDetach)}`, { method: 'DELETE' }); spOpenDetail(it.code); }
       catch (err) { spMsg(err.message); }
     }
@@ -306,7 +306,7 @@ async function spOpenDetail(code) {
   spOnce('#spEdit', async () => spOpenForm(it));
   spOnce('#spRenew', async () => spOpenRenew(it));
   spOnce('#spDelete', async () => {
-    if (!confirm(`Xoá vĩnh viễn ${it.code}? Thao tác được ghi nhật ký kiểm toán. Nếu chỉ không dùng nữa, hãy chọn “Ngừng”.`)) return;
+    if (!await uiConfirm(`Xoá vĩnh viễn ${it.code}? Thao tác được ghi nhật ký kiểm toán. Nếu chỉ không dùng nữa, hãy chọn “Ngừng”.`)) return;
     try { await apiRequest(`/spend/opex/${encodeURIComponent(it.code)}`, { method: 'DELETE' }); $('#spDialog').close(); spRefresh(); }
     catch (err) { spMsg(err.message); }
   });
@@ -621,7 +621,7 @@ async function spRenderAdmin() {
         const r = await apiRequest(`/spend/admin/channels/${encodeURIComponent(b.dataset.chTest)}/test`, { method: 'POST' });
         msg(r.message, r.ok); return spRenderAdmin();
       }
-      if ((b = t('[data-ch-del]')) && confirm('Xoá kênh nhắc này? Nhật ký gửi của kênh cũng bị xoá.')) {
+      if ((b = t('[data-ch-del]')) && await uiConfirm('Xoá kênh nhắc này? Nhật ký gửi của kênh cũng bị xoá.')) {
         await apiRequest(`/spend/admin/channels/${encodeURIComponent(b.dataset.chDel)}`, { method: 'DELETE' }); return spRenderAdmin();
       }
       if ((b = t('[data-log-retry]'))) {

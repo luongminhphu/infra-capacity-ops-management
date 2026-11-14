@@ -169,7 +169,7 @@ async function cpxOpenDetail(code) {
     if (go) return spOpenDetail(go.dataset.spGoto);
     const mv = e.target.closest('[data-cpx-move]');
     if (mv) {
-      if (mv.dataset.cpxMove === 'draft' && !confirm('Trả về nháp sẽ xoá các Opex dự kiến chưa xác nhận của dự án. Tiếp tục?')) return;
+      if (mv.dataset.cpxMove === 'draft' && !await uiConfirm('Trả về nháp sẽ xoá các Opex dự kiến chưa xác nhận của dự án. Tiếp tục?')) return;
       mv.disabled = true;
       try {
         const r = await apiRequest(`/spend/capex/${encodeURIComponent(p.code)}/status`, { method: 'POST', body: JSON.stringify({ status: mv.dataset.cpxMove }) });
@@ -188,7 +188,7 @@ async function cpxOpenDetail(code) {
     } catch (err) { spMsg(err.message); }
   });
   spOnce('#cpxDelete', async () => {
-    if (!confirm(`Xoá vĩnh viễn ${p.code}? Các Opex dự kiến chưa xác nhận của dự án cũng bị xoá.`)) return;
+    if (!await uiConfirm(`Xoá vĩnh viễn ${p.code}? Các Opex dự kiến chưa xác nhận của dự án cũng bị xoá.`)) return;
     try { await apiRequest(`/spend/capex/${encodeURIComponent(p.code)}`, { method: 'DELETE' }); $('#spDialog').close(); cpxRefresh(); }
     catch (err) { spMsg(err.message); }
   });

@@ -15,14 +15,7 @@ const RPT_GROUP_PREF = 'ico.reports.group';
 const RPT_OPTS_PREF = 'ico.reports.opts';
 const rptState = { batch: false, picked: new Set(), opts: {} };
 
-function rptSetStatus(msg, isErr) {
-  const el = $('#rptStatus');
-  if (!el) return;
-  el.textContent = msg || '';
-  el.classList.toggle('hidden', !msg);
-  el.classList.toggle('tone-crit', !!isErr);
-  if (msg) el.scrollIntoView({ block: 'nearest' });
-}
+function rptSetStatus(msg, isErr) { uiSetStatus('#rptStatus', msg, isErr ? 'error' : '', { hideWhenEmpty: true, scroll: true }); }
 
 /* ---------- options (data-opt="report.field"), remembered in localStorage ---------- */
 function rptLoadOpts() {

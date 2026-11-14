@@ -1005,3 +1005,13 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 @media (max-width:900px){.rn-scale{grid-template-columns:repeat(3,minmax(0,1fr));}}
 .qt-ai{border:1px solid var(--border);border-left:3px solid var(--brand);border-radius:var(--radius-sm);padding:var(--space-3);margin-bottom:var(--space-3);}
 .qt-ai .sp-h{margin-top:var(--space-2);}
+
+/* ---------- Super-app shell (SA1): in-page tabs of a menu entry, settings tabs ---------- */
+.page-tabs{display:flex;margin:var(--space-3) var(--space-5) 0;width:fit-content;max-width:calc(100% - 2 * var(--space-5));}
+.page-tabs.hidden{display:none;}
+#viewSettings .set-off{display:none;}
+.ui-confirm{width:min(460px,94vw);}
+.ui-confirm-text{margin:0 0 var(--space-4);font-size:var(--fs-body);line-height:var(--lh-body);white-space:pre-wrap;}
+#szPdfStatus.error{color:var(--crit);font-weight:var(--fw-semibold);}
+#viewSettings .settings-grid .panel:not(.set-off){grid-column:1 / -1;}
+@media (max-width:760px){.page-tabs{margin:var(--space-2) var(--space-4) 0;max-width:calc(100% - 2 * var(--space-4));overflow-x:auto;flex-wrap:nowrap;}}

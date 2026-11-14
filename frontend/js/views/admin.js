@@ -157,7 +157,7 @@ function bindMcpPanel() {
   });
   panel.addEventListener('click', async e => {
     const b = e.target.closest('[data-revoke]');
-    if (!b || !confirm('Thu hồi token này? AI client đang dùng token sẽ mất quyền truy cập ngay.')) return;
+    if (!b || !await uiConfirm('Thu hồi token này? AI client đang dùng token sẽ mất quyền truy cập ngay.')) return;
     try { await apiRequest(`/admin/mcp/tokens/${b.dataset.revoke}`, { method: 'DELETE' }); loadMcpPanel(); }
     catch (err) { $('#mcpState').textContent = err.message; }
   });

@@ -10,10 +10,7 @@ const SRC_DEFAULTS = {
   netbackup: { port: 1556, user: '', title: 'máy chủ backup (NetBackup)' },
 };
 
-function srcSetStatus(msg, isErr) {
-  const el = $('#srcStatus');
-  if (el) { el.textContent = msg || ''; el.classList.toggle('tone-crit', !!isErr); }
-}
+function srcSetStatus(msg, isErr) { uiSetStatus('#srcStatus', msg, isErr ? 'error' : ''); }
 
 function srcAuthLabel(it) {
   if (it.demo) return '<span class="pill na">Demo</span>';
@@ -141,7 +138,7 @@ function bindSourcesPanel() {
     const del = e.target.closest('[data-src-del]');
     if (del) {
       const it = srcState.items.find(i => i.id === Number(del.dataset.srcDel));
-      if (!it || !confirm(`Xoá kết nối "${it.name}"? Dữ liệu lịch sử đã thu thập vẫn được giữ.`)) return;
+      if (!it || !await uiConfirm(`Xoá kết nối "${it.name}"? Dữ liệu lịch sử đã thu thập vẫn được giữ.`)) return;
       try { await apiRequest(`/admin/sources/${it.id}`, { method: 'DELETE' }); srcSetStatus(`Đã xoá ${it.name}.`); afterSourcesChanged(); }
       catch (err) { srcSetStatus(err.message, true); }
     }
@@ -159,7 +156,7 @@ function bindSourcesPanel() {
     finally { t.disabled = false; }
   });
   $('#btnSrcImportEnv').addEventListener('click', async () => {
-    if (!confirm('Sao chép mọi vCenter / NetBackup đang khai báo bằng biến môi trường (kèm mật khẩu, API key) vào giao diện? Sau đó có thể xoá các biến VCENTER_i_* / NETBACKUP_i_* khỏi ConfigMap / Secret.')) return;
+    if (!await uiConfirm('Sao chép mọi vCenter / NetBackup đang khai báo bằng biến môi trường (kèm mật khẩu, API key) vào giao diện? Sau đó có thể xoá các biến VCENTER_i_* / NETBACKUP_i_* khỏi ConfigMap / Secret.')) return;
     try {
       const r = await apiRequest('/admin/sources/import-env', { method: 'POST' });
       srcSetStatus(r.added.length ? `Đã chuyển ${r.added.length} nguồn: ${r.added.join(', ')}.` : 'Không có nguồn mới để chuyển.');

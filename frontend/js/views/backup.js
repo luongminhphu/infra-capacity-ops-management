@@ -28,16 +28,10 @@ function bkState() {
 const bkNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d, minimumFractionDigits: d });
 const bkPct = (v, d = 1) => (v === null || v === undefined || !isFinite(v)) ? '—' : `${bkNum(v, d)}%`;
 const bkDate = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }); };
-const bkPill = (cls, label) => `<span class="pill ${cls}">${esc(label)}</span>`;
+const bkPill = (cls, label) => uiPill(cls, label);
 const bkHours = (h) => (h === null || h === undefined) ? '—' : (h >= 48 ? `${bkNum(h / 24, 1)} ngày` : `${bkNum(h, 0)} giờ`);
 
-function bkSetStatus(msg, isErr) {
-  const el = $('#bkStatus');
-  if (!el) return;
-  el.textContent = msg || '';
-  el.classList.toggle('hidden', !msg);
-  el.classList.toggle('tone-crit', !!isErr);
-}
+function bkSetStatus(msg, isErr) { uiSetStatus('#bkStatus', msg, isErr ? 'error' : '', { hideWhenEmpty: true }); }
 
 async function bkLoadServers() {
   const st = bkState();
@@ -573,7 +567,7 @@ function bkConfig() {
   }).join('') : '<div class="empty-note">Đang tải…</div>';
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Máy chủ backup</div><p class="panel-sub">Thêm / sửa máy chủ, thông tin đăng nhập và API key ở <a href="#/settings" data-nav-link="settings">Cài đặt → Kết nối nguồn dữ liệu</a> (cấu hình bằng biến <code>NETBACKUP_i_*</code> vẫn được hỗ trợ). Tự động đồng bộ cùng chu kỳ vCenter.</p></div></div>
+      <div class="panel-head"><div><div class="panel-title">Máy chủ backup</div><p class="panel-sub">Thêm / sửa máy chủ, thông tin đăng nhập và API key ở <a href="#/settings/sources" data-nav-link="set-sources">Cài đặt → Kết nối nguồn dữ liệu</a> (cấu hình bằng biến <code>NETBACKUP_i_*</code> vẫn được hỗ trợ). Tự động đồng bộ cùng chu kỳ vCenter.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Server</th><th>Địa chỉ</th><th>Xác thực</th><th>API</th><th>Đồng bộ gần nhất</th><th>Trạng thái</th><th></th></tr></thead>
       <tbody>${servers || '<tr><td colspan="7" class="empty-note">Chưa có máy chủ backup. Thêm ở Cài đặt → Kết nối nguồn dữ liệu (bật DEMO để chạy thử).</td></tr>'}</tbody></table></div>
       <div class="insight-box"><strong>Tài khoản chỉ đọc:</strong> tạo user dịch vụ trên NetBackup (ví dụ <code>svc_nbu_ro</code>), gán RBAC role tuỳ chỉnh chỉ có quyền <b>View</b> cho Jobs, Policies (NetBackup policies), Storage (disk pools / storage units) — không cấp quyền thao tác. Ưu tiên cấp <b>API key</b> cho user này (NetBackup 9.x trở lên) và khai báo ở <code>NETBACKUP_i_API_KEY</code>; app chỉ gọi các API GET. Chi tiết trong README.</div>
@@ -596,7 +590,7 @@ function renderBackupBody() {
   const s = st.summary;
   if (!s) { body.innerHTML = '<div class="empty-note">Đang tải dữ liệu backup…</div>'; return; }
   if (!(st.servers || []).length) {
-    body.innerHTML = `<section class="table-card"><div class="empty-state">Chưa có máy chủ backup. Thêm máy chủ ở <a href="#/settings" data-nav-link="settings">Cài đặt → Kết nối nguồn dữ liệu</a> (bật DEMO để chạy thử).</div></section>`;
+    body.innerHTML = `<section class="table-card"><div class="empty-state">Chưa có máy chủ backup. Thêm máy chủ ở <a href="#/settings/sources" data-nav-link="set-sources">Cài đặt → Kết nối nguồn dữ liệu</a> (bật DEMO để chạy thử).</div></section>`;
     return;
   }
   const html = { overview: bkOverview, clients: bkClients, coverage: bkCoverage, storage: bkStorage, schedule: bkSchedule }[st.sub];

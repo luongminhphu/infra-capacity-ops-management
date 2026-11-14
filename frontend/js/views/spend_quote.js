@@ -394,7 +394,7 @@ async function qtAction(act, qid, btn) {
   };
   if (act === 'edit') return qtOpenForm(d);
   if (act === 'delete') {
-    if (!confirm(`Xoá gói ${code} và mọi báo giá, file đính kèm?`)) return;
+    if (!await uiConfirm(`Xoá gói ${code} và mọi báo giá, file đính kèm?`)) return;
     try { await apiRequest(qtUrl(code), { method: 'DELETE' }); qtState.current = null; renderQuotesPage(); } catch (err) { alert(err.message); }
     return;
   }
@@ -410,7 +410,7 @@ async function qtAction(act, qid, btn) {
     return run(() => apiRequest(qtUrl(code, 'quotations', qid, 'verify'), { method: 'POST', body: JSON.stringify({ rowVersion: q && q.rowVersion }) }), 'Đã đánh dấu kiểm tra.');
   }
   if (act === 'remove') {
-    if (!confirm('Xoá báo giá này và file đính kèm?')) return;
+    if (!await uiConfirm('Xoá báo giá này và file đính kèm?')) return;
     return run(() => apiRequest(qtUrl(code, 'quotations', qid), { method: 'DELETE' }));
   }
   if (act === 'lines') return qtOpenLines(qid);
@@ -436,7 +436,7 @@ async function qtAction(act, qid, btn) {
   if (act === 'to-contract') return run(async () => { const r = await apiRequest(qtUrl(code, 'contract'), { method: 'POST' }); qtMsg(`Đã tạo hợp đồng ${r.contractCode}.`, true); }, 'Đã tạo hợp đồng.');
   if (act === 'to-proposal') return qtOpenToProposal(d);
   if (act === 'reopen') {
-    if (!confirm('Mở lại gói để sửa? Lựa chọn NCC hiện tại sẽ bị huỷ.')) return;
+    if (!await uiConfirm('Mở lại gói để sửa? Lựa chọn NCC hiện tại sẽ bị huỷ.')) return;
     return run(() => apiRequest(qtUrl(code, 'reopen'), { method: 'POST' }));
   }
 }

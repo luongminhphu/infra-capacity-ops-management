@@ -1804,6 +1804,9 @@ function syncViewSections() {
   };
   const target = $(map[appState.view] || map.dashboard);
   if (target) target.classList.remove('hidden');
+  // Settings: one tab of panels at a time (Cài đặt → Tiêu chí & ngưỡng / Nguồn dữ liệu / …).
+  const sub = appState.settingsSub || 'criteria';
+  $$('#viewSettings [data-set-tab]').forEach(el => el.classList.toggle('set-off', el.dataset.setTab !== sub));
   document.body.dataset.view = appState.view;
   if (typeof syncNavState === 'function') syncNavState();
 }
