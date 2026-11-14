@@ -45,7 +45,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Schema DB | `models.py` + migration bổ sung trong `database.py::ensure_schema()` |
 | Auth | `security.py` (`get_current_user`, `require_admin`), `auth_entra.py`, `routers/auth.py` |
 | MCP server (chỉ đọc) | `mcp_server.py`, `observability.py` |
-| Chi phí & Hợp đồng IT (`spend`) | `backend/app/spend/` (`models.py`, `service.py`, `fiscal.py`, `roles.py`, `files.py`, `notify.py`, `reminders.py`, `capex.py`), `routers/spend.py`, `routers/spend_admin.py`, `routers/spend_capex.py`, `frontend/js/views/spend.js`, `spend_capex.js`; thiết kế `docs/design/spend-module.md` |
+| Chi phí & Hợp đồng IT (`spend`) | `backend/app/spend/` (`models.py`, `service.py`, `fiscal.py`, `roles.py`, `files.py`, `notify.py`, `reminders.py`, `capex.py`, `report.py`), `routers/spend.py`, `spend_admin.py`, `spend_capex.py`, `spend_reports.py`, `report_spend.py` (PDF), `excel_spend.py`, `frontend/js/views/spend.js`, `spend_capex.js`, `spend_report.js`; thiết kế `docs/design/spend-module.md` |
 | Giao diện | `frontend/index.html`, `css/styles.css` (HSC design system), `js/core.js`, `js/app.js`, `js/views/*.js` |
 
 ## Quy tắc bắt buộc

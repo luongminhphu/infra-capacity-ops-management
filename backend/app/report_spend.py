@@ -17,14 +17,17 @@ MAX_EXPIRING_ROWS = 25
 MAX_CAPEX_ROWS = 15
 
 
-def _billions(v: int) -> float:
-    return round(v / 1e9, 2)
+def _millions(v: int) -> int:
+    # svg_bar_chart prints whole numbers: millions keep 3-4 significant digits for budget-size values.
+    return int(round(v / 1e6))
 
 
 def money_short(v: Optional[int]) -> str:
     """1.234.567.891 -> "1,23 tỷ"; under a billion -> "456,8 tr"."""
     if v is None:
         return "—"
+    if v == 0:
+        return "0"
     if abs(v) >= 1e9:
         return f"{v / 1e9:,.2f} tỷ".replace(",", "§").replace(".", ",").replace("§", ".")
     return f"{v / 1e6:,.1f} tr".replace(",", "§").replace(".", ",").replace("§", ".")
@@ -64,7 +67,7 @@ def _summary(r: Dict[str, Any]) -> str:
         {"label": f"NTC {cmp_['next']['fiscalYear']}", "value": money_short(cmp_["next"]["total"]),
          "sub": "so với năm nay: " + (f"{cmp_['deltaPct']:+.1f}%".replace(".", ",") if cmp_["deltaPct"] is not None else "—"),
          "cls": "warn" if (cmp_["deltaPct"] or 0) > 10 else "na"},
-        {"label": "Sắp hết hạn", "value": money_short(soon_total),
+        {"label": "Hết hạn 12 tháng", "value": money_short(soon_total),
          "sub": f"{sum(g['count'] for g in r['expiringByQuarter'])} khoản Opex", "cls": "bad" if soon_total else "na"},
         {"label": "Opex từ Capex", "value": money_short(r["fromCapex"]["total"]), "sub": f"{r['fromCapex']['count']} khoản gia hạn"},
         {"label": "Tổng theo bộ lọc", "value": money_short(t["total"]), "sub": f"{t['count']} dòng · {t['vendorCount']} NCC"},
@@ -81,15 +84,15 @@ def _summary(r: Dict[str, Any]) -> str:
 def _years(r: Dict[str, Any]) -> str:
     ys = r["byYear"]
     chart = svg_bar_chart([f"NTC {y['fiscalYear']}" for y in ys], [
-        {"name": "Opex", "color": COLORS["primary"], "values": [_billions(y["opex"]) for y in ys]},
-        {"name": "Capex", "color": COLORS["accent"], "values": [_billions(y["capex"]) for y in ys]},
-    ], width=330, height=170, unit=" tỷ")
+        {"name": "Opex", "color": COLORS["primary"], "values": [_millions(y["opex"]) for y in ys]},
+        {"name": "Capex", "color": COLORS["accent"], "values": [_millions(y["capex"]) for y in ys]},
+    ], width=330, height=170, unit="")
     rows = [[f"NTC {y['fiscalYear']}", esc(money_vn(y["opex"])), esc(money_vn(y["capex"])), f"<b>{esc(money_vn(y['total']))}</b>"]
             for y in ys]
     rows.append(["<b>Tổng</b>", esc(money_vn(r["totals"]["opex"])), esc(money_vn(r["totals"]["capex"])),
                  f"<b>{esc(money_vn(r['totals']['total']))}</b>"])
     legend = (f'<div class="legend"><span><span class="dot" style="background:{COLORS["primary"]}"></span>Opex</span>'
-              f'<span><span class="dot" style="background:{COLORS["accent"]}"></span>Capex</span><span>đơn vị: tỷ đồng, sau VAT</span></div>')
+              f'<span><span class="dot" style="background:{COLORS["accent"]}"></span>Capex</span><span>đơn vị: triệu đồng, sau VAT</span></div>')
     return f"""
   <div class="section">
     <div class="section-title">1. Ngân sách theo năm tài chính</div>
@@ -126,7 +129,7 @@ def _expiring(r: Dict[str, Any]) -> str:
     return f"""
   <div class="section">
     <div class="section-title">3. Opex hết hạn theo quý</div>
-    <div class="section-sub">Khoản dự kiến / đang hiệu lực hết hạn từ 90 ngày trước đến 12 tháng tới (hoặc theo khoảng ngày đã lọc).</div>
+    <div class="section-sub">Khoản dự kiến / đang hiệu lực thuộc các năm tài chính đã lọc, hết hạn từ 90 ngày trước đến 12 tháng tới (hoặc theo khoảng ngày đã lọc).</div>
     {body}
   </div>"""
 

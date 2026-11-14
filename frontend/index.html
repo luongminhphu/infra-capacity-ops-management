@@ -583,6 +583,7 @@
                 <button type="button" class="rpt-chip" data-rpt-group="planning"><i data-lucide="calendar-range"></i>Quy hoạch &amp; Sizing</button>
                 <button type="button" class="rpt-chip" data-rpt-group="license"><i data-lucide="badge-check"></i>License &amp; Inventory</button>
                 <button type="button" class="rpt-chip" data-rpt-group="backup"><i data-lucide="database-backup"></i>Backup</button>
+                <button type="button" class="rpt-chip" data-rpt-group="spend"><i data-lucide="wallet"></i>Chi phí &amp; ngân sách</button>
               </div>
             </section>
 
@@ -757,6 +758,26 @@
                   <div class="report-card-body"><div class="report-card-title">Tuân thủ lịch backup</div>
                     <p class="report-card-desc">Lưới tuân thủ theo từng đêm (đạt, trễ, sai loại, lỗi, thiếu) — có trong mục 2 của PDF và sheet “Lịch &amp; tuân thủ” của Excel.</p></div>
                   <div class="report-card-actions"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-schedule">Xem lịch &amp; tuân thủ</button></div>
+                </article>
+              </div>
+            </section>
+
+            <!-- Chi phí & ngân sách (module spend) -->
+            <section class="panel rpt-group" data-rpt-group="spend">
+              <div class="panel-head">
+                <div><div class="panel-title"><i data-lucide="wallet"></i>Chi phí &amp; ngân sách</div>
+                  <p class="panel-sub">Mặc định năm tài chính hiện tại và năm sau, Opex + Capex. Lọc chi tiết và lưu bộ lọc ở trang Tổng quan chi phí.</p></div>
+              </div>
+              <div class="report-grid">
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="landmark"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Kế hoạch ngân sách IT</div>
+                    <p class="report-card-desc">PDF ngắn cho lãnh đạo: so sánh năm nay / năm sau, theo loại, hết hạn theo quý, Opex từ Capex, nhà cung cấp lớn — kèm quyết định cần duyệt. Excel đủ từng dòng.</p></div>
+                  <div class="report-card-actions">
+                    <button class="btn btn-primary btn-sm" type="button" data-spend-export="pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-spend-export="xlsx"><i data-lucide="sheet"></i>Excel</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="spend-overview">Lọc chi tiết</button>
+                  </div>
                 </article>
               </div>
             </section>
@@ -1029,6 +1050,7 @@
 <script src="js/views/sources.js?v=__ASSET_V__"></script>
 <script src="js/views/spend.js?v=__ASSET_V__"></script>
 <script src="js/views/spend_capex.js?v=__ASSET_V__"></script>
+<script src="js/views/spend_report.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

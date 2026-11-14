@@ -255,7 +255,8 @@ def build_budget_report(db: Session, filters: Dict[str, Any], cfg: SpendSettings
     capex_total = total - opex_total
     if compare["inFilter"] and cur_y["total"]:
         change = compare["deltaPct"]
-        headline = (f"Ngân sách NTC {cur + 1} {'tăng' if change >= 0 else 'giảm'} {abs(change):.1f}% so với NTC {cur} "
+        pct = f"{abs(change):.1f}".replace(".", ",")
+        headline = (f"Ngân sách NTC {cur + 1} {'tăng' if change >= 0 else 'giảm'} {pct}% so với NTC {cur} "
                     f"({service.money_vn(next_y['total'])} so với {service.money_vn(cur_y['total'])}).")
     else:
         headline = f"Tổng ngân sách theo bộ lọc: {service.money_vn(total)} ({len(rows)} dòng)."

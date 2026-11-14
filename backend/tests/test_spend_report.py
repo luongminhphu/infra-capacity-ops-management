@@ -60,7 +60,7 @@ def test_totals_by_year_category_vendor(data):
         ("Bảo hành máy chủ", 1_210_000_000), ("License VMware", 330_000_000), ("License firewall", 220_000_000), ("Khác", 108_000_000)]
     assert r["byCategory"][0]["sharePct"] == 64.8
     assert [(v["vendor"], v["total"]) for v in r["topVendors"]] == [("Dell", 1_210_000_000), ("Broadcom", 330_000_000), ("FPT", 328_000_000)]
-    assert "tăng 366.1%" in r["headline"]
+    assert "tăng 366,1%" in r["headline"]
 
 
 def test_expiring_by_fiscal_quarter_and_decisions(data):
