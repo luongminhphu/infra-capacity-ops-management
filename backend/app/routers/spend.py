@@ -18,7 +18,7 @@ from ..features import require_feature
 from ..models import AuditLog, HostSnapshot, SnapshotRun, User
 from ..spend import capex, fiscal, files, service, settings as spend_settings
 from ..spend.models import (
-    CATEGORY_GROUPS, CapexProject, OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendReminderLog, SpendVendor,
+    CATEGORY_GROUPS, CapexProject, Contract, OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendReminderLog, SpendVendor,
 )
 from ..spend.roles import LABELS, effective_role, require_spend
 from ..timeutil import to_iso_utc
@@ -53,6 +53,8 @@ def _detail(db: Session, item: OpexItem) -> Dict[str, Any]:
     out["capexProjectCode"] = (db.query(CapexProject.code).filter(CapexProject.id == item.capex_project_id).scalar()
                                if item.capex_project_id else None)
     out["managedByCapex"] = capex.is_managed(item)
+    out["contracts"] = [{"code": c.code, "title": c.title, "status": c.status}
+                        for c in db.query(Contract).filter(Contract.opex_id == item.id).order_by(Contract.id)]
     out["assets"] = [{"id": a.id, "serial": a.serial, "description": a.description, "vcenterKey": a.vcenter_key,
                       "hostName": a.host_name} for a in db.query(OpexAsset).filter_by(opex_id=item.id).order_by(OpexAsset.id)]
     out["attachments"] = service.attachments(db, item)
@@ -339,6 +341,8 @@ def delete_opex(code: str, request: Request, user: User = Depends(require_spend(
     item = _item(db, code)
     if db.query(OpexItem.id).filter(OpexItem.renewed_from_id == item.id).first():
         raise HTTPException(409, "Khoản đã có khoản gia hạn kế nhiệm — không xoá được, hãy chuyển sang Ngừng.")
+    if db.query(Contract.id).filter(Contract.opex_id == item.id).first():
+        raise HTTPException(409, "Khoản đã có hợp đồng gắn vào — không xoá được, hãy chuyển sang Ngừng.")
     file_rows = (db.query(SpendFile).join(OpexAttachment, OpexAttachment.file_id == SpendFile.id)
                  .filter(OpexAttachment.opex_id == item.id).all())
     service.audit(db, user, request, "spend.opex.delete", code=item.code, before=service.snapshot(item),
