@@ -217,7 +217,7 @@ Không đổi: luật chỉ đọc vCenter / NetBackup, chế độ DEMO, `capac
 | **SA2 — Trang chủ và hộp việc** (+ phần khung còn lại: tuỳ chọn người dùng phía máy chủ) | Nguồn việc từ 4 module; `inbox_acks`, `user_prefs`; trang chủ theo vai trò; trang *Lịch việc & nhắc hạn*; danh sách *Đợt thanh toán*; Quy hoạch hiện kết quả trên màn hình | Mở app thấy ngay việc cần làm |
 | **SA3 — Tìm kiếm và thẻ đối tượng** (mô hình phạm vi chung, menu Xuất chuẩn, nạp module khi mở trang chuyển sang SA6) | `/api/search` + Ctrl + K; thẻ Host / VM / Nhà cung cấp / không gian Dự án; liên kết chéo (compliance → host, VM → backup, quyền license ↔ Opex); "Tạo Capex nháp" từ Quy hoạch / Sizing / Backup storage | Một đối tượng — một trang |
 | **SA4 — Nền tảng AI + A1, A2** | `app/ai/` (registry, chính sách, che dữ liệu, cache, hạn mức, `ai_runs`), chuyển 3 tác vụ Chi phí sang; bản tin trang chủ; tổng kết báo cáo PDF; Cài đặt → AI có thống kê | AI dùng chung, có kiểm soát |
-| **SA5 — AI cho dữ liệu nhiều biến số** | A3 phân tích lỗi backup, A4 ánh xạ cột khi nhập (+ `import_mappings`), A5 phân loại HĐH, A6 tóm tắt biến động | Ít nhập tay, ít luật cứng |
+| **SA5 — AI cho dữ liệu nhiều biến số** (đã làm; A4 mới áp dụng cho file host / VM — các bộ nhập khác dùng lại `ai_data.FIELDS` khi cần) | A3 phân tích lỗi backup, A4 ánh xạ cột khi nhập (+ `import_mappings`), A5 phân loại HĐH, A6 tóm tắt biến động | Ít nhập tay, ít luật cứng |
 | **SA6 — AI nâng cao** | A7 Sizing, A8 tóm tắt version hợp đồng, A9 đọc hoá đơn, A10 Hỏi ICO (công cụ chỉ đọc, kiểm quyền), lưu trữ báo cáo | Trợ lý xuyên suốt |
 
 SA1–SA3 không cần AI và làm được ngay. SA4 là nền cho SA5–SA6.

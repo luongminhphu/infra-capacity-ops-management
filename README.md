@@ -82,7 +82,8 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
 - **Kết nối**: nhà cung cấp (Anthropic), model (mặc định `claude-opus-5-5`), effort, API key (mã hoá, không trả về),
   *Cho phép gửi dữ liệu ra ngoài*.
 - **Công tắc từng tác vụ**: soạn tờ trình, đọc báo giá PDF scan, tóm tắt khác biệt báo giá, **bản tin trang chủ**,
-  **tổng kết báo cáo PDF**.
+  **tổng kết báo cáo PDF**, **phân tích lỗi backup**, **ánh xạ cột file nhập**, **phân loại hệ điều hành**,
+  **tóm tắt biến động VM**.
 - **Che tên** host / IP / VM / client backup trước khi gửi (bật mặc định): thay bằng mã `<host:…>` / `<ip:…>`, rồi
   khôi phục trong kết quả.
 - **Hạn mức 100 USD / tháng**: chạm hạn mức thì AI tạm dừng, các chức năng quay về văn bản theo luật.
@@ -96,6 +97,18 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
 - **Trung tâm báo cáo → Tổng kết bằng AI**: thêm hộp "Tổng kết (AI soạn)" vào PDF Vận hành / Kỹ thuật, Backup và Kế hoạch
   ngân sách. AI chỉ viết từ số liệu đã tính. Phần tổng kết theo luật vẫn giữ nguyên bên dưới để đối chiếu; AI lỗi
   hoặc tắt thì PDF ghi một dòng lý do.
+
+**AI cho dữ liệu nhiều biến số** — chỉ là đề xuất; nút AI chỉ hiện khi tác vụ đang bật:
+- **Backup → Tổng quan → AI phân tích lỗi**: gom job lỗi theo nguyên nhân gốc, giải thích mã lỗi chưa có trong bảng
+  mã, đề xuất thứ tự xử lý. Chỉ gửi số job đã gom theo mã × policy × loại job (không gửi từng job). Mức độ ở các bảng
+  vẫn theo luật; mã lỗi AI nêu mà không có trong kỳ bị bỏ.
+- **Nhập file host / VM bố cục lạ** (không nhận ra cột tên / CPU): hộp **Chọn cột** hiện ra; bấm **AI đề xuất** để AI
+  điền sẵn. AI chỉ nhận tiêu đề cột và tối đa 5 dòng mẫu đã che (chữ → `a`, số → `9`; số đo và từ trạng thái giữ
+  nguyên). Cách ánh xạ đã xác nhận được **nhớ** theo bộ tiêu đề cột (bảng `import_mappings`); lần sau tự áp dụng.
+- **Tài sản → Hệ điều hành → AI gợi ý VM chưa rõ**: đề xuất họ / phiên bản / edition cho tối đa 60 VM *Other / Unknown*
+  chưa ghi đè, kèm độ tin cậy và lý do. Tick chọn rồi **Ghi đè các VM đã chọn** (dùng ghi đè thủ công sẵn có, ghi chú
+  "AI đề xuất").
+- **Capacity → Xu hướng & biến động → AI tóm tắt biến động**: tóm tắt VM thêm / bỏ / đổi cấu hình trong kỳ theo cluster.
 
 Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác

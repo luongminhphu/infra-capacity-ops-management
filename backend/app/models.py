@@ -550,5 +550,24 @@ class AiCache(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
 
+class ImportMapping(Base):
+    """Column mapping confirmed by a user for one file layout (header signature) — re-used on the
+    next import of the same layout without asking AI again (super app SA5 / A4)."""
+    __tablename__ = "import_mappings"
+    __table_args__ = (UniqueConstraint("target", "signature", name="uq_import_mapping"),)
+
+    id = Column(Integer, primary_key=True)
+    target = Column(String(16), nullable=False)                  # hosts | vms
+    signature = Column(String(64), nullable=False)               # sha256 of the normalised header list
+    headers_json = Column(Text, nullable=False)
+    mapping_json = Column(Text, nullable=False)                  # {field: header}
+    source = Column(String(8), nullable=False, default="manual")  # ai | manual
+    uses = Column(Integer, nullable=False, default=0)
+    created_by = Column(String(128))
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_by = Column(String(128))
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
 from .spend import models as _spend_models  # noqa: E402,F401

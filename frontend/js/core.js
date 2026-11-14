@@ -1655,7 +1655,9 @@ async function loadFileInput(input, target) {
   if (!file) return;
   try {
     const text = await readFile(file);
-    const rows = parseInputText(text, file.name);
+    let rows = parseInputText(text, file.name);
+    // SA5 / A4: unfamiliar layout → saved mapping, or ask the user (AI can pre-fill) before parsing.
+    if (typeof importMapRows === 'function') rows = await importMapRows(rows, target === 'hostsRaw' ? 'hosts' : 'vms', file.name);
     appState[target] = rows;
     appState.reportTimestamp = new Date().toISOString();
     rebuildFromRaw();

@@ -178,11 +178,13 @@ function bkOverview(s) {
         <div class="chart-wrap"><canvas id="bkChartDaily"></canvas></div>
       </article>
       <article class="card chart-card">
-        <div class="panel-head panel-head-tight"><div><div class="panel-title">Nguyên nhân lỗi</div><p class="panel-sub">Gom theo đầu mối xử lý.</p></div></div>
+        <div class="panel-head panel-head-tight"><div><div class="panel-title">Nguyên nhân lỗi</div><p class="panel-sub">Gom theo đầu mối xử lý.</p></div>
+          <div class="panel-toolbar"><button class="btn btn-secondary btn-sm hidden" type="button" data-ai-act="backup" data-ai-gate="backup_analysis">AI phân tích lỗi</button></div></div>
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Nhóm</th><th>Job</th><th>Client</th></tr></thead>
         <tbody>${groups || '<tr><td colspan="3" class="empty-note">Không có job lỗi trong kỳ.</td></tr>'}</tbody></table></div>
       </article>
     </section>
+    <section class="table-card ai-out" id="bkAiOut" aria-live="polite"></section>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Client cần xử lý</div><p class="panel-sub">Lỗi liên tiếp, quá RPO hoặc lần gần nhất không thành công.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-clients">Xem tất cả client</button></div></div>
@@ -597,7 +599,7 @@ function renderBackupBody() {
   body.innerHTML = st.sub === 'jobs' ? bkJobs() : html(s);
   body.querySelectorAll('input[data-tri="some"]').forEach(i => { i.indeterminate = true; });
   refreshIcons();
-  if (st.sub === 'overview') bkChartDaily(s);
+  if (st.sub === 'overview') { bkChartDaily(s); if (typeof aiGate === 'function') aiGate(body); }
   if (st.sub === 'storage') bkChartStorage(s);
   if (st.sub === 'jobs' && !st.jobs) bkLoadJobs();
 }

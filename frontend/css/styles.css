@@ -1070,3 +1070,7 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .ai-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--space-2) var(--space-3);}
 .ai-checks{display:flex;flex-direction:column;gap:var(--space-1);margin:var(--space-3) 0;}
 .ai-checks .finding-filter-item{align-items:flex-start;}
+
+/* ---------- SA5: AI cho dữ liệu nhiều biến số ---------- */
+.ai-out:empty{display:none;}
+#licAiOs:not(:empty){margin:var(--space-3) 0;}

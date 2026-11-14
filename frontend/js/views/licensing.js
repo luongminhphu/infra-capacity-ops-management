@@ -168,7 +168,7 @@ function renderLicBody() {
   const body = $('#licBody');
   if (!st.inv || !st.assess) { body.innerHTML = `<div class="empty-note">${st.loading ? 'Đang tải dữ liệu…' : 'Chưa có dữ liệu inventory. Hãy đồng bộ vCenter hoặc import dữ liệu trước.'}</div>`; return; }
   if (st.sub === 'hardware') body.innerHTML = renderLicHardware();
-  else if (st.sub === 'os') { body.innerHTML = renderLicOs(); renderLicOsTable(); }
+  else if (st.sub === 'os') { body.innerHTML = renderLicOs(); renderLicOsTable(); if (typeof aiGate === 'function') aiGate(body); }
   else if (st.sub === 'assess') body.innerHTML = renderLicAssess();
   else if (st.sub === 'whatif') body.innerHTML = renderLicWhatif();
   else if (st.sub === 'snapshots') body.innerHTML = renderLicSnapshots();
@@ -264,8 +264,10 @@ function renderLicOs() {
           <select id="licOsCluster" data-lic-filter="cluster"><option value="all">Tất cả cluster</option>${clusters.map(c => `<option value="${esc(c)}"${st.filters.cluster === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
           <input id="licOsSearch" placeholder="Tìm VM / IP / OS / host…" value="${esc(st.filters.q)}">
           <button class="btn btn-secondary btn-sm" data-lic-action="export-os" type="button">Xuất Excel</button>
+          <button class="btn btn-secondary btn-sm hidden" data-ai-act="os" data-ai-gate="os_classify" type="button">AI gợi ý VM chưa rõ</button>
         </div>
       </div>
+      <div id="licAiOs" class="ai-out" aria-live="polite"></div>
       <div id="licOverrideEditor"></div>
       <div class="table-scroll"><table class="data-table lic-table" id="licOsTable">
         <thead><tr><th>VM</th><th>IP address</th><th>Cluster / Host</th><th>Trạng thái</th><th class="num">vCPU</th><th class="num">RAM GB</th><th>Phân loại</th><th>OS version</th><th>Edition</th><th>Nguồn</th><th>Độ tin cậy</th><th>Ghi chú</th><th></th></tr></thead>
