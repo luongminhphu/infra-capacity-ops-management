@@ -279,3 +279,17 @@ class SpendReminderLog(Base):
     last_error = Column(String(500), nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
     sent_at = Column(DateTime, nullable=True)
+
+
+class SpendSavedFilter(Base):
+    """A budget-report filter saved by a user; `shared` makes it visible to every spend viewer.
+    filters_json is genuinely free-form (validated by report.parse_filters when used)."""
+    __tablename__ = "spend_saved_filters"
+    __table_args__ = (UniqueConstraint("owner_username", "name", name="uq_saved_filter_owner_name"),)
+
+    id = Column(Integer, primary_key=True)
+    owner_username = Column(String(255), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    filters_json = Column(Text, nullable=False)
+    shared = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
