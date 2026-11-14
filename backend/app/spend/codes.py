@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from .models import SpendSequence
 
-PREFIXES = {"opex": "OPX", "capex": "CPX", "contract": "HD", "proposal": "TT"}
+PREFIXES = {"opex": "OPX", "capex": "CPX", "contract": "HD", "proposal": "TT", "quote": "BG"}
 
 
 def next_code(db: Session, kind: str, year: int) -> str:

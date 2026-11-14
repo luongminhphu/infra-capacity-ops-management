@@ -61,6 +61,18 @@ class SpendVendor(Base):
     name_norm = Column(String(255), nullable=False, unique=True)
     tax_code = Column(String(32), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
+    # Vendor profile (added after the first release: columns also listed in database.ensure_schema()).
+    short_name = Column(String(64), nullable=True)
+    aliases = Column(Text, nullable=True)            # other spellings, one per line ("Thakral One" / "THRAKONE")
+    address = Column(String(500), nullable=True)
+    contact_name = Column(String(128), nullable=True)
+    contact_email = Column(String(255), nullable=True)
+    contact_phone = Column(String(64), nullable=True)
+    website = Column(String(255), nullable=True)
+    tags = Column(String(500), nullable=True)        # lĩnh vực, comma separated
+    notes = Column(Text, nullable=True)
+    status = Column(String(12), nullable=True, default="active")   # active | paused | blocked
+    status_reason = Column(String(500), nullable=True)
 
 
 class SpendCostCenter(Base):
@@ -519,3 +531,141 @@ class PaymentDocDefault(Base):
     required = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
     active = Column(Boolean, nullable=False, default=True)
+
+
+QUOTE_STATUSES = ("draft", "comparing", "selected", "closed")
+WORKSTREAMS = ("cabling", "network", "vc", "other")
+QUOTATION_STATES = ("pending", "extracted", "verified", "failed")
+LINE_TYPES = ("item", "discount", "subtotal", "vat", "total", "note")
+
+
+class QuoteRequest(_Audited, Base):
+    """Gói so sánh báo giá (BG-<NTC>-<số>): several vendor quotations for the same scope."""
+    __tablename__ = "quote_requests"
+    __table_args__ = (
+        CheckConstraint(_in("status", QUOTE_STATUSES), name="ck_quote_status"),
+        CheckConstraint(_in("workstream", WORKSTREAMS), name="ck_quote_workstream"),
+        CheckConstraint("min_quotes BETWEEN 1 AND 10", name="ck_quote_min"),
+        CheckConstraint("(status IN ('selected', 'closed')) = (selected_quotation_id IS NOT NULL)", name="ck_quote_selected"),
+        CheckConstraint("estimate_amount IS NULL OR estimate_amount >= 0", name="ck_quote_estimate"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(20), nullable=False, unique=True)
+    title = Column(String(255), nullable=False)
+    workstream = Column(String(10), nullable=False, default="other")
+    description = Column(Text, nullable=True)
+    capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
+    estimate_amount = Column(BigInteger, nullable=True)          # dự toán (before VAT), compared with the chosen quote
+    min_quotes = Column(Integer, nullable=False, default=3)
+    status = Column(String(10), nullable=False, default="draft")
+    # Selected quotation: plain id (no FK) to avoid a circular FK with quotations; checked by the service.
+    selected_quotation_id = Column(Integer, nullable=True)
+    selection_reason = Column(Text, nullable=True)
+    selected_at = Column(DateTime, nullable=True)
+    selected_by = Column(String(255), nullable=True)
+    # Phiếu đánh giá NCC (EVALUATION FORM header)
+    eval_department = Column(String(64), nullable=True)
+    eval_date = Column(Date, nullable=True)
+    eval_service = Column(String(255), nullable=True)
+    eval_conclusion = Column(String(255), nullable=True)
+    eval_evaluator = Column(String(128), nullable=True)
+    eval_approver = Column(String(128), nullable=True)
+
+
+class Quotation(_Audited, Base):
+    """One vendor's quotation inside a request; stated totals as printed, computed totals from the lines."""
+    __tablename__ = "quotations"
+    __table_args__ = (
+        UniqueConstraint("request_id", "vendor_id", name="uq_quotation_vendor"),
+        CheckConstraint(_in("state", QUOTATION_STATES), name="ck_quotation_state"),
+        CheckConstraint("(state = 'verified') = (verified_at IS NOT NULL)", name="ck_quotation_verified"),
+        CheckConstraint("fx_rate IS NULL OR fx_rate > 0", name="ck_quotation_fx"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    request_id = Column(Integer, ForeignKey("quote_requests.id", ondelete="RESTRICT"), nullable=False, index=True)
+    vendor_id = Column(Integer, ForeignKey("spend_vendors.id", ondelete="RESTRICT"), nullable=False, index=True)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    quote_no = Column(String(64), nullable=True)
+    quote_date = Column(Date, nullable=True)
+    valid_until = Column(Date, nullable=True)
+    currency = Column(String(3), nullable=False, default="VND")
+    fx_rate = Column(Numeric(14, 4), nullable=True)               # VND per unit of currency
+    vat_pct = Column(Numeric(5, 2), nullable=True)
+    stated_subtotal = Column(BigInteger, nullable=True)
+    stated_discount = Column(BigInteger, nullable=True)
+    stated_vat = Column(BigInteger, nullable=True)
+    stated_total = Column(BigInteger, nullable=True)
+    delivery_terms = Column(String(500), nullable=True)
+    warranty_terms = Column(String(500), nullable=True)
+    payment_terms = Column(String(500), nullable=True)
+    notes = Column(Text, nullable=True)
+    extraction_method = Column(String(8), nullable=True)          # excel | docx | ai | manual
+    state = Column(String(10), nullable=False, default="pending")
+    extraction_message = Column(String(500), nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    verified_by = Column(String(255), nullable=True)
+    row_version = Column(Integer, nullable=False, default=1)
+
+
+class QuotationLine(Base):
+    __tablename__ = "quotation_lines"
+    __table_args__ = (CheckConstraint(_in("line_type", LINE_TYPES), name="ck_quotation_line_type"),)
+
+    id = Column(Integer, primary_key=True)
+    quotation_id = Column(Integer, ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False, index=True)
+    seq = Column(Integer, nullable=False)
+    line_type = Column(String(8), nullable=False, default="item")
+    description = Column(Text, nullable=False)
+    model = Column(String(255), nullable=True)
+    unit = Column(String(32), nullable=True)
+    qty = Column(Numeric(16, 3), nullable=True)
+    unit_price = Column(Numeric(18, 2), nullable=True)            # in the quotation currency
+    amount = Column(Numeric(18, 2), nullable=True)                # "thành tiền" as printed
+    match_key = Column(String(255), nullable=True)                # manual alignment across vendors
+
+
+class QuotationFinding(Base):
+    """Result of the formula / completeness checks (regenerated at each check)."""
+    __tablename__ = "quotation_findings"
+
+    id = Column(Integer, primary_key=True)
+    quotation_id = Column(Integer, ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False, index=True)
+    line_id = Column(Integer, nullable=True)
+    code = Column(String(12), nullable=False)
+    severity = Column(String(8), nullable=False)                  # crit | warn | info
+    expected = Column(Numeric(20, 2), nullable=True)
+    actual = Column(Numeric(20, 2), nullable=True)
+    message = Column(String(500), nullable=False)
+
+
+class EvaluationCriterion(Base):
+    """Criteria of the EVALUATION FORM of one request (A: standard 70%, B: extended 30%, 2–4 lines)."""
+    __tablename__ = "evaluation_criteria"
+    __table_args__ = (
+        CheckConstraint("section IN ('A', 'B')", name="ck_eval_section"),
+        CheckConstraint("weight > 0 AND weight <= 1", name="ck_eval_weight"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    request_id = Column(Integer, ForeignKey("quote_requests.id", ondelete="CASCADE"), nullable=False, index=True)
+    section = Column(String(1), nullable=False)
+    seq = Column(Integer, nullable=False)
+    name = Column(String(255), nullable=False)
+    weight = Column(Numeric(5, 4), nullable=False)
+
+
+class EvaluationScore(Base):
+    __tablename__ = "evaluation_scores"
+    __table_args__ = (
+        UniqueConstraint("criterion_id", "quotation_id", name="uq_eval_score"),
+        CheckConstraint("score >= 1 AND score <= 10", name="ck_eval_score"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    criterion_id = Column(Integer, ForeignKey("evaluation_criteria.id", ondelete="CASCADE"), nullable=False, index=True)
+    quotation_id = Column(Integer, ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False, index=True)
+    score = Column(Numeric(4, 2), nullable=False)
+    scored_by = Column(String(255), nullable=False)
+    scored_at = Column(DateTime, nullable=False, default=utcnow)

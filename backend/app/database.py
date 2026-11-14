@@ -47,6 +47,12 @@ def ensure_schema() -> None:
         "license_entitlements": [
             ("kind", "VARCHAR(16) NOT NULL DEFAULT 'owned'"),
         ],
+        "spend_vendors": [
+            ("short_name", "VARCHAR(64)"), ("aliases", "TEXT"), ("address", "VARCHAR(500)"),
+            ("contact_name", "VARCHAR(128)"), ("contact_email", "VARCHAR(255)"), ("contact_phone", "VARCHAR(64)"),
+            ("website", "VARCHAR(255)"), ("tags", "VARCHAR(500)"), ("notes", "TEXT"),
+            ("status", "VARCHAR(12) DEFAULT 'active'"), ("status_reason", "VARCHAR(500)"),
+        ],
         "users": [
             ("auth_source", "VARCHAR(16) NOT NULL DEFAULT 'local'"), ("external_id", "VARCHAR(64)"),
             ("email", "VARCHAR(255)"), ("last_login_at", "TIMESTAMP"),
@@ -66,6 +72,11 @@ def ensure_schema() -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
                     if name in indexed:
                         conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_{name} ON {table} ({name})"))
+        # One short name per vendor (used in every comparison / evaluation document and in tờ trình);
+        # partial unique index on the lower-cased value works on SQLite and PostgreSQL.
+        if "spend_vendors" in insp.get_table_names():
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_spend_vendor_short_name "
+                              "ON spend_vendors (lower(short_name)) WHERE short_name IS NOT NULL"))
         # Entra user principal names can be longer than the original 64-character username column.
         if engine.dialect.name == "postgresql" and "users" in insp.get_table_names():
             col = next((c for c in insp.get_columns("users") if c["name"] == "username"), None)

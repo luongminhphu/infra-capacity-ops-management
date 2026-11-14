@@ -178,6 +178,27 @@ def _text(v: Any, label: str, max_len: int, required: bool = False) -> Optional[
     return s or None
 
 
+def vendor_label(v: Optional[SpendVendor]) -> str:
+    """Name used in comparison / evaluation documents and tờ trình: the short name when set."""
+    if v is None:
+        return "—"
+    return (v.short_name or "").strip() or v.name
+
+
+def find_vendor(db: Session, name: str) -> Optional[SpendVendor]:
+    """Vendor whose name or one of its aliases matches `name` (case / accents / spaces ignored)."""
+    key = norm_name(name)
+    if not key:
+        return None
+    v = db.query(SpendVendor).filter_by(name_norm=key).first()
+    if v:
+        return v
+    for cand in db.query(SpendVendor).filter(SpendVendor.aliases.isnot(None)):
+        if key in {norm_name(a) for a in re.split(r"[\n;]+", cand.aliases or "") if a.strip()}:
+            return cand
+    return None
+
+
 def resolve_vendor(db: Session, data: Dict[str, Any], user: User, request: Optional[Request]) -> int:
     """vendorId, or vendorName (an unknown name creates the vendor — same normalised name reuses it)."""
     if data.get("vendorId"):
@@ -187,7 +208,7 @@ def resolve_vendor(db: Session, data: Dict[str, Any], user: User, request: Optio
         return v.id
     name = _text(data.get("vendorName"), "nhà cung cấp", 255, required=True)
     key = norm_name(name)
-    v = db.query(SpendVendor).filter_by(name_norm=key).first()
+    v = find_vendor(db, name)
     if not v:
         v = SpendVendor(name=name, name_norm=key)
         db.add(v)
