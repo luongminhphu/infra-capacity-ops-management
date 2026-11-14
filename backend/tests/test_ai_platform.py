@@ -30,6 +30,7 @@ def _clean(app_, monkeypatch):
     db.close()
     from app import data_access, inbox
     inbox.invalidate()
+    ai_platform._names_cache.update(names=None)
     monkeypatch.setattr(data_access, "get_latest_combined", lambda db, keys=None, include_import=True: (HOSTS, VMS, []))
     yield
     inbox.invalidate()
@@ -57,7 +58,10 @@ def test_price_and_masking():
     masked = m.mask({"a": "ESX01.corp.local và sql-prod-01 tại 10.1.2.3", "b": ["esx01 chậm"]})
     text = json.dumps(masked)
     assert "esx01" not in text.lower() and "sql-prod-01" not in text and "10.1.2.3" not in text and "<host:" in text and "<ip:" in text
-    assert m.unmask(masked)["a"] == "esx01.corp.local và sql-prod-01 tại 10.1.2.3"
+    assert m.unmask(masked)["a"] == "ESX01.corp.local và sql-prod-01 tại 10.1.2.3"
+    toks = set(__import__("re").findall(r"<host:[0-9a-f]+>", text))
+    assert len(toks) == 3 and all(len(t) >= len("<host:") + 12 + 1 for t in toks)       # 3 distinct names, ≥ 12 hex
+    assert "sql-prod-01x" == m.unmask(m.mask("sql-prod-01x"))                            # only whole words are masked
 
 
 def test_policy_blocks_and_records(app_, admin, editor, monkeypatch):
@@ -68,7 +72,7 @@ def test_policy_blocks_and_records(app_, admin, editor, monkeypatch):
     r = editor.post("/api/ai/home-brief")
     assert r.status_code == 409 and "đang tắt" in r.json()["detail"] and seen == []
     db = SessionLocal()
-    assert [x.status for x in db.query(AiRun).order_by(AiRun.id)] == ["blocked", "blocked"]
+    assert [x.status for x in db.query(AiRun).order_by(AiRun.id)] == ["blocked"]          # ≤ 1 blocked row / user / minute
     db.close()
 
 
@@ -161,3 +165,25 @@ def test_budget_and_backup_pdf_accept_ai_flag(app_, admin):
     assert admin.post("/api/spend/reports/budget.pdf", json={"ai": True}).status_code == 200
     r = admin.get("/api/backup/report/pdf?ai=1")
     assert r.status_code in (200, 404)
+
+
+def test_usage_counted_when_refused(app_, admin, monkeypatch):
+    """A refused / truncated answer is still billed: the platform records its tokens."""
+    _enable(admin)
+
+    class Resp:
+        model, stop_reason, content = "claude-opus-5-5", "refusal", []
+        usage = NS(input_tokens=1000, output_tokens=500)
+
+    class Client:
+        def __init__(self, **kw):
+            self.beta = NS(messages=NS(create=lambda **kw: Resp()))
+    import anthropic
+    monkeypatch.setattr(anthropic, "Anthropic", Client)
+    monkeypatch.setattr(transport, "JSON_CALL", transport._call_anthropic_json)
+    r = admin.post("/api/ai/home-brief")
+    assert r.status_code == 422
+    db = SessionLocal()
+    run = db.query(AiRun).filter_by(task="home_brief", status="error").one()
+    assert run.output_tokens == 500 and run.cost_usd == pytest.approx(0.014)
+    db.close()

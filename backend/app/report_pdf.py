@@ -2266,6 +2266,7 @@ def _inject_ai_box(html_str: str) -> str:
     box = AI_BOX.get()
     if not box:
         return html_str
+    AI_BOX.set(None)                    # one-shot: never reused by another PDF of the same request
     for marker in ('<div class="exec-brief', '<div class="section"', "<body>"):
         i = html_str.find(marker)
         if i >= 0:

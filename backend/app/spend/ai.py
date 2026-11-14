@@ -172,11 +172,11 @@ def _call_anthropic(cfg: SpendAiConfig, api_key: str, messages: List[Dict[str, A
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối soạn nội dung này.")
     if response.stop_reason == "max_tokens":
         raise AiError("Nội dung AI soạn quá dài, bị cắt — thử lại với ít khoản hơn.")
-    _note_usage(response)
     text = next((b.text for b in response.content if getattr(b, "type", "") == "text"), None)
     if text is None:
         raise AiError("AI không trả về nội dung.")
@@ -284,11 +284,11 @@ def _call_anthropic_pdf(cfg: SpendAiConfig, api_key: str, pdf_bytes: bytes) -> s
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối đọc file này.")
     if response.stop_reason == "max_tokens":
         raise AiError("Báo giá quá dài để đọc một lần — tách file hoặc nhập bằng Excel.")
-    _note_usage(response)
     text = next((b.text for b in response.content if getattr(b, "type", "") == "text"), None)
     if text is None:
         raise AiError("AI không trả về nội dung.")
@@ -378,11 +378,11 @@ def _call_anthropic_diff(cfg: SpendAiConfig, api_key: str, payload: Dict[str, An
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối phân tích nội dung này.")
     if response.stop_reason == "max_tokens":
         raise AiError("Phân tích quá dài, bị cắt — thử lại với ít dòng hơn.")
-    _note_usage(response)
     text = next((b.text for b in response.content if getattr(b, "type", "") == "text"), None)
     if text is None:
         raise AiError("AI không trả về nội dung.")
@@ -435,7 +435,7 @@ def _call_anthropic_json(cfg: SpendAiConfig, api_key: str, system: str, user_tex
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
-    _note_usage(response)
+    _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối nội dung này.")
     if response.stop_reason == "max_tokens":

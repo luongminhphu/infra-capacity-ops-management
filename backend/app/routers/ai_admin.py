@@ -1,5 +1,6 @@
 """Cài đặt → AI & MCP (admin) and the AI tasks reachable from the UI (super app SA4)."""
 import datetime as dt
+import time
 import json
 from typing import Any, Dict
 
@@ -66,6 +67,8 @@ def put_ai(request: Request, data: Dict[str, Any] = Body(...), user: User = Depe
     if effort not in ("low", "medium", "high"):
         raise HTTPException(400, "Mức effort không hợp lệ.")
     c.provider, c.model, c.effort = provider, model, effort
+    if "allowExternal" in data and not isinstance(data["allowExternal"], bool):
+        raise HTTPException(400, "allowExternal phải là true / false.")
     c.allow_external = bool(data.get("allowExternal", c.allow_external))
     if "maskNames" in data:
         c.mask_names = bool(data["maskNames"])
@@ -108,6 +111,11 @@ def test_ai(user: User = Depends(require_admin), db: Session = Depends(get_db)):
 @router.post("/ai/home-brief")
 def home_brief(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """A1 — bản tin trang chủ from the user's own inbox (role-filtered) and the capacity brief."""
+    try:
+        ai_platform.check(db, "home_brief", user)          # before building facts / masker (cheap refusal)
+    except ai_platform.AiBlocked as exc:
+        ai_platform._record(db, "home_brief", user, "blocked", None, time.monotonic(), message=str(exc))
+        raise HTTPException(409, str(exc)) from exc
     facts = ai_tasks.home_facts(db, user)
     try:
         out = ai_tasks.summarize(db, user, "home_brief", "home", facts)

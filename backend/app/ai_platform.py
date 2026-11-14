@@ -114,12 +114,12 @@ def check(db: Session, task: str, user: Optional[User]):
     if not task_states(cfg)[task]:
         raise AiBlocked(f"Tác vụ “{TASKS[task][0]}” đang tắt (Cài đặt → AI & MCP).")
     budget = cfg.budget_usd if cfg.budget_usd is not None else 100
-    spent = month_cost(db)
+    spent = month_cost(db) + _reserved["usd"]
     if spent >= budget:
         raise AiBlocked(f"Đã dùng hết hạn mức AI tháng này ({spent:.2f} / {budget} USD) — AI tạm dừng tới đầu tháng sau.".replace(".", ",", 1))
     if user is not None:
         limit = cfg.rate_per_hour or 30
-        n = (db.query(func.count(AiRun.id)).filter(AiRun.username == user.username, AiRun.status.in_(("ok", "error")),
+        n = (db.query(func.count(AiRun.id)).filter(AiRun.username == user.username, AiRun.status.in_(("ok", "error", "cached")),
                                                    AiRun.created_at >= dt.datetime.utcnow() - dt.timedelta(hours=1)).scalar() or 0)
         if n >= limit:
             raise AiBlocked(f"Đã gọi AI {n} lần trong 1 giờ (giới hạn {limit}) — thử lại sau.")
@@ -128,33 +128,64 @@ def check(db: Session, task: str, user: Optional[User]):
 
 # ---------------------------------------------------------------- masking
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{2,}")
+_names_cache: Dict[str, Any] = {"at": 0.0, "names": None}
+_names_lock = threading.Lock()
+NAMES_TTL = 300
+
+
+def _token_key() -> bytes:
+    from .config import get_settings
+    st = get_settings()
+    return ((st.secrets_key or "") + "|" + (st.jwt_secret or "")).encode()
 
 
 class Masker:
-    """Replace known names (hosts, VMs, backup clients) and IPv4 addresses by stable tokens
-    `<host:ab12cd>` before sending, and put them back in the answer."""
+    """Replace known names (hosts, VMs, backup clients — exact words, case-insensitive) and IPv4
+    addresses by tokens `<host:…>` / `<ip:…>` before sending, and put them back in the answer.
+    Tokens are an HMAC with a server secret (not reversible by the receiver); a collision gets a
+    longer token, so unmasking never returns the wrong name. Lookup is per word in a set: cost is
+    linear in the facts, whatever the inventory size."""
 
-    def __init__(self, names: Iterable[str]):
-        self.forward: Dict[str, str] = {}
+    def __init__(self, names: Iterable[str], key: Optional[bytes] = None):
+        import hmac
+        self._key = key if key is not None else _token_key()
+        self._hmac = lambda v: hmac.new(self._key, v.encode(), hashlib.sha256).hexdigest()
+        self.names = {n.lower() for n in names if n and len(n) >= 3}
         self.back: Dict[str, str] = {}
-        uniq = sorted({n for n in names if n and len(n) >= 3}, key=len, reverse=True)
-        for n in uniq:
-            tok = f"<host:{hashlib.sha1(n.lower().encode()).hexdigest()[:6]}>"
-            self.forward[n] = tok
-            self.back[tok] = n
-        self._re = re.compile("|".join(re.escape(n) for n in uniq), re.I) if uniq else None
-        self._lower = {n.lower(): t for n, t in self.forward.items()}
+        self._fwd: Dict[str, str] = {}
 
-    def _ip(self, m: "re.Match") -> str:
-        ip = m.group(0)
-        tok = f"<ip:{hashlib.sha1(ip.encode()).hexdigest()[:6]}>"
-        self.back[tok] = ip
+    def _token(self, kind: str, value: str) -> str:
+        key = value.lower()
+        if key in self._fwd:
+            return self._fwd[key]
+        digest = self._hmac(kind + key)
+        n = 12
+        tok = f"<{kind}:{digest[:n]}>"
+        while tok in self.back and self.back[tok].lower() != key:
+            n += 4
+            tok = f"<{kind}:{digest[:n]}>"
+        self._fwd[key] = tok
+        self.back[tok] = value
         return tok
+
+    def _mask_str(self, s: str) -> str:
+        s = _IPV4.sub(lambda m: self._token("ip", m.group(0)), s)
+
+        def word(m: "re.Match") -> str:
+            w = m.group(0)
+            core = w.rstrip(".-_")
+            if core.lower() in self.names:
+                return self._token("host", core) + w[len(core):]
+            short = core.split(".")[0]
+            if short != core and short.lower() in self.names:
+                return self._token("host", core) + w[len(core):]
+            return w
+        return _WORD.sub(word, s)
 
     def mask(self, obj: Any) -> Any:
         if isinstance(obj, str):
-            s = self._re.sub(lambda m: self._lower[m.group(0).lower()], obj) if self._re else obj
-            return _IPV4.sub(self._ip, s)
+            return self._mask_str(obj)
         if isinstance(obj, list):
             return [self.mask(x) for x in obj]
         if isinstance(obj, dict):
@@ -163,7 +194,7 @@ class Masker:
 
     def unmask(self, obj: Any) -> Any:
         if isinstance(obj, str):
-            return re.sub(r"<(?:host|ip):[0-9a-f]{6}>", lambda m: self.back.get(m.group(0), m.group(0)), obj)
+            return re.sub(r"<(?:host|ip):[0-9a-f]{12,64}>", lambda m: self.back.get(m.group(0), m.group(0)), obj)
         if isinstance(obj, list):
             return [self.unmask(x) for x in obj]
         if isinstance(obj, dict):
@@ -171,25 +202,50 @@ class Masker:
         return obj
 
 
-def masker_for(db: Session) -> Masker:
-    """Names from the latest inventory snapshot and backup clients."""
+def _known_names(db: Session) -> set:
+    """Every host / VM / guest hostname / backup client name (and short host names), cached 5 min."""
+    now = time.monotonic()
+    with _names_lock:
+        if _names_cache["names"] is not None and now - _names_cache["at"] < NAMES_TTL:
+            return _names_cache["names"]
     from . import data_access
     from .models import BackupJob
     hosts, vms, _ = data_access.get_latest_combined(db, None)
-    names = [h.get("host") for h in hosts] + [v.get("vm") for v in vms] + [v.get("guestHostname") for v in vms]
-    names += [c for (c,) in db.query(BackupJob.client_name).distinct().limit(20000) if c]
-    short = [n.split(".")[0] for n in names if n and "." in n]
-    return Masker([n for n in names + short if n])
+    names = {h.get("host") for h in hosts} | {v.get("vm") for v in vms} | {v.get("guestHostname") for v in vms}
+    names |= {c for (c,) in db.query(BackupJob.client_name).distinct() if c}
+    names = {n for n in names if n}
+    names |= {n.split(".")[0] for n in names if "." in n}
+    out = {n.lower() for n in names if len(n) >= 3}
+    with _names_lock:
+        _names_cache.update(at=time.monotonic(), names=out)
+    return out
+
+
+def masker_for(db: Session) -> Masker:
+    return Masker(_known_names(db))
 
 
 # ---------------------------------------------------------------- running a task
-def _hash(task: str, facts: Any) -> str:
-    return hashlib.sha256((task + "|" + json.dumps(facts, ensure_ascii=False, sort_keys=True, default=str)).encode()).hexdigest()
+PROMPT_VERSION = "2026-11-sa4"
+RUN_RETENTION_DAYS = 400
+# Budget reserved by calls in flight (this process): worst-case cost of one call.
+_reserved = {"usd": 0.0}
+_budget_lock = threading.Lock()
+RESERVE_USD = 0.5
+
+
+def _hash(task: str, facts: Any, cfg=None) -> str:
+    extra = f"{getattr(cfg, 'model', '')}|{getattr(cfg, 'effort', '')}|{PROMPT_VERSION}"
+    return hashlib.sha256((task + "|" + extra + "|" + json.dumps(facts, ensure_ascii=False, sort_keys=True, default=str)).encode()).hexdigest()
 
 
 def _record(db: Session, task: str, user: Optional[User], status: str, h: Optional[str], started: float,
             usage: Optional[Dict[str, Any]] = None, message: str = "") -> None:
     usage = usage or {"model": None, "in": 0, "out": 0}
+    if status == "blocked" and db.query(AiRun.id).filter(
+            AiRun.task == task, AiRun.status == "blocked", AiRun.username == (user.username if user else None),
+            AiRun.created_at >= dt.datetime.utcnow() - dt.timedelta(minutes=1)).first():
+        return                                             # at most one "blocked" row per user / task / minute
     db.add(AiRun(task=task, username=user.username if user else None, model=usage.get("model"), status=status,
                  input_tokens=usage.get("in") or None, output_tokens=usage.get("out") or None,
                  cost_usd=price(usage.get("model"), usage.get("in"), usage.get("out")) if status in ("ok", "error") else 0.0,
@@ -202,13 +258,24 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
     """Policy → cache → call → accounting. `call()` performs the request (already masked) and
     returns the parsed result. Returns (result, from_cache). Raises AiBlocked or the transport's
     AiError (both have safe messages)."""
+    from .spend.ai import AiError
     started = time.monotonic()
-    h = _hash(task, facts) if facts is not None else None
     try:
-        check(db, task, user)
+        with _budget_lock:                                 # check + reserve atomically (this process)
+            cfg = check(db, task, user)
+            _reserved["usd"] += RESERVE_USD
     except AiBlocked as exc:
-        _record(db, task, user, "blocked", h, started, message=str(exc))
+        _record(db, task, user, "blocked", None, started, message=str(exc))
         raise
+    h = _hash(task, facts, cfg) if facts is not None else None
+    try:
+        return _run_reserved(db, user, task, call, h, cache, started, AiError)
+    finally:
+        with _budget_lock:
+            _reserved["usd"] = max(0.0, _reserved["usd"] - RESERVE_USD)
+
+
+def _run_reserved(db, user, task, call, h, cache, started, AiError):
     if cache and h:
         row = db.get(AiCache, h)
         if row and row.created_at >= dt.datetime.utcnow() - dt.timedelta(hours=CACHE_HOURS):
@@ -218,10 +285,12 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
     try:
         result = call()
     except Exception as exc:
-        _record(db, task, user, "error", h, started, _take_usage(), message=str(exc))
+        safe = str(exc) if isinstance(exc, (AiError, AiBlocked)) else f"Lỗi không mong đợi ({type(exc).__name__})."
+        _record(db, task, user, "error", h, started, _take_usage(), message=safe)
         raise
     _record(db, task, user, "ok", h, started, _take_usage())
     if cache and h:
+        db.query(AiCache).filter(AiCache.created_at < dt.datetime.utcnow() - dt.timedelta(hours=CACHE_HOURS)).delete(synchronize_session=False)
         db.merge(AiCache(key=h, task=task, output=json.dumps(result, ensure_ascii=False), created_at=dt.datetime.utcnow()))
         db.commit()
     alert_if_needed(db)
@@ -231,17 +300,26 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
 def alert_if_needed(db: Session, post=None) -> bool:
     """Once per month, when the month's cost reaches the alert threshold (default 50 USD), tell
     the admins: Discord ops channels (the hộp việc shows it too, see inbox.system_items)."""
+    from sqlalchemy import or_, update
+    from .spend.models import SpendAiConfig
     cfg = config(db)
     if cfg is None:
         return False
     now = dt.datetime.utcnow()
     month = now.strftime("%Y-%m")
+    db.query(AiRun).filter(AiRun.created_at < now - dt.timedelta(days=RUN_RETENTION_DAYS)).delete(synchronize_session=False)
+    db.commit()
     threshold = cfg.alert_usd if cfg.alert_usd is not None else 50
     spent = month_cost(db, now)
     if spent < threshold or cfg.alert_month == month:
         return False
-    cfg.alert_month = month
+    # Atomic claim: only the request that flips alert_month sends the alert.
+    res = db.execute(update(SpendAiConfig).where(SpendAiConfig.id == 1, or_(SpendAiConfig.alert_month.is_(None),
+                                                                           SpendAiConfig.alert_month != month))
+                     .values(alert_month=month))
     db.commit()
+    if res.rowcount != 1:
+        return False
     try:
         from . import secrets_box
         from .spend.models import SpendNotifyChannel
