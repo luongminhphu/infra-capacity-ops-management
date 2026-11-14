@@ -122,7 +122,8 @@ def sync_vcenter(db: Session, cfg: VCenterConfig, settings: Optional[Settings] =
     vcenter_client.VCenterConnectionError on connection failure (the run is still
     persisted with status='error' for visibility)."""
     settings = settings or get_settings()
-    run = SnapshotRun(vcenter_key=cfg.key, source="live", status="ok", started_at=dt.datetime.utcnow())
+    started_at = dt.datetime.utcnow()
+    run = SnapshotRun(vcenter_key=cfg.key, source="live", status="ok", started_at=started_at)
     db.add(run)
     db.flush()
 
@@ -177,11 +178,13 @@ def sync_vcenter(db: Session, cfg: VCenterConfig, settings: Optional[Settings] =
         return run
     except Exception as exc:  # noqa: BLE001
         db.rollback()
-        run = db.merge(run)
-        run.status = "error"
-        run.error_message = str(exc)
-        run.finished_at = dt.datetime.utcnow()
-        db.add(run)
+        # Record the failure as a NEW row (same pattern as backup/collector.py). Re-merging the
+        # rolled-back `run` would reuse its flushed primary key, which SQLite hands out again
+        # to a concurrent sync once this INSERT is rolled back — the error row then collides
+        # with that run's id and is never saved.
+        failed = SnapshotRun(vcenter_key=cfg.key, source="live", status="error", error_message=str(exc),
+                             started_at=started_at, finished_at=dt.datetime.utcnow())
+        db.add(failed)
         db.commit()
         logger.exception("Sync failed for vCenter %s", cfg.key)
         raise
