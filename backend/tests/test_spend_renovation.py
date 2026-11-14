@@ -271,3 +271,33 @@ def test_zero_cells_are_no_data_not_zero():
     fl12 = {p.floor: p for p in rv.read_summarize(summarize_file()).projects}["FL12"]
     assert "CÁP QUANG" not in fl12.amounts["cabling"] and "RACK CABINET" not in fl12.amounts["cabling"]
     assert fl12.amounts["cabling"]["UPS"] == 77_623_920
+
+
+def test_hardening_floor_historical_flag_and_pdf_headers(app_, admin, editor):
+    approver = _login(app_, "approver1")
+    bad = editor.post("/api/spend/renovations", json={"name": "x", "floor": "<IMG SRC=file:///etc/passwd>", "year": 2026})
+    assert bad.status_code == 400
+    assert editor.post("/api/spend/renovations", json={"name": "x", "floor": "TẦNG6", "year": 2026}).status_code == 400
+    # Only an approver can mark a project as history (it is then closed without "Chốt thực chi").
+    assert editor.post("/api/spend/renovations", json={"name": "x", "floor": "FL1", "year": 2020, "isHistorical": True}).status_code == 403
+    d = approver.post("/api/spend/renovations", json={"name": "Cũ <b>", "floor": "FL1", "year": 2020, "isHistorical": True}).json()
+    assert d["isHistorical"] and d["status"] == "closed"
+    p = editor.post("/api/spend/renovations", json={"name": "Mới", "floor": "FL2", "year": 2026}).json()
+    assert editor.put(f"/api/spend/renovations/{p['code']}", json={**p, "isHistorical": True}).status_code == 403
+    assert editor.put(f"/api/spend/renovations/{p['code']}", json={**p, "rowVersion": "x"}).status_code == 400
+    from app.report_renovation import render_html
+    from app.routers.spend_renovations import build_detail
+    from app.database import SessionLocal
+    from app.spend.models import RenovationProject
+    db = SessionLocal()
+    html = render_html(build_detail(db, db.query(RenovationProject).filter_by(code=p["code"]).one()), "<script>")
+    db.close()
+    assert "<script>" not in html and "&lt;script&gt;" in html
+    # Import never overwrites a project managed in the app.
+    r = admin.post("/api/spend/renovations/import", files={"file": ("s.xlsx", summarize_file())},
+                   data={"apply": json.dumps({"projects": [{"floor": "FL2", "year": 2026}]})})
+    assert r.status_code == 200 and r.json()["created"] == []      # FL2 not in the file: nothing
+    editor.post("/api/spend/renovations", json={"name": "FL12 đang làm", "floor": "FL12", "year": 2027})
+    r = admin.post("/api/spend/renovations/import", files={"file": ("s.xlsx", summarize_file())},
+                   data={"apply": json.dumps({"projects": [{"floor": "FL12", "year": 2027}]})})
+    assert r.status_code == 400 and "người dùng quản lý" in r.json()["detail"]

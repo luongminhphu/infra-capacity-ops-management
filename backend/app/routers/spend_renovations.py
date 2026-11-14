@@ -3,6 +3,7 @@ groups, amounts per kind (dự toán / báo giá trúng / thực chi), history c
 "Summarize" workbook, exports (Excel in the Summarize layout, PDF)."""
 import datetime as dt
 import json
+import re
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote as urlquote
@@ -31,6 +32,8 @@ SCALE_FIELDS = (("nodes", "nodes", "số node mạng"), ("headcount", "headcount
                 ("hub_rooms", "hubRooms", "số phòng hub"), ("meeting_rooms", "meetingRooms", "số phòng họp"),
                 ("vc_rooms", "vcRooms", "số phòng họp có VC"), ("access_points", "accessPoints", "số access point"))
 MAX_AMOUNT = 10 ** 13
+MAX_GROUPS = 60
+FLOOR_RE = re.compile(r"^[A-Z0-9][A-Z0-9_.-]{0,31}$")
 
 
 def _bad(msg: str):
@@ -79,8 +82,14 @@ def save_groups(request: Request, data: Dict[str, Any] = Body(...), user: User =
             if name.lower() in names:
                 _bad(f"Nhóm “{name}” bị trùng trong khối {rv.WS_LABELS[ws]}.")
             names.add(name.lower())
-            aliases = "\n".join(str(a).strip()[:120] for a in (r.get("aliases") or [])[:40] if str(a).strip()) or None
-            g = existing.get(int(r["id"])) if r.get("id") else None
+            raw_aliases = r.get("aliases") or []
+            if not isinstance(raw_aliases, list):
+                _bad("Tên gọi khác phải là danh sách.")
+            aliases = "\n".join(str(a).strip()[:120] for a in raw_aliases[:40] if str(a).strip()) or None
+            try:
+                g = existing.get(int(r["id"])) if r.get("id") else None
+            except (TypeError, ValueError):
+                _bad("Mã nhóm chi phí không hợp lệ.")
             if g is not None and g.workstream != ws:
                 _bad("Nhóm chi phí không thuộc khối này.")
             if g is None:
@@ -197,10 +206,12 @@ def _int_or_none(v: Any, label: str) -> Optional[int]:
     return n
 
 
-def _apply(db: Session, p: RenovationProject, data: Dict[str, Any]) -> None:
+def _apply(db: Session, p: RenovationProject, data: Dict[str, Any], allow_historical: bool = False) -> None:
     t = service._text
     p.name = t(data.get("name"), "tên dự án", 255, required=True)
     p.floor = (t(data.get("floor"), "tầng", 32, required=True) or "").upper().replace(" ", "")
+    if not FLOOR_RE.match(p.floor):
+        _bad("Tầng chỉ gồm chữ không dấu, số, “-”, “_” hoặc “.” (vd FL6, FL12A, B1).")
     try:
         p.year = int(data.get("year") or 0)
     except (TypeError, ValueError):
@@ -211,7 +222,10 @@ def _apply(db: Session, p: RenovationProject, data: Dict[str, Any]) -> None:
         setattr(p, attr, _int_or_none(data.get(key), label))
     p.config_tags = ", ".join(rv.tags_of(t(data.get("configTags"), "cấu hình", 255))) or None
     p.notes = t(data.get("notes"), "ghi chú", 5000)
-    p.is_historical = bool(data.get("isHistorical", p.is_historical))
+    if "isHistorical" in data and bool(data["isHistorical"]) != bool(p.is_historical):
+        if not allow_historical:
+            raise HTTPException(403, "Đánh dấu dự án lịch sử cần quyền Duyệt (hoặc nhập từ file).")
+        p.is_historical = bool(data["isHistorical"])
     st = data.get("status") or p.status or "planning"
     if st not in RENOVATION_STATUSES or (st == "closed" and p.status != "closed" and not p.is_historical):
         _bad("Trạng thái không hợp lệ (chốt dự án bằng nút “Chốt thực chi”).")
@@ -250,13 +264,13 @@ def list_projects(user: User = Depends(require_spend("viewer")), db: Session = D
 def create_project(request: Request, data: Dict[str, Any] = Body(...), user: User = Depends(require_spend("editor")),
                    db: Session = Depends(get_db)):
     p = RenovationProject(created_by=user.username, status="planning", is_historical=False, row_version=1)
-    _apply(db, p, data)
+    _apply(db, p, data, allow_historical=has_role(user, "approver"))
     if db.query(RenovationProject.id).filter_by(floor=p.floor, year=p.year).first():
         raise HTTPException(409, f"Đã có dự án {p.floor} năm {p.year}.")
-    p.code = codes.next_code(db, "renovation", p.year)
-    db.add(p)
-    service.audit(db, user, request, "spend.renovation.create", code=p.code, floor=p.floor, year=p.year)
     try:
+        p.code = codes.next_code(db, "renovation", p.year)
+        db.add(p)
+        service.audit(db, user, request, "spend.renovation.create", code=p.code, floor=p.floor, year=p.year)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -279,12 +293,16 @@ def get_project(code: str, history: Optional[str] = None, user: User = Depends(r
 def update_project(code: str, request: Request, data: Dict[str, Any] = Body(...), user: User = Depends(require_spend("editor")),
                    db: Session = Depends(get_db)):
     p = _project(db, code)
-    if int(data.get("rowVersion") or 0) != p.row_version:
+    try:
+        version = int(data.get("rowVersion") or 0)
+    except (TypeError, ValueError):
+        _bad("rowVersion không hợp lệ.")
+    if version != p.row_version:
         raise HTTPException(409, "Dự án vừa được người khác sửa — tải lại.")
     if p.status == "closed" and not has_role(user, "approver"):
         raise HTTPException(403, "Dự án đã chốt — cần quyền Duyệt để sửa.")
     floor, year = p.floor, p.year
-    _apply(db, p, data)
+    _apply(db, p, data, allow_historical=has_role(user, "approver"))
     if (p.floor, p.year) != (floor, year) and db.query(RenovationProject.id).filter(
             RenovationProject.floor == p.floor, RenovationProject.year == p.year, RenovationProject.id != p.id).first():
         raise HTTPException(409, f"Đã có dự án {p.floor} năm {p.year}.")
@@ -379,6 +397,8 @@ def awarded_from_quotes(db: Session, p: RenovationProject) -> Dict[str, Any]:
         if r.workstream not in rv.WORKSTREAMS or not r.selected_quotation_id:
             continue
         q = db.get(Quotation, r.selected_quotation_id)
+        if q is None:
+            continue
         gl = [(g.id, g.name, g.aliases) for g in gmap[r.workstream]]
         ids = {g.id for g in gmap[r.workstream]}
         used.append(r.code)
@@ -412,6 +432,9 @@ def pull_quotes(code: str, request: Request, user: User = Depends(require_spend(
         raise HTTPException(409, "Chưa có gói báo giá nào của dự án đã chọn nhà cung cấp.")
     if m["unmatched"]:
         raise HTTPException(409, f"Còn {len(m['unmatched'])} dòng báo giá chưa gắn nhóm chi phí — gắn nhóm trước khi lấy số.")
+    bad = [gid for gid, amt in m["amounts"].items() if not 0 <= amt <= MAX_AMOUNT]
+    if bad:
+        raise HTTPException(409, "Tổng một nhóm chi phí âm hoặc quá lớn (kiểm tra dòng chiết khấu / tỷ giá của báo giá).")
     ws_of = {g.id: ws for ws, gs in groups_by_ws(db).items() for g in gs}
     pulled_ws = {r.workstream for r in db.query(QuoteRequest).filter(QuoteRequest.code.in_(m["requests"]))}
     for c in db.query(RenovationCost).filter_by(project_id=p.id, kind="awarded"):
@@ -432,6 +455,8 @@ def pull_quotes(code: str, request: Request, user: User = Depends(require_spend(
 def set_line_group(code: str, request: Request, data: Dict[str, Any] = Body(...), user: User = Depends(require_spend("editor")),
                    db: Session = Depends(get_db)):
     p = _project(db, code)
+    if p.status == "closed":
+        raise HTTPException(409, "Dự án đã chốt.")
     try:
         line_id, gid = int(data.get("lineId") or 0), (int(data["groupId"]) if data.get("groupId") else None)
     except (TypeError, ValueError):
@@ -530,57 +555,69 @@ async def import_summarize(request: Request, file: UploadFile = File(...), apply
         _bad("Lựa chọn nhập không hợp lệ.")
     gmap = groups_by_ws(db)
     created, updated = [], []
-    for ip in res.projects:
-        c = picks.get(ip.floor)
-        if not c:
-            continue
-        kind = c.get("kind") or "actual"
-        if kind not in COST_KINDS:
-            _bad("Loại số liệu không hợp lệ.")
-        try:
-            year = int(c.get("year"))
-        except (TypeError, ValueError):
-            _bad(f"Nhập năm cho {ip.floor}.")
-        if not 2000 <= year <= 2100:
-            _bad(f"Năm của {ip.floor} không hợp lệ.")
-        p = db.query(RenovationProject).filter_by(floor=ip.floor, year=year).first()
-        if p is None:
-            p = RenovationProject(floor=ip.floor, year=year, name=service._text(c.get("name"), "tên", 255) or f"Cải tạo {ip.floor}",
-                                  status="closed", is_historical=True, created_by=user.username, row_version=1,
-                                  code=codes.next_code(db, "renovation", year))
-            db.add(p)
-            created.append(ip.floor)
-        else:
-            if p.status != "closed" and not p.is_historical:
-                _bad(f"{ip.floor} {year} là dự án đang làm — không ghi đè bằng số liệu nhập.")
-            updated.append(ip.floor)
-            p.row_version += 1
-        for attr, val in (("nodes", ip.nodes), ("headcount", ip.headcount), ("config_tags", ip.config),
-                          ("vc_rooms", ip.vc_rooms), ("meeting_rooms", ip.meeting_rooms)):
-            if getattr(p, attr) is None and val is not None:
-                setattr(p, attr, val)
-        db.flush()
-        sums: Dict[int, int] = {}
-        for ws, labels in ip.amounts.items():
-            gl = [(g.id, g.name, g.aliases) for g in gmap[ws]]
-            for lab, amt in labels.items():
-                gid = rv.match_group(lab, gl)
-                if gid is None:
-                    g = RenovationCostGroup(workstream=ws, name=lab[:255], seq=len(gmap[ws]), active=True)
-                    db.add(g)
-                    db.flush()
-                    gmap[ws].append(g)
-                    gl.append((g.id, g.name, g.aliases))
-                    gid = g.id
-                sums[gid] = sums.get(gid, 0) + amt
-        old = {x.group_id: x for x in db.query(RenovationCost).filter_by(project_id=p.id, kind=kind)}
-        for gid, amt in sums.items():
-            x = old.get(gid)
-            if x is None:
-                db.add(RenovationCost(project_id=p.id, group_id=gid, kind=kind, amount=amt, source="import",
-                                      note=f"Nhập từ {files.clean_name(file.filename, files.XLSX)}", updated_by=user.username))
+    try:
+        for ip in res.projects:
+            c = picks.get(ip.floor)
+            if not c:
+                continue
+            kind = c.get("kind") or "actual"
+            if kind not in COST_KINDS:
+                _bad("Loại số liệu không hợp lệ.")
+            try:
+                year = int(c.get("year"))
+            except (TypeError, ValueError):
+                _bad(f"Nhập năm cho {ip.floor}.")
+            if not 2000 <= year <= 2100:
+                _bad(f"Năm của {ip.floor} không hợp lệ.")
+            p = db.query(RenovationProject).filter_by(floor=ip.floor, year=year).first()
+            if p is None:
+                p = RenovationProject(floor=ip.floor, year=year, name=service._text(c.get("name"), "tên", 255) or f"Cải tạo {ip.floor}",
+                                      status="closed", is_historical=True, created_by=user.username, row_version=1,
+                                      code=codes.next_code(db, "renovation", year))
+                db.add(p)
+                created.append(ip.floor)
             else:
-                x.amount, x.source, x.updated_by, x.updated_at = amt, "import", user.username, dt.datetime.utcnow()
+                if not p.is_historical:
+                    _bad(f"{ip.floor} {year} là dự án do người dùng quản lý — không ghi đè bằng số liệu nhập.")
+                updated.append(ip.floor)
+                p.row_version += 1
+            for attr, val in (("nodes", ip.nodes), ("headcount", ip.headcount), ("config_tags", ip.config),
+                              ("vc_rooms", ip.vc_rooms), ("meeting_rooms", ip.meeting_rooms)):
+                if getattr(p, attr) is None and val is not None:
+                    setattr(p, attr, val)
+            db.flush()
+            sums: Dict[int, int] = {}
+            for ws, labels in ip.amounts.items():
+                gl = [(g.id, g.name, g.aliases) for g in gmap[ws]]
+                for lab, amt in labels.items():
+                    if not rv.norm_text(lab) or not 0 < amt <= MAX_AMOUNT:
+                        continue
+                    gid = rv.match_group(lab, gl)
+                    if gid is None:
+                        name = lab.strip()[:255]
+                        g = next((x for x in gmap[ws] if x.name.lower() == name.lower()), None)
+                        if g is None:
+                            if len(gmap[ws]) >= MAX_GROUPS:
+                                _bad(f"Khối {rv.WS_LABELS[ws]} đã có {MAX_GROUPS} nhóm chi phí — thêm tên gọi khác cho nhóm có sẵn "
+                                     f"để ghép “{name[:60]}”.")
+                            g = RenovationCostGroup(workstream=ws, name=name, seq=len(gmap[ws]), active=True)
+                            db.add(g)
+                            db.flush()
+                            gmap[ws].append(g)
+                            gl.append((g.id, g.name, g.aliases))
+                        gid = g.id
+                    sums[gid] = sums.get(gid, 0) + amt
+            old = {x.group_id: x for x in db.query(RenovationCost).filter_by(project_id=p.id, kind=kind)}
+            for gid, amt in sums.items():
+                x = old.get(gid)
+                if x is None:
+                    db.add(RenovationCost(project_id=p.id, group_id=gid, kind=kind, amount=amt, source="import",
+                                          note=f"Nhập từ {files.clean_name(file.filename, files.XLSX)}", updated_by=user.username))
+                else:
+                    x.amount, x.source, x.updated_by, x.updated_at = amt, "import", user.username, dt.datetime.utcnow()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Trùng dự án / nhóm chi phí do thao tác đồng thời — thử lại.") from exc
     service.audit(db, user, request, "spend.renovation.import", file=files.clean_name(file.filename, files.XLSX),
                   created=created, updated=updated)
     try:
@@ -592,6 +629,10 @@ async def import_summarize(request: Request, file: UploadFile = File(...), apply
 
 
 # ================================================================ exports
+def _slug(p: RenovationProject) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", f"cai-tao-{p.floor}-{p.year}")[:60]
+
+
 def _download(content: bytes, name: str, media: str) -> Response:
     return Response(content, media_type=media, headers={
         "Content-Disposition": f"attachment; filename=\"{name}\"; filename*=UTF-8''{urlquote(name)}", "Cache-Control": "private, no-store"})
@@ -614,11 +655,11 @@ def _export_data(db: Session, p: RenovationProject) -> Dict[str, Any]:
 @router.get("/renovations/{code}/export.xlsx")
 def export_xlsx(code: str, user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
     p = _project(db, code)
-    return _download(excel_renovation.build_xlsx(_export_data(db, p)), f"cai-tao-{p.floor}-{p.year}.xlsx",
+    return _download(excel_renovation.build_xlsx(_export_data(db, p)), f"{_slug(p)}.xlsx",
                      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 @router.get("/renovations/{code}/export.pdf")
 def export_pdf(code: str, user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
     p = _project(db, code)
-    return _download(report_renovation.build_pdf(_export_data(db, p), user.username), f"cai-tao-{p.floor}-{p.year}.pdf", "application/pdf")
+    return _download(report_renovation.build_pdf(_export_data(db, p), user.username), f"{_slug(p)}.pdf", "application/pdf")
