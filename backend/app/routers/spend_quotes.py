@@ -23,7 +23,7 @@ from ..models import User
 from ..spend import ai, codes, files, fiscal, quotes as qm, service, settings as spend_settings
 from ..spend.models import (
     WORKSTREAMS, CapexItem, CapexProject, Contract, EvaluationCriterion, EvaluationScore, OpexItem, QuoteRequest, Quotation,
-    QuotationFinding, QuotationLine, SpendAiConfig, SpendFile, SpendVendor,
+    QuotationFinding, QuotationLine, RenovationProject, SpendAiConfig, SpendFile, SpendVendor,
 )
 from ..spend.roles import has_role, require_spend
 from ..timeutil import to_iso_utc
@@ -290,6 +290,7 @@ def _detail(db: Session, r: QuoteRequest) -> Dict[str, Any]:
     quotations = db.query(Quotation).filter_by(request_id=r.id).order_by(Quotation.id).all()
     vendors = {v.id: v for v in db.query(SpendVendor).filter(SpendVendor.id.in_([q.vendor_id for q in quotations] or [0]))}
     cpx = db.get(CapexProject, r.capex_project_id) if r.capex_project_id else None
+    rp = db.get(RenovationProject, r.renovation_project_id) if r.renovation_project_id else None
     sel = next((q for q in quotations if q.id == r.selected_quotation_id), None)
     warnings = []
     if r.estimate_amount is not None and sel is not None:
@@ -304,6 +305,7 @@ def _detail(db: Session, r: QuoteRequest) -> Dict[str, Any]:
     return {
         "id": r.id, "code": r.code, "title": r.title, "workstream": r.workstream, "workstreamLabel": qm.WORKSTREAM_LABELS[r.workstream],
         "description": r.description, "capex": {"code": cpx.code, "name": cpx.name} if cpx else None,
+        "renovation": {"code": rp.code, "name": rp.name, "floor": rp.floor} if rp else None,
         "estimateAmount": r.estimate_amount, "minQuotes": r.min_quotes, "status": r.status, "statusLabel": STATUS_LABELS[r.status],
         "selectedQuotationId": r.selected_quotation_id, "selectionReason": r.selection_reason,
         "selectedBy": r.selected_by, "selectedAt": to_iso_utc(r.selected_at),
@@ -361,6 +363,16 @@ def _apply_request(db: Session, r: QuoteRequest, data: Dict[str, Any]) -> None:
         r.capex_project_id = p.id
     else:
         r.capex_project_id = None
+    rcode = str(data.get("renovationCode") or "").strip()
+    if rcode:
+        rp = db.query(RenovationProject).filter_by(code=rcode).first()
+        if not rp:
+            _bad(f"Không có dự án cải tạo {rcode}.")
+        if r.workstream not in ("cabling", "network", "vc"):
+            _bad("Gói gắn dự án cải tạo phải thuộc khối Cabling, Network hoặc Video Conference.")
+        r.renovation_project_id = rp.id
+    else:
+        r.renovation_project_id = None
 
 
 @router.post("/quotes")

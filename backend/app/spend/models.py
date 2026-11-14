@@ -556,6 +556,7 @@ class QuoteRequest(_Audited, Base):
     workstream = Column(String(10), nullable=False, default="other")
     description = Column(Text, nullable=True)
     capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
+    renovation_project_id = Column(Integer, ForeignKey("renovation_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
     estimate_amount = Column(BigInteger, nullable=True)          # dự toán (before VAT), compared with the chosen quote
     min_quotes = Column(Integer, nullable=False, default=3)
     status = Column(String(10), nullable=False, default="draft")
@@ -624,6 +625,7 @@ class QuotationLine(Base):
     unit_price = Column(Numeric(18, 2), nullable=True)            # in the quotation currency
     amount = Column(Numeric(18, 2), nullable=True)                # "thành tiền" as printed
     match_key = Column(String(255), nullable=True)                # manual alignment across vendors
+    cost_group_id = Column(Integer, ForeignKey("renovation_cost_groups.id", ondelete="SET NULL"), nullable=True)
 
 
 class QuotationFinding(Base):
@@ -669,3 +671,83 @@ class EvaluationScore(Base):
     score = Column(Numeric(4, 2), nullable=False)
     scored_by = Column(String(255), nullable=False)
     scored_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+# ---------------------------------------------------------------- office renovation (V2)
+RENOVATION_STATUSES = ("planning", "executing", "closed")
+RENOVATION_WORKSTREAMS = ("cabling", "network", "vc")
+COST_KINDS = ("estimate", "awarded", "actual")       # dự toán | báo giá trúng | thực chi
+COST_SOURCES = ("manual", "import", "quote")
+
+
+class RenovationProject(_Audited, Base):
+    """Dự án cải tạo văn phòng (CTVP-<năm>-<số>): IT part of an office floor renovation, with its scale
+    (nodes, headcount, meeting rooms) so costs of different floors compare per node / per room."""
+    __tablename__ = "renovation_projects"
+    __table_args__ = (
+        CheckConstraint(_in("status", RENOVATION_STATUSES), name="ck_renov_status"),
+        CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_renov_year"),
+        CheckConstraint("(nodes IS NULL OR nodes >= 0) AND (headcount IS NULL OR headcount >= 0) AND "
+                        "(hub_rooms IS NULL OR hub_rooms >= 0) AND (meeting_rooms IS NULL OR meeting_rooms >= 0) AND "
+                        "(vc_rooms IS NULL OR vc_rooms >= 0) AND (area_m2 IS NULL OR area_m2 >= 0) AND "
+                        "(access_points IS NULL OR access_points >= 0)", name="ck_renov_scale"),
+        UniqueConstraint("floor", "year", name="uq_renov_floor_year"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(20), nullable=False, unique=True)
+    name = Column(String(255), nullable=False)
+    floor = Column(String(32), nullable=False)                    # FL6, FL12…
+    year = Column(Integer, nullable=False)
+    status = Column(String(10), nullable=False, default="planning")
+    is_historical = Column(Boolean, nullable=False, default=False)
+    nodes = Column(Integer, nullable=True)
+    headcount = Column(Integer, nullable=True)
+    area_m2 = Column(Integer, nullable=True)
+    hub_rooms = Column(Integer, nullable=True)
+    meeting_rooms = Column(Integer, nullable=True)
+    vc_rooms = Column(Integer, nullable=True)
+    access_points = Column(Integer, nullable=True)
+    config_tags = Column(String(255), nullable=True)               # "10G, Wifi7" — comma separated
+    capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
+    notes = Column(Text, nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    closed_by = Column(String(255), nullable=True)
+    row_version = Column(Integer, nullable=False, default=1)
+
+
+class RenovationCostGroup(Base):
+    """Nhóm chi phí chuẩn of a workstream (CABLING MATERIALS, Switch…) with aliases used to map lines."""
+    __tablename__ = "renovation_cost_groups"
+    __table_args__ = (
+        UniqueConstraint("workstream", "name", name="uq_renov_group"),
+        CheckConstraint(_in("workstream", RENOVATION_WORKSTREAMS), name="ck_renov_group_ws"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    workstream = Column(String(10), nullable=False)
+    name = Column(String(255), nullable=False)
+    aliases = Column(Text, nullable=True)                         # one per line
+    seq = Column(Integer, nullable=False, default=0)
+    active = Column(Boolean, nullable=False, default=True)
+
+
+class RenovationCost(Base):
+    """Amount of one cost group of one project, per kind (dự toán / báo giá trúng / thực chi)."""
+    __tablename__ = "renovation_costs"
+    __table_args__ = (
+        UniqueConstraint("project_id", "group_id", "kind", name="uq_renov_cost"),
+        CheckConstraint(_in("kind", COST_KINDS), name="ck_renov_cost_kind"),
+        CheckConstraint(_in("source", COST_SOURCES), name="ck_renov_cost_source"),
+        CheckConstraint("amount >= 0", name="ck_renov_cost_amount"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, ForeignKey("renovation_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_id = Column(Integer, ForeignKey("renovation_cost_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
+    kind = Column(String(8), nullable=False)
+    amount = Column(BigInteger, nullable=False)
+    source = Column(String(8), nullable=False, default="manual")
+    note = Column(String(500), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_by = Column(String(255), nullable=False)
