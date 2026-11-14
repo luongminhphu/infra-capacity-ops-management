@@ -17,6 +17,7 @@ class UserOut(BaseModel):
     username: str
     display_name: Optional[str] = None
     is_admin: bool = False
+    spend_role: str = "none"     # effective role in Chi phí & Hợp đồng: none|viewer|editor|approver|admin
 
 
 class ImportPayload(BaseModel):

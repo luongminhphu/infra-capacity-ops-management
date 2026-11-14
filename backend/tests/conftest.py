@@ -5,6 +5,7 @@ import tempfile
 
 _db = os.path.join(tempfile.mkdtemp(prefix="ico-test-"), "test.db")
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_db}")
+os.environ.setdefault("SPEND_FILES_DIR", os.path.join(os.path.dirname(_db), "files"))
 os.environ.setdefault("JWT_SECRET", "test-secret-0123456789")
 os.environ.setdefault("ADMIN_PASSWORD", "Admin12345!")
 os.environ.setdefault("ENABLE_SCHEDULER", "false")
