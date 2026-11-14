@@ -1,7 +1,7 @@
 import datetime as dt
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+    BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -567,6 +567,24 @@ class ImportMapping(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(128))
     updated_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class ReportArchive(Base):
+    """Copy of a PDF report as it was exported (Tài liệu → Kho báo cáo, super app SA6). Stored in the
+    database so every pod sees it; size, count and age are capped (report_archive.py)."""
+    __tablename__ = "report_archive"
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(32), nullable=False, index=True)        # capacity | backup | license | sizing | spend | renovation | other
+    scope = Column(String(8), nullable=False, default="general")  # general | spend (needs a spend role to read)
+    title = Column(String(255), nullable=False)
+    filename = Column(String(255), nullable=False)
+    params = Column(String(1000))                                # query string of the export (without secrets)
+    size_bytes = Column(Integer, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    content = Column(LargeBinary, nullable=False)
+    created_by = Column(String(128), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow, index=True)
 
 
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).

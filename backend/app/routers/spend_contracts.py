@@ -224,6 +224,21 @@ def diff_versions(code: str, from_: int = Query(alias="from", ge=1), to: int = Q
     return out
 
 
+@router.post("/{code}/diff/ai")
+def diff_ai_summary(code: str, from_: int = Query(alias="from", ge=1), to: int = Query(ge=1),
+                    user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+    """A8 — AI summary of the from→to changes (topic, risk for the buyer). Same access as the diff."""
+    from .. import ai_advanced, ai_platform
+    from ..spend import ai as transport
+    diff = diff_versions(code, from_, to, user, db)
+    try:
+        return ai_advanced.contract_summary(db, user, diff)
+    except ai_platform.AiBlocked as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except transport.AiError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 # ---------------------------------------------------------------- status
 @router.post("/{code}/negotiate")
 def start_negotiation(code: str, request: Request, user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):

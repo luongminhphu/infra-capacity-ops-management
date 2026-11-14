@@ -96,6 +96,7 @@
       </div>
       <div class="topbar-actions">
         <button class="btn btn-secondary btn-sm topbar-search" id="btnSearch" type="button" title="Tìm kiếm (Ctrl + K)"><i data-lucide="search"></i><span>Tìm</span><kbd>Ctrl K</kbd></button>
+        <button class="btn btn-secondary btn-sm hidden" id="btnAsk" type="button" data-ai-gate="ask_ico" title="Hỏi ICO bằng tiếng Việt"><i data-lucide="message-circle-question"></i><span>Hỏi ICO</span></button>
         <span class="vcenter-status-row" id="vcenterStatusRow"></span>
         <button class="btn btn-secondary btn-sm" id="btnSyncNow" type="button"><i data-lucide="refresh-cw"></i>Đồng bộ ngay</button>
       </div>
@@ -110,6 +111,7 @@
       <!-- ================= TRANG CHỦ · LỊCH VIỆC (super app SA2) ================= -->
       <section id="viewHome" class="view-section hidden"><div id="homeMount"></div></section>
       <section id="viewAgenda" class="view-section hidden"><div id="agendaMount"></div></section>
+      <section id="viewArchive" class="view-section hidden"><div id="archiveMount"></div></section>
       <section id="viewEntity" class="view-section hidden"><div id="entityMount" class="entity-mount"></div></section>
 
       <!-- ================= TỔNG QUAN · ĐIỀU HÀNH ================= -->
@@ -499,7 +501,9 @@
                   </div>
                 </details>
                 <button class="btn btn-secondary" id="btnSizingExport" type="button" title="Xuất Excel dạng dashboard: KPI, biểu đồ, so sánh phương án, rủi ro & khuyến nghị, độ nhạy, dự báo, danh sách VM (dùng thông tin tài liệu &amp; logo trong mục Xuất PDF)"><i data-lucide="download"></i>Xuất Excel</button>
+                <button class="btn btn-secondary hidden" id="btnSizingAi" type="button" data-ai-act="sizing" data-ai-gate="sizing_narrative" title="AI diễn giải phương án, rủi ro và câu hỏi cho khách hàng (số liệu giữ nguyên)">AI nhận định</button>
               </div>
+              <div id="sizingAiOut" class="ai-out" aria-live="polite"></div>
             </div>
             <div class="sim-card sz-adjust hidden" id="sizingAdjust"></div>
             <div class="sim-card sim-result hidden" id="sizingResult"></div>
@@ -794,6 +798,11 @@
           </div>
 
           <aside class="reports-side">
+            <section class="side-card side-card-static">
+              <h4>Kho báo cáo</h4>
+              <label class="finding-filter-item"><input type="checkbox" id="rptArchive"><span>Lưu một bản mỗi PDF xuất ra vào <a href="#/docs/archive">Kho báo cáo</a></span></label>
+              <p class="side-hint">Áp dụng cho mọi PDF (Capacity, Backup, License, Sizing, Ngân sách, Cải tạo). Lưu tối đa 1.000 bản, 400 ngày; báo cáo chi phí chỉ người có vai trò Chi phí xem được.</p>
+            </section>
             <section class="side-card side-card-static" id="rptAiCard">
               <h4>Tổng kết bằng AI</h4>
               <label class="finding-filter-item"><input type="checkbox" id="rptAi"><span>Thêm hộp “Tổng kết (AI soạn)” vào PDF Vận hành / Kỹ thuật, Backup và Kế hoạch ngân sách</span></label>
@@ -1080,6 +1089,7 @@
 <script src="js/views/entity.js?v=__ASSET_V__"></script>
 <script src="js/views/ai.js?v=__ASSET_V__"></script>
 <script src="js/views/ai_data.js?v=__ASSET_V__"></script>
+<script src="js/views/ai_assist.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

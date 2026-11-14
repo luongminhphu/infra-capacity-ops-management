@@ -8,7 +8,7 @@
 let aiStatusCache = null;
 async function aiStatus(force) {
   if (!aiStatusCache || force) {
-    try { aiStatusCache = await apiRequest('/ai/status'); } catch (err) { aiStatusCache = { enabled: false, tasks: {} }; }
+    try { aiStatusCache = await apiRequest('/ai/status'); } catch (err) { return { enabled: false, tasks: {} }; }   // not cached: retried after login
   }
   return aiStatusCache;
 }

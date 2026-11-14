@@ -12,7 +12,7 @@ the output only fills a .docx that a person reviews before use.
 """
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .. import secrets_box
 from .models import SpendAiConfig
@@ -447,3 +447,123 @@ def _call_anthropic_json(cfg: SpendAiConfig, api_key: str, system: str, user_tex
 
 
 JSON_CALL = _call_anthropic_json
+
+
+# ---------------------------------------------------------------- shared request path (SA6)
+def _api_key(cfg: SpendAiConfig) -> str:
+    if not enabled(cfg):
+        raise AiError("AI chưa được bật hoặc chưa cho phép gửi dữ liệu ra ngoài.")
+    try:
+        return secrets_box.decrypt(cfg.api_key_enc)
+    except secrets_box.SecretUnreadable:
+        raise AiError("API key đã lưu không giải mã được (SECRETS_KEY đổi) — nhập lại.") from None
+
+
+def _create(cfg: SpendAiConfig, api_key: str, **kwargs):
+    """One Messages API request with the platform's error mapping and usage accounting."""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key, timeout=TIMEOUT_S, max_retries=1)
+    model = cfg.model or DEFAULT_MODEL
+    extra: Dict[str, Any] = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in FALLBACK_MODELS else {}
+    try:
+        response = client.beta.messages.create(model=model, **kwargs, **extra)
+    except anthropic.AuthenticationError:
+        raise AiError("API key Anthropic không hợp lệ.") from None
+    except anthropic.RateLimitError:
+        raise AiError("Anthropic đang giới hạn tốc độ — thử lại sau ít phút.") from None
+    except anthropic.BadRequestError as exc:
+        logger.warning("Anthropic rejected the request: %s", getattr(exc, "message", type(exc).__name__))
+        raise AiError("Anthropic từ chối yêu cầu (file quá lớn / hỏng, hoặc nội dung không hợp lệ).") from None
+    except anthropic.APIStatusError as exc:
+        raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
+    except anthropic.APIConnectionError:
+        raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
+    if response.stop_reason == "refusal":
+        raise AiError("Model từ chối nội dung này.")
+    if response.stop_reason == "max_tokens":
+        raise AiError("Nội dung AI viết quá dài, bị cắt.")
+    return response
+
+
+def _first_text(response) -> str:
+    text = next((b.text for b in response.content if getattr(b, "type", "") == "text"), None)
+    if text is None:
+        raise AiError("AI không trả về nội dung.")
+    return text
+
+
+def _call_anthropic_pdf_json(cfg: SpendAiConfig, api_key: str, system: str, pdf_bytes: bytes, instruction: str,
+                             schema: Dict[str, Any], max_tokens: int) -> str:
+    import base64
+    content = [{"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                               "data": base64.standard_b64encode(pdf_bytes).decode()}},
+               {"type": "text", "text": instruction}]
+    r = _create(cfg, api_key, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": content}],
+                output_config={"effort": cfg.effort or "medium", "format": {"type": "json_schema", "schema": schema}})
+    return _first_text(r)
+
+
+PDF_JSON_CALL = _call_anthropic_pdf_json
+
+
+def complete_json_pdf(cfg: SpendAiConfig, system: str, pdf_bytes: bytes, instruction: str, schema: Dict[str, Any],
+                      max_tokens: int = 3000) -> Dict[str, Any]:
+    """Structured reading of one PDF (hoá đơn…). Raises AiError."""
+    raw = PDF_JSON_CALL(cfg, _api_key(cfg), system, pdf_bytes, instruction, schema, max_tokens)
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        raise AiError("AI trả về nội dung không đọc được.") from None
+    if not isinstance(data, dict):
+        raise AiError("AI trả về nội dung không đúng cấu trúc.")
+    return data
+
+
+def _call_anthropic_tools(cfg: SpendAiConfig, api_key: str, system: str, messages: List[Dict[str, Any]],
+                          tools: List[Dict[str, Any]], max_tokens: int) -> Dict[str, Any]:
+    """One turn of a tool loop. Returns {"stop": stop_reason, "content": [plain block dicts]}."""
+    r = _create(cfg, api_key, max_tokens=max_tokens, system=system, messages=messages, tools=tools,
+                output_config={"effort": cfg.effort or "medium"})
+    blocks = []
+    for b in r.content:
+        t = getattr(b, "type", "")
+        if t == "text":
+            blocks.append({"type": "text", "text": b.text})
+        elif t == "tool_use":
+            blocks.append({"type": "tool_use", "id": b.id, "name": b.name, "input": b.input})
+    return {"stop": r.stop_reason, "content": blocks}
+
+
+TOOLS_CALL = _call_anthropic_tools
+
+
+def run_tools(cfg: SpendAiConfig, system: str, question: str, tools: List[Dict[str, Any]],
+              handler, max_turns: int = 5, max_tokens: int = 2000) -> Tuple[str, List[str]]:
+    """Manual tool loop: the model calls read-only tools (handler(name, input) -> str) until it
+    answers. Returns (answer text, names of the tools called). Raises AiError."""
+    api_key = _api_key(cfg)
+    messages: List[Dict[str, Any]] = [{"role": "user", "content": question}]
+    used: List[str] = []
+    for _ in range(max_turns):
+        turn = TOOLS_CALL(cfg, api_key, system, messages, tools, max_tokens)
+        calls = [b for b in turn["content"] if b["type"] == "tool_use"]
+        if turn["stop"] != "tool_use" or not calls:
+            text = "\n".join(b["text"] for b in turn["content"] if b["type"] == "text").strip()
+            if not text:
+                raise AiError("AI không trả về câu trả lời.")
+            return text, used
+        messages.append({"role": "assistant", "content": turn["content"]})
+        results = []
+        for c in calls[:6]:
+            used.append(c["name"])
+            try:
+                out, err = handler(c["name"], c["input"] if isinstance(c["input"], dict) else {}), False
+            except Exception as exc:  # noqa: BLE001 — tool errors go back to the model, never the stack
+                out, err = f"Lỗi công cụ: {exc if isinstance(exc, ValueError) else type(exc).__name__}", True
+            results.append({"type": "tool_result", "tool_use_id": c["id"], "content": out[:20000], "is_error": err})
+        for c in calls[6:]:
+            results.append({"type": "tool_result", "tool_use_id": c["id"], "content": "Bỏ qua: tối đa 6 công cụ mỗi lượt.", "is_error": True})
+        messages.append({"role": "user", "content": results})
+    raise AiError("Câu hỏi cần quá nhiều bước tra cứu — hãy hỏi cụ thể hơn.")

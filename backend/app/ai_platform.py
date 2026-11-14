@@ -39,6 +39,10 @@ TASKS: Dict[str, Tuple[str, str, bool]] = {
     "column_mapping": ("Ánh xạ cột file nhập", "Đề xuất cột nào là tên / CPU / RAM… cho file host / VM bố cục lạ (chỉ gửi tiêu đề cột và dạng dữ liệu mẫu).", True),
     "os_classify": ("Phân loại hệ điều hành", "Đề xuất họ / phiên bản HĐH cho VM “Other / Unknown”; người xác nhận mới ghi đè.", True),
     "vm_changes": ("Tóm tắt biến động VM", "Tóm tắt VM thêm / bỏ / đổi cấu hình trong kỳ và tác động tới capacity.", True),
+    "sizing_narrative": ("Nhận định sizing", "Diễn giải phương án sizing, rủi ro và câu hỏi cần làm rõ với khách hàng (số liệu giữ nguyên).", True),
+    "contract_diff": ("Tóm tắt thay đổi hợp đồng", "Tóm tắt điều khoản đổi giữa 2 version hợp đồng, đánh dấu điều khoản rủi ro.", True),
+    "invoice_read": ("Đọc hoá đơn", "Đọc hoá đơn PDF trong hồ sơ thanh toán để hệ thống đối chiếu số tiền / MST / số hợp đồng.", True),
+    "ask_ico": ("Hỏi ICO", "Trả lời câu hỏi tiếng Việt bằng công cụ chỉ đọc, theo đúng quyền của người hỏi.", True),
 }
 
 # USD per million tokens (input, output) — Claude API list prices. An unknown model is priced at
@@ -68,8 +72,9 @@ _usage = threading.local()
 def note_usage(response: Any) -> None:
     """Called by the transport (spend/ai.py) after each Messages API response."""
     u = getattr(response, "usage", None)
-    _usage.data = {"model": getattr(response, "model", None), "in": getattr(u, "input_tokens", 0) or 0,
-                   "out": getattr(u, "output_tokens", 0) or 0}
+    prev = getattr(_usage, "data", None) or {"in": 0, "out": 0}       # a tool loop makes several calls: add them up
+    _usage.data = {"model": getattr(response, "model", None), "in": prev["in"] + (getattr(u, "input_tokens", 0) or 0),
+                   "out": prev["out"] + (getattr(u, "output_tokens", 0) or 0)}
 
 
 def _take_usage() -> Dict[str, Any]:
@@ -230,7 +235,7 @@ def masker_for(db: Session) -> Masker:
 
 
 # ---------------------------------------------------------------- running a task
-PROMPT_VERSION = "2026-11-sa5"
+PROMPT_VERSION = "2026-11-sa6"
 RUN_RETENTION_DAYS = 400
 # Budget reserved by calls in flight (this process): worst-case cost of one call.
 _reserved = {"usd": 0.0}

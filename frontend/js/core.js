@@ -1800,7 +1800,7 @@ function populateFilterSelects() {
 function syncViewSections() {
   $$('.view-section').forEach(sec => sec.classList.add('hidden'));
   const map = {
-    home:'#viewHome', entity:'#viewEntity', agenda:'#viewAgenda', executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
+    home:'#viewHome', entity:'#viewEntity', agenda:'#viewAgenda', archive:'#viewArchive', executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
     inventory:'#viewInventory', whatif:'#viewWhatif', sizing:'#viewSizing', planning:'#viewPlanning',
     licensing:'#viewLicensing', backup:'#viewBackup', reports:'#viewReports', settings:'#viewSettings', spend:'#viewSpend',
   };
@@ -1812,6 +1812,8 @@ function syncViewSections() {
   if (appState.view === 'settings' && sub === 'ai' && typeof renderAiSettings === 'function') renderAiSettings();
   document.body.dataset.view = appState.view;
   if (typeof syncNavState === 'function') syncNavState();
+  // AI buttons outside page renderers (Hỏi ICO in the top bar, Sizing): show when their task is on.
+  if (typeof aiGate === 'function' && currentUser) { aiGate(document.querySelector('.topbar')); aiGate($('#viewSizing')); }
 }
 
 function renderActiveView() {
@@ -1821,6 +1823,7 @@ function renderActiveView() {
   else if (appState.view === 'executive' && typeof renderExecutiveView === 'function') renderExecutiveView();
   else if (appState.view === 'home' && typeof renderHomeView === 'function') renderHomeView();
   else if (appState.view === 'agenda' && typeof renderAgendaView === 'function') renderAgendaView();
+  else if (appState.view === 'archive' && typeof renderArchiveView === 'function') renderArchiveView();
   else if (appState.view === 'entity' && typeof renderEntityView === 'function') renderEntityView();
   else if (appState.view === 'history') {
     // Snapshot-history page (needs the backend; skipped silently in static mode).

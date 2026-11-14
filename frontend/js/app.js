@@ -93,6 +93,8 @@ const NAV_GROUPS = [
       desc: 'Soạn tờ trình Mẫu A (trình TGĐ) / Mẫu B (trình Ban Mua sắm) từ mẫu .docx của công ty, AI viết nội dung theo dữ liệu Opex / Capex.', scope: [] },
   ] },
   { label: 'Báo cáo & cài đặt', items: [
+    { id: 'report-archive', view: 'archive', icon: 'archive', label: 'Kho báo cáo', title: 'Kho báo cáo',
+      desc: 'Bản PDF đã xuất và lưu lại (tick “Lưu vào kho” ở Trung tâm báo cáo): ai xuất, lúc nào, với tham số nào.', scope: [] },
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
       desc: 'Mọi báo cáo PDF và dữ liệu Excel / CSV, nhóm theo chức năng: Capacity & vận hành, Quy hoạch & Sizing, License & Inventory, Backup.', scope: ['vcenter'] },
     { id: 'settings', view: 'settings', sub: 'criteria', icon: 'settings', label: 'Cài đặt', title: 'Cài đặt — tiêu chí & ngưỡng',
@@ -139,7 +141,7 @@ const MENU = [
     { key: 'procure', label: 'Mua sắm', icon: 'shopping-cart', tabs: [
       ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
     { key: 'contracts', label: 'Hợp đồng & thanh toán', icon: 'scroll-text', tabs: [['spend-contracts', '', 'Hợp đồng'], ['spend-payments', 'payments', 'Đợt thanh toán']] },
-    { key: 'docs', label: 'Tài liệu', icon: 'file-text', tabs: [['spend-proposals', '', 'Tờ trình'], ['reports', 'reports', 'Báo cáo']] },
+    { key: 'docs', label: 'Tài liệu', icon: 'file-text', tabs: [['spend-proposals', '', 'Tờ trình'], ['reports', 'reports', 'Báo cáo'], ['report-archive', 'archive', 'Kho báo cáo']] },
   ] },
   { label: 'Hệ thống', entries: [
     { key: 'settings', label: 'Cài đặt', icon: 'settings', tabs: [

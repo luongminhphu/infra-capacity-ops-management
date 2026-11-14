@@ -1074,3 +1074,15 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 /* ---------- SA5: AI cho dữ liệu nhiều biến số ---------- */
 .ai-out:empty{display:none;}
 #licAiOs:not(:empty){margin:var(--space-3) 0;}
+
+/* ---------- SA6: AI nâng cao, Hỏi ICO, Kho báo cáo ---------- */
+.ai-quote{margin:var(--space-2) 0;padding:var(--space-3) var(--space-4);border-left:3px solid var(--border-strong);background:var(--bg-elevated);color:var(--text-primary);}
+#sizingAiOut:not(:empty),#ctAiDiff:not(:empty){margin-top:var(--space-4);}
+.pay-ai:not(:empty){flex-basis:100%;margin-top:var(--space-2);}
+.ask-dlg{width:min(760px,94vw);}
+.ask-log{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:var(--space-2);margin:var(--space-3) 0;}
+.ask-q{align-self:flex-end;max-width:85%;padding:var(--space-2) var(--space-3);border-radius:var(--radius-lg);background:var(--bg-elevated);border:1px solid var(--border);}
+.ask-a{max-width:95%;line-height:1.55;}
+.ask-links{margin-top:var(--space-2);font-size:.9em;}
+.ask-form{display:flex;gap:var(--space-2);}
+.ask-form input{flex:1;}
