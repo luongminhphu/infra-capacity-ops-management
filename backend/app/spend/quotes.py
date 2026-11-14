@@ -25,7 +25,7 @@ def parse_number(value: Any) -> Optional[Decimal]:
         return None
     if isinstance(value, (int, float, Decimal)):
         try:
-            return Decimal(str(value))
+            return _bounded(Decimal(str(value)))
         except InvalidOperation:
             return None
     m = _NUM.search(str(value).replace(" ", " "))
@@ -46,9 +46,16 @@ def parse_number(value: Any) -> Optional[Decimal]:
         else:
             s = s.replace(sep, ".")                      # decimal separator
     try:
-        return Decimal(s)
+        return _bounded(Decimal(s))
     except InvalidOperation:
         return None
+
+
+MAX_ABS = Decimal("1e15")          # larger than any quotation; keeps BIGINT / NUMERIC(18,2) safe
+
+
+def _bounded(d: Decimal) -> Optional[Decimal]:
+    return d if d.is_finite() and abs(d) < MAX_ABS else None
 
 
 def to_int(d: Optional[Decimal]) -> Optional[int]:
@@ -180,8 +187,35 @@ def lines_from_rows(rows: Sequence[Sequence[Any]]) -> Extracted:
     return out
 
 
+MAX_PART = 15 * 1024 * 1024        # one XML part (sharedStrings.xml, document.xml) once unzipped
+MAX_TOTAL = 60 * 1024 * 1024
+
+
+def _guard_zip(data: bytes) -> None:
+    """Quotations are small: refuse Office files whose XML parts would blow up memory when parsed."""
+    import zipfile
+    infos = zipfile.ZipFile(io.BytesIO(data)).infolist()
+    if sum(i.file_size for i in infos) > MAX_TOTAL or any(i.file_size > MAX_PART for i in infos):
+        raise ValueError("file quá lớn khi giải nén")
+
+
 def read_xlsx(data: bytes) -> Extracted:
+    try:
+        return _read_xlsx(data)
+    except Exception as exc:              # malformed file: report, never 500
+        return Extracted(message=f"Không đọc được file Excel ({type(exc).__name__}) — nhập dòng bằng tay.")
+
+
+def read_docx(data: bytes) -> Extracted:
+    try:
+        return _read_docx(data)
+    except Exception as exc:
+        return Extracted(message=f"Không đọc được file Word ({type(exc).__name__}) — nhập dòng bằng tay.")
+
+
+def _read_xlsx(data: bytes) -> Extracted:
     from openpyxl import load_workbook
+    _guard_zip(data)
     wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
     best: Optional[Extracted] = None
     for ws in wb.worksheets[:10]:
@@ -192,8 +226,9 @@ def read_xlsx(data: bytes) -> Extracted:
     return best or Extracted(message="File không có sheet nào.")
 
 
-def read_docx(data: bytes) -> Extracted:
+def _read_docx(data: bytes) -> Extracted:
     import docx
+    _guard_zip(data)
     d = docx.Document(io.BytesIO(data))
     best: Optional[Extracted] = None
     for t in d.tables:
@@ -352,6 +387,8 @@ def validate_criteria(criteria: Sequence[Tuple[str, str, Decimal]]) -> Optional[
     """(section, name, weight) -> error message or None. A = 70 %, B = 30 % with 2–4 criteria."""
     a = [w for s, _, w in criteria if s == "A"]
     b = [w for s, _, w in criteria if s == "B"]
+    if not 1 <= len(a) <= 10:
+        return "Khung đánh giá tiêu chuẩn (A) có từ 01 đến 10 tiêu chí."
     if not 2 <= len(b) <= 4:
         return "Khung đánh giá mở rộng (B) cần tối thiểu 02, tối đa 04 tiêu chí."
     if sum(a) != Decimal("0.7"):

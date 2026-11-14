@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import quote as urlquote
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -24,7 +25,7 @@ from ..spend.models import (
     WORKSTREAMS, CapexItem, CapexProject, Contract, EvaluationCriterion, EvaluationScore, OpexItem, QuoteRequest, Quotation,
     QuotationFinding, QuotationLine, SpendAiConfig, SpendFile, SpendVendor,
 )
-from ..spend.roles import require_spend
+from ..spend.roles import has_role, require_spend
 from ..timeutil import to_iso_utc
 
 router = APIRouter(prefix="/api/spend", tags=["spend-quotes"], dependencies=[Depends(require_feature("spend"))])
@@ -118,7 +119,13 @@ def update_vendor_profile(vendor_id: int, request: Request, data: Dict[str, Any]
         _bad("Trạng thái nhà cung cấp không hợp lệ.")
     if status != "active" and not str(data.get("statusReason") or "").strip():
         _bad("Ghi lý do khi tạm ngừng / không hợp tác.")
-    aliases = [a.strip()[:255] for a in (data.get("aliases") or []) if str(a).strip()][:20]
+    if status != (v.status or "active") and not has_role(user, "approver"):
+        raise HTTPException(403, "Đổi trạng thái nhà cung cấp cần quyền Duyệt.")
+    raw_aliases = data.get("aliases") or []
+    if not isinstance(raw_aliases, list):
+        _bad("Tên gọi khác không hợp lệ.")
+    aliases = [str(a).strip()[:255] for a in raw_aliases if str(a).strip()][:20]
+    _no_name_clash(db, v, [name] + ([short] if short else []) + aliases)
     email = t(data.get("contactEmail"), "email liên hệ", 255)
     if email and not service.EMAIL_RE.match(email):
         _bad("Email liên hệ không hợp lệ.")
@@ -144,6 +151,17 @@ def update_vendor_profile(vendor_id: int, request: Request, data: Dict[str, Any]
     return _vendor_out(v)
 
 
+def _no_name_clash(db: Session, v: SpendVendor, names: List[str]) -> None:
+    """Name, short name and aliases must not point at another vendor (uploads resolve vendors by them)."""
+    mine = {service.norm_name(n) for n in names if n}
+    for o in db.query(SpendVendor).filter(SpendVendor.id != v.id):
+        theirs = {o.name_norm} | ({service.norm_name(o.short_name)} if o.short_name else set()) | \
+                 {service.norm_name(a) for a in (o.aliases or "").splitlines() if a.strip()}
+        hit = mine & theirs
+        if hit:
+            raise HTTPException(409, f"Tên “{next(iter(hit))}” đã dùng cho nhà cung cấp {o.name}.")
+
+
 # ================================================================ helpers
 def _request(db: Session, code: str) -> QuoteRequest:
     r = db.query(QuoteRequest).filter(QuoteRequest.code == code).first()
@@ -157,6 +175,11 @@ def _quotation(db: Session, r: QuoteRequest, qid: int) -> Quotation:
     if not q:
         raise HTTPException(404, "Không tìm thấy báo giá trong gói này.")
     return q
+
+
+def _usable_vendor(v: Optional[SpendVendor]) -> None:
+    if v is not None and (v.status or "active") == "blocked":
+        raise HTTPException(409, f"{service.vendor_label(v)} đang ở trạng thái Không hợp tác — đổi trạng thái ở trang Nhà cung cấp nếu cần.")
 
 
 def _editable(r: QuoteRequest) -> None:
@@ -426,33 +449,33 @@ async def add_quotation(code: str, request: Request, file: Optional[UploadFile] 
     vid = service.resolve_vendor(db, {"vendorId": vendorId, "vendorName": vendorName}, user, request)
     if db.query(Quotation.id).filter_by(request_id=r.id, vendor_id=vid).first():
         raise HTTPException(409, "Nhà cung cấp này đã có báo giá trong gói — sửa hoặc thay file của báo giá đó.")
+    _usable_vendor(db.get(SpendVendor, vid))
     q = Quotation(request_id=r.id, vendor_id=vid, currency="VND", state="pending", created_by=user.username, row_version=1)
     tmp = final = None
-    if file is not None and file.filename:
-        data = await files.read_upload(file)
-        row, tmp, final = files.store(db, data, file.filename, user.username)
-        q.file_id = row.id
-        if row.mime == files.XLSX:
-            q.extraction_method = "excel"
-            _pending = qm.read_xlsx(data)
-        elif row.mime == files.DOCX:
-            q.extraction_method = "docx"
-            _pending = qm.read_docx(data)
-        else:
-            _pending = None                      # PDF: read with AI on request (may take a minute)
-    else:
-        _pending = None
-        q.extraction_method = "manual"
-    db.add(q)
-    db.flush()
-    if _pending is not None:
-        _store_extracted(db, q, _pending)
-        db.flush()
-        run_checks(db, r, q)
-    if r.status == "draft":
-        r.status = "comparing"
-    service.audit(db, user, request, "spend.quote.add", code=r.code, quotation=q.id, vendor=vid, method=q.extraction_method)
     try:
+        _pending = None
+        if file is not None and file.filename:
+            data = await files.read_upload(file)
+            row, tmp, final = files.store(db, data, file.filename, user.username)
+            q.file_id = row.id
+            if row.mime == files.XLSX:
+                q.extraction_method = "excel"
+                _pending = await run_in_threadpool(qm.read_xlsx, data)
+            elif row.mime == files.DOCX:
+                q.extraction_method = "docx"
+                _pending = await run_in_threadpool(qm.read_docx, data)
+            # PDF: read with AI on request (may take a minute)
+        else:
+            q.extraction_method = "manual"
+        db.add(q)
+        db.flush()
+        if _pending is not None:
+            _store_extracted(db, q, _pending)
+            db.flush()
+            run_checks(db, r, q)
+        if r.status == "draft":
+            r.status = "comparing"
+        service.audit(db, user, request, "spend.quote.add", code=r.code, quotation=q.id, vendor=vid, method=q.extraction_method)
         db.commit()
         if tmp is not None:
             files.finalize(tmp, final)
@@ -489,6 +512,8 @@ def extract_quotation(code: str, qid: int, request: Request, user: User = Depend
             raw = ai.extract_quotation(db.get(SpendAiConfig, 1), data)
         except ai.AiError as exc:
             q.state, q.extraction_message = "failed", str(exc)[:500]
+            if ai.enabled(db.get(SpendAiConfig, 1)):
+                service.audit(db, user, request, "spend.quote.ai_extract", code=r.code, quotation=q.id, sha256=f.sha256, failed=True)
             db.commit()
             raise HTTPException(422, str(exc)) from exc
         ex, q.extraction_method = _from_ai(q, raw), "ai"
@@ -543,7 +568,7 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
         _bad("Mã tiền tệ gồm 3 chữ cái (VND, USD…).")
     q.currency = cur
     q.fx_rate = _d(data.get("fxRate")) if cur != "VND" else None
-    if q.fx_rate is not None and q.fx_rate <= 0:
+    if q.fx_rate is not None and not Decimal(0) < q.fx_rate < Decimal(10_000_000):
         _bad("Tỷ giá phải lớn hơn 0.")
     q.vat_pct = _d(data.get("vatPct"))
     for attr, key in (("stated_subtotal", "statedSubtotal"), ("stated_discount", "statedDiscount"), ("stated_vat", "statedVat"),
@@ -555,6 +580,8 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
     q.notes = t(data.get("notes"), "ghi chú", 5000)
     rows = data.get("lines")
     if rows is not None:
+        if not isinstance(rows, list) or not all(isinstance(x, dict) for x in rows):
+            _bad("Danh sách dòng không hợp lệ.")
         if len(rows) > MAX_LINES:
             _bad(f"Tối đa {MAX_LINES} dòng.")
         db.query(QuotationLine).filter_by(quotation_id=q.id).delete(synchronize_session=False)
@@ -581,13 +608,15 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
 
 
 @router.post("/quotes/{code}/quotations/{qid}/verify")
-def verify_quotation(code: str, qid: int, request: Request, user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
+def verify_quotation(code: str, qid: int, request: Request, data: Dict[str, Any] = Body(default={}), user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
     """A person confirms the lines match the vendor's document (the vendor's own arithmetic errors stay as findings)."""
     r = _request(db, code)
     _editable(r)
     q = _quotation(db, r, qid)
     if not db.query(QuotationLine.id).filter_by(quotation_id=q.id, line_type="item").first():
         raise HTTPException(409, "Báo giá chưa có dòng hàng nào.")
+    if data.get("rowVersion") is not None and int(data["rowVersion"]) != q.row_version:
+        raise HTTPException(409, "Báo giá vừa được sửa / đọc lại — tải lại và kiểm tra trước khi xác nhận.")
     q.state, q.verified_at, q.verified_by = "verified", dt.datetime.utcnow(), user.username
     q.row_version += 1
     service.audit(db, user, request, "spend.quote.verify", code=r.code, quotation=q.id)
@@ -689,12 +718,17 @@ def save_evaluation(code: str, request: Request, data: Dict[str, Any] = Body(...
     r.eval_approver = t(data.get("approver"), "trưởng bộ phận", 128)
     qids = {q.id for q in db.query(Quotation).filter_by(request_id=r.id)}
     crit_in = data.get("criteria") or []
+    if not isinstance(crit_in, list) or len(crit_in) > 14:
+        _bad("Phiếu đánh giá tối đa 14 tiêu chí.")
     parsed = []
     for i, c in enumerate(crit_in):
+        if not isinstance(c, dict) or not isinstance(c.get("scores") or {}, dict) or len(c.get("scores") or {}) > len(qids):
+            _bad(f"Tiêu chí {i + 1}: dữ liệu không hợp lệ.")
         sec = c.get("section")
         if sec not in ("A", "B"):
             _bad(f"Tiêu chí {i + 1}: phần phải là A hoặc B.")
         w = _d(c.get("weight"))
+        w = w.quantize(Decimal("0.0001")) if w is not None else None
         if w is None or not Decimal(0) < w <= 1:
             _bad(f"Tiêu chí {i + 1}: tỷ trọng từ 0 đến 1 (vd 0,15).")
         parsed.append((sec, t(c.get("name"), f"tên tiêu chí {i + 1}", 255, required=True), w, c.get("scores") or {}))
@@ -744,6 +778,7 @@ def select_vendor(code: str, request: Request, data: Dict[str, Any] = Body(...),
     if verified < r.min_quotes and not reason:
         raise HTTPException(409, f"Mới có {verified}/{r.min_quotes} báo giá đã kiểm tra — ghi lý do (vd độc quyền, chỉ 1 NCC) để chọn.")
     v = db.get(SpendVendor, q.vendor_id)
+    _usable_vendor(v)
     r.status, r.selected_quotation_id, r.selection_reason = "selected", q.id, reason
     r.selected_at, r.selected_by = dt.datetime.utcnow(), user.username
     if not r.eval_conclusion:

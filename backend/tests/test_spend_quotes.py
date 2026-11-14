@@ -286,3 +286,49 @@ def test_roles(app_, editor):
     assert nobody.get("/api/spend/quotes").status_code == 403
     assert nobody.get("/api/spend/vendor-profiles").status_code == 403
     assert editor.delete(f"/api/spend/quotes/{rq['code']}").status_code == 403
+
+
+def test_hardening_bad_files_numbers_names_and_blocked_vendor(app_, admin, editor):
+    approver = _login(app_, "approver1")
+    rq = _new_request(editor)
+    code = rq["code"]
+    # Huge / non-finite numbers are ignored, never a 500.
+    assert qm.parse_number("1" + "0" * 20) is None and qm.parse_number(float("inf")) is None and qm.parse_number("NaN") is None
+    # A broken xlsx (valid zip, garbage workbook) is stored as "failed", the temp file is not left behind.
+    bad = io.BytesIO()
+    import zipfile
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("xl/workbook.xml", "not xml")
+    r = _upload(editor, code, "Broken Co", bad.getvalue())
+    assert r.status_code == 200, r.text
+    q = r.json()["quotations"][0]
+    assert q["state"] == "failed" and "Không đọc được file Excel" in q["message"]
+    # Verify with a stale rowVersion is refused.
+    d = _upload(editor, code, "Alpha", _quote_file()).json()
+    a = d["quotations"][1]
+    assert editor.post(f"/api/spend/quotes/{code}/quotations/{a['id']}/verify", json={"rowVersion": a["rowVersion"] - 1}).status_code == 409
+    assert editor.post(f"/api/spend/quotes/{code}/quotations/{a['id']}/verify", json={"rowVersion": a["rowVersion"]}).status_code == 200
+    # An alias equal to another vendor's name is refused; status change needs an approver.
+    p = editor.get(f"/api/spend/vendor-profiles/{a['vendorId']}").json()
+    assert editor.put(f"/api/spend/vendor-profiles/{a['vendorId']}", json={**p, "aliases": ["broken co"]}).status_code == 409
+    blocked = {**p, "status": "blocked", "statusReason": "Vi phạm bảo mật"}
+    assert editor.put(f"/api/spend/vendor-profiles/{a['vendorId']}", json=blocked).status_code == 403
+    assert approver.put(f"/api/spend/vendor-profiles/{a['vendorId']}", json=blocked).status_code == 200
+    # A blocked vendor can be neither quoted nor selected.
+    assert _upload(editor, _new_request(editor)["code"], "Alpha", _quote_file()).status_code == 409
+    r = approver.post(f"/api/spend/quotes/{code}/select", json={"quotationId": a["id"], "reason": "x"})
+    assert r.status_code == 409 and "Không hợp tác" in r.json()["detail"]
+    # Too many criteria are refused.
+    crit = [{"section": "A", "name": f"c{i}", "weight": 0.05, "scores": {}} for i in range(15)]
+    assert editor.put(f"/api/spend/quotes/{code}/evaluation", json={"criteria": crit}).status_code == 400
+
+
+def test_excel_title_with_formula_text_stays_text(editor):
+    rq = _new_request(editor, title="=HYPERLINK(\"http://x\",\"y\")")
+    _upload(editor, rq["code"], "=cmd|' /C calc'!A0", _quote_file())
+    wb = load_workbook(io.BytesIO(editor.get(f"/api/spend/quotes/{rq['code']}/comparison.xlsx").content))
+    for ws in wb.worksheets:
+        for ref in ("A1", "A2"):
+            c = ws[ref]
+            assert not (isinstance(c.value, str) and c.value.startswith("=") and c.data_type == "f"), (ws.title, ref)

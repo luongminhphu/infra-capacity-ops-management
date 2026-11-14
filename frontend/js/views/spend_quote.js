@@ -395,7 +395,10 @@ async function qtAction(act, qid, btn) {
     return run(() => apiRequest(qtUrl(code, 'quotations'), { method: 'POST', body: fd }), file ? 'Đã thêm báo giá.' : 'Đã thêm báo giá — nhập dòng bằng tay.');
   }
   if (act === 'extract') return run(() => apiRequest(qtUrl(code, 'quotations', qid, 'extract'), { method: 'POST' }), 'Đã đọc lại — kiểm tra từng dòng với file gốc.');
-  if (act === 'verify') return run(() => apiRequest(qtUrl(code, 'quotations', qid, 'verify'), { method: 'POST' }), 'Đã đánh dấu kiểm tra.');
+  if (act === 'verify') {
+    const q = d.quotations.find(x => String(x.id) === String(qid));
+    return run(() => apiRequest(qtUrl(code, 'quotations', qid, 'verify'), { method: 'POST', body: JSON.stringify({ rowVersion: q && q.rowVersion }) }), 'Đã đánh dấu kiểm tra.');
+  }
   if (act === 'remove') {
     if (!confirm('Xoá báo giá này và file đính kèm?')) return;
     return run(() => apiRequest(qtUrl(code, 'quotations', qid), { method: 'DELETE' }));

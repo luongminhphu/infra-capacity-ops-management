@@ -107,6 +107,9 @@ def _sheet_title(ws, title: str, subtitle: str, ncols: int) -> int:
     ws["A2"].font = _font(9.5, False, "DCE7F7")
     ws["A2"].fill = _fill(NAVY)
     ws["A2"].alignment = Alignment(vertical="center", indent=1)
+    for ref in ("A1", "A2"):                      # titles may carry user / vendor text: never a formula
+        if isinstance(ws[ref].value, str) and ws[ref].value[:1] in ("=", "+", "-", "@"):
+            ws[ref].data_type = "s"
     for c in range(1, ncols + 1):
         ws.cell(row=1, column=c).fill = _fill(NAVY)
         ws.cell(row=2, column=c).fill = _fill(NAVY)
