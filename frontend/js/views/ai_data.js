@@ -61,7 +61,7 @@ async function aiOsClassify(btn) {
     aiOsSuggest = r.items;
     if (!r.total) return uiEmpty('Không có VM nào ở nhóm Other / Unknown chưa ghi đè.');
     const rows = r.items.map((s, i) => `<tr>
-      <td><input type="checkbox" data-ai-os-pick="${i}" ${s.category !== 'other_unknown' && s.confidence !== 'low' ? 'checked' : ''} ${s.category === 'other_unknown' ? 'disabled' : ''} aria-label="Chọn ${esc(s.vm)}"></td>
+      <td><input type="checkbox" data-ai-os-pick="${i}" ${s.category !== 'other_unknown' && s.confidence === 'high' ? 'checked' : ''} ${s.category === 'other_unknown' ? 'disabled' : ''} aria-label="Chọn ${esc(s.vm)}"></td>
       <td><b>${esc(s.vm)}</b><span class="muted-sub">${esc(s.cluster || '')}</span></td>
       <td class="wrap">${esc(s.evidence.toolsGuestFullName || s.evidence.guestFullName || s.evidence.guestId || '—')}</td>
       <td>${esc(LIC_CATEGORY_LABEL[s.category] || s.category)}</td><td>${esc(s.osVersion || '—')}</td><td>${esc(s.osEdition || '—')}</td>
@@ -137,7 +137,6 @@ async function importMapRows(rows, target, fileName) {
   try { lk = await apiRequest('/import-mappings/lookup', { method: 'POST', body: JSON.stringify({ target, headers }) }); }
   catch (err) { return rows; }
   if (lk.saved) {
-    apiRequest(`/import-mappings/${lk.saved.id}/used`, { method: 'POST' }).catch(() => {});
     return importApplyMapping(rows, lk.saved.mapping, lk.fields);
   }
   const mapping = await importMapDialog(rows, target, headers, lk.fields, fileName);
@@ -189,7 +188,8 @@ function importMapDialog(rows, target, headers, fields, fileName) {
       if (dlg.returnValue !== 'yes') { resolve(null); return; }
       const m = read();
       if ($('#importMapSave', dlg).checked) {
-        try { await apiRequest('/import-mappings', { method: 'PUT', body: JSON.stringify({ target, headers, mapping: m, source }) }); } catch (err) { /* applied anyway */ }
+        // Applied anyway; a refusal (layout saved by someone else, cap reached) only means it is not remembered.
+        try { await apiRequest('/import-mappings', { method: 'PUT', body: JSON.stringify({ target, headers, mapping: m, source }) }); } catch (err) { /* not remembered */ }
       }
       resolve(m);
     }, { once: true });

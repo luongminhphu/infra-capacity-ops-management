@@ -118,6 +118,7 @@ def test_shape_and_signature():
     assert ai_data.shape("10.1.2.3") == "99.9.9.9"
     assert ai_data.shape("Powered On") == "Powered On" and ai_data.shape("512 GB") == "512 GB" and ai_data.shape(32) == 32
     assert ai_data.shape("4237-ab12") == "9999-aa99"
+    assert ai_data.shape("0912345678") == "9999999999"                                   # long digit IDs shaped
     assert ai_data.signature(["Tên máy", "Số lõi"]) == ai_data.signature([" số LÕI", "tên máy"])
     assert ai_data.signature(["A"]) != ai_data.signature(["B"])
 
@@ -127,13 +128,13 @@ def test_column_mapping_suggest_save_reuse(app_, admin, editor, monkeypatch):
     headers = ["Máy chủ", "Nhóm", "Lõi CPU", "Bộ nhớ (GiB)", "Ghi chú"]
     samples = [{"Máy chủ": "esx01.corp.local", "Nhóm": "PRD", "Lõi CPU": "32", "Bộ nhớ (GiB)": "512", "Ghi chú": "rack A3 – 10.1.2.3"}]
     seen = []
-    answer = {"mapping": [{"field": "name", "column": "Máy chủ", "confidence": "high"},
-                          {"field": "cluster", "column": "Nhóm", "confidence": "medium"},
-                          {"field": "cores", "column": "Lõi CPU", "confidence": "high"},
-                          {"field": "ramGB", "column": "Bộ nhớ (GiB)", "confidence": "high"},
-                          {"field": "ramMB", "column": "Ghi chú", "confidence": "low"},          # dropped: ramGB wins
-                          {"field": "password", "column": "Ghi chú", "confidence": "low"},       # unknown field
-                          {"field": "status", "column": "Không có cột này", "confidence": "low"}],  # not a header
+    answer = {"mapping": [{"field": "name", "column": 0, "confidence": "high"},
+                          {"field": "cluster", "column": 1, "confidence": "medium"},
+                          {"field": "cores", "column": 2, "confidence": "high"},
+                          {"field": "ramGB", "column": 3, "confidence": "high"},
+                          {"field": "ramMB", "column": 4, "confidence": "low"},          # dropped: ramGB wins
+                          {"field": "password", "column": 4, "confidence": "low"},       # unknown field
+                          {"field": "status", "column": 99, "confidence": "low"}],       # no such column
               "notes": "Cột Nhóm có thể là cluster."}
     monkeypatch.setattr(transport, "JSON_CALL", _fake(answer, seen))
     lk = editor.post("/api/import-mappings/lookup", json={"target": "hosts", "headers": headers}).json()
@@ -143,7 +144,11 @@ def test_column_mapping_suggest_save_reuse(app_, admin, editor, monkeypatch):
     assert r.json()["mapping"] == {"name": "Máy chủ", "cluster": "Nhóm", "cores": "Lõi CPU", "ramGB": "Bộ nhớ (GiB)"}
     sent = seen[-1]["text"]
     assert "esx01" not in sent and "10.1.2.3" not in sent and "corp" not in sent       # sample values shaped
-    assert len(_facts(seen)["dong_mau"]) == 5                                          # ≤ 5 sample rows
+    assert len(_facts(seen)["dong_mau_theo_thu_tu_cot"]) == 5                          # ≤ 5 sample rows
+    # a file without a header row: data used as header labels is shaped too
+    editor.post("/api/ai/column-mapping", json={"target": "hosts", "headers": ["esx09.corp.local", "PRD", "32", "10.9.9.9"], "samples": []})
+    hd = [c["tieu_de"] for c in _facts(seen)["cot"]]
+    assert hd[:3] == ["aaa99.aaaa.aaaaa", "PRD", "99"] and "10.9.9.9" not in seen[-1]["text"]
     # save requires the required fields, then lookup finds it for the same layout in another order
     bad = editor.put("/api/import-mappings", json={"target": "hosts", "headers": headers, "mapping": {"name": "Máy chủ"}})
     assert bad.status_code == 400 and "Số core" in bad.json()["detail"]
@@ -151,7 +156,13 @@ def test_column_mapping_suggest_save_reuse(app_, admin, editor, monkeypatch):
     assert ok.status_code == 200 and ok.json()["source"] == "ai"
     again = editor.post("/api/import-mappings/lookup", json={"target": "hosts", "headers": list(reversed(headers))}).json()
     assert again["saved"]["mapping"]["cores"] == "Lõi CPU"
-    assert editor.post(f"/api/import-mappings/{again['saved']['id']}/used").status_code == 200
+    # another user cannot overwrite it; only admin lists / deletes
+    other = _login(app_, "approver1")
+    assert other.put("/api/import-mappings", json={"target": "hosts", "headers": headers, "mapping": r.json()["mapping"]}).status_code == 403
+    assert editor.get("/api/import-mappings").status_code == 403
+    assert admin.get("/api/import-mappings").json()[0]["uses"] == 1
+    assert editor.delete(f"/api/import-mappings/{again['saved']['id']}").status_code == 403
+    assert admin.delete(f"/api/import-mappings/{again['saved']['id']}").status_code == 200
     assert editor.post("/api/import-mappings/lookup", json={"target": "vms", "headers": headers}).json()["saved"] is None
     assert editor.post("/api/import-mappings/lookup", json={"target": "x", "headers": headers}).status_code == 400
     assert editor.post("/api/import-mappings/lookup", json={"target": "hosts", "headers": "abc"}).status_code == 400

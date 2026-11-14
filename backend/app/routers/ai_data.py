@@ -12,7 +12,7 @@ from .. import ai_data, ai_platform
 from ..database import get_db
 from ..features import get_features
 from ..models import ImportMapping, User
-from ..security import get_current_user
+from ..security import get_current_user, is_admin, require_admin
 from ..spend import ai as transport
 
 router = APIRouter(prefix="/api", tags=["ai-data"])
@@ -66,6 +66,8 @@ def mapping_lookup(data: Dict[str, Any] = Body(...), user: User = Depends(get_cu
         mp = ai_data.clean_mapping(target, json.loads(row.mapping_json), headers)
         if mp:
             saved = {**ai_data.mapping_out(row), "mapping": mp}
+            row.uses = (row.uses or 0) + 1
+            db.commit()
     return {"fields": ai_data.fields_out(target), "saved": saved}
 
 
@@ -87,9 +89,13 @@ def mapping_save(data: Dict[str, Any] = Body(...), user: User = Depends(get_curr
     sig = ai_data.signature(headers)
     row = db.query(ImportMapping).filter(ImportMapping.target == target, ImportMapping.signature == sig).first()
     now = dt.datetime.utcnow()
+    if row and row.created_by != user.username and not is_admin(user):
+        raise HTTPException(403, f"Cách ánh xạ cho bộ cột này do {row.created_by} lưu — chỉ người đó hoặc admin sửa được.")
     if not row:
         if db.query(ImportMapping).count() >= ai_data.MAX_MAPPINGS:
-            raise HTTPException(409, f"Đã lưu tối đa {ai_data.MAX_MAPPINGS} cách ánh xạ — xoá bớt trước khi lưu thêm.")
+            raise HTTPException(409, f"Đã lưu tối đa {ai_data.MAX_MAPPINGS} cách ánh xạ — admin xoá bớt trước khi lưu thêm.")
+        if db.query(ImportMapping).filter(ImportMapping.created_by == user.username).count() >= ai_data.MAX_MAPPINGS_PER_USER:
+            raise HTTPException(409, f"Mỗi người lưu tối đa {ai_data.MAX_MAPPINGS_PER_USER} cách ánh xạ.")
         row = ImportMapping(target=target, signature=sig, created_by=user.username, created_at=now, uses=0)
         db.add(row)
     row.headers_json, row.mapping_json, row.source = json.dumps(headers, ensure_ascii=False), json.dumps(mp), source
@@ -102,9 +108,15 @@ def mapping_save(data: Dict[str, Any] = Body(...), user: User = Depends(get_curr
     return ai_data.mapping_out(row)
 
 
-@router.post("/import-mappings/{mapping_id}/used")
-def mapping_used(mapping_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    n = db.query(ImportMapping).filter(ImportMapping.id == mapping_id).update({ImportMapping.uses: ImportMapping.uses + 1})
+@router.get("/import-mappings")
+def mapping_list(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return [{**ai_data.mapping_out(r), "headers": json.loads(r.headers_json), "createdBy": r.created_by}
+            for r in db.query(ImportMapping).order_by(ImportMapping.updated_at.desc()).limit(ai_data.MAX_MAPPINGS)]
+
+
+@router.delete("/import-mappings/{mapping_id}")
+def mapping_delete(mapping_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    n = db.query(ImportMapping).filter(ImportMapping.id == mapping_id).delete()
     db.commit()
     if not n:
         raise HTTPException(404, "Không tìm thấy cách ánh xạ.")

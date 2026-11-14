@@ -101,12 +101,15 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
 **AI cho dữ liệu nhiều biến số** — chỉ là đề xuất; nút AI chỉ hiện khi tác vụ đang bật:
 - **Backup → Tổng quan → AI phân tích lỗi**: gom job lỗi theo nguyên nhân gốc, giải thích mã lỗi chưa có trong bảng
   mã, đề xuất thứ tự xử lý. Chỉ gửi số job đã gom theo mã × policy × loại job (không gửi từng job). Mức độ ở các bảng
-  vẫn theo luật; mã lỗi AI nêu mà không có trong kỳ bị bỏ.
+  vẫn theo luật; mã lỗi AI nêu mà không có trong kỳ bị bỏ. Tên policy được gửi nguyên văn (tên client trùng với
+  danh mục được che).
 - **Nhập file host / VM bố cục lạ** (không nhận ra cột tên / CPU): hộp **Chọn cột** hiện ra; bấm **AI đề xuất** để AI
   điền sẵn. AI chỉ nhận tiêu đề cột và tối đa 5 dòng mẫu đã che (chữ → `a`, số → `9`; số đo và từ trạng thái giữ
-  nguyên). Cách ánh xạ đã xác nhận được **nhớ** theo bộ tiêu đề cột (bảng `import_mappings`); lần sau tự áp dụng.
+  nguyên; tiêu đề trông như dữ liệu — file không có dòng tiêu đề — cũng bị che). Cách ánh xạ đã xác nhận được **nhớ**
+  theo bộ tiêu đề cột (bảng `import_mappings`); lần sau tự áp dụng. Chỉ người lưu hoặc admin sửa được một cách ánh xạ;
+  admin xem / xoá qua `GET` / `DELETE /api/import-mappings`.
 - **Tài sản → Hệ điều hành → AI gợi ý VM chưa rõ**: đề xuất họ / phiên bản / edition cho tối đa 60 VM *Other / Unknown*
-  chưa ghi đè, kèm độ tin cậy và lý do. Tick chọn rồi **Ghi đè các VM đã chọn** (dùng ghi đè thủ công sẵn có, ghi chú
+  chưa ghi đè, kèm độ tin cậy và lý do. Chỉ đề xuất tin cậy cao được tick sẵn. Tick chọn rồi **Ghi đè các VM đã chọn** (dùng ghi đè thủ công sẵn có, ghi chú
   "AI đề xuất").
 - **Capacity → Xu hướng & biến động → AI tóm tắt biến động**: tóm tắt VM thêm / bỏ / đổi cấu hình trong kỳ theo cluster.
 
