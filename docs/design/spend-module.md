@@ -246,9 +246,10 @@ sửa được) → đổi `start_month` sau này không làm dịch chuyển d�
 Với mỗi hạng mục có `coverage_years = N > 0`:
 ```
 start        = item.start_date or project.go_live_date      (thiếu cả hai → chưa sinh, báo "thiếu ngày")
-renewal_date = add_years(start, N)        # 29/02 + N năm, năm đích không nhuận → 28/02
+cover_end    = term_end(start, N)         # ngày cuối của bảo hành / license đi kèm
+renewal_date = cover_end + 1 ngày          # 29/02/2028 + 1 năm: hết 28/02/2029 → gia hạn từ 01/03/2029
 opex.start   = renewal_date
-opex.end     = add_years(renewal_date, 1) - 1 ngày
+opex.end     = term_end(renewal_date, 1)
 opex.fiscal_year = fiscal_year(renewal_date, start_month)
 amount_net   = item.renewal_amount                         nếu nhập tay
              = round_half_up(item.amount_net × pct / 100)  pct = item.renewal_pct ?? category.renewal_pct
@@ -260,7 +261,7 @@ Ví dụ kiểm thử (start_month=1, trừ khi ghi khác):
 | 15/06/2026 | 1 | 15/06/2027 | 2027 |
 | 15/06/2026 | 3 | 15/06/2029 | 2029 (năm thứ 4) |
 | 01/01/2026 | 5 | 01/01/2031 | 2031 |
-| 29/02/2028 | 1 | 28/02/2029 | 2029 |
+| 29/02/2028 | 1 | 01/03/2029 (bảo hành hết 28/02/2029) | 2029 |
 | 29/02/2028 | 4 | 29/02/2032 | 2032 |
 | 31/03/2026, start_month=4 | 1 | 31/03/2027 | 2026 |
 | 01/04/2026, start_month=4 | 1 | 01/04/2027 | 2027 |

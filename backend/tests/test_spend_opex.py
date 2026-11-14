@@ -11,6 +11,7 @@ from app.models import AppSetting, AuditLog, User
 from app.security import hash_password
 from app.spend import files
 from app.spend.models import (
+    CapexItem, CapexProject,
     OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendNotifyChannel,
     SpendReminderLog, SpendSequence, SpendSmtpConfig, SpendVendor,
 )
@@ -24,7 +25,7 @@ def _wipe():
     for model in (SpendReminderLog, OpexAttachment, OpexAsset, SpendFile, SpendNotifyChannel, SpendSmtpConfig):
         db.query(model).delete()
     db.query(OpexItem).update({OpexItem.renewed_from_id: None})
-    for model in (OpexItem, SpendVendor, SpendCostCenter, SpendSequence):
+    for model in (OpexItem, CapexItem, CapexProject, SpendVendor, SpendCostCenter, SpendSequence):
         db.query(model).delete()
     db.query(AppSetting).filter(AppSetting.key.like("spend.%")).delete(synchronize_session=False)
     db.query(AppSetting).filter(AppSetting.key == "feature.spend").delete()
@@ -138,7 +139,8 @@ def test_update_optimistic_lock_and_audit(app_, editor):
     r = editor.put(f"/api/spend/opex/{item['code']}", json={**_opex(), "status": "stopped", "code": "X", "rowVersion": 2})
     assert r.status_code == 200 and r.json()["status"] == "active" and r.json()["code"] == item["code"]
     db = SessionLocal()
-    row = db.query(AuditLog).filter(AuditLog.action == "spend.opex.update").order_by(AuditLog.id).first()
+    row = (db.query(AuditLog).filter(AuditLog.action == "spend.opex.update", AuditLog.detail.like(f'%"{item["code"]}"%'))
+           .order_by(AuditLog.id.desc()).offset(1).first())   # the first of the two updates
     assert json.loads(row.detail)["changes"]["amountNet"] == [120_000_000, 150_000_000]
     db.close()
     hist = editor.get(f"/api/spend/opex/{item['code']}/history").json()
