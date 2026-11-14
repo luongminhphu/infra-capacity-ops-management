@@ -453,3 +453,69 @@ class SpendAiConfig(Base):
     allow_external = Column(Boolean, nullable=False, default=False)
     updated_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(255), nullable=False)
+
+
+PAYMENT_STATUSES = ("pending", "submitted", "paid")
+
+
+class ContractPayment(_Audited, Base):
+    """One payment instalment of a contract (đợt thanh toán). Status: pending (collecting the
+    documents) -> submitted (documents complete, handed to accounting) -> paid."""
+    __tablename__ = "contract_payments"
+    __table_args__ = (
+        UniqueConstraint("contract_id", "seq", name="uq_contract_payment_seq"),
+        CheckConstraint("seq >= 1", name="ck_payment_seq"),
+        CheckConstraint("amount >= 0", name="ck_payment_amount"),
+        CheckConstraint("percent IS NULL OR (percent >= 0 AND percent <= 100)", name="ck_payment_percent"),
+        CheckConstraint(_in("status", PAYMENT_STATUSES), name="ck_payment_status"),
+        CheckConstraint("(status = 'paid') = (paid_at IS NOT NULL)", name="ck_payment_paid"),
+        CheckConstraint("paid_amount IS NULL OR paid_amount >= 0", name="ck_payment_paid_amount"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="RESTRICT"), nullable=False, index=True)
+    seq = Column(Integer, nullable=False)
+    title = Column(String(255), nullable=False)
+    amount = Column(BigInteger, nullable=False)                 # VND, after VAT
+    percent = Column(Numeric(5, 2), nullable=True)              # % of the contract value, informative
+    due_date = Column(Date, nullable=True)
+    condition = Column(String(500), nullable=True)              # "Sau khi nghiệm thu", "Khi ký hợp đồng"…
+    status = Column(String(10), nullable=False, default="pending")
+    submitted_at = Column(DateTime, nullable=True)
+    submitted_by = Column(String(255), nullable=True)
+    paid_at = Column(Date, nullable=True)
+    paid_by = Column(String(255), nullable=True)
+    paid_amount = Column(BigInteger, nullable=True)
+    payment_ref = Column(String(64), nullable=True)             # số chứng từ / UNC
+    note = Column(Text, nullable=True)
+    row_version = Column(Integer, nullable=False, default=1)
+
+
+class PaymentDocument(Base):
+    """One line of the document checklist of an instalment (hóa đơn, biên bản nghiệm thu…)."""
+    __tablename__ = "payment_documents"
+    __table_args__ = (
+        CheckConstraint("(done AND done_at IS NOT NULL) OR (NOT done AND done_at IS NULL)", name="ck_payment_doc_done"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    payment_id = Column(Integer, ForeignKey("contract_payments.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    required = Column(Boolean, nullable=False, default=True)
+    done = Column(Boolean, nullable=False, default=False)
+    done_at = Column(DateTime, nullable=True)
+    done_by = Column(String(255), nullable=True)
+    note = Column(String(500), nullable=True)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+
+class PaymentDocDefault(Base):
+    """Document checklist copied into every new instalment (Settings → Chi phí & nhắc hạn)."""
+    __tablename__ = "spend_payment_doc_defaults"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False, unique=True)
+    required = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    active = Column(Boolean, nullable=False, default=True)

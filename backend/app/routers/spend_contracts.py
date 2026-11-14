@@ -324,7 +324,16 @@ def delete_contract(code: str, request: Request, user: User = Depends(require_sp
     fl = db.query(SpendFile).filter(SpendFile.id.in_([v.file_id for v in versions])).all() if versions else []
     service.audit(db, user, request, "spend.contract.delete", code=c.code, title=c.title,
                   files=[{"name": f.original_name, "sha256": f.sha256} for f in fl])
-    from ..spend.models import ProposalContract
+    from ..spend.models import ContractPayment, PaymentDocument, ProposalContract
+    payments = db.query(ContractPayment).filter(ContractPayment.contract_id == c.id).all()
+    if any(pm.status != "pending" for pm in payments):
+        raise HTTPException(409, "Hợp đồng đã có đợt nộp hồ sơ / đã thanh toán — không xoá được.")
+    doc_files = [d.file_id for d in db.query(PaymentDocument).filter(PaymentDocument.payment_id.in_([pm.id for pm in payments] or [0]))
+                 if d.file_id]
+    db.query(PaymentDocument).filter(PaymentDocument.payment_id.in_([pm.id for pm in payments] or [0])).delete(synchronize_session=False)
+    for pm in payments:
+        db.delete(pm)
+    fl += db.query(SpendFile).filter(SpendFile.id.in_(doc_files)).all() if doc_files else []
     db.query(ProposalContract).filter(ProposalContract.contract_id == c.id).delete(synchronize_session=False)
     for v in versions:
         db.delete(v)

@@ -40,11 +40,23 @@ DEFAULT_CATEGORIES = [
 ]
 
 
+DEFAULT_PAYMENT_DOCS = [
+    ("Đề nghị thanh toán", True), ("Hóa đơn GTGT", True), ("Biên bản nghiệm thu / bàn giao", True),
+    ("Bảo lãnh tạm ứng / thực hiện hợp đồng", False), ("Phiếu xuất kho, CO / CQ", False),
+]
+
+
 def ensure_defaults(db: Session) -> None:
-    """Seed the category list once (an empty table only — admins edit it afterwards)."""
+    """Seed the category list and the payment document checklist once (empty tables only —
+    admins edit them afterwards)."""
+    from .models import PaymentDocDefault
     if db.query(SpendCategory.id).first() is None:
         for i, (code, name, grp, pct) in enumerate(DEFAULT_CATEGORIES):
             db.add(SpendCategory(code=code, name=name, grp=grp, renewal_pct=pct, sort_order=i))
+        db.commit()
+    if db.query(PaymentDocDefault.id).first() is None:
+        for i, (name, required) in enumerate(DEFAULT_PAYMENT_DOCS):
+            db.add(PaymentDocDefault(name=name, required=required, sort_order=i))
         db.commit()
 
 
