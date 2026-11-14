@@ -166,7 +166,8 @@ def ask(db: Session, user: User, question: str) -> Dict[str, Any]:
     def call():
         text, used = transport.run_tools(ai_platform.config(db), SYSTEM, masker.mask(q), TOOLS, handler)
         return {"answer": text[:6000], "tools": used}
-    result, _ = ai_platform.run(db, user, "ask_ico", call, facts=None, cache=False)
+    # A loop of up to 5 calls: reserve the worst case of its token ceiling, not one call.
+    result, _ = ai_platform.run(db, user, "ask_ico", call, facts=None, cache=False, reserve=2.0)
     answer = masker.unmask(result["answer"])
     low = answer.lower()
     links = [e for e in box.seen.values() if e["type"] in ("host", "vm") and e["name"].lower() in low][:15]

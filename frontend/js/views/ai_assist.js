@@ -126,9 +126,9 @@ function reportArchiveOn() {
   const orig = window.fetch.bind(window);
   window.fetch = (input, init = {}) => {
     try {
-      const url = typeof input === 'string' ? input : input.url;
-      if (reportArchiveOn() && /\/api\/[^?]*pdf/i.test(url)) {
-        const h = new Headers(init.headers || undefined);
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (reportArchiveOn() && url.origin === location.origin && /^\/api\/[^?]*pdf$/i.test(url.pathname)) {
+        const h = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
         h.set('X-ICO-Archive', '1');
         init = { ...init, headers: h };
       }
@@ -147,7 +147,7 @@ async function renderArchiveView() {
   const size = (b) => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
   mount.innerHTML = `<section class="table-card">
     <div class="panel-head"><div><div class="panel-title">Kho báo cáo</div>
-      <p class="panel-sub">Bản PDF đúng như lúc xuất. Bật “Lưu vào kho” ở <a href="#/docs/reports">Trung tâm báo cáo</a> để mỗi lần xuất được lưu một bản. Giữ tối đa ${esc(d.maxRows)} bản, ${esc(d.retentionDays)} ngày.</p></div>
+      <p class="panel-sub">Bản PDF đúng như lúc xuất. Bật “Lưu vào kho” ở <a href="#/docs/reports">Trung tâm báo cáo</a> để mỗi lần xuất được lưu một bản. Mỗi người giữ tối đa ${esc(d.maxPerUser)} bản, ${esc(d.retentionDays)} ngày.</p></div>
       <div class="panel-toolbar"><select id="archKind" aria-label="Loại báo cáo"><option value="">Mọi loại</option>${Object.entries(d.kinds).map(([k, l]) => `<option value="${esc(k)}"${archState.kind === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
         <label class="finding-filter-item"><input type="checkbox" id="archMine" ${archState.mine ? 'checked' : ''}><span>Chỉ của tôi</span></label></div></div>
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Lúc</th><th>Loại</th><th>Báo cáo</th><th>Tham số</th><th>Người xuất</th><th class="num">Dung lượng</th><th></th></tr></thead><tbody>

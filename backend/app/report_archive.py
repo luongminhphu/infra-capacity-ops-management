@@ -8,7 +8,7 @@ import datetime as dt
 import hashlib
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qsl, unquote, urlencode
 
 from sqlalchemy.orm import Session
@@ -20,23 +20,28 @@ logger = logging.getLogger("vco.report_archive")
 
 HEADER = "x-ico-archive"
 MAX_BYTES = 25 * 1024 * 1024
-MAX_ROWS = 1000
+MAX_ROWS = 1000                     # listing cap
+MAX_PER_USER = 100                  # each user's oldest copies are trimmed beyond this (never other users')
 RETENTION_DAYS = 400
-KINDS = [  # (path prefix, kind, label, feature)
-    ("/api/spend/renovations", "renovation", "Cải tạo văn phòng", "spend"),
-    ("/api/spend/", "spend", "Ngân sách & chi phí", "spend"),
-    ("/api/backup/", "backup", "Backup", "backup"),
-    ("/api/licensing/", "license", "License", "license"),
-    ("/api/sizing/", "sizing", "Sizing máy chủ", "sizing"),
-    ("/api/reports/", "capacity", "Capacity", None),
+# Only these report exports are archived (path regex, kind, label, feature, scope). The scope is the
+# minimum right to READ the copy and must match the route's own guard: "spend" = spend viewer.
+KINDS = [
+    (r"^/api/spend/renovations/[^/]+/export\.pdf$", "renovation", "Cải tạo văn phòng", "spend", "spend"),
+    (r"^/api/spend/reports/budget\.pdf$", "spend", "Ngân sách & chi phí", "spend", "spend"),
+    (r"^/api/backup/report/pdf$", "backup", "Backup", "backup", "general"),
+    (r"^/api/licensing/report/pdf$", "license", "License", "license", "general"),
+    (r"^/api/sizing/pdf$", "sizing", "Sizing máy chủ", "sizing", "general"),
+    (r"^/api/reports/pdf$", "capacity", "Capacity", None, "general"),
 ]
-KIND_LABELS = {k: lbl for _, k, lbl, _ in KINDS} | {"other": "Khác"}
-KIND_FEATURE = {k: f for _, k, _, f in KINDS}
+_KIND_RX = [(re.compile(rx), k, s) for rx, k, _, _, s in KINDS]
+KIND_LABELS = {k: lbl for _, k, lbl, _, _ in KINDS}
+KIND_FEATURE = {k: f for _, k, _, f, _ in KINDS}
 _SECRET_PARAM = re.compile(r"(token|key|secret|password|logo)", re.IGNORECASE)
 
 
-def kind_of(path: str) -> str:
-    return next((k for prefix, k, _, _ in KINDS if path.startswith(prefix)), "other")
+def kind_of(path: str) -> Optional[Tuple[str, str]]:
+    """(kind, scope) of an archivable report route, None for anything else (files, archive downloads…)."""
+    return next(((k, s) for rx, k, s in _KIND_RX if rx.match(path)), None)
 
 
 def _filename(content_disposition: str, path: str) -> str:
@@ -48,24 +53,28 @@ def _filename(content_disposition: str, path: str) -> str:
 
 def save(username: str, path: str, query: str, content_disposition: str, body: bytes, now: Optional[dt.datetime] = None) -> Optional[int]:
     """Store one archived PDF (own DB session; runs in a worker thread). Returns its id."""
-    if not body.startswith(b"%PDF") or len(body) > MAX_BYTES:
+    ks = kind_of(path)
+    if ks is None or not body.startswith(b"%PDF") or len(body) > MAX_BYTES:
         return None
+    kind, scope = ks
     now = now or dt.datetime.utcnow()
-    kind = kind_of(path)
+    digest = hashlib.sha256(body).hexdigest()
     fname = _filename(content_disposition, path)
     params = urlencode([(k, v[:100]) for k, v in parse_qsl(query or "", keep_blank_values=False) if not _SECRET_PARAM.search(k)][:30])[:1000]
     db = SessionLocal()
     try:
-        row = ReportArchive(kind=kind, scope="spend" if KIND_FEATURE.get(kind) == "spend" else "general",
+        if db.query(ReportArchive.id).filter(ReportArchive.created_by == username, ReportArchive.sha256 == digest).first():
+            return None                                          # same bytes already archived by this user
+        row = ReportArchive(kind=kind, scope=scope,
                             title=f"{KIND_LABELS[kind]} — {fname[:-4]}"[:255], filename=fname, params=params or None,
-                            size_bytes=len(body), sha256=hashlib.sha256(body).hexdigest(), content=body,
+                            size_bytes=len(body), sha256=digest, content=body,
                             created_by=username, created_at=now)
         db.add(row)
         db.flush()
         db.query(ReportArchive).filter(ReportArchive.created_at < now - dt.timedelta(days=RETENTION_DAYS)).delete(synchronize_session=False)
-        keep = [i for (i,) in db.query(ReportArchive.id).order_by(ReportArchive.created_at.desc(), ReportArchive.id.desc()).limit(MAX_ROWS)]
-        if len(keep) >= MAX_ROWS:
-            db.query(ReportArchive).filter(ReportArchive.id.notin_(keep)).delete(synchronize_session=False)
+        keep = [i for (i,) in db.query(ReportArchive.id).filter(ReportArchive.created_by == username)
+                .order_by(ReportArchive.created_at.desc(), ReportArchive.id.desc()).limit(MAX_PER_USER)]
+        db.query(ReportArchive).filter(ReportArchive.created_by == username, ReportArchive.id.notin_(keep)).delete(synchronize_session=False)
         db.commit()
         return row.id
     except Exception:  # noqa: BLE001 — archiving must never break the download
@@ -78,6 +87,8 @@ def save(username: str, path: str, query: str, content_disposition: str, body: b
 
 def can_read(row: ReportArchive, user: User, features: Dict[str, bool]) -> bool:
     from .spend.roles import has_role
+    if row.kind not in KIND_LABELS:
+        return False
     feat = KIND_FEATURE.get(row.kind)
     if feat and features.get(feat) is False:
         return False
@@ -103,7 +114,7 @@ class ArchiveMiddleware:
         if scope["type"] != "http" or not scope["path"].startswith("/api/"):
             return await self.app(scope, receive, send)
         headers = {k.decode().lower(): v.decode("latin-1") for k, v in scope.get("headers") or []}
-        if headers.get(HEADER) != "1":
+        if headers.get(HEADER) != "1" or kind_of(scope["path"]) is None:
             return await self.app(scope, receive, send)
         state = {"pdf": False, "status": 0, "cd": "", "chunks": [], "size": 0}
 
@@ -119,19 +130,23 @@ class ArchiveMiddleware:
                     state["chunks"].append(chunk)
                 await send(message)
                 if not message.get("more_body"):
-                    await self._store(scope, headers, state)    # after the user has the file
+                    try:
+                        await self._store(scope, state)          # after the user has the file
+                    except Exception:  # noqa: BLE001 — never break a finished response
+                        logger.exception("report archive failed")
                 return
             await send(message)
         await self.app(scope, receive, tee)
 
     @staticmethod
-    async def _store(scope, headers, state):
+    async def _store(scope, state):
         from starlette.concurrency import run_in_threadpool
+        from starlette.requests import Request
 
         from .security import COOKIE_NAME, decode_access_token
         if state["size"] > MAX_BYTES:
             return
-        cookie = next((p.split("=", 1)[1] for p in headers.get("cookie", "").split("; ") if p.startswith(COOKIE_NAME + "=")), None)
+        cookie = Request(scope).cookies.get(COOKIE_NAME)
         username = decode_access_token(cookie) if cookie else None
         if not username:
             return

@@ -526,6 +526,7 @@ def _call_anthropic_tools(cfg: SpendAiConfig, api_key: str, system: str, message
     """One turn of a tool loop. Returns {"stop": stop_reason, "content": [plain block dicts]}."""
     r = _create(cfg, api_key, max_tokens=max_tokens, system=system, messages=messages, tools=tools,
                 output_config={"effort": cfg.effort or "medium"})
+    u = getattr(r, "usage", None)
     blocks = []
     for b in r.content:
         t = getattr(b, "type", "")
@@ -533,21 +534,27 @@ def _call_anthropic_tools(cfg: SpendAiConfig, api_key: str, system: str, message
             blocks.append({"type": "text", "text": b.text})
         elif t == "tool_use":
             blocks.append({"type": "tool_use", "id": b.id, "name": b.name, "input": b.input})
-    return {"stop": r.stop_reason, "content": blocks}
+    return {"stop": r.stop_reason, "content": blocks,
+            "tokens": (getattr(u, "input_tokens", 0) or 0) + (getattr(u, "output_tokens", 0) or 0)}
 
 
 TOOLS_CALL = _call_anthropic_tools
 
 
 def run_tools(cfg: SpendAiConfig, system: str, question: str, tools: List[Dict[str, Any]],
-              handler, max_turns: int = 5, max_tokens: int = 2000) -> Tuple[str, List[str]]:
+              handler, max_turns: int = 5, max_tokens: int = 2000, token_budget: int = 120_000,
+              result_chars: int = 8000) -> Tuple[str, List[str]]:
     """Manual tool loop: the model calls read-only tools (handler(name, input) -> str) until it
     answers. Returns (answer text, names of the tools called). Raises AiError."""
     api_key = _api_key(cfg)
     messages: List[Dict[str, Any]] = [{"role": "user", "content": question}]
     used: List[str] = []
+    spent = 0
     for _ in range(max_turns):
+        if spent > token_budget:
+            raise AiError("Câu hỏi cần tra cứu quá nhiều dữ liệu — hãy hỏi hẹp hơn (một cluster, một VM…).")
         turn = TOOLS_CALL(cfg, api_key, system, messages, tools, max_tokens)
+        spent += int(turn.get("tokens") or 0)
         calls = [b for b in turn["content"] if b["type"] == "tool_use"]
         if turn["stop"] != "tool_use" or not calls:
             text = "\n".join(b["text"] for b in turn["content"] if b["type"] == "text").strip()
@@ -562,7 +569,7 @@ def run_tools(cfg: SpendAiConfig, system: str, question: str, tools: List[Dict[s
                 out, err = handler(c["name"], c["input"] if isinstance(c["input"], dict) else {}), False
             except Exception as exc:  # noqa: BLE001 — tool errors go back to the model, never the stack
                 out, err = f"Lỗi công cụ: {exc if isinstance(exc, ValueError) else type(exc).__name__}", True
-            results.append({"type": "tool_result", "tool_use_id": c["id"], "content": out[:20000], "is_error": err})
+            results.append({"type": "tool_result", "tool_use_id": c["id"], "content": out[:result_chars], "is_error": err})
         for c in calls[6:]:
             results.append({"type": "tool_result", "tool_use_id": c["id"], "content": "Bỏ qua: tối đa 6 công cụ mỗi lượt.", "is_error": True})
         messages.append({"role": "user", "content": results})

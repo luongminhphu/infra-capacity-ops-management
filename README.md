@@ -125,8 +125,8 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
   hỏi: tìm kiếm, thẻ host / VM, capacity cluster, client backup, VM chưa backup, hộp việc. Module tắt hoặc dữ liệu chi phí
   không đủ quyền thì công cụ không trả. Tối đa 5 vòng tra cứu mỗi câu; câu trả lời kèm link tới thẻ host / VM.
 - **Tài liệu → Kho báo cáo**: tick *Lưu vào kho* ở Trung tâm báo cáo, mỗi PDF xuất ra (Capacity, Backup, License, Sizing,
-  Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Tối đa 1.000 bản, 400 ngày, 25 MB
-  mỗi bản. Báo cáo chi phí chỉ người có vai trò Chi phí xem được; người lưu hoặc admin xoá được.
+  Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Mỗi người giữ tối đa 100 bản (bản cũ nhất của chính
+  người đó bị thay), 400 ngày, 25 MB mỗi bản; cùng nội dung không lưu hai lần. Chỉ các route báo cáo trong danh sách được lưu. Báo cáo chi phí chỉ người có vai trò Chi phí xem được; người lưu hoặc admin xoá được.
 
 Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác

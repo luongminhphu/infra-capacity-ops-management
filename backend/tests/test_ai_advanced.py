@@ -185,6 +185,13 @@ def test_ask_ico_tool_loop_masks_and_respects_rights(app_, admin, editor, monkey
     assert (run.input_tokens, run.output_tokens) == (2000, 200)                                # both turns accounted
     db.close()
     assert editor.post("/api/ai/ask", json={"question": "a"}).status_code == 400
+    # a loop that keeps asking for tools stops at the token ceiling with a clear message
+    def greedy(cfg, key, system, messages, tools, max_tokens):
+        ai_platform.note_usage(NS(model="claude-opus-5-5", usage=NS(input_tokens=70_000, output_tokens=100)))
+        return {"stop": "tool_use", "tokens": 70_100, "content": [{"type": "tool_use", "id": f"g{len(messages)}", "name": "capacity_cluster", "input": {}}]}
+    monkeypatch.setattr(transport, "TOOLS_CALL", greedy)
+    r = editor.post("/api/ai/ask", json={"question": "Liệt kê tất cả mọi thứ"})
+    assert r.status_code == 422 and "hẹp hơn" in r.json()["detail"]
 
 
 def test_ask_ico_inbox_tool_is_role_filtered(app_, admin, monkeypatch):
@@ -221,4 +228,19 @@ def test_report_archive_via_header(app_, admin, editor, monkeypatch):
         assert all(x["kind"] != "spend" for x in nobody.get("/api/report-archive").json()["items"])   # no spend role
         assert nobody.get(f"/api/report-archive/{sp['id']}/file").status_code == 404
     assert nobody.delete(f"/api/report-archive/{b['id']}").status_code == 403
+    # same bytes again: not stored twice; non-report routes (archive download itself) never archived
+    n0 = len(editor.get("/api/report-archive").json()["items"])
+    editor.get(f"/api/report-archive/{b['id']}/file", headers={"X-ICO-Archive": "1"})
+    assert len(editor.get("/api/report-archive").json()["items"]) == n0
+    from app import report_archive as ra
+    assert ra.kind_of("/api/spend/files/3") is None and ra.kind_of("/api/report-archive/1/file") is None
+    assert ra.kind_of("/api/spend/reports/budget.pdf") == ("spend", "spend")
+    # per-user trimming never touches other users' copies
+    monkeypatch.setattr(ra, "MAX_PER_USER", 2)
+    for i in range(3):
+        ra.save("viewer1", "/api/reports/pdf", f"i={i}", "", b"%PDF-1.7 v" + bytes([i]))
+    db = SessionLocal()
+    assert db.query(ReportArchive).filter_by(created_by="viewer1").count() == 2
+    assert db.query(ReportArchive).filter_by(created_by="editor1").count() >= 1
+    db.close()
     assert admin.delete(f"/api/report-archive/{b['id']}").status_code == 200

@@ -24,7 +24,7 @@ def list_archive(kind: Optional[str] = Query(default=None, max_length=32), mine:
         q = q.filter(ReportArchive.created_by == user.username)
     feats = get_features(db)
     rows = [r for r in q.limit(ra.MAX_ROWS) if ra.can_read(r, user, feats)][:limit]
-    return {"items": [ra.out(r) for r in rows], "kinds": ra.KIND_LABELS, "maxRows": ra.MAX_ROWS, "retentionDays": ra.RETENTION_DAYS}
+    return {"items": [ra.out(r) for r in rows], "kinds": ra.KIND_LABELS, "maxPerUser": ra.MAX_PER_USER, "retentionDays": ra.RETENTION_DAYS}
 
 
 def _row(db: Session, user: User, archive_id: int) -> ReportArchive:
@@ -41,7 +41,7 @@ def download(archive_id: int, user: User = Depends(get_current_user), db: Sessio
     ascii_name = "".join(ch if ch.isascii() and (ch.isalnum() or ch in "._-") else "_" for ch in r.filename)
     return Response(r.content, media_type="application/pdf", headers={
         "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(r.filename)}",
-        "X-Content-Type-Options": "nosniff"})
+        "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"})
 
 
 @router.delete("/{archive_id}")

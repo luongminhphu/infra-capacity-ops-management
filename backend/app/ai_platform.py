@@ -263,7 +263,7 @@ def _record(db: Session, task: str, user: Optional[User], status: str, h: Option
 
 
 def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], facts: Any = None,
-        cache: bool = False) -> Tuple[Any, bool]:
+        cache: bool = False, reserve: float = RESERVE_USD) -> Tuple[Any, bool]:
     """Policy → cache → call → accounting. `call()` performs the request (already masked) and
     returns the parsed result. Returns (result, from_cache). Raises AiBlocked or the transport's
     AiError (both have safe messages)."""
@@ -272,7 +272,7 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
     try:
         with _budget_lock:                                 # check + reserve atomically (this process)
             cfg = check(db, task, user)
-            _reserved["usd"] += RESERVE_USD
+            _reserved["usd"] += reserve
     except AiBlocked as exc:
         _record(db, task, user, "blocked", None, started, message=str(exc))
         raise
@@ -281,7 +281,7 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
         return _run_reserved(db, user, task, call, h, cache, started, AiError)
     finally:
         with _budget_lock:
-            _reserved["usd"] = max(0.0, _reserved["usd"] - RESERVE_USD)
+            _reserved["usd"] = max(0.0, _reserved["usd"] - reserve)
 
 
 def _run_reserved(db, user, task, call, h, cache, started, AiError):
