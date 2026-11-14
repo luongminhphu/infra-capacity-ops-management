@@ -1,6 +1,7 @@
 import datetime as dt
 from typing import Optional
 
+from fastapi.encoders import jsonable_encoder
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -151,3 +152,52 @@ def management_brief(
     brief["available"] = True
     brief["scope"] = _scope_label(vcenter)
     return brief
+
+
+def _finite_or_none(v):
+    import math
+    return v if isinstance(v, (int, float)) and math.isfinite(v) else None
+
+
+@router.get("/planning")
+def planning_result(
+    vcenter: Optional[str] = Query(default="all"),
+    horizon: int = Query(default=36, ge=6, le=60),
+    growth: Optional[str] = Query(default=None),
+    node_cores: Optional[int] = Query(default=None, ge=1),
+    node_ram: Optional[int] = Query(default=None, ge=1),
+    lead: int = Query(default=3, ge=0, le=12),
+    target: float = Query(default=80.0, ge=50, le=100),
+    months: int = Query(default=12),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Quy hoạch tài nguyên on screen (same engine as the planning PDF): totals per scenario,
+    per-cluster need under the base scenario, and the decision list."""
+    policy = data_access.get_effective_policy(db, get_settings())
+    host_rows, vm_rows, _ = data_access.get_latest_combined(db, _scope_keys(vcenter))
+    if not host_rows:
+        raise HTTPException(status_code=404, detail="Chưa có dữ liệu host để quy hoạch. Hãy đồng bộ hoặc import dữ liệu trước.")
+    try:
+        growth_list = [float(g) for g in _split_csv(growth) or []] or None
+        params = planning.PlanningParams(horizon_months=horizon, growth=growth_list, node_cores=node_cores,
+                                         node_ram_gb=node_ram, lead_months=lead, target_pct=target)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Tham số quy hoạch không hợp lệ: {exc}") from exc
+    try:
+        hist = history.get_resource_history(db, _scope_keys(vcenter), history.normalize_months(months), "cluster", policy)
+    except Exception:  # noqa: BLE001 — history is optional (trend scenario only)
+        hist = None
+    plan = planning.build_plan(host_rows, vm_rows, policy, params, history=hist)
+    recs = planning.plan_recommendations(plan)
+    base = plan["baseIndex"]
+    return jsonable_encoder({
+        "scope": _scope_label(vcenter), "params": plan["params"], "scenarios": plan["scenarios"], "baseIndex": base,
+        "totals": [{k: t[k] for k in ("scenario", "finalNodes", "addCores", "addRamGB", "firstNeedLabel", "orderByLabel")} for t in plan["totals"]],
+        "clusters": [{"name": c["name"], "nodeSpec": c["nodeSpec"], "hosts": c["model"]["hostCount"],
+                      "cpuPct": _finite_or_none(c["model"]["cpuPct"]), "ramPct": _finite_or_none(c["model"]["ramPct"]),
+                      **{k: c["scenarios"][base].get(k) for k in ("firstNeedLabel", "orderByLabel", "ramUpgrade")},
+                      "nodes": c["scenarios"][base]["final"]["nodes"], "binding": c["scenarios"][base]["final"].get("binding")}
+                     for c in plan["clusters"]],
+        "recommendations": recs,
+    })

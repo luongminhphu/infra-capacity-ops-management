@@ -81,6 +81,7 @@ async function renderSpendView() {
   if (spState.sub === 'vendors' && typeof renderVendorsPage === 'function') { await renderVendorsPage(); return; }
   if (spState.sub === 'quotes' && typeof renderQuotesPage === 'function') { await renderQuotesPage(); return; }
   if (spState.sub === 'renovations' && typeof renderRenovationsPage === 'function') { await renderRenovationsPage(); return; }
+  if (spState.sub === 'payments' && typeof renderPaymentsPage === 'function') { await renderPaymentsPage(); return; }
   await spLoadList();
   spRenderPage();
   spBindPage();
@@ -652,7 +653,8 @@ function spOpenChannel(kind, c) {
   const body = kind === 'discord'
     ? `<div class="src-grid"><label class="field"><span>Tên kênh</span><input id="spChName" maxlength="128" value="${esc(v.name)}" placeholder="Discord #ha-tang"></label>
         <label class="field"><span>Webhook URL</span><input type="password" id="spChHook" autocomplete="off" placeholder="${c ? 'Đã lưu — để trống để giữ' : 'https://discord.com/api/webhooks/…'}"></label></div>
-       <p class="panel-sub">Discord → Cài đặt kênh → Tích hợp → Webhook → Sao chép URL. URL là bí mật: lưu mã hoá, không hiển thị lại.</p>`
+       <p class="panel-sub">Discord → Cài đặt kênh → Tích hợp → Webhook → Sao chép URL. URL là bí mật: lưu mã hoá, không hiển thị lại.</p>
+       <label class="finding-filter-item"><input type="checkbox" id="spChOps" ${v.opsAlerts ? 'checked' : ''}><span>Nhận cả <b>cảnh báo vận hành</b>: capacity cluster ≥ 90%, backup thành công / độ phủ / RPO dưới 90% (gửi một lần, báo lại khi hết)</span></label>`
     : `<div class="src-grid"><label class="field"><span>Tên kênh</span><input id="spChName" maxlength="128" value="${esc(v.name)}" placeholder="Email nhóm hạ tầng"></label>
         <label class="field"><span>Người nhận (cách nhau dấu phẩy)</span><input id="spChTo" value="${esc(v.recipients)}" placeholder="infra@congty.vn, finance@congty.vn"></label></div>
        <label class="finding-filter-item"><input type="checkbox" id="spChOwner" ${v.includeOwner ? 'checked' : ''}><span>Gửi thêm cho email người phụ trách của từng khoản (chỉ các khoản của họ)</span></label>`;
@@ -660,7 +662,7 @@ function spOpenChannel(kind, c) {
     `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button><button class="btn btn-primary btn-sm" type="button" id="spChSave">Lưu</button>`);
   spOnce('#spChSave', async () => {
     const p = { kind, name: $('#spChName').value, enabled: v.enabled };
-    if (kind === 'discord') { const h = $('#spChHook').value.trim(); if (h) p.webhookUrl = h; }
+    if (kind === 'discord') { const h = $('#spChHook').value.trim(); if (h) p.webhookUrl = h; p.opsAlerts = $('#spChOps').checked; }
     else { p.recipients = $('#spChTo').value; p.includeOwner = $('#spChOwner').checked; }
     try {
       await apiRequest(c ? `/spend/admin/channels/${encodeURIComponent(c.id)}` : '/spend/admin/channels', { method: c ? 'PUT' : 'POST', body: JSON.stringify(p) });

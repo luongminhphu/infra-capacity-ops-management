@@ -1,7 +1,7 @@
 import datetime as dt
 
 from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+    BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -480,6 +480,45 @@ class DataSource(Base):
     last_test_at = Column(DateTime, nullable=True)
     last_test_ok = Column(Boolean, nullable=True)
     last_test_message = Column(Text, nullable=True)
+
+
+# ---------------------------------------------------------------- super app (SA2)
+class InboxAck(Base):
+    """A user marked an inbox item done or snoozed it (the item key includes its level, so a worse
+    level shows again)."""
+    __tablename__ = "inbox_acks"
+    __table_args__ = (UniqueConstraint("username", "item_key", name="uq_inbox_ack"),
+                      CheckConstraint("state IN ('done', 'snooze')", name="ck_inbox_ack_state"))
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(255), nullable=False, index=True)
+    item_key = Column(String(255), nullable=False)
+    state = Column(String(8), nullable=False)
+    until = Column(Date, nullable=True)                 # snooze end (inclusive)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class UserPref(Base):
+    """Small per-user preferences kept server-side (theme, inbox filter…), JSON ≤ 4 KB."""
+    __tablename__ = "user_prefs"
+
+    username = Column(String(255), primary_key=True)
+    data = Column(Text, nullable=False, default="{}")
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class OpsAlertState(Base):
+    """Operations alert pushed to Discord (capacity / backup at the 90 % level): sent once while
+    active, re-armed when it clears."""
+    __tablename__ = "ops_alert_state"
+
+    key = Column(String(255), primary_key=True)
+    title = Column(String(500), nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    first_at = Column(DateTime, nullable=False, default=utcnow)
+    last_sent_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    last_error = Column(String(500), nullable=True)
 
 
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).

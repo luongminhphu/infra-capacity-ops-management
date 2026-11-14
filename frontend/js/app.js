@@ -15,6 +15,12 @@ let vcentersCache = [];
    which global filters make sense on that page. */
 const NAV_GROUPS = [
   { label: 'Tổng quan', items: [
+    { id: 'home', view: 'home', icon: 'house', label: 'Hôm nay', title: 'Trang chủ',
+      desc: 'Hôm nay cần làm: bản tin, trạng thái từng miền và hộp việc gom từ mọi module theo quyền của bạn.', scope: [] },
+    { id: 'agenda', view: 'agenda', icon: 'calendar-clock', label: 'Lịch việc & nhắc hạn', title: 'Lịch việc & nhắc hạn',
+      desc: 'Mọi mốc có ngày: Opex hết hạn, đợt thanh toán, license hết hạn, báo giá hết hiệu lực.', scope: [] },
+    { id: 'spend-payments', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'payments', icon: 'banknote', label: 'Đợt thanh toán', title: 'Đợt thanh toán',
+      desc: 'Mọi đợt thanh toán của mọi hợp đồng, sớm nhất trước, kèm tình trạng hồ sơ.', scope: [] },
     { id: 'executive', view: 'executive', icon: 'briefcase', label: 'Điều hành', title: 'Tổng quan điều hành',
       desc: 'Tình trạng capacity, rủi ro, đề xuất và nội dung cần phê duyệt theo System Owner của từng cluster.', scope: ['vcenter'] },
     { id: 'dashboard', view: 'dashboard', icon: 'layout-dashboard', label: 'Capacity', title: 'Capacity',
@@ -108,7 +114,7 @@ const NAV_GROUPS = [
    (#/backup/jobs). Old ids (#/bk-jobs) still work and are rewritten to the new path. */
 const MENU = [
   { label: '', entries: [
-    { key: 'home', label: 'Trang chủ', icon: 'house', tabs: [['executive', '', 'Tổng quan']] },
+    { key: 'home', label: 'Trang chủ', icon: 'house', tabs: [['home', '', 'Hôm nay'], ['executive', 'leader', 'Điều hành']] },
   ] },
   { label: 'Vận hành', entries: [
     { key: 'capacity', label: 'Capacity & Compliance', icon: 'gauge', tabs: [
@@ -116,6 +122,7 @@ const MENU = [
     { key: 'backup', label: 'Backup', icon: 'database-backup', tabs: [
       ['bk-overview', '', 'Tổng quan'], ['bk-clients', 'clients', 'Client & RPO'], ['bk-jobs', 'jobs', 'Job'],
       ['bk-schedule', 'schedule', 'Lịch & tuân thủ'], ['bk-coverage', 'coverage', 'Độ phủ VM'], ['bk-storage', 'storage', 'Storage & policy']] },
+    { key: 'agenda', label: 'Lịch việc & nhắc hạn', icon: 'calendar-clock', tabs: [['agenda', '', 'Lịch việc']] },
     { key: 'simulate', label: 'Mô phỏng & quy hoạch', icon: 'git-branch', tabs: [
       ['whatif', '', 'What-if capacity'], ['planning', 'planning', 'Quy hoạch tài nguyên'], ['lic-whatif', 'license', 'What-if license']] },
     { key: 'sizing', label: 'Sizing máy chủ', icon: 'calculator', tabs: [['sizing', '', 'Sizing']] },
@@ -129,7 +136,7 @@ const MENU = [
       ['spend-overview', '', 'Tổng quan ngân sách'], ['spend-opex', 'opex', 'Opex'], ['spend-capex', 'capex', 'Capex']] },
     { key: 'procure', label: 'Mua sắm', icon: 'shopping-cart', tabs: [
       ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
-    { key: 'contracts', label: 'Hợp đồng & thanh toán', icon: 'scroll-text', tabs: [['spend-contracts', '', 'Hợp đồng']] },
+    { key: 'contracts', label: 'Hợp đồng & thanh toán', icon: 'scroll-text', tabs: [['spend-contracts', '', 'Hợp đồng'], ['spend-payments', 'payments', 'Đợt thanh toán']] },
     { key: 'docs', label: 'Tài liệu', icon: 'file-text', tabs: [['spend-proposals', '', 'Tờ trình'], ['reports', 'reports', 'Báo cáo']] },
   ] },
   { label: 'Hệ thống', entries: [
@@ -146,10 +153,9 @@ MENU.forEach(g => g.entries.forEach(en => en.tabs.forEach(([id, slug, tab]) => {
   PAGE_ROUTE[id] = { entry: en, group: g, path, tab };
   PATH_PAGE[path] = id;
 })));
-const DEFAULT_PAGE = 'executive';
+const DEFAULT_PAGE = 'home';
 const NAV_ITEMS = {};
 NAV_GROUPS.forEach(g => g.items.forEach(it => { NAV_ITEMS[it.id] = it; }));
-NAV_ITEMS.executive.title = 'Trang chủ';
 let activeNavId = DEFAULT_PAGE;
 
 /* Modules switched off in Settings → Tính năng disappear from the menu, routes and report centre. */
@@ -924,6 +930,8 @@ function bindTopBarInteractions() {
   [['#btnExportPdfExec', 'executive'], ['#btnExportPdfTech', 'technical'], ['#btnExportPdfPlan', 'planning']].forEach(([sel, view]) => {
     const b = $(sel); if (b) b.addEventListener('click', e => handleExportPdf(view, e.currentTarget));
   });
+  const planPreview = $('#btnPlanPreview');
+  if (planPreview) planPreview.addEventListener('click', e => runPlanningPreview(e.currentTarget));
   const planQuick = $('#btnExportPdfPlanQuick');
   if (planQuick) planQuick.addEventListener('click', e => handleExportPdf('planning', e.currentTarget));
   const licSummary = $('#btnExportPdfLicSummary');
