@@ -914,3 +914,26 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .data-table tr.sr-group td{background:var(--bg-heading);}
 @media (max-width:1240px){.sr-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.sr-two{grid-template-columns:1fr;}}
 @media (max-width:640px){.sr-grid{grid-template-columns:1fr;}.sr-year{grid-template-columns:64px minmax(0,1fr);}.sr-year-val{grid-column:1 / -1;text-align:left;}}
+/* Hợp đồng (spend_contract.js): colour = party that made the change (not a status) */
+.ct-party-legal{--ct-c:var(--chart-optimized);}
+.ct-party-finance{--ct-c:var(--chart-index);}
+.ct-party-partner{--ct-c:var(--chart-portfolio);}
+.ct-timeline{list-style:none;margin:0;padding:0 0 0 var(--space-2);border-left:2px solid var(--border);}
+.ct-tl-item{position:relative;padding:0 0 var(--space-3) var(--space-4);font-size:var(--fs-body-sm);}
+.ct-tl-dot{position:absolute;left:calc(-1 * var(--space-2) - 6px);top:5px;width:10px;height:10px;border-radius:50%;background:var(--ct-c);box-shadow:0 0 0 3px var(--bg-surface);}
+.ct-party-tag{color:var(--ct-c);font-weight:var(--fw-semibold);}
+.ct-tl-note{color:var(--text-secondary);white-space:pre-wrap;}
+.ct-tl-body a,.ct-upload a{color:var(--text-brand);}
+.ct-legend{display:flex;gap:var(--space-4);flex-wrap:wrap;font-size:var(--fs-caption);color:var(--text-secondary);margin-bottom:var(--space-2);}
+.ct-swatch{display:inline-block;width:10px;height:10px;border-radius:var(--radius-xs);background:var(--ct-c);margin-right:var(--space-1);vertical-align:middle;}
+.ct-compare-bar{align-items:flex-end;margin-bottom:var(--space-3);}
+.ct-compare-bar select{height:var(--control-h-sm);}
+.ct-diff{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);max-height:420px;overflow:auto;font-size:var(--fs-body-sm);line-height:var(--lh-body-sm);}
+.ct-eq{margin:0 0 var(--space-2);color:var(--text-secondary);}
+.ct-skip{margin:0 0 var(--space-2);font-size:var(--fs-caption);color:var(--text-tertiary);text-align:center;}
+.ct-chg{margin:0 0 var(--space-2);padding:var(--space-1) var(--space-2);border-left:3px solid var(--ct-c);background:color-mix(in srgb,var(--ct-c) 10%,transparent);border-radius:0 var(--radius-xs) var(--radius-xs) 0;}
+.ct-chg ins{text-decoration:underline;text-decoration-color:var(--ct-c);text-decoration-thickness:2px;background:color-mix(in srgb,var(--ct-c) 18%,transparent);}
+.ct-chg del{color:var(--text-secondary);}
+.ct-who{display:block;font-size:var(--fs-micro);line-height:var(--lh-micro);font-weight:var(--fw-semibold);color:var(--ct-c);text-transform:uppercase;letter-spacing:.04em;}
+.ct-upload{border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:var(--space-3);margin:var(--space-3) 0;}
+.ct-upload input[type="text"]{width:100%;}

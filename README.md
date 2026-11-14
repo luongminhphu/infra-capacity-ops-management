@@ -21,7 +21,7 @@ mà trang đó dùng (vCenter / cluster / host).
 | Quy hoạch | **What-if capacity**, **Sizing máy chủ**, **Quy hoạch tài nguyên** | What-if simulation; sizing host vật lý; form giả định + PDF quy hoạch (trước là dropdown trong header). |
 | License | **Đánh giá license**, **What-if license**, **Snapshot license** | Ba tab còn lại của License & Inventory cũ, kèm thanh chọn phạm vi cluster cho đợt mua. |
 | Backup | **Tổng quan backup**, **Client & RPO**, **Job backup**, **Độ phủ VM**, **Storage & policy**, **Nguồn & ngưỡng** | Giám sát Veritas NetBackup qua REST API chỉ đọc — xem mục *Backup* bên dưới. |
-| Chi phí & Hợp đồng | **Tổng quan chi phí**, **Opex**, **Capex** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
+| Chi phí & Hợp đồng | **Tổng quan chi phí**, **Opex**, **Capex**, **Hợp đồng** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
 | Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi báo cáo xuất tập trung, nhóm theo chức năng (lọc nhanh bằng chip): **Capacity & vận hành** (PDF Vận hành / Kỹ thuật, Excel host & VM, CSV tổng hợp), **Quy hoạch & Sizing** (PDF quy hoạch, Sizing PDF đầy đủ / rút gọn / Excel, mẫu nhập liệu), **License & Inventory** (PDF tổng quan — hiện tại hoặc từ snapshot, Excel đánh giá / ESXi / hệ điều hành), **Backup** (PDF hiện trạng — có / không phụ lục, Excel thống kê; chọn server và kỳ). Mỗi báo cáo có “Tuỳ chọn” riêng (Storage, cửa sổ xu hướng, giả định quy hoạch, hướng đề xuất sizing…) được ghi nhớ; “Chọn nhiều” để xuất nhiều báo cáo một lần. Khung bên phải: phạm vi cluster / host, loại finding, logo. Nút xuất ở từng trang vẫn giữ. |
 | | **Cài đặt** | Tiêu chí đánh giá (Storage), ngưỡng (idle, overcommit, HT) có nút **Lưu ngưỡng** lên server, trạng thái vCenter, import CSV/JSON, sample data, reset. |
 
@@ -547,7 +547,25 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   **Excel** đủ từng dòng: Tổng quan, Chi tiết, Hết hạn theo quý, Từ Capex, Nhà cung cấp, Bộ lọc. Ô chữ do người
   dùng nhập luôn ghi dạng văn bản (không thành công thức Excel).
 
-**Các giai đoạn sau**: GĐ4 hợp đồng có version, so sánh, tự xoá version cũ sau khi chốt · GĐ5 AI soạn tờ trình từ mẫu .docx tải lên.
+**Giai đoạn 4 — Hợp đồng và version (đã có)**
+
+- Hợp đồng mã `HD-<năm tài chính>-<số>` **bắt buộc gắn đúng một** khoản Opex hoặc một dự án Capex (ràng buộc trong DB);
+  tạo nhanh từ chi tiết khoản Opex. Không xoá được Opex / dự án Capex đã có hợp đồng.
+- **Version**: mỗi lần upload file .docx tạo version mới không sửa được (v1, v2…), ghi rõ bên chỉnh sửa — Legal (nội bộ),
+  Finance (nội bộ), Đối tác — người upload, thời gian, ghi chú. **Chỉ một nhánh**: form upload gửi kèm version đang
+  dựa trên; nếu đã có version mới hơn, hệ thống từ chối (409) và yêu cầu tải bản mới nhất về sửa tiếp.
+- **So sánh** hai version bất kỳ theo đoạn và theo từ; mỗi thay đổi được tô màu theo **bên đã tạo ra nó** (kể cả qua
+  các version trung gian: so v1 → v4 vẫn biết dòng nào Đối tác sửa ở v2, dòng nào Finance thêm ở v3). Lịch sử dạng
+  dòng thời gian.
+- **Trạng thái**: Nháp → Đang đàm phán (tự chuyển khi có v2) → Đã chốt (Final, quyền Duyệt, chọn version chốt) →
+  Đã ký (tải bản scan PDF).
+- **Tự xoá version cũ**: khi chốt Final, file và nội dung văn bản của các version không phải Final bị xoá sau thời gian
+  chờ (Cài đặt → mặc định 30 ngày; job chạy hằng ngày cùng job nhắc hạn). Admin **huỷ** hoặc bật lại lịch xoá trên
+  chi tiết hợp đồng. Giữ lại bản Final, bản ký, thông tin version (người upload, thời gian, hash) và nhật ký xoá
+  (`spend.contract.purge`); tải file đã xoá trả 410.
+- File chỉ nhận .docx (version) và PDF (bản ký), kiểm tra nội dung, từ chối macro và DOCTYPE / ENTITY trong XML.
+
+**Giai đoạn sau**: GĐ5 AI soạn tờ trình từ mẫu .docx tải lên.
 
 ## Kiến trúc
 

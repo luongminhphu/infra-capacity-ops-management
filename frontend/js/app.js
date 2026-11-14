@@ -73,6 +73,8 @@ const NAV_GROUPS = [
       desc: 'Bảo hành, license, bảo trì, dịch vụ thuê ngoài theo năm tài chính; hạn hết hiệu lực và nhắc gia hạn.', scope: [] },
     { id: 'spend-capex', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'capex', icon: 'package-plus', label: 'Capex', title: 'Dự án đầu tư (Capex)',
       desc: 'Dự án mua mới gồm nhiều hạng mục; tự sinh Opex gia hạn bảo hành / license dự kiến cho các năm sau.', scope: [] },
+    { id: 'spend-contracts', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'contracts', icon: 'scroll-text', label: 'Hợp đồng', title: 'Hợp đồng',
+      desc: 'Hợp đồng gắn Opex / Capex, version theo từng bên chỉnh sửa, so sánh, chốt Final, bản ký và lịch xoá version cũ.', scope: [] },
   ] },
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',

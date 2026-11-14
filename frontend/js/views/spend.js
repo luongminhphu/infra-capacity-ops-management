@@ -76,6 +76,7 @@ async function renderSpendView() {
   }
   if (spState.sub === 'capex' && typeof renderCapexPage === 'function') { await renderCapexPage(); return; }
   if (spState.sub === 'overview' && typeof renderSpendOverview === 'function') { await renderSpendOverview(); return; }
+  if (spState.sub === 'contracts' && typeof renderContractsPage === 'function') { await renderContractsPage(); return; }
   await spLoadList();
   spRenderPage();
   spBindPage();
@@ -242,6 +243,8 @@ async function spOpenDetail(code) {
       ${dl('Cập nhật', `${esc(it.updatedBy || it.createdBy)} · ${esc(spTime(it.updatedAt || it.createdAt))}`)}
     </dl>
     ${it.description ? `<p class="sp-desc">${esc(it.description)}</p>` : ''}
+    <h4 class="sp-h">Hợp đồng</h4>${(it.contracts || []).length ? `<ul class="sp-files">${it.contracts.map(c => `<li><button class="btn btn-ghost btn-sm sp-link" type="button" data-ct-goto="${esc(c.code)}">${esc(c.code)}</button> ${esc(c.title)}</li>`).join('')}</ul>` : '<p class="muted-sub">Chưa có hợp đồng.</p>'}
+    ${spCan('editor') ? '<button class="btn btn-ghost btn-sm" type="button" data-ct-new-for="1"><i data-lucide="plus"></i>Tạo hợp đồng cho khoản này</button>' : ''}
     <h4 class="sp-h">Thiết bị liên quan</h4>${assets}
     <h4 class="sp-h">File đính kèm</h4>${filesHtml}
     <details class="sp-history" id="spHistory"><summary>Lịch sử thay đổi</summary><div class="muted-sub">Đang tải…</div></details>`;
@@ -262,6 +265,9 @@ async function spOpenDetail(code) {
     if (go) return spOpenDetail(go.dataset.spGoto);
     const cpx = e.target.closest('[data-cpx-goto]');
     if (cpx && typeof cpxOpenDetail === 'function') return cpxOpenDetail(cpx.dataset.cpxGoto);
+    const ct = e.target.closest('[data-ct-goto]');
+    if (ct && typeof ctOpenDetail === 'function') return ctOpenDetail(ct.dataset.ctGoto);
+    if (e.target.closest('[data-ct-new-for]') && typeof ctOpenCreate === 'function') return ctOpenCreate({ kind: 'opex', code: it.code, title: `Hợp đồng ${it.title}` });
     const del = e.target.closest('[data-sp-detach]');
     if (del && confirm('Xoá file đính kèm này?')) {
       try { await apiRequest(`/spend/opex/${encodeURIComponent(it.code)}/attachments/${encodeURIComponent(del.dataset.spDetach)}`, { method: 'DELETE' }); spOpenDetail(it.code); }
