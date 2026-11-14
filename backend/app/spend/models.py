@@ -426,6 +426,7 @@ class Proposal(_Audited, Base):
     context_note = Column(Text, nullable=True)            # background written by the user, sent to the AI
     status = Column(String(10), nullable=False, default="draft")
     capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
+    quote_request_id = Column(Integer, ForeignKey("quote_requests.id", ondelete="RESTRICT"), nullable=True, index=True)
     file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
     ai_provider_used = Column(String(16), nullable=True)
     ai_model = Column(String(64), nullable=True)
@@ -572,6 +573,10 @@ class QuoteRequest(_Audited, Base):
     eval_conclusion = Column(String(255), nullable=True)
     eval_evaluator = Column(String(128), nullable=True)
     eval_approver = Column(String(128), nullable=True)
+    # AI summary of content / configuration differences between the quotations (JSON), V3
+    ai_summary = Column(Text, nullable=True)
+    ai_summary_at = Column(DateTime, nullable=True)
+    ai_summary_by = Column(String(255), nullable=True)
 
 
 class Quotation(_Audited, Base):
