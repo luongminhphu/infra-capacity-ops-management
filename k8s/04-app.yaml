@@ -51,6 +51,8 @@ spec:
           # CA của NetBackup (ConfigMap ico-nbu-ca, tạo bằng k8s/nbu-ca.sh) cho NETBACKUP_1_CA_CERT.
           volumeMounts:
             - { name: nbu-ca, mountPath: /etc/netbackup-ca, readOnly: true }
+            # File đính kèm / hợp đồng / tờ trình của module Chi phí & Hợp đồng IT (SPEND_FILES_DIR).
+            - { name: ico-files, mountPath: /data/files }
           resources:
             requests: { cpu: "100m", memory: "256Mi" }
             limits: { cpu: "1", memory: "512Mi" }
@@ -58,6 +60,8 @@ spec:
         - name: nbu-ca
           # optional: pod vẫn chạy khi chưa tạo ConfigMap (đồng bộ NetBackup sẽ báo thiếu file CA).
           configMap: { name: ico-nbu-ca, optional: true }
+        - name: ico-files
+          persistentVolumeClaim: { claimName: ico-files }
 ---
 apiVersion: v1
 kind: Service

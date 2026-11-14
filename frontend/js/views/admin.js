@@ -172,4 +172,5 @@ function initAdminSettings(user) {
   $('#mcpNewToken').classList.add('hidden');
   if (isAdmin) { bindMcpPanel(); loadMcpPanel(); }
   if (typeof initSourcesSettings === 'function') initSourcesSettings(isAdmin);
+  if (typeof initSpendSettings === 'function') initSpendSettings(user);
 }

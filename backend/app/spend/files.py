@@ -151,6 +151,7 @@ def remove(row: SpendFile) -> None:
 def disk_usage() -> dict:
     d = files_dir()
     try:
+        d.mkdir(parents=True, exist_ok=True)
         st = os.statvfs(d)
         return {"path": str(d), "freeBytes": st.f_bavail * st.f_frsize, "totalBytes": st.f_blocks * st.f_frsize}
     except OSError:

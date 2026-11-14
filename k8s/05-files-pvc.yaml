@@ -1,0 +1,17 @@
+# File của module Chi phí & Hợp đồng IT (file đính kèm Opex, hợp đồng, tờ trình) — gắn vào ico-app tại /data/files.
+# ReadWriteOnce là đủ: ico-app chạy 1 replica, strategy Recreate (pod cũ tắt trước khi pod mới gắn volume).
+# Đưa PVC này vào kế hoạch backup (snapshot Longhorn) cùng với database.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ico-files
+  namespace: cattle-monitoring-system
+  labels:
+    app: ico-app
+spec:
+  accessModes: ["ReadWriteOnce"]
+  # Cụm không có StorageClass mặc định — chỉ định rõ như PVC của Postgres.
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi

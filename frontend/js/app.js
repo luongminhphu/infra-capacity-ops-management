@@ -66,6 +66,10 @@ const NAV_GROUPS = [
     { id: 'bk-config', feature: 'backup', view: 'backup', sub: 'config', icon: 'sliders-horizontal', label: 'Nguồn & ngưỡng', title: 'Nguồn backup & ngưỡng',
       desc: 'Trạng thái kết nối máy chủ backup, hướng dẫn tài khoản chỉ đọc và ngưỡng giám sát backup.', scope: [] },
   ] },
+  { label: 'Chi phí & Hợp đồng', items: [
+    { id: 'spend-opex', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'opex', icon: 'wallet', label: 'Opex', title: 'Chi phí vận hành (Opex)',
+      desc: 'Bảo hành, license, bảo trì, dịch vụ thuê ngoài theo năm tài chính; hạn hết hiệu lực và nhắc gia hạn.', scope: [] },
+  ] },
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
       desc: 'Mọi báo cáo PDF và dữ liệu Excel / CSV, nhóm theo chức năng: Capacity & vận hành, Quy hoạch & Sizing, License & Inventory, Backup.', scope: ['vcenter'] },
@@ -81,7 +85,10 @@ let activeNavId = 'dashboard';
 let appFeatures = {};
 let currentUser = null;
 const featureOn = (f) => !f || appFeatures[f] !== false;
-const navItemVisible = (id) => !!NAV_ITEMS[id] && featureOn(NAV_ITEMS[id].feature);
+/* Pages of the Chi phí & Hợp đồng module also need a spend role (the API checks it again). */
+const SPEND_RANK = { none: 0, viewer: 1, editor: 2, approver: 3, admin: 4 };
+const spendRoleOk = (min) => !min || !currentUser || (SPEND_RANK[(currentUser && currentUser.spendRole) || 'none'] || 0) >= SPEND_RANK[min];
+const navItemVisible = (id) => !!NAV_ITEMS[id] && featureOn(NAV_ITEMS[id].feature) && spendRoleOk(NAV_ITEMS[id].spendRole);
 
 function applyFeatures(features) {
   appFeatures = features || {};
@@ -112,7 +119,7 @@ function refreshIcons() {
 function renderSidebarNav() {
   const nav = $('#mainNav');
   if (!nav) return;
-  nav.innerHTML = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(it => featureOn(it.feature)) }))
+  nav.innerHTML = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(it => navItemVisible(it.id)) }))
     .filter(g => g.items.length).map(g => `
     <div class="nav-group">
       <div class="nav-group-label">${esc(g.label)}</div>

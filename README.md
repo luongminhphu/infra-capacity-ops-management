@@ -21,6 +21,7 @@ mà trang đó dùng (vCenter / cluster / host).
 | Quy hoạch | **What-if capacity**, **Sizing máy chủ**, **Quy hoạch tài nguyên** | What-if simulation; sizing host vật lý; form giả định + PDF quy hoạch (trước là dropdown trong header). |
 | License | **Đánh giá license**, **What-if license**, **Snapshot license** | Ba tab còn lại của License & Inventory cũ, kèm thanh chọn phạm vi cluster cho đợt mua. |
 | Backup | **Tổng quan backup**, **Client & RPO**, **Job backup**, **Độ phủ VM**, **Storage & policy**, **Nguồn & ngưỡng** | Giám sát Veritas NetBackup qua REST API chỉ đọc — xem mục *Backup* bên dưới. |
+| Chi phí & Hợp đồng | **Opex** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
 | Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi báo cáo xuất tập trung, nhóm theo chức năng (lọc nhanh bằng chip): **Capacity & vận hành** (PDF Vận hành / Kỹ thuật, Excel host & VM, CSV tổng hợp), **Quy hoạch & Sizing** (PDF quy hoạch, Sizing PDF đầy đủ / rút gọn / Excel, mẫu nhập liệu), **License & Inventory** (PDF tổng quan — hiện tại hoặc từ snapshot, Excel đánh giá / ESXi / hệ điều hành), **Backup** (PDF hiện trạng — có / không phụ lục, Excel thống kê; chọn server và kỳ). Mỗi báo cáo có “Tuỳ chọn” riêng (Storage, cửa sổ xu hướng, giả định quy hoạch, hướng đề xuất sizing…) được ghi nhớ; “Chọn nhiều” để xuất nhiều báo cáo một lần. Khung bên phải: phạm vi cluster / host, loại finding, logo. Nút xuất ở từng trang vẫn giữ. |
 | | **Cài đặt** | Tiêu chí đánh giá (Storage), ngưỡng (idle, overcommit, HT) có nút **Lưu ngưỡng** lên server, trạng thái vCenter, import CSV/JSON, sample data, reset. |
 
@@ -462,6 +463,59 @@ phụ:
 Render bằng [WeasyPrint](https://weasyprint.org/) (thuần Python/HTML/CSS, không cần Chromium) —
 đã có sẵn system dependencies trong `backend/Dockerfile`. Font Việt dùng bộ Noto Sans để hiển
 thị đầy đủ dấu tiếng Việt trong PDF.
+
+## Chi phí & Hợp đồng IT (module `spend`)
+
+Quản lý chi phí hạ tầng IT, nhắc hạn gia hạn, và (các giai đoạn sau) Capex, báo cáo ngân sách, hợp đồng
+có version, tờ trình soạn bằng AI. Thiết kế đầy đủ: [`docs/design/spend-module.md`](docs/design/spend-module.md).
+Bật / tắt ở **Cài đặt → Tính năng** (khi tắt, API trả 404).
+
+**Giai đoạn 1 — Opex và nhắc hạn (đã có)**
+
+- **Khoản Opex**: mã tự sinh `OPX-<năm tài chính>-<số>` (không đổi về sau), loại chi phí (cấu hình được),
+  nội dung dịch vụ, nhà cung cấp (gõ tên mới sẽ tự thêm, tên trùng khi bỏ dấu / khoảng trắng được gộp),
+  mã hợp đồng / PO, ngày bắt đầu – kết thúc, chu kỳ, số tiền trước / sau VAT (VND, tự tính sau VAT, sửa tay
+  được khi hoá đơn làm tròn khác), năm tài chính (tự tính từ ngày bắt đầu, sửa được), cost center, người phụ
+  trách + email, thiết bị liên quan (serial, liên kết host vCenter đang có), file đính kèm (PDF / .docx /
+  .xlsx, tối đa `SPEND_MAX_UPLOAD_MB`, kiểm tra nội dung — từ chối macro, file giả đuôi).
+- **Trạng thái**: Dự kiến → Đang hiệu lực → Đã gia hạn | Ngừng. “Sắp hết hạn” / “Quá hạn” tự tính theo
+  ngày hết hạn và mốc nhắc, màu theo 4 mức AN TOÀN / THEO DÕI (≤ mốc lớn nhất) / CẢNH BÁO (≤ mốc nhỏ nhất) /
+  VƯỢT NGƯỠNG (quá hạn). Đổi trạng thái chỉ qua nút: **Gia hạn** (tạo khoản kế nhiệm cho kỳ sau, khoản cũ
+  dừng nhắc; mỗi khoản chỉ gia hạn được một lần), **Ngừng** (cần lý do), **Xác nhận** / **Kích hoạt lại**
+  (quyền Duyệt). Mọi thay đổi số tiền / ngày / trạng thái / file được ghi `audit_log` (xem “Lịch sử thay đổi”).
+- **Năm tài chính**: tháng bắt đầu cấu hình trong Cài đặt; đặt tên theo năm bắt đầu
+  (tháng 4: 01/04/2026 – 31/03/2027 = NTC 2026).
+- **Nhắc hạn**: chạy hằng ngày sau giờ cấu hình (mặc định 08:00 giờ VN) trong tiến trình app, mốc mặc định
+  90 / 60 / 30 ngày. Mỗi mốc của mỗi khoản gửi **một lần** cho mỗi kênh (bảng `spend_reminder_log`, khoá
+  UNIQUE). App tắt qua nhiều mốc thì chỉ gửi mốc nhỏ nhất đã tới; gửi lỗi tự thử lại tối đa 5 lần; tiến trình
+  dừng giữa lúc gửi thì đánh dấu “Không rõ” và **không** gửi lại (admin bấm “Gửi lại” nếu cần). Mỗi kênh nhận
+  một tin tổng hợp: mã, dịch vụ, nhà cung cấp, ngày hết hạn, số tiền, người phụ trách, link về app.
+- **Kênh nhắc** (Cài đặt → Chi phí & nhắc hạn, chỉ admin): máy chủ SMTP (STARTTLS / SSL / relay), kênh email
+  (danh sách người nhận, tuỳ chọn gửi thêm cho người phụ trách — chỉ các khoản của họ), kênh Discord (webhook);
+  bật / tắt từng kênh, nút **Gửi thử**, nhật ký gửi, **Chạy nhắc hạn ngay**. Mật khẩu SMTP và webhook lưu mã hoá
+  (`SECRETS_KEY`), không bao giờ trả về API. Webhook chỉ nhận `https://discord.com/api/webhooks/…`;
+  nội dung tin nhắn được escape, tắt mention.
+- **Mạng**: pod cần ra được máy chủ SMTP nội bộ và `discord.com:443` (nếu dùng Discord).
+
+**Vai trò** (cột `users.spend_role`; admin hiện có = toàn quyền):
+
+| Vai trò | Quyền |
+|---|---|
+| Xem | Xem Opex, tải file đính kèm |
+| Biên tập | + tạo / sửa / gia hạn / ngừng, thêm file, thêm nhà cung cấp & cost center |
+| Duyệt | + xác nhận khoản dự kiến, kích hoạt lại khoản đã ngừng |
+| Admin | + cài đặt module, loại chi phí, SMTP / kênh nhắc, gán vai trò, xoá khoản |
+
+Tài khoản Entra lấy vai trò từ app role `ICO.Spend.Viewer` / `ICO.Spend.Editor` / `ICO.Spend.Approver`
+(đổi tên bằng `ENTRA_SPEND_*_ROLES`, cập nhật mỗi lần đăng nhập; bỏ role trong Entra thì mất quyền ở lần đăng
+nhập sau). Tài khoản cục bộ do admin gán ở Cài đặt → Chi phí & nhắc hạn → Vai trò người dùng. Nếu
+`ENTRA_ALLOWED_ROLES` đang giới hạn người vào app, thêm các role trên vào đó.
+
+**Lưu file**: volume `/data/files` — PVC `ico-files` (`k8s/05-files-pvc.yaml`, Longhorn 10Gi, nhớ đưa vào kế
+hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dưới tên ngẫu nhiên; tên gốc chỉ là metadata.
+
+**Các giai đoạn sau**: GĐ2 Capex và tự sinh Opex dự kiến năm sau · GĐ3 báo cáo ngân sách PDF / Excel ·
+GĐ4 hợp đồng có version, so sánh, tự xoá version cũ sau khi chốt · GĐ5 AI soạn tờ trình từ mẫu .docx tải lên.
 
 ## Kiến trúc
 
