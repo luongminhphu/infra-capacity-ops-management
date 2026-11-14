@@ -173,6 +173,8 @@ def test_validation_and_locking(app_, editor):
     assert r.status_code == 400 and "nhà cung cấp" in r.json()["detail"]
     r = editor.post("/api/spend/capex", json=_project(items=[{**items[0], "coverageYears": 11}]))
     assert r.status_code == 400
+    r = editor.post("/api/spend/capex/preview", json=_project(items=[{**items[0], "categoryId": "abc"}]))
+    assert r.status_code == 400
     r = editor.post("/api/spend/capex", json=_project(goLiveDate=None, fiscalYear=None))
     assert r.status_code == 400
     p = editor.post("/api/spend/capex", json=_project()).json()

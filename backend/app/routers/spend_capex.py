@@ -39,6 +39,13 @@ def _bad(msg: str):
     raise HTTPException(400, msg)
 
 
+def _id(v: Any) -> int:
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 # ---------------------------------------------------------------- input
 def _apply_project(db: Session, p: CapexProject, data: Dict[str, Any], cfg: spend_settings.SpendSettings) -> None:
     p.name = service._text(data.get("name"), "tên dự án", 255, required=True)
@@ -60,9 +67,9 @@ def _apply_project(db: Session, p: CapexProject, data: Dict[str, Any], cfg: spen
         _bad("Năm tài chính không hợp lệ.")
     cc = data.get("costCenterId")
     if cc:
-        if not db.get(SpendCostCenter, int(cc)):
+        if not db.get(SpendCostCenter, _id(cc)):
             _bad("Cost center không tồn tại.")
-        p.cost_center_id = int(cc)
+        p.cost_center_id = _id(cc)
     else:
         p.cost_center_id = None
 
@@ -81,7 +88,7 @@ def _pct(v: Any, label: str) -> Optional[Decimal]:
 
 def _apply_item(db: Session, it: CapexItem, d: Dict[str, Any], user: User, request: Request, idx: int) -> None:
     n = f"Hạng mục {idx + 1}: "
-    cat = db.get(SpendCategory, int(d.get("categoryId") or 0))
+    cat = db.get(SpendCategory, _id(d.get("categoryId")))
     if not cat:
         _bad(n + "chọn loại chi phí.")
     it.category_id = cat.id
@@ -133,7 +140,7 @@ def _apply_items(db: Session, p: CapexProject, rows: Optional[List[Dict[str, Any
     for idx, d in enumerate(rows):
         iid = d.get("id")
         if iid:
-            it = current.get(int(iid))
+            it = current.get(_id(iid))
             if it is None:
                 _bad(f"Hạng mục {idx + 1} không thuộc dự án này.")
         else:
