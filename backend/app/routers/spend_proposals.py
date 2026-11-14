@@ -235,11 +235,12 @@ def list_proposals(opex: Optional[str] = None, capex: Optional[str] = None, user
         q = q.filter(Proposal.capex_project_id.in_(db.query(CapexProject.id).filter(CapexProject.code == capex)))
     rows = q.order_by(Proposal.id.desc()).limit(500).all()
     cpx = dict(db.query(CapexProject.id, CapexProject.code).filter(CapexProject.id.in_({p.capex_project_id for p in rows if p.capex_project_id})))
+    qrs = dict(db.query(QuoteRequest.id, QuoteRequest.code).filter(QuoteRequest.id.in_({p.quote_request_id for p in rows if p.quote_request_id})))
     counts: Dict[int, int] = {}
     for (pid,) in db.query(ProposalOpex.proposal_id).filter(ProposalOpex.proposal_id.in_([p.id for p in rows])):
         counts[pid] = counts.get(pid, 0) + 1
     return [{"code": p.code, "kind": p.kind, "subject": p.subject, "status": p.status, "statusLabel": STATUS_LABELS[p.status],
-             "capexCode": cpx.get(p.capex_project_id), "opexCount": counts.get(p.id, 0), "hasFile": p.file_id is not None,
+             "capexCode": cpx.get(p.capex_project_id), "quoteCode": qrs.get(p.quote_request_id), "opexCount": counts.get(p.id, 0), "hasFile": p.file_id is not None,
              "aiProvider": p.ai_provider_used, "updatedAt": to_iso_utc(p.updated_at or p.created_at),
              "updatedBy": p.updated_by or p.created_by} for p in rows]
 
