@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 LEVELS = ("crit", "bad", "warn", "task", "info")
 LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
-SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "license": "License", "spend": "Chi phí & hợp đồng"}
+SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "license": "License", "spend": "Chi phí & hợp đồng", "system": "Hệ thống"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
 PUSH_LEVEL_PCT = 90.0          # decision 5: Discord alert at the 90 % level
@@ -157,9 +157,27 @@ def spend_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
     return out
 
 
+def system_items(db: Session) -> List[Dict[str, Any]]:
+    """Admin-only: AI cost of the month at / over the alert threshold (decision: 50 USD) or the budget."""
+    from . import ai_platform
+    cfg = ai_platform.config(db)
+    if cfg is None or not cfg.provider or cfg.provider == "none":
+        return []
+    spent = ai_platform.month_cost(db)
+    budget = cfg.budget_usd if cfg.budget_usd is not None else 100
+    alert = cfg.alert_usd if cfg.alert_usd is not None else 50
+    if spent < alert:
+        return []
+    level = "crit" if spent >= budget else "bad"
+    month = dt.date.today().strftime("%Y-%m")
+    return [item("system", level, _key("ai-cost", month, level),
+                 f"Chi phí AI tháng này {spent:.2f} USD".replace(".", ",") + (" — đã chạm hạn mức, AI tạm dừng" if level == "crit" else f" (≥ {alert} USD)"),
+                 f"Hạn mức {budget} USD / tháng. Xem theo tác vụ ở Cài đặt → AI & MCP.", page="set-ai", role="admin")]
+
+
 PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("capacity", capacity_items, False), ("backup", backup_items, False),
-    ("license", license_items, True), ("spend", spend_items, True),
+    ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
 ]
 
 _cache: Dict[str, Any] = {"at": 0.0, "items": None, "errors": []}

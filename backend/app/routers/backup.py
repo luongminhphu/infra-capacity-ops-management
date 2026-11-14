@@ -390,9 +390,14 @@ def _fname(prefix: str, days: int, ext: str) -> str:
 
 @router.get("/report/pdf")
 def report_pdf(server: Optional[str] = Query(default="all"), days: int = Query(default=7, ge=1, le=90),
-               appendix: bool = Query(default=True), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+               appendix: bool = Query(default=True), ai: bool = Query(default=False),
+               db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     from .. import report_backup
     res = build_summary(db, server, days)
+    if ai:
+        from ..ai_tasks import backup_facts
+        from .ai_admin import pdf_ai_box
+        pdf_ai_box(db, user, "backup", lambda: backup_facts(res))
     servers = [_server_public(c, db) for c in get_settings().netbackups() if not _keys(server) or c.key in _keys(server)]
     pdf = report_backup.build_backup_pdf(res, servers, _scope_label(server), logo_data_url=_logo(db), appendix=appendix)
     return StreamingResponse(iter([pdf]), media_type="application/pdf",

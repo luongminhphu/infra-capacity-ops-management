@@ -8,6 +8,7 @@ numbers in the PDF always match the live UI. No external chart images —
 utilization bars and the VM power-state donut are drawn as inline SVG so the
 report has zero network dependencies and renders identically every time.
 """
+import contextvars
 import datetime as dt
 import html
 import itertools
@@ -2256,8 +2257,26 @@ def render_technical_html(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]]
 </body></html>"""
 
 
+# Optional "Tổng kết (AI soạn)" box set by the endpoint for this request (super app SA4): inserted
+# before the first summary / section block of whatever report is being rendered.
+AI_BOX: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar("ai_box", default=None)
+
+
+def _inject_ai_box(html_str: str) -> str:
+    box = AI_BOX.get()
+    if not box:
+        return html_str
+    for marker in ('<div class="exec-brief', '<div class="section"', "<body>"):
+        i = html_str.find(marker)
+        if i >= 0:
+            if marker == "<body>":
+                i += len(marker)
+            return html_str[:i] + box + html_str[i:]
+    return html_str
+
+
 def html_to_pdf_bytes(html_str: str) -> bytes:
-    return HTML(string=html_str).write_pdf()
+    return HTML(string=_inject_ai_box(html_str)).write_pdf()
 
 
 def build_report_pdf(view: str, hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]], policy: capacity.Policy,

@@ -41,7 +41,9 @@ async function renderHomeView(fresh) {
   homeBind();
   await homeLoadPrefs();
   if (!homeState.data) mount.innerHTML = '<div class="empty-note">Đang tải…</div>';
-  const [inbox, brief] = await Promise.allSettled([apiRequest(`/inbox?show=${homeState.show}${fresh ? '&fresh=true' : ''}`), apiRequest('/reports/brief')]);
+  const [inbox, brief, ai] = await Promise.allSettled([apiRequest(`/inbox?show=${homeState.show}${fresh ? '&fresh=true' : ''}`), apiRequest('/reports/brief'),
+    typeof aiStatus === 'function' ? aiStatus() : Promise.resolve({ tasks: {} })]);
+  homeState.aiOn = ai.status === 'fulfilled' && !!(ai.value.tasks || {}).home_brief;
   homeState.data = inbox.status === 'fulfilled' ? inbox.value : { items: [], counts: {}, sources: {}, unavailable: [], error: inbox.reason.message };
   homeState.brief = brief.status === 'fulfilled' ? brief.value : null;
   homeRender();
@@ -70,11 +72,12 @@ function homeRender() {
           <button class="btn btn-ghost btn-sm" type="button" data-home-ack="snooze" data-key="${esc(i.key)}" title="Ẩn 7 ngày">Ẩn 7 ngày</button>`}</div></li>`).join('');
   $('#homeMount').innerHTML = `
     ${brief}
+    <div id="homeAiBrief"></div>
     <div class="home-cards">${cards}</div>
     <section class="panel">
       <div class="panel-head"><div><div class="panel-title">Hôm nay cần làm</div>
         <p class="panel-sub">Gom từ mọi module theo quyền của bạn: cảnh báo capacity / backup, license và Opex sắp hết hạn, đợt thanh toán đến hạn, báo giá chờ kiểm tra / chọn, tờ trình chờ duyệt.</p></div>
-        <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-home-refresh title="Đọc lại từ mọi module"><i data-lucide="refresh-cw"></i>Làm mới</button><div class="view-toggle" role="tablist">${[['open', 'Cần xử lý'], ['done', 'Đã xong / đã ẩn']].map(([k, t]) => `<button type="button" class="${homeState.show === k ? 'active' : ''}" data-home-show="${k}">${t}</button>`).join('')}</div></div></div>
+        <div class="panel-toolbar">${homeState.aiOn ? '<button class="btn btn-secondary btn-sm" type="button" data-home-ai><i data-lucide="sparkles"></i>AI tóm tắt hôm nay</button>' : ''}<button class="btn btn-ghost btn-sm" type="button" data-home-refresh title="Đọc lại từ mọi module"><i data-lucide="refresh-cw"></i>Làm mới</button><div class="view-toggle" role="tablist">${[['open', 'Cần xử lý'], ['done', 'Đã xong / đã ẩn']].map(([k, t]) => `<button type="button" class="${homeState.show === k ? 'active' : ''}" data-home-show="${k}">${t}</button>`).join('')}</div></div></div>
       <div class="sp-inline home-filters">${levels.map(([k, t]) => `<button class="btn btn-ghost btn-sm${homeState.level === k ? ' active' : ''}" type="button" data-home-level="${k}">${esc(t)}${k && d.counts[k] ? ` (${esc(d.counts[k])})` : ''}</button>`).join('')}
         ${homeState.source ? `<button class="btn btn-ghost btn-sm" type="button" data-home-source="">Bỏ lọc ${esc((d.sources[homeState.source] || {}).label || '')} ✕</button>` : ''}</div>
       ${d.error ? `<p class="criteria-status error">${esc(d.error)}</p>` : ''}
@@ -93,6 +96,7 @@ function homeBind() {
     const t = (s) => e.target.closest(s);
     let b;
     if (t('[data-home-refresh]')) return renderHomeView(true);
+    if ((b = t('[data-home-ai]'))) return homeAiBrief(b);
     if ((b = t('[data-home-show]'))) { homeState.show = b.dataset.homeShow; return renderHomeView(); }
     if ((b = t('[data-home-level]'))) { homeState.level = b.dataset.homeLevel; homeSavePrefs(); return homeRender(); }
     if ((b = t('[data-home-source]'))) {

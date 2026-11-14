@@ -1807,6 +1807,7 @@ function syncViewSections() {
   // Settings: one tab of panels at a time (Cài đặt → Tiêu chí & ngưỡng / Nguồn dữ liệu / …).
   const sub = appState.settingsSub || 'criteria';
   $$('#viewSettings [data-set-tab]').forEach(el => el.classList.toggle('set-off', el.dataset.setTab !== sub));
+  if (appState.view === 'settings' && sub === 'ai' && typeof renderAiSettings === 'function') renderAiSettings();
   document.body.dataset.view = appState.view;
   if (typeof syncNavState === 'function') syncNavState();
 }

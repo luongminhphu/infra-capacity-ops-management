@@ -182,7 +182,8 @@ async function spendExport(kind, btn) {
   if (btn) btn.disabled = true;
   try {
     const res = await fetch(`/api/spend/reports/budget.${kind}`, { method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(filters) });
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(kind === 'pdf' && typeof reportAiOn === 'function' && reportAiOn() ? { ...filters, ai: true } : filters) });
     if (!res.ok) {
       let msg = `Lỗi xuất báo cáo (${res.status})`;
       try { msg = (await res.json()).detail || msg; } catch (err) { /* not JSON */ }

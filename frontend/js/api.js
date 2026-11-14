@@ -88,6 +88,7 @@ const api = {
     // apart from "no filter at all".
     if (clusters !== null && clusters !== undefined) params.clusters = clusters.join(',');
     if (hosts !== null && hosts !== undefined) params.hosts = hosts.join(',');
+    if ((view === 'executive' || view === 'technical') && typeof reportAiOn === 'function' && reportAiOn()) params.ai = '1';
     const qs = new URLSearchParams(params).toString();
     const res = await fetch(`${API_BASE}/reports/pdf?${qs}`, { credentials: 'include' });
     if (res.status === 401) {
@@ -225,7 +226,7 @@ const api = {
   bkSchedulesImport: (file) => { const fd = new FormData(); fd.append('file', file); return apiRequest('/backup/schedules/import', { method: 'POST', body: fd }); },
   bkThresholds: () => apiRequest('/backup/thresholds'),
   bkThresholdsSave: (payload) => apiRequest('/backup/thresholds', { method: 'PUT', body: JSON.stringify(payload) }),
-  bkReportPdf: (server, days, appendix = true) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7, appendix: appendix ? 'true' : 'false' })}`, { method: 'GET' }, 'ICO_Bao_cao_backup.pdf'),
+  bkReportPdf: (server, days, appendix = true) => api._downloadBlob(`${API_BASE}/backup/report/pdf?${new URLSearchParams({ server: server || 'all', days: days || 7, appendix: appendix ? 'true' : 'false', ...(typeof reportAiOn === 'function' && reportAiOn() ? { ai: '1' } : {}) })}`, { method: 'GET' }, 'ICO_Bao_cao_backup.pdf'),
   bkReportXlsx: (server, days) => api._downloadBlob(`${API_BASE}/backup/report/xlsx?${new URLSearchParams({ server: server || 'all', days: days || 7 })}`, { method: 'GET' }, 'ICO_Thong_ke_backup.xlsx'),
 
   getLogo: () => apiRequest('/settings/logo'),

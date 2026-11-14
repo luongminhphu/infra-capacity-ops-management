@@ -188,7 +188,7 @@ async function ppOpenDetail(code, note) {
 }
 
 /* =========================================================
-   Cài đặt → Tờ trình & AI (admin)
+   Cài đặt → Tờ trình (admin)
    ========================================================= */
 async function ppRenderAdmin(mount) {
   let aiCfg, templates, recipients;
@@ -213,16 +213,8 @@ async function ppRenderAdmin(mount) {
     <div class="sp-settings-grid">
       <div>
         <h5 class="pp-rec-title">AI soạn tờ trình</h5>
-        <div class="settings-form">
-          <label class="field"><span>Nhà cung cấp</span><select id="aiProvider">${spOpt('none', 'Không dùng AI (chỉ điền dữ liệu)', aiCfg.provider)}${spOpt('anthropic', 'Anthropic (Claude)', aiCfg.provider)}</select></label>
-          <label class="field"><span>Model</span><input type="text" id="aiModel" maxlength="64" value="${esc(aiCfg.model)}"></label>
-          <label class="field"><span>Mức suy luận (effort)</span><select id="aiEffort">${['low', 'medium', 'high'].map(x => spOpt(x, x, aiCfg.effort)).join('')}</select></label>
-          <label class="field"><span>API key</span><input type="password" id="aiKey" autocomplete="off" placeholder="${aiCfg.hasApiKey ? 'Đã lưu — để trống để giữ' : 'sk-ant-…'}"></label>
-        </div>
-        <label class="finding-filter-item"><input type="checkbox" id="aiAllow" ${aiCfg.allowExternal ? 'checked' : ''}><span>Cho phép gửi dữ liệu tờ trình (các khoản Opex / Capex đã chọn, bối cảnh người soạn nhập) tới Anthropic. Không gửi serial, email, mật khẩu.</span></label>
-        <p class="panel-sub">Trạng thái: <b>${aiCfg.enabled ? 'AI đang bật' : 'AI đang tắt'}</b>. Pod cần ra được <code>api.anthropic.com:443</code>.</p>
-        <div class="sim-actions"><button class="btn btn-primary btn-sm" type="button" id="aiSave">Lưu cấu hình AI</button>
-          <button class="btn btn-secondary btn-sm" type="button" id="aiTest">Kiểm tra kết nối</button></div>
+        <p class="panel-sub">Trạng thái: <b>${aiCfg.enabled ? 'AI đang bật' : 'AI đang tắt'}</b>. Cấu hình nhà cung cấp, API key, công tắc từng tác vụ và hạn mức chi phí nằm ở
+          <a href="#/settings/ai" data-nav-link="set-ai">Cài đặt → AI &amp; MCP</a> (dùng chung cho mọi tính năng AI).</p>
       </div>
       <div>
         <h5 class="pp-rec-title">Tải mẫu tờ trình (.docx)</h5>
@@ -243,14 +235,6 @@ async function ppRenderAdmin(mount) {
   refreshIcons();
   const msg = (t, ok) => { const el = $('#spSettingsMsg'); if (el) { el.textContent = t || ''; el.className = 'criteria-status' + (t ? (ok ? ' ok' : ' error') : ''); } };
   const rerender = () => ppRenderAdmin(mount);
-  spOnce('#aiSave', async () => {
-    try {
-      await apiRequest('/spend/proposals/ai', { method: 'PUT', body: JSON.stringify({ provider: $('#aiProvider').value, model: $('#aiModel').value,
-        effort: $('#aiEffort').value, apiKey: $('#aiKey').value, allowExternal: $('#aiAllow').checked }) });
-      msg('Đã lưu cấu hình AI.', true); rerender();
-    } catch (err) { msg(err.message); }
-  });
-  spOnce('#aiTest', async () => { try { const r = await apiRequest('/spend/proposals/ai/test', { method: 'POST' }); msg(r.message, r.ok); } catch (err) { msg(err.message); } });
   spOnce('#tplUpload', async () => {
     const f = $('#tplFile').files[0];
     if (!f) { msg('Chọn file .docx.'); return; }

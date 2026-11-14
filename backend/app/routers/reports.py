@@ -52,6 +52,7 @@ def export_pdf(
     node_ram: Optional[int] = Query(default=None, ge=1, description="[planning] RAM GB of a new node (omit = largest host per cluster)"),
     lead: int = Query(default=3, ge=0, le=12, description="[planning] procurement + deployment lead time in months"),
     target: float = Query(default=80.0, ge=50, le=100, description="[planning] planning target as %% of the overcommit threshold"),
+    ai: bool = Query(default=False, description="[executive|technical] add a 'Tổng kết (AI soạn)' box (AI task report_summary)"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -115,6 +116,11 @@ def export_pdf(
             pdf_bytes = report_planning.build_planning_pdf(host_rows, vm_rows, policy, scope_label, params, logo_data_url,
                                                            history=history_data)
         else:
+            if ai:
+                from .ai_admin import pdf_ai_box
+                from ..ai_tasks import brief_facts
+                pdf_ai_box(db, user, view, lambda: {"pham_vi": scope_label, **brief_facts(
+                    report_pdf.build_management_brief(host_rows, vm_rows, policy))})
             pdf_bytes = report_pdf.build_report_pdf(view, host_rows, vm_rows, policy, scope_label, run_meta, include_types, logo_data_url,
                                                     history=history_data, vm_changes=vm_changes)
     except ValueError as exc:

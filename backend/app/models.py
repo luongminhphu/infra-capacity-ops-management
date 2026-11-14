@@ -521,5 +521,34 @@ class OpsAlertState(Base):
     last_error = Column(String(500), nullable=True)
 
 
+class AiRun(Base):
+    """One AI call (or a refusal by the platform policy): task, user, tokens, cost — never the content."""
+    __tablename__ = "ai_runs"
+    __table_args__ = (CheckConstraint("status IN ('ok', 'error', 'blocked', 'cached')", name="ck_ai_run_status"),)
+
+    id = Column(Integer, primary_key=True)
+    task = Column(String(32), nullable=False, index=True)
+    username = Column(String(255), nullable=True)
+    model = Column(String(64), nullable=True)
+    status = Column(String(8), nullable=False)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    cost_usd = Column(Float, nullable=False, default=0.0)
+    input_hash = Column(String(64), nullable=True)
+    latency_ms = Column(Integer, nullable=True)
+    message = Column(String(300), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow, index=True)
+
+
+class AiCache(Base):
+    """Result of an AI task for identical facts (bản tin, tổng kết) — re-used instead of paying again."""
+    __tablename__ = "ai_cache"
+
+    key = Column(String(64), primary_key=True)                  # sha256(task + facts)
+    task = Column(String(32), nullable=False)
+    output = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
 from .spend import models as _spend_models  # noqa: E402,F401
