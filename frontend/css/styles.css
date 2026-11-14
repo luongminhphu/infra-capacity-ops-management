@@ -1086,3 +1086,17 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .ask-links{margin-top:var(--space-2);font-size:.9em;}
 .ask-form{display:flex;gap:var(--space-2);}
 .ask-form input{flex:1;}
+
+/* ---------- Chuẩn hoá BOM ---------- */
+.bom-form{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
+.bom-kpi-text{font-size:1.1rem;line-height:1.35;}
+.bom-cat .panel-title{color:var(--brand);}
+.bom-config{border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-4);margin:var(--space-3) 0;background:var(--bg-surface);}
+.bom-config-head{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-end;margin-bottom:var(--space-3);}
+.bom-title{flex:1 1 280px;font-weight:600;font-size:1rem;}
+.bom-mini{min-width:140px;max-width:220px;}
+.bom-total{margin-left:auto;font-weight:700;color:var(--text-primary);white-space:nowrap;}
+.bom-summary th{width:220px;text-align:left;color:var(--text-secondary);font-weight:600;background:var(--bg-elevated);}
+.bom-summary td input{width:100%;border:1px solid transparent;background:transparent;color:var(--text-primary);padding:2px 4px;}
+.bom-summary td input:hover,.bom-summary td input:focus{border-color:var(--field-border);background:var(--field-bg);}
+.bom-model td{font-weight:600;}
