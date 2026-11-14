@@ -11,3 +11,5 @@ python-dotenv==1.0.1
 weasyprint==70.0
 openpyxl==3.1.5
 cryptography>=42  # Fernet: secrets saved in Settings (also required by python-jose[cryptography])
+python-docx==1.2.0  # đọc / ghi .docx: mẫu tờ trình (module Chi phí & Hợp đồng)
+anthropic==2.8.0  # AI soạn tờ trình (tuỳ chọn, chỉ gọi khi admin bật)

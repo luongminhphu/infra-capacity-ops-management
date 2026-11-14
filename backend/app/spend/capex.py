@@ -157,7 +157,9 @@ def reconcile(db: Session, project: CapexProject, cfg: SpendSettings, user: User
 
 
 def _drop(db: Session, o: OpexItem, out, user: User, request, project: CapexProject) -> None:
-    has_contract = db.query(Contract.id).filter(Contract.opex_id == o.id).first() is not None
+    from .models import ProposalOpex
+    has_contract = (db.query(Contract.id).filter(Contract.opex_id == o.id).first() is not None
+                    or db.query(ProposalOpex.opex_id).filter(ProposalOpex.opex_id == o.id).first() is not None)
     if is_managed(o) and not has_contract:
         out["removed"].append(o.code)
         service.audit(db, user, request, "spend.opex.delete", code=o.code, capex=project.code, before=service.snapshot(o),

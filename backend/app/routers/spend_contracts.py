@@ -324,6 +324,8 @@ def delete_contract(code: str, request: Request, user: User = Depends(require_sp
     fl = db.query(SpendFile).filter(SpendFile.id.in_([v.file_id for v in versions])).all() if versions else []
     service.audit(db, user, request, "spend.contract.delete", code=c.code, title=c.title,
                   files=[{"name": f.original_name, "sha256": f.sha256} for f in fl])
+    from ..spend.models import ProposalContract
+    db.query(ProposalContract).filter(ProposalContract.contract_id == c.id).delete(synchronize_session=False)
     for v in versions:
         db.delete(v)
     db.flush()

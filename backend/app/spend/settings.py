@@ -19,11 +19,13 @@ class SpendSettings:
     reminder_hour: int = 8                 # Vietnam time
     app_base_url: str = ""                 # link in reminders, e.g. https://ico.corp.example
     purge_days: int = 30                   # phase 4: delay before old contract versions are purged
+    proposal_department: str = ""          # default "Đề xuất bởi" of a tờ trình
 
     def public(self) -> Dict[str, Any]:
         d = asdict(self)
         return {"fiscalStartMonth": d["fiscal_start_month"], "reminderDays": d["reminder_days"],
-                "reminderHour": d["reminder_hour"], "appBaseUrl": d["app_base_url"], "purgeDays": d["purge_days"]}
+                "reminderHour": d["reminder_hour"], "appBaseUrl": d["app_base_url"], "purgeDays": d["purge_days"],
+                "proposalDepartment": d["proposal_department"]}
 
 
 class SettingsError(ValueError):
@@ -45,6 +47,7 @@ def load(db: Session) -> SpendSettings:
     except ValueError:
         pass   # a hand-edited bad value falls back to the default instead of breaking the module
     s.app_base_url = rows.get("app_base_url", "")
+    s.proposal_department = rows.get("proposal_department", "")
     return s
 
 
@@ -61,6 +64,8 @@ def validate(data: Dict[str, Any], current: SpendSettings) -> SpendSettings:
             s.purge_days = int(data["purgeDays"])
     except (TypeError, ValueError) as exc:
         raise SettingsError("Giá trị cài đặt phải là số nguyên.") from exc
+    if "proposalDepartment" in data:
+        s.proposal_department = str(data["proposalDepartment"] or "").strip()[:128]
     if "appBaseUrl" in data:
         s.app_base_url = str(data["appBaseUrl"] or "").strip().rstrip("/")
     if not 1 <= s.fiscal_start_month <= 12:
@@ -80,7 +85,8 @@ def validate(data: Dict[str, Any], current: SpendSettings) -> SpendSettings:
 
 def save(db: Session, s: SpendSettings) -> None:
     values = {"fiscal_start_month": str(s.fiscal_start_month), "reminder_days": ",".join(map(str, s.reminder_days)),
-              "reminder_hour": str(s.reminder_hour), "app_base_url": s.app_base_url, "purge_days": str(s.purge_days)}
+              "reminder_hour": str(s.reminder_hour), "app_base_url": s.app_base_url, "purge_days": str(s.purge_days),
+              "proposal_department": s.proposal_department}
     for k, v in values.items():
         db.merge(AppSetting(key=PREFIX + k, value=v))
 

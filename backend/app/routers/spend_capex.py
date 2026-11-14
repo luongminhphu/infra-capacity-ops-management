@@ -332,7 +332,10 @@ def confirm_opex(code: str, request: Request, data: Dict[str, Any] = Body(...),
 def delete_project(code: str, request: Request, user: User = Depends(require_spend("admin")), db: Session = Depends(get_db)):
     p = _project(db, code)
     opex = db.query(OpexItem).filter(OpexItem.capex_project_id == p.id).all()
-    from ..spend.models import Contract
+    from ..spend.models import Contract, Proposal, ProposalOpex
+    if (db.query(Proposal.id).filter(Proposal.capex_project_id == p.id).first()
+            or db.query(ProposalOpex.opex_id).filter(ProposalOpex.opex_id.in_([o.id for o in opex] or [0])).first()):
+        raise HTTPException(409, "Dự án (hoặc Opex của dự án) đã có tờ trình — không xoá được, hãy đóng dự án.")
     if db.query(Contract.id).filter((Contract.capex_project_id == p.id) | (Contract.opex_id.in_([o.id for o in opex] or [0]))).first():
         raise HTTPException(409, "Dự án (hoặc Opex của dự án) đã có hợp đồng — không xoá được, hãy đóng dự án.")
     unmanaged = [o.code for o in opex if not capex.is_managed(o)]

@@ -13,7 +13,7 @@ from .collectors.scheduler import scheduler_loop
 from .config import get_settings
 from .database import SessionLocal, engine, ensure_schema
 from . import mcp_server, observability
-from .routers import admin, appconfig, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, spend_capex, spend_contracts, spend_reports, vcenters
+from .routers import admin, appconfig, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, spend_capex, spend_contracts, spend_proposals, spend_reports, vcenters
 from .spend import reminders as spend_reminders, service as spend_service
 from .security import ensure_bootstrap_admin
 
@@ -91,6 +91,7 @@ app.include_router(spend_admin.router)
 app.include_router(spend_capex.router)
 app.include_router(spend_reports.router)
 app.include_router(spend_contracts.router)
+app.include_router(spend_proposals.router)
 app.include_router(mcp_server.router)
 # Outermost: measures every /api and /mcp request (route template, latency, DB time).
 app.add_middleware(observability.TimingMiddleware)

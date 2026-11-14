@@ -354,3 +354,102 @@ class ContractVersion(Base):
     note = Column(String(1000), nullable=True)
     uploaded_by = Column(String(255), nullable=False)
     uploaded_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+PROPOSAL_KINDS = ("A", "B")
+PROPOSAL_STATUSES = ("draft", "submitted", "approved", "rejected")
+RECIPIENT_ROLES = ("de_xuat", "kiem_soat", "tham_van", "phe_duyet")
+AI_PROVIDERS = ("none", "anthropic")
+
+
+class ProposalTemplate(Base):
+    """An uploaded .docx proposal template (Mẫu A: to the CEO, Mẫu B: to Procurement / COO).
+    outline_json caches the structure read from the file (sections, their kind) for the UI and the AI."""
+    __tablename__ = "proposal_templates"
+    __table_args__ = (CheckConstraint(_in("kind", PROPOSAL_KINDS), name="ck_proposal_template_kind"),)
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(1), nullable=False)
+    name = Column(String(128), nullable=False)
+    description = Column(String(500), nullable=True)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=False)
+    outline_json = Column(Text, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    uploaded_by = Column(String(255), nullable=False)
+    uploaded_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class ProposalRecipient(Base):
+    """People of the approval block for each template kind (configured in Settings, never hard-coded)."""
+    __tablename__ = "proposal_recipients"
+    __table_args__ = (
+        CheckConstraint(_in("kind", PROPOSAL_KINDS), name="ck_proposal_recipient_kind"),
+        CheckConstraint(_in("role", RECIPIENT_ROLES), name="ck_proposal_recipient_role"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(1), nullable=False, index=True)
+    role = Column(String(10), nullable=False)
+    salutation = Column(String(16), nullable=True)        # "Anh", "Chị"…
+    name = Column(String(128), nullable=False)
+    title = Column(String(255), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+
+class Proposal(_Audited, Base):
+    """A tờ trình tied to one Capex project or to one or more Opex items (proposal_opex);
+    the "exactly one of the two" rule spans tables and is enforced by the service."""
+    __tablename__ = "proposals"
+    __table_args__ = (
+        CheckConstraint(_in("kind", PROPOSAL_KINDS), name="ck_proposal_kind"),
+        CheckConstraint(_in("status", PROPOSAL_STATUSES), name="ck_proposal_status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(20), nullable=False, unique=True)
+    kind = Column(String(1), nullable=False)
+    template_id = Column(Integer, ForeignKey("proposal_templates.id", ondelete="RESTRICT"), nullable=False, index=True)
+    subject = Column(String(255), nullable=False)
+    department = Column(String(128), nullable=True)
+    context_note = Column(Text, nullable=True)            # background written by the user, sent to the AI
+    status = Column(String(10), nullable=False, default="draft")
+    capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    ai_provider_used = Column(String(16), nullable=True)
+    ai_model = Column(String(64), nullable=True)
+    generated_at = Column(DateTime, nullable=True)
+    generated_by = Column(String(255), nullable=True)
+
+
+class ProposalOpex(Base):
+    __tablename__ = "proposal_opex"
+
+    proposal_id = Column(Integer, ForeignKey("proposals.id", ondelete="CASCADE"), primary_key=True)
+    opex_id = Column(Integer, ForeignKey("opex_items.id", ondelete="RESTRICT"), primary_key=True, index=True)
+
+
+class ProposalContract(Base):
+    """Contract <-> proposal link (separate table: no FK column can be added to contracts later)."""
+    __tablename__ = "proposal_contracts"
+
+    proposal_id = Column(Integer, ForeignKey("proposals.id", ondelete="CASCADE"), primary_key=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
+class SpendAiConfig(Base):
+    """Exactly one row. Nothing leaves the network unless provider != 'none' AND allow_external."""
+    __tablename__ = "spend_ai_config"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_ai_single"),
+        CheckConstraint(_in("provider", AI_PROVIDERS), name="ck_ai_provider"),
+        CheckConstraint("effort IN ('low', 'medium', 'high')", name="ck_ai_effort"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    provider = Column(String(16), nullable=False, default="none")
+    model = Column(String(64), nullable=False, default="claude-opus-5-5")
+    effort = Column(String(8), nullable=False, default="medium")
+    api_key_enc = Column(Text, nullable=True)
+    allow_external = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_by = Column(String(255), nullable=False)

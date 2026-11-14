@@ -341,6 +341,9 @@ def delete_opex(code: str, request: Request, user: User = Depends(require_spend(
     item = _item(db, code)
     if db.query(OpexItem.id).filter(OpexItem.renewed_from_id == item.id).first():
         raise HTTPException(409, "Khoản đã có khoản gia hạn kế nhiệm — không xoá được, hãy chuyển sang Ngừng.")
+    from ..spend.models import ProposalOpex
+    if db.query(ProposalOpex.opex_id).filter(ProposalOpex.opex_id == item.id).first():
+        raise HTTPException(409, "Khoản đã có tờ trình gắn vào — không xoá được, hãy chuyển sang Ngừng.")
     if db.query(Contract.id).filter(Contract.opex_id == item.id).first():
         raise HTTPException(409, "Khoản đã có hợp đồng gắn vào — không xoá được, hãy chuyển sang Ngừng.")
     file_rows = (db.query(SpendFile).join(OpexAttachment, OpexAttachment.file_id == SpendFile.id)
