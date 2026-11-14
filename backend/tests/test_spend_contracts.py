@@ -118,6 +118,7 @@ def test_finalize_sign_and_purge(app_, admin, contract, editor):
     r = approver.post(f"/api/spend/contracts/{code}/finalize", json={"versionNo": 2})
     assert r.status_code == 200 and r.json()["status"] == "final" and r.json()["finalVersion"] == 2
     assert _up(editor, code, docx("x"), "legal", 3).status_code == 409             # no versions after Final
+    assert editor.put(f"/api/spend/contracts/{code}", json={"title": "Đổi tên"}).status_code == 409
     # Signed scan: PDF only.
     assert approver.post(f"/api/spend/contracts/{code}/sign", files={"file": ("ky.docx", docx("x"))}).status_code == 415
     s = approver.post(f"/api/spend/contracts/{code}/sign", files={"file": ("ban-ky.pdf", b"%PDF-1.7 signed")})
@@ -185,5 +186,10 @@ def test_draft_contract_delete_removes_files(admin, contract, editor):
 
 def test_docx_paragraph_extraction():
     assert contracts.docx_paragraphs(docx("A", "  ", "B & C")) == ["A", "B & C"]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE x><x/>'.encode("utf-16"))
+    with pytest.raises(contracts.DocxTextError):
+        contracts.docx_paragraphs(buf.getvalue())
     with pytest.raises(contracts.DocxTextError):
         contracts.docx_paragraphs(docx("A", doctype=True))

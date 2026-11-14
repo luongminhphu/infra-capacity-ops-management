@@ -52,6 +52,9 @@ def docx_paragraphs(data: bytes) -> List[str]:
             xml = zf.read(info)
     except (KeyError, zipfile.BadZipFile) as exc:
         raise DocxTextError("Không đọc được nội dung .docx.") from exc
+    # Word writes UTF-8; anything else (UTF-16 with NUL bytes, BOM) is refused so the byte check below is reliable.
+    if xml[:2] in (b"\xff\xfe", b"\xfe\xff") or b"\x00" in xml[:4096]:
+        raise DocxTextError("Nội dung .docx phải mã hoá UTF-8.")
     if b"<!DOCTYPE" in xml[:4096].upper() or b"<!ENTITY" in xml.upper():
         raise DocxTextError("File .docx chứa khai báo DOCTYPE / ENTITY không hợp lệ.")
     try:

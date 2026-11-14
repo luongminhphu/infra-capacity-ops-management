@@ -143,8 +143,8 @@ def update_contract(code: str, request: Request, data: Dict[str, Any] = Body(...
                     db: Session = Depends(get_db)):
     """Title, vendor and note only; the link to Opex / Capex never changes (create a new contract)."""
     c = _contract(db, code)
-    if c.status == "signed":
-        raise HTTPException(409, "Hợp đồng đã ký không sửa được.")
+    if c.status in ("final", "signed"):
+        raise HTTPException(409, "Hợp đồng đã chốt / đã ký không sửa được thông tin.")
     c.title = service._text(data.get("title"), "tên hợp đồng", 255, required=True)
     c.note = service._text(data.get("note"), "ghi chú", 5000)
     if data.get("vendorId") or data.get("vendorName"):
