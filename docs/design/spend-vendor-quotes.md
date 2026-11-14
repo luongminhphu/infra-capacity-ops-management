@@ -26,7 +26,7 @@ Những điểm hệ thống sẽ tự phát hiện (thử trên chính file nà
 
 | # | Phát hiện | Số liệu |
 |---|---|---|
-| 1 | Dự toán IT Facility (F10, đưa lên bảng tổng C3) **thấp hơn** tổng báo giá VNT (G10) và cột lịch sử FL6 (M10) | 814.752.128 so với 913.109.394, lệch **98.356.266** = RACK CABINET 39.760.848 (F14 trống) + PHÁT SINH 58.596.418 (F24 trống) |
+| 1 | Dự toán IT Facility (F10, đưa lên bảng tổng C3) **thấp hơn** tổng báo giá VNT (G10) và cột lịch sử FL6 (M10) | 814.752.128 so với 913.109.394, lệch **98.357.266** = RACK CABINET 39.760.848 (F14 trống) + PHÁT SINH 58.596.418 (F24 trống) |
 | 2 | Dự toán VC (F41 = 1.600.711.200) chỉ bằng ~41% báo giá SVT được chọn (I41 = 3.909.015.600) | Cần xác nhận phạm vi (2 phòng VC + 1 phòng trình chiếu) khác phạm vi báo giá |
 | 3 | Chi phí / node (G25 = 4.909.191) tính trên 913.109.394 trong khi dự toán dùng 814.752.128 | Hai con số cùng tên "chi phí FL6" không khớp |
 | 4 | Tiêu đề khối VC ghi "SO SÁNH CHI PHÍ NETWORK" (K39) | Lỗi sao chép nhãn |
@@ -274,7 +274,7 @@ tiêu chí, nhập lịch sử, xoá.
 | **V2** | Cải tạo văn phòng: dự án, **3 khối**, nhóm chi phí chuẩn, quy mô / cấu hình; **nhập lịch sử 5 tầng (FL3, FL11, FL12, FL6, FL7) từ file Summarize**; so sánh lịch sử theo **thực chi**, theo nhóm + chỉ số + cảnh báo; xuất Excel đúng bố cục Summarize (có công thức) + PDF |
 | **V3** | AI tóm tắt khác biệt nội dung / cấu hình giữa 3 báo giá; đơn giá theo mặt hàng qua các năm; đưa so sánh + phiếu đánh giá vào tờ trình Mẫu B; tạo nhanh Capex / hợp đồng từ báo giá chọn |
 
-Test bắt buộc (ví dụ): đọc lại đúng file FL6 → phát hiện #1 (lệch 98.356.266 = 39.760.848 + 58.596.418);
+Test bắt buộc (ví dụ): đọc lại đúng file FL6 → phát hiện #1 (lệch 98.357.266 = 39.760.848 + 58.596.418);
 chi phí / node FL6 Network = 15.225.897, FL12 = 11.801.788, FL3 = 10.138.000; dòng SL × đơn giá sai 1 chữ số bị bắt;
 VAT 8% so với 10%; ghép dòng 3 báo giá có mô tả khác nhau.
 

@@ -186,13 +186,16 @@ def vendor_label(v: Optional[SpendVendor]) -> str:
 
 
 def find_vendor(db: Session, name: str) -> Optional[SpendVendor]:
-    """Vendor whose name or one of its aliases matches `name` (case / accents / spaces ignored)."""
+    """Vendor whose name, short name or one of its aliases matches `name` (case / accents / spaces ignored)."""
     key = norm_name(name)
     if not key:
         return None
     v = db.query(SpendVendor).filter_by(name_norm=key).first()
     if v:
         return v
+    for cand in db.query(SpendVendor).filter(SpendVendor.short_name.isnot(None) | SpendVendor.aliases.isnot(None)):
+        if cand.short_name and norm_name(cand.short_name) == key:
+            return cand
     for cand in db.query(SpendVendor).filter(SpendVendor.aliases.isnot(None)):
         if key in {norm_name(a) for a in re.split(r"[\n;]+", cand.aliases or "") if a.strip()}:
             return cand
