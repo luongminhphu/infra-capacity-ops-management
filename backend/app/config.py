@@ -22,7 +22,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 class VCenterConfig:
     def __init__(self, key: str, name: str, host: str, port: int, username: str,
-                 password: str, verify_ssl: bool, demo: bool = False):
+                 password: str, verify_ssl: bool, demo: bool = False, ca_pem: str = "", origin: str = "env"):
         self.key = key
         self.name = name
         self.host = host
@@ -31,6 +31,8 @@ class VCenterConfig:
         self.password = password
         self.verify_ssl = verify_ssl
         self.demo = demo
+        self.ca_pem = ca_pem          # CA chain (PEM text) trusted for this vCenter, when verify_ssl is on
+        self.origin = origin          # "env" (ConfigMap / .env) or "ui" (Settings → Nguồn dữ liệu)
 
 
 class NetBackupConfig:
@@ -40,7 +42,7 @@ class NetBackupConfig:
 
     def __init__(self, key: str, name: str, host: str, port: int, api_key: str, username: str, password: str,
                  domain_type: str, domain_name: str, verify_ssl: bool, api_version: str, demo: bool = False,
-                 timeout: int = 60, ca_cert: str = ""):
+                 timeout: int = 60, ca_cert: str = "", ca_pem: str = "", origin: str = "env"):
         self.key = key
         self.name = name
         self.host = host
@@ -54,8 +56,10 @@ class NetBackupConfig:
         self.api_version = api_version
         self.demo = demo
         self.timeout = timeout
-        # PEM file with the NetBackup CA certificate, used when verify_ssl is on.
+        # NetBackup CA used when verify_ssl is on: a PEM file path (env) or PEM text (Settings UI).
         self.ca_cert = ca_cert
+        self.ca_pem = ca_pem
+        self.origin = origin
 
 
 class Settings(BaseSettings):
@@ -160,7 +164,21 @@ class Settings(BaseSettings):
             return ["*"]
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    # ---- Data sources ----
+    # Sources come from VCENTER_i_* / NETBACKUP_i_* variables and from Settings → Nguồn dữ liệu
+    # (table data_sources, secrets encrypted with SECRETS_KEY). A UI source with the same key
+    # replaces the variable-based one. vcenters() / netbackups() return the merged, enabled list.
+    secrets_key: str = Field(default="")
+
     def vcenters(self) -> List[VCenterConfig]:
+        from .sources import vcenter_configs
+        return vcenter_configs(self)
+
+    def netbackups(self) -> List[NetBackupConfig]:
+        from .sources import netbackup_configs
+        return netbackup_configs(self)
+
+    def env_vcenters(self) -> List[VCenterConfig]:
         result = []
         for i in range(1, self.vcenter_count + 1):
             prefix = f"VCENTER_{i}_"
@@ -181,7 +199,7 @@ class Settings(BaseSettings):
         return result
 
 
-    def netbackups(self) -> List[NetBackupConfig]:
+    def env_netbackups(self) -> List[NetBackupConfig]:
         result = []
         for i in range(1, self.netbackup_count + 1):
             prefix = f"NETBACKUP_{i}_"

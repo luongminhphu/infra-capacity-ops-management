@@ -520,6 +520,31 @@ Muốn thử trước khi có vCenter thật: đặt `VCENTER_i_DEMO=true` cho c
 docker compose exec app python -m app.seed --username <user> --password '<pass>' --display-name "Tên hiển thị"
 ```
 
+## Kết nối nguồn dữ liệu trên giao diện (vCenter, NetBackup)
+
+**Cài đặt → Kết nối nguồn dữ liệu** (chỉ admin) cho phép thêm / sửa / tắt / xoá vCenter và máy chủ
+backup NetBackup ngay trên giao diện — mỗi môi trường triển khai tự khai báo nguồn của mình, không cần
+sửa ConfigMap / Secret hay redeploy:
+
+- Thông tin: tên, mã nguồn (cố định — lịch sử lưu theo mã này), máy chủ, cổng, tài khoản chỉ đọc, mật
+  khẩu hoặc API key (NetBackup), API version, domain type / name, kiểm tra chứng chỉ TLS kèm CA dạng
+  PEM (dán trực tiếp, thay cho việc mount file CA), chế độ DEMO.
+- **Kiểm tra kết nối** trước khi lưu: đăng nhập, đọc một thông tin (phiên bản vCenter / 1 job NetBackup),
+  đăng xuất — chỉ đọc.
+- Mật khẩu / API key **chỉ ghi**: lưu mã hoá (Fernet) bằng `SECRETS_KEY`, không bao giờ trả về trình
+  duyệt; để trống khi sửa = giữ nguyên. Mọi thay đổi được ghi nhật ký (không kèm mật khẩu).
+- Thay đổi có hiệu lực ở lần đồng bộ kế tiếp (lịch đồng bộ đọc lại danh sách nguồn mỗi chu kỳ). Tắt hoặc
+  xoá một nguồn chỉ dừng đồng bộ; dữ liệu lịch sử vẫn giữ.
+
+**`SECRETS_KEY`**: thêm vào Secret `ico-secrets` (`openssl rand -hex 32`) trước khi nhập mật khẩu. Khi chưa
+đặt, app dùng khoá suy ra từ `JWT_SECRET` và hiện cảnh báo; đổi khoá nào thì các mật khẩu đã lưu phải nhập
+lại (trang Cài đặt báo "không giải mã được").
+
+**Cấu hình bằng biến môi trường** (`VCENTER_i_*`, `NETBACKUP_i_*`) vẫn hoạt động như cũ và hiện trong
+bảng với nhãn "Biến môi trường". Nút **Chuyển cấu hình biến môi trường vào giao diện** sao chép chúng (kèm
+mật khẩu, API key, file CA) vào giao diện; nguồn trên giao diện cùng mã sẽ thay thế nguồn từ biến, sau đó có
+thể xoá các biến khỏi ConfigMap / Secret.
+
 ## Tạo tài khoản read-only trên vCenter (bắt buộc trước khi trỏ vào vCenter thật)
 
 Ứng dụng chỉ **đọc** dữ liệu (host, cluster, VM, datastore) — không tạo, sửa, xoá gì trên vSphere.

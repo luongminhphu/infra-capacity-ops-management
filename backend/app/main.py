@@ -13,7 +13,7 @@ from .collectors.scheduler import scheduler_loop
 from .config import get_settings
 from .database import SessionLocal, engine, ensure_schema
 from . import mcp_server, observability
-from .routers import admin, appconfig, auth, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, vcenters
+from .routers import admin, appconfig, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, vcenters
 from .security import ensure_bootstrap_admin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -78,6 +78,7 @@ app.include_router(licensing.router)
 app.include_router(backup.router)
 app.include_router(admin.router)
 app.include_router(appconfig.router)
+app.include_router(sources_router.router)
 app.include_router(mcp_server.router)
 # Outermost: measures every /api and /mcp request (route template, latency, DB time).
 app.add_middleware(observability.TimingMiddleware)
