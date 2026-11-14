@@ -1,6 +1,6 @@
 # Thiết kế: ICO thành super app — sắp xếp lại cụm tính năng và nền tảng AI dùng chung
 
-> Trạng thái: **ĐỀ XUẤT — chờ duyệt.** Chưa sửa code. Phân giai đoạn ở mục 7, câu hỏi cần quyết ở mục 9.
+> Trạng thái: **ĐÃ CHỐT** (quyết định ở mục 9). Làm theo thứ tự SA1 → SA6.
 
 ---
 
@@ -232,11 +232,13 @@ SA1–SA3 không cần AI và làm được ngay. SA4 là nền cho SA5–SA6.
 
 ---
 
-## 9. Câu hỏi cần anh/chị quyết
+## 9. Quyết định (đã chốt)
 
-1. **Nhóm menu:** đồng ý 2 miền *Vận hành* / *Quản lý thông tin* (+ Hệ thống) như mục 2.1? Đặc biệt: *Mô phỏng & quy hoạch* và *Sizing* để ở Vận hành, còn *Ngân sách / Mua sắm / Hợp đồng / Tài liệu* ở Quản lý thông tin.
-2. **Trang chủ mặc định:** theo vai trò (lãnh đạo → bản tin + thẻ miền; kỹ thuật → hộp việc), hay cùng một trang cho tất cả?
-3. **Che dữ liệu khi gửi AI:** che hostname / IP / tên VM mặc định (giống MCP) — đồng ý? Hay cho gửi tên thật để câu chữ tự nhiên hơn?
-4. **Hạn mức AI:** có giới hạn chi phí / tháng không (vd 50 USD), và bản tin trang chủ chạy tự động 1 lần / ngày hay chỉ khi bấm?
-5. **Hộp việc gửi đẩy:** ngoài nhắc hạn Opex, có muốn email / Discord cho lỗi backup và capacity vượt ngưỡng không (mức tối thiểu nào)?
-6. **Thứ tự:** làm SA1 → SA6 như trên, hay đưa SA4 (nền tảng AI + bản tin + tổng kết) lên ngay sau SA1?
+1. **Nhóm menu:** đồng ý 2 miền *Vận hành* / *Quản lý thông tin* (+ Hệ thống) như mục 2.1.
+2. **Trang chủ:** **một trang chung cho tất cả** (bản tin + thẻ miền + hộp việc lọc theo quyền), không chia theo vai trò.
+3. **Che dữ liệu khi gửi AI:** đồng ý che hostname / IP / tên VM mặc định (giống MCP).
+4. **Hạn mức AI:** tối đa **100 USD / tháng** (chạm hạn mức thì dừng gọi AI, quay về văn bản theo luật);
+   **cảnh báo ở 50 USD** gửi cho admin (Discord + hộp việc). Bản tin trang chủ: chạy khi bấm, cache theo dữ kiện.
+5. **Thông báo đẩy:** gửi **Discord** cho lỗi backup và capacity khi chạm **mức 90%** (ngưỡng VƯỢT NGƯỠNG của
+   capacity, tỷ lệ backup thành công / độ phủ dưới 90%); mỗi cảnh báo gửi một lần cho tới khi hết rồi tái phát.
+6. **Thứ tự:** SA1 → SA2 → SA3 → SA4 → SA5 → SA6.
