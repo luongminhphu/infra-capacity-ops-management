@@ -1,0 +1,22 @@
+Project-specific security checks for Infra Capacity Ops Management (ICO):
+
+- The app reads VMware vCenter (pyVmomi, backend/app/vcenter/) and Veritas NetBackup
+  (REST, backend/app/backup/) with READ-ONLY service accounts. Flag any code that calls a
+  mutating vSphere method (power, reconfigure, snapshot, relocate, destroy of infrastructure
+  objects) or any non-GET NetBackup request other than /login and /logout.
+- Flag secrets (vCenter / NetBackup passwords, NetBackup API keys, JWT_SECRET, Entra client
+  secret, session cookies) reaching logs, API responses, exported files or the MCP server
+  (backend/app/mcp_server.py, backend/app/observability.py).
+- PDF reports are rendered by WeasyPrint from HTML strings (backend/app/report_*.py). Flag
+  external strings (vCenter / NetBackup / user input) inserted without esc(), and any user- or
+  source-controlled URL that WeasyPrint could fetch (img src, CSS url(), references inside an
+  uploaded SVG logo) — SSRF or local file read.
+- Frontend (frontend/js/) builds HTML with template strings: flag data inserted into innerHTML
+  without esc().
+- FastAPI routers (backend/app/routers/): flag endpoints missing Depends(get_current_user), and
+  endpoints that change system-wide configuration, users or feature toggles without
+  Depends(require_admin).
+- File imports (CSV / JSON / Excel in routers/imports.py, routers/sizing.py, routers/backup.py):
+  check size limits and parsing of untrusted content.
+- Raw SQL built with f-strings (e.g. backend/app/database.py) must only use constant,
+  code-defined identifiers, never request data.
