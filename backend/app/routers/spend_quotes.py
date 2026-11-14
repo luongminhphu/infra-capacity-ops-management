@@ -5,6 +5,7 @@ Vendor documents use the vendor SHORT NAME (service.vendor_label) everywhere: co
 headers, evaluation columns, conclusions, exports and tờ trình."""
 import datetime as dt
 import json
+import re
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote as urlquote
@@ -857,7 +858,8 @@ def _line_vnd(l: QuotationLine, q: Quotation) -> Dict[str, Optional[int]]:
 
 
 def ai_payload(db: Session, r: QuoteRequest) -> Dict[str, Any]:
-    """What the AI sees: scope, and per vendor (short name) its lines, totals and terms. No contacts, files or users."""
+    """What the AI sees: scope of the request, and per vendor (short name) its lines, totals and terms.
+    No contacts, internal notes, files or users."""
     quotations = db.query(Quotation).filter_by(request_id=r.id).order_by(Quotation.id).all()
     vendors = {v.id: v for v in db.query(SpendVendor).filter(SpendVendor.id.in_([q.vendor_id for q in quotations] or [0]))}
     out = []
@@ -867,7 +869,7 @@ def ai_payload(db: Session, r: QuoteRequest) -> Dict[str, Any]:
             "ncc": service.vendor_label(vendors.get(q.vendor_id)), "da_kiem_tra": q.state == "verified",
             "tong_truoc_vat_vnd": _quotation_out(db, q, vendors)["subtotalVnd"], "tong_ncc_ghi_vnd": _quote_total_vnd(q),
             "vat_pct": _num(q.vat_pct), "hieu_luc_den": _iso(q.valid_until), "giao_hang": q.delivery_terms,
-            "bao_hanh": q.warranty_terms, "thanh_toan": q.payment_terms, "ghi_chu": (q.notes or "")[:1000] or None,
+            "bao_hanh": q.warranty_terms, "thanh_toan": q.payment_terms,
             "dong": [{"loai": l.line_type, "mo_ta": l.description[:300], "model": l.model, "dvt": l.unit, "sl": _num(l.qty),
                       **({"don_gia_vnd": _line_vnd(l, q)["unitPriceVnd"], "thanh_tien_vnd": _line_vnd(l, q)["amountVnd"]}
                          if l.line_type == "item" else {})} for l in lines],
@@ -901,10 +903,10 @@ def ai_summary(code: str, request: Request, user: User = Depends(require_spend("
 @router.get("/price-history")
 def price_history(q: str, user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
     """Unit prices of an item (model or words of the description) across verified quotations, vendors and years."""
-    term = (q or "").strip()
+    term = " ".join(re.sub(r"[%_\\]+", " ", q or "").split())[:80]     # wildcards are never user-controlled
     if len(term) < 3:
         _bad("Nhập ít nhất 3 ký tự (model hoặc tên hàng).")
-    like = f"%{term[:80].replace('%', '').replace('_', ' ')}%"
+    like = f"%{term}%"
     rows = (db.query(QuotationLine, Quotation, QuoteRequest)
             .join(Quotation, Quotation.id == QuotationLine.quotation_id)
             .join(QuoteRequest, QuoteRequest.id == Quotation.request_id)
@@ -941,7 +943,7 @@ def create_capex_from_quote(code: str, request: Request, data: Dict[str, Any] = 
                             db: Session = Depends(get_db)):
     """Capex project from the selected quotation: one item per line, or one item for the whole quotation."""
     from . import spend_capex
-    r = _request(db, code)
+    r = db.query(QuoteRequest).filter(QuoteRequest.code == code).with_for_update().first() or _request(db, code)
     q = _selected(db, r)
     if r.capex_project_id:
         raise HTTPException(409, "Gói đã gắn dự án Capex.")
@@ -963,6 +965,10 @@ def create_capex_from_quote(code: str, request: Request, data: Dict[str, Any] = 
                 continue
             qty = int(l.qty) if l.qty is not None and Decimal(l.qty) == int(l.qty) and l.qty > 0 else 1
             items.append({**base, "description": (f"{l.description} {l.model or ''}").strip()[:255], "quantity": qty, "amountNet": amt})
+        if not items:
+            _bad("Báo giá không có dòng hàng có giá trị — chọn tạo 1 hạng mục tổng.")
+        if any(l.line_type == "discount" for l in _lines(db, q)):
+            _bad("Báo giá có dòng chiết khấu — chọn tạo 1 hạng mục tổng để khớp giá trị sau chiết khấu.")
     else:
         sub = _quotation_out(db, q, {v.id: v})["subtotalVnd"]
         if not sub:
@@ -985,7 +991,7 @@ def create_capex_from_quote(code: str, request: Request, data: Dict[str, Any] = 
 
 @router.post("/quotes/{code}/contract")
 def create_contract_from_quote(code: str, request: Request, user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
-    r = _request(db, code)
+    r = db.query(QuoteRequest).filter(QuoteRequest.code == code).with_for_update().first() or _request(db, code)
     q = _selected(db, r)
     if not r.capex_project_id:
         raise HTTPException(409, "Tạo (hoặc gắn) dự án Capex cho gói trước, hợp đồng gắn với dự án Capex.")

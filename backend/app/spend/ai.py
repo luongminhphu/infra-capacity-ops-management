@@ -328,8 +328,13 @@ def compare_quotes(cfg: SpendAiConfig, payload: Dict[str, Any]) -> Dict[str, Any
     if not isinstance(data, dict):
         raise AiError("AI trả về nội dung không đúng cấu trúc.")
     clean = lambda v, n: str(v or "").strip()[:n]  # noqa: E731
+    for key in ("differences", "risks", "questions"):
+        if not isinstance(data.get(key) or [], list):
+            raise AiError("AI trả về nội dung không đúng cấu trúc.")
     diffs = []
     for d in (data.get("differences") or [])[:30]:
+        if isinstance(d, dict) and not isinstance(d.get("vendors") or [], list):
+            continue
         if isinstance(d, dict) and clean(d.get("detail"), 10):
             diffs.append({"topic": clean(d.get("topic"), 120), "detail": clean(d.get("detail"), 1500),
                           "vendors": [clean(v, 64) for v in (d.get("vendors") or [])[:10] if clean(v, 64)]})

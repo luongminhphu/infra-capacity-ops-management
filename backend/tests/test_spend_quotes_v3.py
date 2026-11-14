@@ -132,3 +132,23 @@ def test_proposal_payload_includes_renovation_history(app_, admin, editor):
     db.close()
     assert h["du_an"] == "FL9 (2026)" and h["trung_vi_lich_su"] == 10_969_894
     assert [x["gia_tri_chi_so"] for x in h["lich_su"]] == [11_801_788, 10_138_000]
+
+
+def test_v3_hardening(app_, admin, editor, monkeypatch):
+    code, ids = _selected_request(app_, editor)
+    assert editor.get("/api/spend/price-history", params={"q": "%%%"}).status_code == 400
+    assert editor.get("/api/spend/price-history", params={"q": "a%_\\"}).status_code == 400
+    admin.put("/api/spend/proposals/ai", json={"provider": "anthropic", "apiKey": KEY, "allowExternal": True})
+    monkeypatch.setattr(ai, "DIFF_CALL", lambda *a: json.dumps({"summary": "x", "differences": {"a": 1}, "risks": [], "questions": []}))
+    assert editor.post(f"/api/spend/quotes/{code}/ai-summary").status_code == 422
+    sent = []
+    monkeypatch.setattr(ai, "DIFF_CALL", lambda cfg, key, payload: sent.append(payload) or json.dumps(
+        {"summary": "ok", "differences": [], "risks": [], "questions": []}))
+    from app.database import SessionLocal
+    from app.spend.models import Quotation
+    db = SessionLocal()
+    db.get(Quotation, ids[0]).notes = "Nội bộ: NCC hứa giảm thêm 5%"
+    db.commit()
+    db.close()
+    assert editor.post(f"/api/spend/quotes/{code}/ai-summary").status_code == 200
+    assert "Nội bộ" not in json.dumps(sent[0], ensure_ascii=False)
