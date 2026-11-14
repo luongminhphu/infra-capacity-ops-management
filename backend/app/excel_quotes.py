@@ -122,7 +122,7 @@ def build_comparison_xlsx(d: Dict[str, Any], comp: Dict[str, Any], lines: Dict[i
                 ws.cell(row=r, column=c0, value=cell.get("qty")).number_format = QTY
                 ws.cell(row=r, column=c0 + 1, value=cell.get("unitPriceVnd")).number_format = MONEY
                 ws.cell(row=r, column=c0 + 2, value=cell.get("amountVnd")).number_format = MONEY
-                if str(c["quotationId"]) == row.get("minQuotation") and n > 1:
+                if str(c["quotationId"]) == row.get("minQuotation") and n > 1 and row.get("spreadPct"):
                     ws.cell(row=r, column=c0 + 2).fill = _fill("DCFCE7")
             amount_refs.append(f"{get_column_letter(c0 + 2)}{r}")
         if amount_refs:

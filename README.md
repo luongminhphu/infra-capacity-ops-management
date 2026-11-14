@@ -595,6 +595,27 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   **Không dùng AI**: điền các trường đầu tờ trình, bảng ký và bảng chi phí; các mục còn lại ghi “[Cần soạn: …]”.
   API key lưu mã hoá (`SECRETS_KEY`), không trả về API. Pod cần ra được `api.anthropic.com:443`.
 
+**V1 — Nhà cung cấp và so sánh báo giá (đã có)** — thiết kế [`docs/design/spend-vendor-quotes.md`](docs/design/spend-vendor-quotes.md)
+
+- **Nhà cung cấp** (menu *Nhà cung cấp*): **tên viết tắt** (duy nhất, không phân biệt hoa thường) dùng thống nhất trong
+  bảng so sánh, phiếu đánh giá, kết luận và tờ trình; **tên gọi khác** (vd *Thakral One* = *THRAKONE*) để nhận đúng NCC
+  khi tên trên báo giá viết khác; MST, địa chỉ, liên hệ, lĩnh vực, trạng thái (Tạm ngừng / Không hợp tác phải ghi lý do);
+  lịch sử báo giá (điểm, được chọn), hợp đồng, Opex, hạng mục Capex.
+- **Gói báo giá** `BG-<năm tài chính>-<số>` (menu *So sánh báo giá*): khối Cabling (gồm Hub) / Network /
+  Video Conference / Khác, dự toán trước VAT, dự án Capex, số báo giá tối thiểu (mặc định 3).
+  - **Upload** báo giá từng NCC: Excel / Word được đọc ngay (tìm dòng tiêu đề *Hạng mục / SL / Đơn giá / Thành tiền*,
+    dòng Cộng / VAT / Tổng); **PDF scan** đọc bằng AI (cùng cấu hình AI của tờ trình, chỉ khi admin đã bật và cho phép
+    gửi ra ngoài; AI chỉ *chép* số, không tính lại). Sửa dòng cho khớp file gốc, rồi bấm **Đã kiểm tra**.
+  - **Kiểm tra công thức** (bằng code): SL × Đơn giá ≠ Thành tiền, cộng dòng ≠ Cộng NCC ghi, VAT sai tỷ lệ, Tổng sai,
+    thiếu số, thành tiền 0, dòng trùng, ngoại tệ thiếu tỷ giá. Cảnh báo khi giá trị báo giá được chọn lệch dự toán > 1%.
+  - **So sánh**: ghép hạng mục giữa các NCC theo model → mô tả gần giống (ghép tay được), ô thấp nhất tô xanh, chênh %
+    từng hàng, tổng trước VAT / hạng mục chung / tổng NCC ghi, xếp hạng, điều kiện thương mại. Xuất Excel có công thức.
+  - **Phiếu đánh giá NCC** theo mẫu EVALUATION FORM: khung tiêu chuẩn 70% (6 tiêu chí cố định tỷ trọng), khung mở rộng
+    30% (2–4 tiêu chí, mặc định theo khối), điểm 1–10, Total và xếp loại ≥ 8 A / ≥ 7 B / ≥ 6 C / Không đạt; gợi ý điểm
+    *Giá thành* từ báo giá. Xuất Excel cùng bố cục, Total và Loại đánh giá là công thức.
+  - **Chọn NCC** (quyền Duyệt): chỉ báo giá đã kiểm tra; ít hơn số báo giá tối thiểu thì phải ghi lý do; kết luận mặc
+    định “Đề xuất chọn <tên viết tắt>”. Mở lại được để sửa. Mọi thao tác ghi nhật ký kiểm toán.
+
 ## Kiến trúc
 
 ```

@@ -78,6 +78,8 @@ async function renderSpendView() {
   if (spState.sub === 'overview' && typeof renderSpendOverview === 'function') { await renderSpendOverview(); return; }
   if (spState.sub === 'contracts' && typeof renderContractsPage === 'function') { await renderContractsPage(); return; }
   if (spState.sub === 'proposals' && typeof renderProposalsPage === 'function') { await renderProposalsPage(); return; }
+  if (spState.sub === 'vendors' && typeof renderVendorsPage === 'function') { await renderVendorsPage(); return; }
+  if (spState.sub === 'quotes' && typeof renderQuotesPage === 'function') { await renderQuotesPage(); return; }
   await spLoadList();
   spRenderPage();
   spBindPage();

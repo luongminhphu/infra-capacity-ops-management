@@ -963,3 +963,33 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .pay-paid-form input{height:var(--control-h-sm);}
 .pay-def-row{grid-template-columns:minmax(0,1fr) auto auto auto;}
 @media (max-width:760px){.pay-row{grid-template-columns:1fr 1fr;}}
+
+/* ---------- Chi phí & Hợp đồng — so sánh báo giá ---------- */
+.qt-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-3);margin-bottom:var(--space-3);}
+.qt-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);min-width:0;}
+.qt-card-head{display:flex;align-items:center;gap:var(--space-2);justify-content:space-between;font-size:var(--fs-body);}
+.qt-card .sp-dl{margin:0;}
+.qt-findings{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--space-1);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.qt-findings li{padding:var(--space-1) var(--space-2);border-radius:var(--radius-xs);overflow-wrap:anywhere;}
+.qt-findings li.crit{background:var(--crit-bg);color:var(--crit);}
+.qt-findings li.warn{background:var(--warn-bg);color:var(--warn);}
+.qt-ok{margin:0;font-size:var(--fs-caption);color:var(--ok);}
+.qt-bar{margin-bottom:var(--space-2);}
+.qt-matrix td,.qt-matrix th{white-space:nowrap;}
+.qt-matrix td.wrap{white-space:normal;min-width:220px;}
+.qt-matrix .qt-min{background:var(--ok-bg);color:var(--ok);font-weight:var(--fw-semibold);}
+.qt-matrix .qt-missing{color:var(--text-tertiary);font-style:italic;}
+.qt-foot td{background:var(--bg-surface-2);}
+.qt-eval input{height:var(--control-h-sm);width:100%;}
+.qt-eval .qt-w,.qt-eval .qt-score{width:80px;text-align:right;}
+.qt-eval .qt-crit-name{min-width:280px;}
+.qt-sec td{background:var(--bg-surface-2);color:var(--text-brand);}
+.qt-choices{display:flex;flex-direction:column;gap:var(--space-2);margin:var(--space-2) 0 var(--space-3);}
+.qt-choice{display:flex;align-items:center;gap:var(--space-2);font-size:var(--fs-body-sm);flex-wrap:wrap;}
+.qt-head-grid{grid-template-columns:repeat(4,minmax(0,1fr));}
+.qt-lines input,.qt-lines select{height:var(--control-h-sm);width:100%;}
+.qt-lines .ql-desc{min-width:240px;}
+.qt-lines .num{text-align:right;min-width:100px;}
+.qt-lines tr.qt-bad td{background:var(--crit-bg);}
+.sp-dialog.qt-wide{width:min(1280px,98vw);}
+@media (max-width:760px){.qt-head-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.qt-cards{grid-template-columns:1fr;}}
