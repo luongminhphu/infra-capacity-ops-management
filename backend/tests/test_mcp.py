@@ -137,11 +137,11 @@ def test_performance_is_captured_per_route_template(client):
     tok = _token(client)["token"]
     for _ in range(3):
         client.get("/api/auth/me")
-    perf = _call(client, tok, "endpoint_performance", {"since_minutes": 10, "sort": "count"})
+    perf = _call(client, tok, "endpoint_performance", {"since_minutes": 10, "sort": "count", "limit": 200})
     me = next(e for e in perf["endpoints"] if e["endpoint"] == "GET /api/auth/me")
     assert me["requests"] >= 3 and me["p95Ms"] is not None and me["avgDbQueries"] > 0
     client.delete("/api/admin/mcp/tokens/999999")    # 404 → counted as 4xx under the template
-    perf = _call(client, tok, "endpoint_performance", {"since_minutes": 10})
+    perf = _call(client, tok, "endpoint_performance", {"since_minutes": 10, "limit": 200})
     assert any(e["endpoint"] == "DELETE /api/admin/mcp/tokens/{token_id}" and e["errors4xx"] >= 1 for e in perf["endpoints"])
     # Buckets survive a flush to the database.
     obs.flush(force_all_buckets=True)
