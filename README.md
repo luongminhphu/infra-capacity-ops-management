@@ -564,6 +564,16 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   chi tiết hợp đồng. Giữ lại bản Final, bản ký, thông tin version (người upload, thời gian, hash) và nhật ký xoá
   (`spend.contract.purge`); tải file đã xoá trả 410.
 - File chỉ nhận .docx (version) và PDF (bản ký), kiểm tra nội dung, từ chối macro và DOCTYPE / ENTITY trong XML.
+- **Thanh toán hợp đồng** (mục *Thanh toán* trong chi tiết hợp đồng):
+  - Các **đợt thanh toán**: số đợt, nội dung, % giá trị hợp đồng (tự tính số tiền từ giá trị khoản Opex / tổng hạng mục
+    Capex) hoặc số tiền, hạn thanh toán hoặc điều kiện (“sau nghiệm thu”…), ghi chú. Tổng hợp: giá trị tham chiếu, tổng
+    các đợt (cảnh báo khi lệch giá trị), đã thanh toán, còn lại; đợt quá hạn tô đỏ, còn ≤ 30 ngày tô vàng.
+  - **Checklist hồ sơ** từng đợt, tạo sẵn từ danh sách mặc định (Cài đặt → Chi phí & nhắc hạn, mặc định: Đề nghị thanh
+    toán, Hóa đơn GTGT, Biên bản nghiệm thu / bàn giao — bắt buộc; Bảo lãnh, Phiếu xuất kho / CO-CQ — không bắt buộc);
+    thêm / bớt hồ sơ, đánh dấu bắt buộc, **tick** khi đã có (ghi người tick, thời điểm), đính kèm bản scan.
+  - Trạng thái: **Chờ hồ sơ** → **Đã nộp hồ sơ** (chỉ khi đủ hồ sơ bắt buộc; checklist khoá lại) → **Đã thanh toán**
+    (quyền Duyệt; ngày, số tiền thực trả, số chứng từ / UNC). Duyệt mở lại được đợt đã nộp; Admin huỷ được ghi nhận
+    thanh toán. Mọi thao tác ghi nhật ký kiểm toán. Không xoá được hợp đồng đã có đợt nộp hồ sơ / đã thanh toán.
 
 **Giai đoạn 5 — Tờ trình từ mẫu của công ty, AI soạn nội dung (đã có)**
 
