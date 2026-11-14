@@ -21,7 +21,7 @@ mà trang đó dùng (vCenter / cluster / host).
 | Quy hoạch | **What-if capacity**, **Sizing máy chủ**, **Quy hoạch tài nguyên** | What-if simulation; sizing host vật lý; form giả định + PDF quy hoạch (trước là dropdown trong header). |
 | License | **Đánh giá license**, **What-if license**, **Snapshot license** | Ba tab còn lại của License & Inventory cũ, kèm thanh chọn phạm vi cluster cho đợt mua. |
 | Backup | **Tổng quan backup**, **Client & RPO**, **Job backup**, **Độ phủ VM**, **Storage & policy**, **Nguồn & ngưỡng** | Giám sát Veritas NetBackup qua REST API chỉ đọc — xem mục *Backup* bên dưới. |
-| Chi phí & Hợp đồng | **Tổng quan chi phí**, **Opex**, **Capex**, **Hợp đồng** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
+| Chi phí & Hợp đồng | **Tổng quan chi phí**, **Opex**, **Capex**, **Hợp đồng**, **Tờ trình** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
 | Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi báo cáo xuất tập trung, nhóm theo chức năng (lọc nhanh bằng chip): **Capacity & vận hành** (PDF Vận hành / Kỹ thuật, Excel host & VM, CSV tổng hợp), **Quy hoạch & Sizing** (PDF quy hoạch, Sizing PDF đầy đủ / rút gọn / Excel, mẫu nhập liệu), **License & Inventory** (PDF tổng quan — hiện tại hoặc từ snapshot, Excel đánh giá / ESXi / hệ điều hành), **Backup** (PDF hiện trạng — có / không phụ lục, Excel thống kê; chọn server và kỳ). Mỗi báo cáo có “Tuỳ chọn” riêng (Storage, cửa sổ xu hướng, giả định quy hoạch, hướng đề xuất sizing…) được ghi nhớ; “Chọn nhiều” để xuất nhiều báo cáo một lần. Khung bên phải: phạm vi cluster / host, loại finding, logo. Nút xuất ở từng trang vẫn giữ. |
 | | **Cài đặt** | Tiêu chí đánh giá (Storage), ngưỡng (idle, overcommit, HT) có nút **Lưu ngưỡng** lên server, trạng thái vCenter, import CSV/JSON, sample data, reset. |
 
@@ -565,7 +565,25 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   (`spend.contract.purge`); tải file đã xoá trả 410.
 - File chỉ nhận .docx (version) và PDF (bản ký), kiểm tra nội dung, từ chối macro và DOCTYPE / ENTITY trong XML.
 
-**Giai đoạn sau**: GĐ5 AI soạn tờ trình từ mẫu .docx tải lên.
+**Giai đoạn 5 — Tờ trình từ mẫu của công ty, AI soạn nội dung (đã có)**
+
+- **Mẫu**: admin tải file .docx tờ trình đang dùng (Cài đặt → Chi phí & nhắc hạn → Tờ trình & AI), chọn loại
+  **Mẫu A — trình Tổng Giám Đốc** (thân ngắn, chi tiết vào phụ lục) hoặc **Mẫu B — trình Ban Mua sắm / COO** (chi tiết,
+  so sánh phương án, nhà cung cấp, chi phí). Không cần chèn placeholder: hệ thống đọc cấu trúc của chính file —
+  bảng *Về việc / Đề xuất bởi / Trình đến / Thời gian*, dòng *Kính gửi*, các **mục đánh số**, **Phụ lục …**, bảng ký —
+  và hiển thị mục nào sẽ được soạn, mục nào **giữ nguyên** (khai báo xung đột lợi ích), mục **để trống** (Ý kiến FAD…).
+- **Người ký / người nhận** cấu hình theo từng loại mẫu (vai trò Đề xuất / Kiểm soát / Tham vấn / Phê duyệt, xưng hô,
+  họ tên, chức vụ); người Phê duyệt đầu tiên điền vào *Trình đến* và *Kính gửi*. Không cấu hình thì giữ tên trong mẫu.
+- **Soạn**: chọn một dự án Capex hoặc một / nhiều khoản Opex + loại mẫu, ghi bối cảnh (lý do, phương án đã cân nhắc).
+  File .docx được tạo từ **bản sao của chính mẫu** (giữ font, đánh số, header / footer, logo; bảng và gạch đầu dòng mới
+  sao chép định dạng của mẫu) để tải về chỉnh tiếp. Lưu tờ trình mã `TT-<năm tài chính>-<số>`, trạng thái Nháp →
+  Đã trình → Đã duyệt / Không duyệt (quyền Duyệt), gắn được với hợp đồng.
+- **AI** (Anthropic Claude, mặc định `claude-opus-5-5`): chỉ chạy khi admin chọn *Anthropic*, nhập API key **và** tick
+  *Cho phép gửi dữ liệu ra ngoài*. Gửi đi: nội dung yêu cầu, các khoản Opex / hạng mục Capex (mã, nội dung, nhà cung cấp,
+  thời hạn, số tiền), bối cảnh người soạn nhập; **không** gửi serial thiết bị, email, mật khẩu. Kết quả dạng JSON theo
+  cấu trúc mẫu, chỉ ghi vào các mục được phép soạn; AI lỗi / từ chối thì vẫn tạo file chỉ điền dữ liệu kèm cảnh báo.
+  **Không dùng AI**: điền các trường đầu tờ trình, bảng ký và bảng chi phí; các mục còn lại ghi “[Cần soạn: …]”.
+  API key lưu mã hoá (`SECRETS_KEY`), không trả về API. Pod cần ra được `api.anthropic.com:443`.
 
 ## Kiến trúc
 

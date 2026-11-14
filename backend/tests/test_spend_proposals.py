@@ -214,3 +214,25 @@ def test_recipients_admin_only(app_, admin, editor):
     r = admin.put("/api/spend/proposals/recipients/B", json=body)
     assert [i["roleLabel"] for i in r.json()["items"]] == ["Đề xuất", "Phê duyệt"]
     assert admin.put("/api/spend/proposals/recipients/B", json={"items": [{"role": "ceo", "name": "x", "title": "y"}]}).status_code == 400
+
+
+def _png() -> bytes:
+    import struct
+    import zlib
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00")) + chunk(b"IEND", b""))
+
+
+def test_old_embedded_objects_are_removed_from_written_sections():
+    d = docx.Document(io.BytesIO(template()))
+    target = next(p for p in d.paragraphs if p.text == "Bảng chi phí cũ.")
+    pic = d.add_paragraph()
+    pic.add_run().add_picture(io.BytesIO(_png()))
+    target._p.addnext(pic._p)                       # an "empty" paragraph holding an image, inside an editable section
+    buf = io.BytesIO()
+    d.save(buf)
+    out = proposal_doc.fill(buf.getvalue(), {"subject": "x"}, [], None, [])
+    assert b"<w:drawing" not in __import__("zipfile").ZipFile(io.BytesIO(out)).read("word/document.xml")

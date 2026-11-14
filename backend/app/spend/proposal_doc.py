@@ -288,6 +288,16 @@ def _new_table_after(anchor_el, example: Table, rows: Sequence[Sequence[str]]):
     return el
 
 
+def _blank(p: Paragraph) -> bool:
+    if p.text.strip():
+        return False
+    return not any(el.tag in _OBJECT_TAGS for el in p._p.iter())
+
+
+_OBJECT_TAGS = {qn("w:drawing"), qn("w:object"), qn("w:pict"), qn("w:fldSimple"),
+                "{urn:schemas-microsoft-com:vml}shape", "{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent"}
+
+
 def _remove(obj) -> None:
     el = obj._p if isinstance(obj, Paragraph) else obj._tbl
     el.getparent().remove(el)
@@ -364,7 +374,9 @@ def fill(data: bytes, header: Dict[str, Optional[str]], recipients: Sequence[Dic
             continue
         par, bul, tbl = examples(s["body"])
         par, bul, tbl = par or doc_par or fallback_par, bul or doc_bul or par or fallback_par, tbl or doc_tbl
-        keep_tail = [o for k, o in s["body"] if k == "p" and not o.text.strip()][-1:]   # spacing before next heading
+        # Keep one truly empty paragraph as spacing before the next heading; an empty-looking paragraph
+        # that holds a drawing / embedded object (e.g. an Excel table) is old content and goes too.
+        keep_tail = [o for k, o in s["body"] if k == "p" and _blank(o)][-1:]
         for k, o in s["body"]:
             if not (keep_tail and o is keep_tail[0]):
                 _remove(o)
