@@ -80,6 +80,7 @@ async function renderSpendView() {
   if (spState.sub === 'proposals' && typeof renderProposalsPage === 'function') { await renderProposalsPage(); return; }
   if (spState.sub === 'vendors' && typeof renderVendorsPage === 'function') { await renderVendorsPage(); return; }
   if (spState.sub === 'quotes' && typeof renderQuotesPage === 'function') { await renderQuotesPage(); return; }
+  if (spState.sub === 'renovations' && typeof renderRenovationsPage === 'function') { await renderRenovationsPage(); return; }
   await spLoadList();
   spRenderPage();
   spBindPage();

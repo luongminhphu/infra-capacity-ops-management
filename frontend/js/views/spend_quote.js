@@ -184,8 +184,8 @@ function qtBind() {
 }
 
 async function qtOpenForm(r) {
-  let capex = [];
-  try { capex = await apiRequest('/spend/capex'); } catch (err) { /* suggestions only */ }
+  let capex = [], renov = [];
+  try { [capex, renov] = await Promise.all([apiRequest('/spend/capex'), apiRequest('/spend/renovations')]); } catch (err) { /* suggestions only */ }
   const p = r || { workstream: 'cabling', minQuotes: 3 };
   const body = `<form id="qtForm" class="sp-form" novalidate><div class="src-grid">
       <label class="field sp-span2"><span>Tên gói *</span><input name="title" maxlength="255" value="${esc(p.title || '')}" placeholder="Vd: Thi công hạ tầng cáp FL9"></label>
@@ -193,6 +193,7 @@ async function qtOpenForm(r) {
       <label class="field"><span>Số báo giá tối thiểu</span><input name="minQuotes" type="number" min="1" max="10" value="${esc(p.minQuotes || 3)}"></label>
       <label class="field"><span>Dự toán trước VAT (đ)</span><input name="estimateAmount" inputmode="numeric" value="${esc(qtRaw(p.estimateAmount))}"></label>
       <label class="field"><span>Dự án Capex</span><input name="capexCode" list="qtCapexList" maxlength="20" value="${esc((p.capex && p.capex.code) || '')}" placeholder="CPX-2026-0001"></label>
+      <label class="field"><span>Dự án cải tạo văn phòng</span><select name="renovationCode">${spOpt('', '— không —', (p.renovation && p.renovation.code) || '')}${renov.filter(x => !x.isHistorical).map(x => spOpt(x.code, `${x.floor} (${x.year}) — ${x.name}`, (p.renovation && p.renovation.code) || '')).join('')}</select></label>
       <label class="field sp-span2"><span>Mô tả / phạm vi</span><textarea name="description" rows="3" maxlength="5000">${esc(p.description || '')}</textarea></label>
     </div><datalist id="qtCapexList">${capex.map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join('')}</datalist></form>
     ${r ? '' : '<p class="muted-sub">Phiếu đánh giá được tạo sẵn: khung tiêu chuẩn 70% (6 tiêu chí) và khung mở rộng 30% theo khối — sửa được ở tab Đánh giá.</p>'}`;
@@ -227,7 +228,7 @@ function qtRenderDetail() {
       <div class="panel-head">
         <div><button class="btn btn-ghost btn-sm" type="button" data-qt-back><i data-lucide="arrow-left"></i>Danh sách gói</button>
           <div class="panel-title">${esc(d.code)} — ${esc(d.title)}</div>
-          <p class="panel-sub">${esc(d.workstreamLabel)} · dự toán ${spMoney(d.estimateAmount)}${d.capex ? ` · Capex ${esc(d.capex.code)}` : ''} · ${spPill(...(QT_STATUS[d.status] || ['na', d.statusLabel]))}</p></div>
+          <p class="panel-sub">${esc(d.workstreamLabel)} · dự toán ${spMoney(d.estimateAmount)}${d.capex ? ` · Capex ${esc(d.capex.code)}` : ''}${d.renovation ? ` · cải tạo ${esc(d.renovation.floor)} (${esc(d.renovation.code)})` : ''} · ${spPill(...(QT_STATUS[d.status] || ['na', d.statusLabel]))}</p></div>
         <div class="panel-toolbar">
           ${spCan('editor') && !qtLocked() ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="edit"><i data-lucide="pencil"></i>Sửa gói</button>' : ''}
           ${spCan('admin') && !qtLocked() ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="delete"><i data-lucide="trash-2"></i>Xoá</button>' : ''}

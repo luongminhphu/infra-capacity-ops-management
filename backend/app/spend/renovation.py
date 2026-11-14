@@ -169,8 +169,8 @@ def compare(current: ProjectView, history: Sequence[ProjectView], groups: Dict[s
             dev = round((cur_kpi[main] - med) * 100 / med, 1)
             if abs(dev) > threshold * 100:
                 word = "cao hơn" if dev > 0 else "thấp hơn"
-                msg = (f"{WS_LABELS[ws]}: {cur_kpi[main]:,} {KPI_LABELS[main]}, {word} trung vị lịch sử {med:,} "
-                       f"({dev:+.1f}%).").replace(",", ".")
+                pct = f"{dev:+.1f}%".replace(".", ",")
+                msg = f"{WS_LABELS[ws]}: {_vn(cur_kpi[main])} {KPI_LABELS[main]}, {word} trung vị lịch sử {_vn(med)} ({pct})."
                 if not same:
                     cfgs = sorted({c['config'] for c in cols if c['config']})
                     msg += f" Khác cấu hình ({current.config or 'chưa ghi'} so với {', '.join(cfgs) or 'chưa ghi'}) — không kết luận đắt / rẻ."
@@ -330,7 +330,7 @@ def _read_sheet(rows: List[List[Any]], res: SummarizeResult, by_floor: Dict[str,
                 break
             for j, p in projects:
                 v = to_int(parse_number(r[j])) if j < len(r) else None
-                if v is not None:
+                if v:                       # 0 / empty = not bought or no data: never a 0 in the medians
                     p.amounts.setdefault(ws, {})[label] = p.amounts.setdefault(ws, {}).get(label, 0) + v
             k += 1
         # Left block lines (dự toán of the current floor) for the estimate-vs-history check (#1 in the design).

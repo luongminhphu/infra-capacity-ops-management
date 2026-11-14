@@ -265,3 +265,9 @@ def test_groups_admin_and_viewer_roles(app_, admin, editor):
     assert [x["name"] for x in out["network"]][-1] == "Firewall"
     dup = {"network": body["network"] + [{"name": "firewall"}]}
     assert admin.put("/api/spend/renovation-groups", json=dup).status_code == 400
+
+
+def test_zero_cells_are_no_data_not_zero():
+    fl12 = {p.floor: p for p in rv.read_summarize(summarize_file()).projects}["FL12"]
+    assert "CÁP QUANG" not in fl12.amounts["cabling"] and "RACK CABINET" not in fl12.amounts["cabling"]
+    assert fl12.amounts["cabling"]["UPS"] == 77_623_920
