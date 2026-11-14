@@ -87,5 +87,5 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 - `hsc-design-system` — token màu / chữ / khoảng cách, light/dark, trạng thái.
 - `pdf-report` — quy ước báo cáo PDF A4 bằng WeasyPrint.
 
-Quét bảo mật: chạy `/security-review` trước khi tạo PR; PR được quét tự động bởi
-`.github/workflows/security-review.yml`.
+Quét bảo mật: chạy `/security-review` (thay đổi đang chờ) hoặc `/claude-security`
+(quét sâu cả repo) trong Claude Code trước khi tạo PR.
