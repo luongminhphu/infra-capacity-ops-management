@@ -49,6 +49,8 @@ def test_submit_requires_required_documents_and_paid_needs_approver(app_, admin,
     assert editor.post(_url(contract, p["id"], "submit")).json()["items"][0]["status"] == "submitted"
     # Checklist is locked once submitted.
     assert editor.put(_url(contract, p["id"], "documents", p["documents"][0]["id"]), json={"done": False}).status_code == 409
+    assert editor.post(_url(contract, p["id"], "documents", p["documents"][0]["id"], "file"),
+                       files={"file": ("x.pdf", b"%PDF-1.7 x")}).status_code == 409
     assert editor.post(_url(contract, p["id"], "paid"), json={}).status_code == 403
     d = approver.post(_url(contract, p["id"], "paid"), json={"paidAt": "2026-11-20", "paidAmount": 499_000_000,
                                                             "paymentRef": "UNC-0123"}).json()

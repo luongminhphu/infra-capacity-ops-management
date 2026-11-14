@@ -286,8 +286,8 @@ async def attach_document_file(code: str, payment_id: int, doc_id: int, request:
     c = _contract(db, code)
     p = _payment(db, c, payment_id)
     d = _doc(db, p, doc_id)
-    if p.status == "paid":
-        raise HTTPException(409, "Đợt đã thanh toán — không thay file hồ sơ.")
+    if p.status != "pending":
+        raise HTTPException(409, "Đợt đã nộp hồ sơ / đã thanh toán — mở lại đợt để thay file hồ sơ.")
     data = await files.read_upload(file)
     row, tmp, final = files.store(db, data, file.filename, user.username)
     old = db.get(SpendFile, d.file_id) if d.file_id else None

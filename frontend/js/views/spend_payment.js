@@ -24,7 +24,7 @@ async function payRender(code) {
           ${p.status !== 'pending' || !spCan('editor') ? 'disabled' : ''}><span>${esc(x.name)}${x.required ? ' <span class="pill-mini">Bắt buộc</span>' : ''}</span></label>
         <span class="muted-sub sr-inline">${x.done ? `${esc(x.doneBy || '')} · ${esc(spTime(x.doneAt))}` : 'Chưa có'}</span>
         ${x.file ? `<a href="/api/spend/files/${encodeURIComponent(x.file.id)}" download>${esc(x.file.name)}</a>` : ''}
-        ${spCan('editor') && p.status !== 'paid' ? `<label class="btn btn-ghost btn-sm pay-file">Đính kèm<input type="file" class="hidden" accept=".pdf,.docx,.xlsx" data-pay-file="${esc(p.id)}:${esc(x.id)}"></label>` : ''}
+        ${spCan('editor') && p.status === 'pending' ? `<label class="btn btn-ghost btn-sm pay-file">Đính kèm<input type="file" class="hidden" accept=".pdf,.docx,.xlsx" data-pay-file="${esc(p.id)}:${esc(x.id)}"></label>` : ''}
         ${spCan('editor') && p.status === 'pending' ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" data-pay-deldoc="${esc(p.id)}:${esc(x.id)}" aria-label="Xoá hồ sơ ${esc(x.name)}"><i data-lucide="x"></i></button>` : ''}
       </li>`).join('');
     const btn = (attr, label, cls = 'btn-ghost') => `<button class="btn ${cls} btn-sm" type="button" ${attr}>${label}</button>`;
