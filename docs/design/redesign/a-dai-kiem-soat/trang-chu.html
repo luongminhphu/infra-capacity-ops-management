@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trang chủ — Hướng A · Đài kiểm soát</title>
+<link rel="stylesheet" href="../_shared/hsc-tokens.css">
+<link rel="stylesheet" href="deck.css">
+<script src="../../../../frontend/vendor/lucide-1.73.0.min.js" defer></script>
+<script src="../_shared/mock.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Bỏ qua đến nội dung chính</a>
+<div class="deck">
+  <nav class="rail" aria-label="Điều hướng chính">
+    <div class="home-mark"><span aria-hidden="true"><i data-lucide="layout-grid"></i></span></div>
+    <a href="trang-chu.html" aria-current="page"><i data-lucide="house"></i>Hôm nay<span class="count" aria-label="12 việc cảnh báo">12</span></a>
+    <a href="dieu-hanh.html"><i data-lucide="gauge"></i>Capacity</a>
+    <a href="#"><i data-lucide="database-backup"></i>Backup</a>
+    <a href="#"><i data-lucide="git-branch"></i>Mô phỏng</a>
+    <a href="#" class="more"><i data-lucide="calculator"></i>Sizing</a>
+    <hr>
+    <a href="#"><i data-lucide="server"></i>Tài sản</a>
+    <a href="#"><i data-lucide="badge-check"></i>License</a>
+    <a href="opex.html"><i data-lucide="wallet"></i>Chi phí</a>
+    <a href="#" class="more"><i data-lucide="shopping-cart"></i>Mua sắm</a>
+    <a href="#" class="more"><i data-lucide="scroll-text"></i>Hợp đồng</a>
+    <div class="spacer"></div>
+    <a href="#" class="more"><i data-lucide="settings"></i>Cài đặt</a>
+  </nav>
+
+  <div>
+    <header class="bar">
+      <div class="crumb">
+        <h1>Hôm nay</h1>
+        <div class="tabs" role="tablist" aria-label="Trang chủ">
+          <button class="tab" role="tab" aria-selected="true">Việc của tôi</button>
+          <a class="tab" role="tab" aria-selected="false" href="dieu-hanh.html" style="display:inline-grid;place-items:center;text-decoration:none">Điều hành</a>
+        </div>
+      </div>
+      <button class="cmd" type="button" aria-label="Tìm hoặc chạy lệnh (Ctrl K)"><i data-lucide="search"></i><span class="lbl">Tìm host, VM, mã OPX-, hoặc gõ lệnh…</span><kbd>Ctrl K</kbd></button>
+      <div class="sync"><span class="dot" aria-hidden="true"></span><span>3/3 nguồn · đồng bộ 11:57</span></div>
+      <button class="iconbtn" type="button" data-toggle-theme aria-pressed="false" aria-label="Đổi giao diện sáng / tối"><i data-lucide="sun-moon"></i></button>
+    </header>
+
+    <!-- Signature: pulse strip. Each beacon = domain status + one number + 7-day spark -->
+    <section class="pulse" aria-label="Nhịp hạ tầng">
+      <a class="beacon" href="dieu-hanh.html">
+        <svg class="spark" viewBox="0 0 44 28" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--c1)" stroke-width="2" points="0,20 7,19 14,19 22,18 29,18 36,17 44,17"/></svg>
+        <span class="name">Capacity</span><span class="st ok"><i data-lucide="circle-check"></i>AN TOÀN</span>
+        <span class="metric">RAM 37 % · CPU 11 %</span>
+      </a>
+      <a class="beacon is-bad" href="#">
+        <svg class="spark" viewBox="0 0 44 28" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--c1)" stroke-width="2" points="0,6 7,7 14,6 22,8 29,9 36,8 44,9"/></svg>
+        <span class="name">Backup</span><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span>
+        <span class="metric">Phủ 74,5 % · 96,1 % đạt</span>
+      </a>
+      <a class="beacon" href="#">
+        <svg class="spark" viewBox="0 0 44 28" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--c-other)" stroke-width="2" points="0,14 44,14"/></svg>
+        <span class="name">License</span><span class="st na"><i data-lucide="circle-dashed"></i>NA</span>
+        <span class="metric">Chưa nhập entitlement</span>
+      </a>
+      <a class="beacon" href="opex.html">
+        <svg class="spark" viewBox="0 0 44 28" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--c1)" stroke-width="2" points="0,22 7,22 14,20 22,20 29,16 36,14 44,12"/></svg>
+        <span class="name">Chi phí</span><span class="st warn"><i data-lucide="eye"></i>THEO DÕI</span>
+        <span class="metric">4 khoản hết hạn ≤ 90 ngày</span>
+      </a>
+      <a class="beacon" href="#">
+        <svg class="spark" viewBox="0 0 44 28" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--c1)" stroke-width="2" points="0,14 44,14"/></svg>
+        <span class="name">Nguồn dữ liệu</span><span class="st ok"><i data-lucide="circle-check"></i>AN TOÀN</span>
+        <span class="metric">3 nguồn kết nối</span>
+      </a>
+    </section>
+
+    <main id="main">
+      <section class="panel span-8" aria-labelledby="h-queue">
+        <header>
+          <h2 id="h-queue">Hàng việc</h2><span class="meta">18 việc · 0 vượt ngưỡng · 12 cảnh báo · 6 theo dõi</span>
+          <div class="act">
+            <button class="btn ghost" type="button"><i data-lucide="check-check"></i>Xong mục đã chọn</button>
+            <button class="btn ghost" type="button"><i data-lucide="clock"></i>Ẩn 7 ngày</button>
+          </div>
+        </header>
+        <div class="filters" role="toolbar" aria-label="Lọc hàng việc">
+          <button class="chip" aria-pressed="true" type="button">Cần xử lý <span class="n">18</span></button>
+          <button class="chip" aria-pressed="false" type="button">Backup <span class="n">16</span></button>
+          <button class="chip" aria-pressed="false" type="button">Chi phí <span class="n">2</span></button>
+          <button class="chip" aria-pressed="false" type="button">Đã xong / đã ẩn</button>
+        </div>
+        <div class="grid-wrap" role="region" aria-labelledby="h-queue" tabindex="0">
+          <table class="dense">
+            <thead><tr>
+              <th scope="col"><span class="sr-only">Chọn</span></th>
+              <th scope="col">Mức</th><th scope="col">Việc</th><th scope="col">Ai xử lý</th><th scope="col" class="n">Tuổi</th>
+            </tr></thead>
+            <tbody>
+              <tr data-level="bad"><td><input type="checkbox" aria-label="Chọn: 47 VM chưa có backup"></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td>
+                <td class="wrap"><a href="#">47 VM đang chạy chưa có backup</a><div class="sub">PROD-CLUSTER-A 32 · PROD-CLUSTER-B 15 → xác nhận với System Owner, bổ sung query policy VMware</div></td><td>Nhóm backup</td><td class="n">2 ngày</td></tr>
+              <tr data-level="bad"><td><input type="checkbox" aria-label="Chọn: 11 job lỗi kết nối"></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td>
+                <td class="wrap"><a href="#">11 job lỗi kết nối client / mạng</a> <span class="sub">· 4 client</span><div class="sub">Kiểm tra bpcd / vnetd, firewall 1556 / 13724, DNS hai chiều</div></td><td>Nhóm mạng</td><td class="n">3 ngày</td></tr>
+              <tr data-level="bad"><td><input type="checkbox" aria-label="Chọn: LNX-APP-DAILY"></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td>
+                <td class="wrap"><a href="#">LNX-APP-DAILY thiếu 6 / 7 đêm</a><div class="sub">09/11 → 14/11 lỗi · chạy bù trước đêm nay</div></td><td>Nhóm backup</td><td class="n">6 ngày</td></tr>
+              <tr data-level="bad"><td><input type="checkbox" aria-label="Chọn: app06-old"></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td>
+                <td class="wrap"><a href="#">app06-old.corp.local chưa backup 35 ngày</a><div class="sub">Không phân giải được tên client</div></td><td>Nhóm mạng</td><td class="n">35 ngày</td></tr>
+              <tr data-level="bad"><td><input type="checkbox" aria-label="Chọn: dr-cluster-vm-007"></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td>
+                <td class="wrap"><a href="#">dr-cluster-vm-007 lỗi 3 lần liên tiếp</a><div class="sub">Thành công gần nhất 94 giờ trước · kiểm tra snapshot tồn đọng</div></td><td>Nhóm ảo hoá</td><td class="n">4 ngày</td></tr>
+              <tr data-level="bad"><td><input type="checkbox" aria-label="Chọn: OPX-2026-0007"></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td>
+                <td class="wrap"><a href="opex.html">OPX-2026-0007 bảo hành SAN hết hạn sau 5 ngày</a><div class="sub">312,4 triệu đ · chưa có hợp đồng gia hạn</div></td><td>Chi phí</td><td class="n">—</td></tr>
+              <tr data-level="warn"><td><input type="checkbox" aria-label="Chọn: sqldb03 quá RPO"></td><td><span class="st warn"><i data-lucide="eye"></i>THEO DÕI</span></td>
+                <td class="wrap"><a href="#">sqldb03 quá RPO 26 giờ</a></td><td>Nhóm backup</td><td class="n">1 ngày</td></tr>
+              <tr data-level="warn"><td><input type="checkbox" aria-label="Chọn: 14 job nhân bản lỗi"></td><td><span class="st warn"><i data-lucide="eye"></i>THEO DÕI</span></td>
+                <td class="wrap"><a href="#">14 job nhân bản lỗi</a> <span class="sub">· bản sao thành công 97,6 %</span></td><td>Nhóm backup</td><td class="n">2 ngày</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="span-4" style="display:grid;gap:var(--gap);align-content:start">
+        <section class="panel" aria-labelledby="h-brief">
+          <header><h2 id="h-brief">Bản tin</h2><span class="meta">theo luật · 11:57</span>
+            <div class="act"><button class="btn ghost" type="button"><i data-lucide="sparkles"></i>AI soạn lại</button></div></header>
+          <p class="brief">Capacity ổn định, chưa cần đầu tư phần cứng kỳ này. Backup là việc chính hôm nay: 47 VM chưa có backup và 5 policy thiếu đêm.</p>
+        </section>
+        <section class="panel" aria-labelledby="h-agenda">
+          <header><h2 id="h-agenda">Sắp đến hạn</h2><span class="meta">30 ngày</span></header>
+          <ul class="list">
+            <li><span class="st bad"><i data-lucide="triangle-alert"></i>5 ngày</span><span>Bảo hành SAN lưu trữ chính</span><span class="when">20/11</span></li>
+            <li><span class="st bad"><i data-lucide="triangle-alert"></i>27 ngày</span><span>Bảo hành 6 host PROD-CLUSTER-A</span><span class="when">12/12</span></li>
+            <li><span class="st crit"><i data-lucide="octagon-x"></i>Quá hạn</span><span>Thuê kênh truyền DR</span><span class="when">10/11</span></li>
+          </ul>
+        </section>
+        <p class="mock-note">Dữ liệu DEMO (2 vCenter, 1 NetBackup); khoản Opex là dữ liệu mẫu. Cột “Ai xử lý” và “Tuổi” là trường đề xuất, chưa có trong dữ liệu hiện tại.</p>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

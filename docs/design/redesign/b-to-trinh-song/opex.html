@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opex — Hướng B · Tờ trình sống</title>
+<link rel="stylesheet" href="../_shared/hsc-tokens.css">
+<link rel="stylesheet" href="brief.css">
+<script src="../../../../frontend/vendor/lucide-1.73.0.min.js" defer></script>
+<script src="../_shared/mock.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Bỏ qua đến nội dung chính</a>
+<header class="top">
+  <div class="in">
+    <a class="mark" href="trang-chu.html"><span class="box" aria-hidden="true"><i data-lucide="layout-grid"></i></span><b>Infra Capacity Ops</b></a>
+    <a class="navbtn" href="trang-chu.html" >Hôm nay</a>
+    <button class="navbtn" type="button" popovertarget="m-ops" >Vận hành <i data-lucide="chevron-down"></i></button>
+    <button class="navbtn" type="button" popovertarget="m-info" aria-current="page"><span class="lbl-long">Quản lý thông tin</span><span class="lbl-short">Thông tin</span> <i data-lucide="chevron-down"></i></button>
+    <div class="grow"></div>
+    <button class="searchbtn" type="button" aria-label="Tìm (Ctrl K)"><i data-lucide="search"></i><span>Tìm mọi thứ</span><kbd>Ctrl K</kbd></button>
+    <button class="iconbtn" type="button" data-toggle-theme aria-pressed="false" aria-label="Đổi giao diện sáng / tối"><i data-lucide="sun-moon"></i></button>
+    <button class="iconbtn" type="button" aria-label="Cài đặt"><i data-lucide="settings"></i></button>
+  </div>
+  <nav id="m-ops" popover class="menu" aria-label="Vận hành">
+    <a href="dieu-hanh.html"><i data-lucide="gauge"></i>Capacity &amp; Compliance<small>Ngưỡng, N+1, phát hiện, xu hướng</small></a>
+    <a href="#"><i data-lucide="database-backup"></i>Backup<small>Job, RPO, lịch, độ phủ VM</small></a>
+    <a href="#"><i data-lucide="calendar-clock"></i>Lịch việc &amp; nhắc hạn<small>Mọi mốc có ngày</small></a>
+    <a href="#"><i data-lucide="git-branch"></i>Mô phỏng &amp; quy hoạch<small>What-if, dự phóng</small></a>
+    <a href="#"><i data-lucide="calculator"></i>Sizing máy chủ<small>Phương án, TCO</small></a>
+  </nav>
+  <nav id="m-info" popover class="menu" aria-label="Quản lý thông tin">
+    <a href="#"><i data-lucide="server"></i>Tài sản<small>Host, VM, phần cứng, HĐH</small></a>
+    <a href="#"><i data-lucide="badge-check"></i>License<small>Đánh giá, quyền sử dụng</small></a>
+    <a href="opex.html"><i data-lucide="wallet"></i>Ngân sách &amp; chi phí<small>Opex, Capex, kế hoạch năm sau</small></a>
+    <a href="#"><i data-lucide="shopping-cart"></i>Mua sắm<small>NCC, báo giá, BOM, cải tạo</small></a>
+    <a href="#"><i data-lucide="scroll-text"></i>Hợp đồng &amp; thanh toán<small>Version, đợt thanh toán</small></a>
+    <a href="#"><i data-lucide="file-text"></i>Tài liệu<small>Tờ trình, báo cáo, kho</small></a>
+  </nav>
+</header>
+
+<main class="page" id="main">
+  <div class="crumbs">Quản lý thông tin<i data-lucide="chevron-right"></i>Ngân sách &amp; chi phí</div>
+  <nav class="tabs" aria-label="Ngân sách & chi phí">
+    <a href="#">Tổng quan</a><a href="#" aria-current="page">Opex</a><a href="#">Capex</a><a href="#">Kế hoạch năm sau</a>
+  </nav>
+
+  <section class="verdict is-crit" aria-labelledby="v-h">
+    <div class="rule" aria-hidden="true"></div>
+    <div>
+      <div class="meta"><span class="st crit"><i data-lucide="octagon-x"></i>VƯỢT NGƯỠNG</span><span>Năm tài chính 2026 · 8 khoản · 6,05 tỷ đ sau VAT</span>
+        <span style="margin-left:auto;display:flex;gap:8px"><a class="btn" href="#"><i data-lucide="upload"></i>Nhập Excel</a><a class="btn primary" href="#"><i data-lucide="plus"></i>Thêm khoản</a></span></div>
+      <h1 id="v-h">1 khoản đã quá hạn và 4 khoản cần gia hạn trong 90 ngày tới, tổng 2,21 tỷ đ.</h1>
+    </div>
+  </section>
+
+  <form class="sentence-filter" aria-label="Bộ lọc Opex" onsubmit="return false">
+    Hiện
+    <label class="sr-only" for="f-st">Trạng thái</label><select id="f-st"><option>khoản cần theo dõi</option><option>khoản sắp hết hạn</option><option>khoản quá hạn</option><option>mọi khoản</option></select>
+    của
+    <label class="sr-only" for="f-ncc">Nhà cung cấp</label><select id="f-ncc"><option>mọi nhà cung cấp</option><option>SAOMAI</option><option>TLG</option><option>MPT</option></select>,
+    loại
+    <label class="sr-only" for="f-cat">Loại chi phí</label><select id="f-cat"><option>bất kỳ</option><option>bảo hành</option><option>license</option><option>dịch vụ</option></select>,
+    năm tài chính
+    <label class="sr-only" for="f-fy">Năm tài chính</label><select id="f-fy"><option>2026</option><option>2027</option></select>.
+  </form>
+
+  <section aria-label="Dòng hạn theo tháng">
+    <div class="month"><h3>Tháng 11<small>2 khoản · 696,4 tr</small></h3>
+      <div>
+        <article class="item"><div class="day">10<small>quá 5 ngày</small></div>
+          <div><h4><a href="#">Thuê kênh truyền DR</a></h4><p>OPX-2026-0019 · VTBN · Dịch vụ · Hạ tầng</p></div>
+          <div class="money">384 000 000 đ<br><span class="st crit"><i data-lucide="octagon-x"></i>Quá hạn</span></div></article>
+        <article class="item"><div class="day">20<small>còn 5 ngày</small></div>
+          <div><h4><a href="#">Bảo hành SAN lưu trữ chính</a></h4><p>OPX-2026-0007 · SAOMAI · Bảo hành · chưa có hợp đồng gia hạn</p></div>
+          <div class="money">312 400 000 đ<br><span class="st bad"><i data-lucide="triangle-alert"></i>Sắp hết hạn</span></div></article>
+      </div></div>
+    <div class="month"><h3>Tháng 12<small>2 khoản · 618 tr</small></h3>
+      <div>
+        <article class="item"><div class="day">12<small>còn 27 ngày</small></div>
+          <div><h4><a href="#">Bảo hành 6 host PROD-CLUSTER-A</a></h4><p>OPX-2026-0012 · TLG · Bảo hành · gắn 6 host trong Tài sản</p></div>
+          <div class="money">486 000 000 đ<br><span class="st bad"><i data-lucide="triangle-alert"></i>Sắp hết hạn</span></div></article>
+        <article class="item"><div class="day">31<small>còn 46 ngày</small></div>
+          <div><h4><a href="#">Bảo trì điều hoà phòng máy</a></h4><p>OPX-2026-0004 · HBM · Bảo trì · Cơ điện</p></div>
+          <div class="money">132 000 000 đ<br><span class="st warn"><i data-lucide="eye"></i>Sắp hết hạn</span></div></article>
+      </div></div>
+    <div class="month"><h3>Tháng 2 · 2027<small>1 khoản · 1,28 tỷ</small></h3>
+      <div>
+        <article class="item"><div class="day">02<small>còn 79 ngày</small></div>
+          <div><h4><a href="#">License phần mềm sao lưu (theo TB)</a></h4><p>OPX-2026-0003 · MPT · License · Hạ tầng</p></div>
+          <div class="money">1 284 000 000 đ<br><span class="st warn"><i data-lucide="eye"></i>Sắp hết hạn</span></div></article>
+      </div></div>
+    <div class="month"><h3>Sau 90 ngày<small>2 khoản · 3,11 tỷ</small></h3>
+      <div>
+        <article class="item"><div class="day">31/03<small>136 ngày</small></div>
+          <div><h4><a href="#">Giám sát an ninh mạng 24/7</a></h4><p>OPX-2026-0015 · APS · Dịch vụ thuê ngoài</p></div>
+          <div class="money">960 000 000 đ<br><span class="st ok"><i data-lucide="circle-check"></i>Đang hiệu lực</span></div></article>
+        <article class="item"><div class="day">30/06<small>227 ngày</small></div>
+          <div><h4><a href="#">Hỗ trợ kỹ thuật ảo hoá (per-core)</a></h4><p>OPX-2026-0021 · SAOMAI · License</p></div>
+          <div class="money">2 150 000 000 đ<br><span class="st ok"><i data-lucide="circle-check"></i>Đang hiệu lực</span></div></article>
+      </div></div>
+  </section>
+  <p><button class="btn" type="button"><i data-lucide="table"></i>Xem dạng bảng</button> <button class="btn" type="button"><i data-lucide="file-spreadsheet"></i>Xuất Excel theo bộ lọc</button></p>
+  <p class="mock-note">Dữ liệu mẫu (DEMO chưa có Opex). Mức trạng thái theo <code>derived_status</code>: quá hạn → VƯỢT NGƯỠNG, ≤ 30 ngày → CẢNH BÁO, ≤ 90 ngày → THEO DÕI.</p>
+</main>
+</body>
+</html>

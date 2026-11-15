@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trang chủ — Hướng B · Tờ trình sống</title>
+<link rel="stylesheet" href="../_shared/hsc-tokens.css">
+<link rel="stylesheet" href="brief.css">
+<script src="../../../../frontend/vendor/lucide-1.73.0.min.js" defer></script>
+<script src="../_shared/mock.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Bỏ qua đến nội dung chính</a>
+<header class="top">
+  <div class="in">
+    <a class="mark" href="trang-chu.html"><span class="box" aria-hidden="true"><i data-lucide="layout-grid"></i></span><b>Infra Capacity Ops</b></a>
+    <a class="navbtn" href="trang-chu.html" aria-current="page">Hôm nay</a>
+    <button class="navbtn" type="button" popovertarget="m-ops" >Vận hành <i data-lucide="chevron-down"></i></button>
+    <button class="navbtn" type="button" popovertarget="m-info" ><span class="lbl-long">Quản lý thông tin</span><span class="lbl-short">Thông tin</span> <i data-lucide="chevron-down"></i></button>
+    <div class="grow"></div>
+    <button class="searchbtn" type="button" aria-label="Tìm (Ctrl K)"><i data-lucide="search"></i><span>Tìm mọi thứ</span><kbd>Ctrl K</kbd></button>
+    <button class="iconbtn" type="button" data-toggle-theme aria-pressed="false" aria-label="Đổi giao diện sáng / tối"><i data-lucide="sun-moon"></i></button>
+    <button class="iconbtn" type="button" aria-label="Cài đặt"><i data-lucide="settings"></i></button>
+  </div>
+  <nav id="m-ops" popover class="menu" aria-label="Vận hành">
+    <a href="dieu-hanh.html"><i data-lucide="gauge"></i>Capacity &amp; Compliance<small>Ngưỡng, N+1, phát hiện, xu hướng</small></a>
+    <a href="#"><i data-lucide="database-backup"></i>Backup<small>Job, RPO, lịch, độ phủ VM</small></a>
+    <a href="#"><i data-lucide="calendar-clock"></i>Lịch việc &amp; nhắc hạn<small>Mọi mốc có ngày</small></a>
+    <a href="#"><i data-lucide="git-branch"></i>Mô phỏng &amp; quy hoạch<small>What-if, dự phóng</small></a>
+    <a href="#"><i data-lucide="calculator"></i>Sizing máy chủ<small>Phương án, TCO</small></a>
+  </nav>
+  <nav id="m-info" popover class="menu" aria-label="Quản lý thông tin">
+    <a href="#"><i data-lucide="server"></i>Tài sản<small>Host, VM, phần cứng, HĐH</small></a>
+    <a href="#"><i data-lucide="badge-check"></i>License<small>Đánh giá, quyền sử dụng</small></a>
+    <a href="opex.html"><i data-lucide="wallet"></i>Ngân sách &amp; chi phí<small>Opex, Capex, kế hoạch năm sau</small></a>
+    <a href="#"><i data-lucide="shopping-cart"></i>Mua sắm<small>NCC, báo giá, BOM, cải tạo</small></a>
+    <a href="#"><i data-lucide="scroll-text"></i>Hợp đồng &amp; thanh toán<small>Version, đợt thanh toán</small></a>
+    <a href="#"><i data-lucide="file-text"></i>Tài liệu<small>Tờ trình, báo cáo, kho</small></a>
+  </nav>
+</header>
+
+<main class="page" id="main">
+  <div class="crumbs">Chủ nhật 15/11/2026 · dữ liệu đồng bộ 11:57 từ 3 nguồn</div>
+
+  <section class="verdict is-bad" aria-labelledby="v-h">
+    <div class="rule" aria-hidden="true"></div>
+    <div>
+      <div class="meta"><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span><span>Mức xấu nhất trong việc của bạn</span></div>
+      <h1 id="v-h">Hôm nay dồn vào backup: 47 VM chưa được bảo vệ và 5 policy thiếu đêm.</h1>
+      <p class="lead">Capacity ổn định, chưa cần đầu tư phần cứng. Bảo hành SAN lưu trữ chính hết hạn sau 5 ngày và chưa có hợp đồng gia hạn.</p>
+    </div>
+  </section>
+
+  <h2 class="sr-only">Việc cần làm trước</h2>
+  <ol class="decisions">
+    <li><div><h3><a href="#">Xác nhận 47 VM chưa có backup</a></h3><p>32 VM ở PROD-CLUSTER-A, 15 VM ở PROD-CLUSTER-B. Bổ sung vào query của policy VMware hoặc ghi nhận ngoại lệ.</p></div>
+      <div class="when">Hôm nay<small>Nhóm backup</small></div></li>
+    <li><div><h3><a href="opex.html">Chốt gia hạn bảo hành SAN (OPX-2026-0007)</a></h3><p>312,4 triệu đ. Hết hạn 20/11; quá hạn thì mất hỗ trợ phần cứng cho hệ lưu trữ chính.</p></div>
+      <div class="when">Trước 20/11<small>Chi phí</small></div></li>
+    <li><div><h3><a href="#">Chạy bù LNX-APP-DAILY</a></h3><p>Thiếu 6 / 7 đêm gần nhất (09/11 → 14/11). Xử lý nguyên nhân trước đêm nay.</p></div>
+      <div class="when">Trước 22:00<small>Nhóm backup</small></div></li>
+  </ol>
+
+  <section class="sect" aria-labelledby="s-dom">
+    <header><h2 id="s-dom">Từng miền</h2><p>Mỗi đoạn là một câu kết luận; bấm để xem bằng chứng.</p></header>
+    <div class="domains">
+      <article class="domain"><h3><span class="st ok"><i data-lucide="circle-check"></i>AN TOÀN</span>Capacity</h3>
+        <p>CPU dùng 11 % và RAM 37 % ngưỡng overcommit. Cả 3 cluster giữ được ngưỡng khi mất 1 host.</p><a class="more" href="dieu-hanh.html">Xem điều hành</a></article>
+      <article class="domain"><h3><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span>Backup</h3>
+        <p>96,1 % job thành công trong 7 ngày (mục tiêu 95 %), nhưng độ phủ VM chỉ 74,5 % và 45,2 % đêm đúng lịch.</p><a class="more" href="#">Mở Backup</a></article>
+      <article class="domain"><h3><span class="st warn"><i data-lucide="eye"></i>THEO DÕI</span>Chi phí &amp; hợp đồng</h3>
+        <p>4 khoản Opex hết hạn trong 90 ngày, tổng 2,21 tỷ đ. 1 khoản đã quá hạn: thuê kênh truyền DR.</p><a class="more" href="opex.html">Mở Opex</a></article>
+      <article class="domain"><h3><span class="st na"><i data-lucide="circle-dashed"></i>NA</span>License</h3>
+        <p>Chưa nhập entitlement nên chưa đánh giá được thiếu / đủ. Nhập quyền sử dụng để có kết luận.</p><a class="more" href="#">Nhập entitlement</a></article>
+    </div>
+  </section>
+
+  <section class="sect" aria-labelledby="s-all">
+    <header><h2 id="s-all">Mọi việc khác</h2><p>15 việc · gom từ mọi module theo quyền của bạn</p>
+      <div class="act"><button class="btn link" type="button">Xem đã xong / đã ẩn</button></div></header>
+    <table class="t">
+      <caption class="sr-only">Việc còn lại</caption>
+      <thead><tr><th scope="col">Việc</th><th scope="col">Mức</th><th scope="col">Ai xử lý</th><th scope="col"><span class="sr-only">Thao tác</span></th></tr></thead>
+      <tbody>
+        <tr><td><a href="#">11 job lỗi kết nối client / mạng</a><div class="sub">4 client · kiểm tra bpcd / vnetd, firewall, DNS</div></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td><td>Nhóm mạng</td><td class="n"><button class="btn" type="button">Xong</button></td></tr>
+        <tr><td><a href="#">app06-old.corp.local chưa backup 35 ngày</a><div class="sub">Không phân giải được tên client</div></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td><td>Nhóm mạng</td><td class="n"><button class="btn" type="button">Xong</button></td></tr>
+        <tr><td><a href="#">dr-cluster-vm-007 lỗi 3 lần liên tiếp</a><div class="sub">Thành công gần nhất 94 giờ trước</div></td><td><span class="st bad"><i data-lucide="triangle-alert"></i>CẢNH BÁO</span></td><td>Nhóm ảo hoá</td><td class="n"><button class="btn" type="button">Xong</button></td></tr>
+        <tr><td><a href="#">sqldb03 quá RPO 26 giờ</a></td><td><span class="st warn"><i data-lucide="eye"></i>THEO DÕI</span></td><td>Nhóm backup</td><td class="n"><button class="btn" type="button">Xong</button></td></tr>
+      </tbody>
+    </table>
+    <div></div><p><button class="btn link" type="button">Hiện thêm 11 việc</button></p>
+  </section>
+  <p class="mock-note">Dữ liệu DEMO; khoản Opex là dữ liệu mẫu. Câu kết luận do luật sinh (hoặc AI soạn khi bật), số liệu do code tính. “Ai xử lý” là trường đề xuất, chưa có trong dữ liệu hiện tại.</p>
+</main>
+</body>
+</html>

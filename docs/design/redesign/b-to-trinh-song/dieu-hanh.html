@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Điều hành — Hướng B · Tờ trình sống</title>
+<link rel="stylesheet" href="../_shared/hsc-tokens.css">
+<link rel="stylesheet" href="brief.css">
+<script src="../../../../frontend/vendor/lucide-1.73.0.min.js" defer></script>
+<script src="../_shared/mock.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Bỏ qua đến nội dung chính</a>
+<header class="top">
+  <div class="in">
+    <a class="mark" href="trang-chu.html"><span class="box" aria-hidden="true"><i data-lucide="layout-grid"></i></span><b>Infra Capacity Ops</b></a>
+    <a class="navbtn" href="trang-chu.html" >Hôm nay</a>
+    <button class="navbtn" type="button" popovertarget="m-ops" aria-current="page">Vận hành <i data-lucide="chevron-down"></i></button>
+    <button class="navbtn" type="button" popovertarget="m-info" ><span class="lbl-long">Quản lý thông tin</span><span class="lbl-short">Thông tin</span> <i data-lucide="chevron-down"></i></button>
+    <div class="grow"></div>
+    <button class="searchbtn" type="button" aria-label="Tìm (Ctrl K)"><i data-lucide="search"></i><span>Tìm mọi thứ</span><kbd>Ctrl K</kbd></button>
+    <button class="iconbtn" type="button" data-toggle-theme aria-pressed="false" aria-label="Đổi giao diện sáng / tối"><i data-lucide="sun-moon"></i></button>
+    <button class="iconbtn" type="button" aria-label="Cài đặt"><i data-lucide="settings"></i></button>
+  </div>
+  <nav id="m-ops" popover class="menu" aria-label="Vận hành">
+    <a href="dieu-hanh.html"><i data-lucide="gauge"></i>Capacity &amp; Compliance<small>Ngưỡng, N+1, phát hiện, xu hướng</small></a>
+    <a href="#"><i data-lucide="database-backup"></i>Backup<small>Job, RPO, lịch, độ phủ VM</small></a>
+    <a href="#"><i data-lucide="calendar-clock"></i>Lịch việc &amp; nhắc hạn<small>Mọi mốc có ngày</small></a>
+    <a href="#"><i data-lucide="git-branch"></i>Mô phỏng &amp; quy hoạch<small>What-if, dự phóng</small></a>
+    <a href="#"><i data-lucide="calculator"></i>Sizing máy chủ<small>Phương án, TCO</small></a>
+  </nav>
+  <nav id="m-info" popover class="menu" aria-label="Quản lý thông tin">
+    <a href="#"><i data-lucide="server"></i>Tài sản<small>Host, VM, phần cứng, HĐH</small></a>
+    <a href="#"><i data-lucide="badge-check"></i>License<small>Đánh giá, quyền sử dụng</small></a>
+    <a href="opex.html"><i data-lucide="wallet"></i>Ngân sách &amp; chi phí<small>Opex, Capex, kế hoạch năm sau</small></a>
+    <a href="#"><i data-lucide="shopping-cart"></i>Mua sắm<small>NCC, báo giá, BOM, cải tạo</small></a>
+    <a href="#"><i data-lucide="scroll-text"></i>Hợp đồng &amp; thanh toán<small>Version, đợt thanh toán</small></a>
+    <a href="#"><i data-lucide="file-text"></i>Tài liệu<small>Tờ trình, báo cáo, kho</small></a>
+  </nav>
+</header>
+
+<main class="page" id="main">
+  <div class="crumbs"><a href="trang-chu.html">Hôm nay</a><i data-lucide="chevron-right"></i>Điều hành</div>
+  <nav class="tabs" aria-label="Capacity & Compliance">
+    <a href="#" aria-current="page">Điều hành</a><a href="#">Capacity</a><a href="#">Compliance</a><a href="#">Xu hướng &amp; biến động</a>
+  </nav>
+
+  <section class="verdict" aria-labelledby="v-h">
+    <div class="rule" aria-hidden="true"></div>
+    <div>
+      <div class="meta"><span class="st ok"><i data-lucide="circle-check"></i>AN TOÀN</span><span>Toàn bộ vCenter</span><span>Storage ngoài phạm vi (SAN dùng chung)</span>
+        <span style="margin-left:auto;display:flex;gap:8px"><a class="btn" href="#"><i data-lucide="file-down"></i>Xuất PDF</a><a class="btn" href="#"><i data-lucide="file-spreadsheet"></i>Excel</a></span></div>
+      <h1 id="v-h">Ổn định, còn dư địa — chưa cần đầu tư phần cứng kỳ này.</h1>
+      <p class="lead">Không có quyết định đầu tư cần duyệt. Mốc xem lại tiếp theo là Q4/2028, khi RAM dự phóng chạm 80 % ngưỡng.</p>
+    </div>
+  </section>
+
+  <section class="sect" aria-labelledby="s-facts">
+    <header><h2 id="s-facts">Bốn con số</h2><p>% là phần trăm của ngưỡng overcommit, không phải % sử dụng thực.</p></header>
+    <div class="facts">
+      <div class="fact"><div class="v">11 %<small>CPU</small></div><p>1 126 / 1 760 pCPU logic, ngưỡng 6,0×</p><span class="bar" role="img" aria-label="11 %"><i style="width:11%"></i></span></div>
+      <div class="fact"><div class="v">37 %<small>RAM</small></div><p>3 960 / 10 752 GB, ngưỡng 1,0×</p><span class="bar" role="img" aria-label="37 %"><i style="width:37%"></i></span></div>
+      <div class="fact"><div class="v">≈ 315<small>VM</small></div><p>còn nhận thêm, cỡ trung bình; RAM hết trước</p></div>
+      <div class="fact"><div class="v">3 / 3<small>cluster</small></div><p>giữ ngưỡng khi mất 1 host (N+1)</p></div>
+    </div>
+  </section>
+
+  <section class="sect" aria-labelledby="s-proj">
+    <header><h2 id="s-proj">Khi nào chạm ngưỡng</h2><p>Kịch bản cơ sở +10 %/quý, lãi kép theo quý. Số do quy hoạch tính.</p>
+      <div class="act"><button class="btn link" type="button">Xem bảng số</button><button class="btn link" type="button">Đổi kịch bản</button></div></header>
+    <figure>
+      <svg viewBox="-16 0 796 260" width="100%" role="img" aria-labelledby="pt pd">
+        <title id="pt">RAM dự phóng theo % ngưỡng overcommit</title>
+        <desc id="pd">37 % hôm nay; chạm 80 % khoảng Q4/2028; chạm 100 % khoảng Q2/2029 (31 tháng).</desc>
+        <g stroke="var(--c-grid)"><line x1="40" x2="740" y1="220" y2="220"/><line x1="40" x2="740" y1="150" y2="150"/></g>
+        <line x1="40" x2="740" y1="80" y2="80" stroke="var(--c-axis)" stroke-dasharray="3 4"/>
+        <line x1="40" x2="740" y1="45" y2="45" stroke="var(--ink)"/>
+        <g fill="var(--c-axis)" font-size="13" text-anchor="end"><text x="34" y="224">0 %</text><text x="34" y="154">40 %</text><text x="34" y="84">80 %</text><text x="34" y="49">100 %</text></g>
+        <g fill="var(--c-axis)" font-size="13" text-anchor="middle"><text x="40" y="244">11/2026</text><text x="273" y="244">11/2027</text><text x="507" y="244">11/2028</text><text x="740" y="244">11/2029</text></g>
+        <polyline fill="none" stroke="var(--c1)" stroke-width="2.5" stroke-linejoin="round" points="40,155 157,141 273,125 390,105 507,81 623,53 648,45"/>
+        <polyline fill="none" stroke="var(--c1)" stroke-width="2" stroke-dasharray="5 5" points="648,45 740,17"/>
+        <circle cx="40" cy="155" r="5" fill="var(--c1)" stroke="var(--bg)" stroke-width="2"/>
+        <circle cx="507" cy="81" r="5" fill="var(--bg)" stroke="var(--c1)" stroke-width="2"/>
+        <circle cx="648" cy="45" r="6" fill="var(--bg)" stroke="var(--ink)" stroke-width="2.5"/>
+        <text x="52" y="178" font-size="14" fill="var(--ink)">Hôm nay 37 %</text>
+        <text x="515" y="104" font-size="14" fill="var(--ink-2)">80 % — vùng THEO DÕI · Q4/2028</text>
+        <text x="636" y="34" font-size="14" fill="var(--ink)" text-anchor="end" font-weight="600">100 % ngưỡng · ≈ Q2/2029</text>
+      </svg>
+      <figcaption class="sub" style="color:var(--ink-3);font-size:var(--fs-13)">Một đường, ghi chú trực tiếp, không cần chú giải. Đường đứt = sau khi vượt ngưỡng.</figcaption>
+    </figure>
+  </section>
+
+  <section class="sect" aria-labelledby="s-cl">
+    <header><h2 id="s-cl">Theo cluster</h2><p>Vạch dọc trong thanh = 80 % ngưỡng.</p></header>
+    <table class="t">
+      <caption class="sr-only">Tình trạng từng cluster</caption>
+      <thead><tr><th scope="col">Cluster</th><th scope="col">CPU</th><th scope="col">RAM</th><th scope="col">N+1</th><th scope="col">Trạng thái</th></tr></thead>
+      <tbody>
+        <tr><th scope="row" style="font-weight:600;text-align:left"><a href="#">PROD-CLUSTER-B</a><div class="sub">8 host · vc1, vc2</div></th><td class="num">12,3 %<span class="bar"><i style="width:12.3%"></i></span></td><td class="num">45,8 %<span class="bar"><i style="width:45.8%"></i></span></td><td>Đạt</td><td><span class="st ok"><i data-lucide="circle-check"></i>AN TOÀN</span></td></tr>
+        <tr><th scope="row" style="font-weight:600;text-align:left"><a href="#">DR-CLUSTER</a><div class="sub">6 host · vc1, vc2</div></th><td class="num">9,6 %<span class="bar"><i style="width:9.6%"></i></span></td><td class="num">44 %<span class="bar"><i style="width:44%"></i></span></td><td>Đạt</td><td><span class="st ok"><i data-lucide="circle-check"></i>AN TOÀN</span></td></tr>
+        <tr><th scope="row" style="font-weight:600;text-align:left"><a href="#">PROD-CLUSTER-A</a><div class="sub">12 host · vc1, vc2</div></th><td class="num">10,1 %<span class="bar"><i style="width:10.1%"></i></span></td><td class="num">30,5 %<span class="bar"><i style="width:30.5%"></i></span></td><td>Đạt</td><td><span class="st ok"><i data-lucide="circle-check"></i>AN TOÀN</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+  <p class="mock-note">Dữ liệu DEMO. Bố cục này trùng với trang 1 của PDF Vận hành: kết luận → quyết định → 4 con số → dự phóng → bảng cluster.</p>
+</main>
+</body>
+</html>
