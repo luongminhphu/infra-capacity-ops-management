@@ -17,8 +17,8 @@ from .timeutil import to_vn_str, parse_iso_to_vn_str
 SEV_LABEL = {"critical": "Nghiêm trọng", "warning": "Cảnh báo", "info": "Lưu ý"}
 SEV_CLS = {"critical": "crit", "warning": "warn", "info": "na"}
 READY = {"ok": ("ok", "ĐẠT"), "warn": ("warn", "CẦN THEO DÕI"), "crit": ("crit", "CẦN XỬ LÝ")}
-OUT_COLORS = {"success": "#15803d", "partial": "#f59e0b", "failed": "#b91c1c"}
-POOL_COLORS = ["#2681FF", "#0891b2", "#7c3aed", "#ca8a04", "#db2777", "#475467"]
+OUT_COLORS = {"success": "#21A33B", "partial": "#B89717", "failed": "#B82E37"}  # status meaning: HSC sg40 / sy30 / sr40
+POOL_COLORS = ["#165AB8", "#23A4B8", "#B729FE", "#898C8F", "#074B9B", "#147E8F"]  # HSC series (not status colors)
 
 
 def vn(v: Optional[float], d: int = 1) -> str:

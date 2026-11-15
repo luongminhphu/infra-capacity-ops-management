@@ -21,7 +21,7 @@ from .timeutil import VN_TZ
 ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
 THIN = Side(style="thin", color=LINE)
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-LIGHT = "DCE7F7"          # category / config bands (brand blue tint)
+LIGHT = "DFE9F6"          # category / config bands (brand blue tint)
 SUMMARY_FILL = SURFACE
 COLS = [("STT", 7), ("Mã hàng (P/N)", 20), ("Mô tả", 62), ("ĐVT", 8), ("SL", 8), ("Đơn giá", 16), ("Thành tiền", 18), ("Ghi chú", 22)]
 NCOL = len(COLS)

@@ -31,12 +31,14 @@ ngắn, nêu thẳng vấn đề → quyết định đề nghị → thời đi
 
 ## Màu & chữ trên PDF
 
-- PDF nền trắng dùng `COLORS` trong `report_pdf.py` (brand `primary` #2681FF, `primary_dark`
-  #074B9B; trạng thái `ok/warn/bad/crit/na` + `*_bg`). Không thêm mã màu rời rạc.
-- 4 mức trạng thái AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG và nhãn mức độ
-  `SEVERITY_LABEL_VI` (Nghiêm trọng / Cảnh báo / Thông tin) phải khớp web.
-- Font trong image Docker: Roboto + Noto Sans (đủ dấu tiếng Việt), mã đối soát dùng
+- Nguồn sự thật: `design-system/ico/MASTER.md` (mục 3, 8, 9). PDF nền trắng dùng `COLORS` trong `report_pdf.py` =
+  vai trò light-theme của HSC quy ra hex (ink `#0B2D5C`, primary `#165AB8`, logo `#074B9B`, ok `#187A2C`,
+  bad `#B82E37`, crit `#8F282D`, `crit_solid` `#B82E37`, series `series1…3`). Không thêm mã màu rời.
+- 4 mức trạng thái AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG và nhãn mức độ `SEVERITY_LABEL_VI`
+  (Nghiêm trọng / Cảnh báo / Thông tin) phải khớp web. `status_pill()` vẽ glyph + chữ mực; VƯỢT NGƯỠNG là khối đặc.
+- Font trong image Docker: **Inter** (`fonts-inter`, cùng font với web) + Noto Sans dự phòng; mã đối soát dùng
   DejaVu Sans Mono. Thêm font mới → thêm gói vào `backend/Dockerfile`.
+- Biểu đồ: tối đa 3 series màu + xám, không dùng màu trạng thái cho series (trừ khi dữ liệu là trạng thái), một trục Y.
 - Gauge: CPU/RAM vùng 0–80 ok, 80–100 warn; Storage 0–80 / 80–90 / 90–100.
 
 ## Quy ước nội dung

@@ -121,7 +121,7 @@ def _daily(wb, r, subtitle) -> None:
         ch.title = "Job backup theo ngày"
         ch.add_data(Reference(ws, min_col=2, max_col=4, min_row=row, max_row=last), titles_from_data=True)
         ch.set_categories(Reference(ws, min_col=1, min_row=row + 1, max_row=last))
-        for s, c in zip(ch.series, ("15803D", "F59E0B", "B91C1C")):
+        for s, c in zip(ch.series, ("21A33B", "B89717", "B82E37")):
             s.graphicalProperties.solidFill = c
             s.graphicalProperties.line.solidFill = c
         ch.height, ch.width = 8, 18

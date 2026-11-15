@@ -197,7 +197,7 @@ def _cluster_table(res: Dict[str, Any]) -> str:
         if c.get("drs"):
             mob.append("DRS")
         rec = c.get("recommendedEdition")
-        rec_html = _pill(ED_TXT[rec], "crit" if rec == "datacenter" else "ok") if rec else '<span style="color:#98a2b3;">—</span>'
+        rec_html = _pill(ED_TXT[rec], "crit" if rec == "datacenter" else "ok") if rec else '<span style="color:#597090;">—</span>'
         notes = []
         if c.get("hostsWithAssumedSockets"):
             notes.append(f"{c['hostsWithAssumedSockets']} host giả định socket")
@@ -239,7 +239,7 @@ def _entitlement_table(res: Dict[str, Any]) -> str:
         if ent.get("declaredNone") and units <= 0:
             return _pill("Chưa có (đã xác nhận)", "crit")
         if units <= 0:
-            return '<span style="color:#98a2b3;">chưa nhập</span>'
+            return '<span style="color:#597090;">chưa nhập</span>'
         return f"{fmt_int(units)} {unit}" + (" " + _pill("SA", "ok") if ent.get("hasSa") else "")
 
     rows = ""
