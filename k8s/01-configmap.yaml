@@ -25,7 +25,11 @@ data:
   AUTH_BREAKGLASS_USERS: "admin"
   ENTRA_TENANT_ID: ""                 # Directory (tenant) ID — GUID
   ENTRA_CLIENT_ID: ""                 # Application (client) ID của app registration App Proxy
-  ENTRA_REDIRECT_URI: ""              # https://ico.<domain>/api/auth/oidc/callback (URL ngoài của App Proxy)
+  PUBLIC_URL: ""                      # URL ngoài của App Proxy, vd https://ico-<tenant>.msappproxy.net (đặt trước khi tạo passkey)
+  FORWARDED_ALLOW_IPS: "127.0.0.1"    # IP connector App Proxy / ingress được tin X-Forwarded-*
+  AUTH_LOCAL_METHOD: "both"           # passkey · both · password — tài khoản cục bộ đăng nhập bằng Passkey (Face ID / Touch ID)
+  ENTRA_AUTO_REDIRECT: "false"        # "true": màn đăng nhập tự chuyển sang Microsoft khi AUTH_MODE=entra
+  ENTRA_REDIRECT_URI: ""              # để trống = PUBLIC_URL/api/auth/oidc/callback
   ENTRA_POST_LOGOUT_REDIRECT_URI: ""  # https://ico.<domain>/ (tuỳ chọn)
   ENTRA_REQUIRE_MFA: "if-present"     # if-present · strict · off (MFA do Conditional Access ép buộc)
   ENTRA_ALLOWED_ROLES: ""             # tuỳ chọn: app role, vd "ICO.User,ICO.Admin"

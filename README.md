@@ -1294,6 +1294,45 @@ biến môi trường này; nhớ thêm `ico-postgres` và dải IP nội bộ v
   Lỗi `AADSTS50011` = redirect URI không khớp từng ký tự với bước 2.1; `AADSTS7000215` = client secret
   sai/hết hạn.
 
+### 6. Hai cách đăng nhập: SSO tài khoản công ty và Passkey cho tài khoản cục bộ
+
+| Ai | Cách đăng nhập | Cấu hình |
+|---|---|---|
+| Nhân viên có tài khoản công ty | **Đăng nhập bằng Microsoft** (Entra ID OIDC, MFA theo Conditional Access; passkey Microsoft Authenticator / FIDO2 nếu tenant bật) | `AUTH_MODE=entra` hoặc `both` |
+| Tài khoản cục bộ (đối tác, tài khoản dịch vụ, người không có tài khoản công ty) | **Đăng nhập bằng Passkey**: Face ID / Touch ID trên iPhone (lưu iCloud Keychain), Mac, Windows Hello hoặc khoá bảo mật — **không mật khẩu** | `AUTH_MODE=both` + `AUTH_LOCAL_METHOD=passkey` |
+| Tài khoản khẩn cấp (`AUTH_BREAKGLASS_USERS`) | Mật khẩu (và passkey nếu muốn) — khi Entra / App Proxy gặp sự cố | luôn giữ mật khẩu |
+
+- `AUTH_LOCAL_METHOD`: `passkey` (tài khoản cục bộ chỉ dùng passkey), `both` (mặc định, passkey hoặc mật khẩu),
+  `password`.
+- **Cấp tài khoản cục bộ**: Cài đặt → **Đăng nhập & bảo mật** → *Tạo tài khoản cục bộ (passkey)* → hệ thống tạo
+  tài khoản **không mật khẩu** và một **link mời dùng 1 lần, hạn 72 giờ**. Gửi riêng link cho người dùng; họ mở
+  trên iPhone (Safari) → *Tạo passkey và đăng nhập* → Face ID. Passkey được đồng bộ qua iCloud Keychain sang
+  các thiết bị Apple khác của họ.
+- **Đăng nhập trên máy tính** không có passkey: bấm *Đăng nhập bằng Passkey* → trình duyệt đề nghị *Dùng điện
+  thoại* → quét mã QR bằng camera iPhone → Face ID (Bluetooth của máy tính cần bật).
+- **Mất / đổi máy**: admin *Passkey… → Thu hồi* (hết tác dụng ngay) rồi *Link mời passkey* mới. Mỗi người tự quản
+  lý ở biểu tượng chìa khoá (Passkey của tôi) cạnh nút Đăng xuất; nên có ≥ 2 passkey. Không xoá được passkey
+  cuối cùng của tài khoản không có mật khẩu.
+- Passkey gắn với **tên miền** (RP ID = host của `PUBLIC_URL`). Đặt `PUBLIC_URL` **trước** khi người dùng tạo
+  passkey; đổi tên miền thì mọi người phải tạo passkey lại.
+- Mọi lần tạo / xoá / thu hồi passkey, cấp link mời và tạo tài khoản đều ghi nhật ký (`audit_log`).
+
+### 7. Chạy sau Microsoft Entra Application Proxy (không public app ra Internet)
+
+- `PUBLIC_URL` = *External URL* (vd `https://ico-<tenant>.msappproxy.net` hoặc `https://ico.<domain>`). Từ đó ICO
+  suy ra Redirect URI (`PUBLIC_URL/api/auth/oidc/callback`, nếu không đặt `ENTRA_REDIRECT_URI`), trang về sau đăng
+  xuất Microsoft, tên miền passkey, link mời, và bật cookie `Secure`. Lý do: App Proxy *Translate URLs in headers*
+  gửi Host header là tên **nội bộ**, nên app không tự biết URL ngoài.
+- `FORWARDED_ALLOW_IPS` = IP máy chủ connector (hoặc ingress) để uvicorn tin `X-Forwarded-For` / `-Proto` và log
+  ghi đúng IP người dùng.
+- **Pre-authentication**:
+  - *Microsoft Entra ID*: an toàn nhất — chỉ người trong tenant tới được app. Dùng khi mọi người đều có tài khoản
+    công ty; đặt `ENTRA_AUTO_REDIRECT=true` để màn đăng nhập ICO tự chuyển sang Microsoft (đã đăng nhập ở App
+    Proxy nên không phải nhập lại — SSO liền mạch). Tài khoản cục bộ / passkey **không** qua được lớp này.
+  - *Passthrough*: dùng khi cần cả tài khoản cục bộ đăng nhập bằng passkey; ICO tự xác thực (Entra OIDC + passkey).
+- Cài đặt → **Đăng nhập & bảo mật** hiển thị cấu hình app đang thấy (URL ngoài, Redirect URI, tên miền passkey,
+  Host / IP của request vừa rồi) và danh sách kiểm tra những gì còn thiếu.
+
 ## Cài đặt: bật / tắt tính năng và logo màn hình đăng nhập
 
 **Cài đặt → Tính năng**: công tắc gạt cho từng module — Backup, License, Sizing máy chủ, Quy hoạch tài

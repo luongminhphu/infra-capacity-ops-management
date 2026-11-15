@@ -1,14 +1,14 @@
 import datetime as dt
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Body, Cookie, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from .. import auth_entra
+from .. import auth_entra, passkeys
 from ..config import get_settings
 from ..database import get_db
-from ..models import ApiToken, User
+from ..models import ApiToken, User, UserPasskey
 from ..schemas import LoginRequest, UserOut
 from ..spend.roles import apply_entra_roles, effective_role
 from ..security import COOKIE_NAME, create_access_token, get_current_user, is_admin, local_login_allowed, verify_password
@@ -22,7 +22,7 @@ def _set_session(response: Response, user: User) -> None:
         key=COOKIE_NAME,
         value=create_access_token(user.username, user.auth_source or "local"),
         httponly=True,
-        secure=settings.cookie_secure,
+        secure=settings.secure_cookies(),
         samesite="lax",
         max_age=settings.jwt_expire_minutes * 60,
         path="/",
@@ -33,8 +33,13 @@ def _set_session(response: Response, user: User) -> None:
 def auth_config():
     """What the login screen should offer (no secrets)."""
     s = get_settings()
-    return {"local": s.local_enabled(), "entra": s.entra_enabled(), "entraLabel": s.entra_login_label,
-            "breakglass": bool(s.breakglass()) and not s.local_enabled()}
+    local = s.local_enabled()
+    return {"local": local, "entra": s.entra_enabled(), "entraLabel": s.entra_login_label,
+            "breakglass": bool(s.breakglass()) and not local,
+            # local accounts: passkey button, password form (break-glass keeps its password)
+            "passkey": s.passkey_enabled() and (local or bool(s.breakglass())),
+            "password": local and s.auth_local_method in ("password", "both"),
+            "entraAuto": s.entra_auto_redirect and s.entra_enabled() and not local}
 
 
 @router.post("/login", response_model=UserOut)
@@ -44,6 +49,8 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tên đăng nhập hoặc mật khẩu")
     if not local_login_allowed(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Đăng nhập bằng mật khẩu đã bị tắt — dùng tài khoản Microsoft")
+    if not get_settings().password_enabled_for(user.username):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tài khoản cục bộ đăng nhập bằng Passkey (Face ID / Touch ID), không dùng mật khẩu")
     user.last_login_at = dt.datetime.utcnow()
     db.commit()
     _set_session(response, user)
@@ -70,7 +77,7 @@ def oidc_login(next: Optional[str] = Query(default="/")):
         return _fail(str(exc))
     resp = RedirectResponse(url, status_code=302)
     # SameSite=Lax: sent back on the top-level redirect from login.microsoftonline.com.
-    resp.set_cookie(auth_entra.FLOW_COOKIE, flow, max_age=600, httponly=True, secure=s.cookie_secure,
+    resp.set_cookie(auth_entra.FLOW_COOKIE, flow, max_age=600, httponly=True, secure=s.secure_cookies(),
                     samesite="lax", path="/api/auth/oidc")
     return resp
 
@@ -115,6 +122,128 @@ def oidc_callback(request: Request, code: Optional[str] = None, state: Optional[
     resp.delete_cookie(auth_entra.FLOW_COOKIE, path="/api/auth/oidc")
     _set_session(resp, user)
     return resp
+
+
+# ---- Passkeys (WebAuthn) for local accounts ----
+def _local_user_or_403(user: User) -> None:
+    if (user.auth_source or "local") != "local":
+        raise HTTPException(403, "Tài khoản Microsoft dùng passkey của Microsoft (Authenticator), không đăng ký ở đây.")
+    s = get_settings()
+    if not local_login_allowed(user):
+        raise HTTPException(403, "Tài khoản cục bộ đã bị tắt — đăng nhập bằng Microsoft.")
+    if not (s.passkey_enabled() or user.username.lower() in s.breakglass()):
+        raise HTTPException(403, "Passkey cho tài khoản cục bộ đang tắt.")
+
+
+@router.post("/passkey/login/options")
+def passkey_login_options(request: Request):
+    s = get_settings()
+    if not (s.passkey_enabled() and (s.local_enabled() or s.breakglass())):
+        raise HTTPException(404, "Đăng nhập bằng passkey đang tắt.")
+    options, challenge = passkeys.authentication_options(request)
+    resp = Response(options, media_type="application/json")
+    passkeys.set_state(resp, passkeys.state_token("auth", challenge))
+    return resp
+
+
+@router.post("/passkey/login/verify", response_model=UserOut)
+def passkey_login_verify(request: Request, response: Response, data: dict = Body(...), db: Session = Depends(get_db)):
+    from webauthn.helpers import base64url_to_bytes
+    st = passkeys.read_state(request, "auth")
+    user = passkeys.finish_authentication(db, request, base64url_to_bytes(st["c"]), passkeys.parse_credential(data.get("credential")))
+    if (user.auth_source or "local") != "local" or not local_login_allowed(user):
+        raise HTTPException(403, "Tài khoản cục bộ đã bị tắt — đăng nhập bằng Microsoft.")
+    user.last_login_at = dt.datetime.utcnow()
+    db.commit()
+    passkeys.clear_state(response)
+    _set_session(response, user)
+    return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user), spend_role=effective_role(user))
+
+
+@router.get("/passkey/invite")
+def passkey_invite_info(token: str = Query(max_length=200), db: Session = Depends(get_db)):
+    """What the invite landing page shows (account name only)."""
+    inv = passkeys.find_invite(db, token)
+    user = db.get(User, inv.user_id)
+    return {"username": user.username, "displayName": user.display_name, "expiresAt": inv.expires_at.isoformat() + "Z"}
+
+
+def _register_target(request: Request, db: Session, invite: str = None) -> tuple:
+    """The account a passkey is being added to: the signed-in local user, or the invite's account."""
+    if invite:
+        inv = passkeys.find_invite(db, invite)
+        user = db.get(User, inv.user_id)
+        return user, inv
+    from ..security import decode_access_token
+    token = request.cookies.get(COOKIE_NAME)
+    name = decode_access_token(token) if token else None
+    user = db.query(User).filter(User.username == name).first() if name else None
+    if not user:
+        raise HTTPException(401, "Chưa đăng nhập")
+    return user, None
+
+
+@router.post("/passkey/register/options")
+def passkey_register_options(request: Request, data: dict = Body(default={}), db: Session = Depends(get_db)):
+    invite = data.get("invite") if isinstance(data.get("invite"), str) else None
+    user, inv = _register_target(request, db, invite)
+    _local_user_or_403(user)
+    options, challenge = passkeys.registration_options(db, user, request)
+    resp = Response(options, media_type="application/json")
+    passkeys.set_state(resp, passkeys.state_token("reg", challenge, u=user.id, i=inv.id if inv else None))
+    return resp
+
+
+@router.post("/passkey/register/verify")
+def passkey_register_verify(request: Request, response: Response, data: dict = Body(...), db: Session = Depends(get_db)):
+    from webauthn.helpers import base64url_to_bytes
+    from ..models import PasskeyInvite
+    from ..spend import service
+    st = passkeys.read_state(request, "reg")
+    invite = data.get("invite") if isinstance(data.get("invite"), str) else None
+    user, inv = _register_target(request, db, invite)
+    if user.id != st.get("u") or (inv.id if inv else None) != st.get("i"):
+        raise HTTPException(400, "Phiên tạo passkey không khớp tài khoản — thử lại.")
+    _local_user_or_403(user)
+    pk = passkeys.finish_registration(db, user, request, base64url_to_bytes(st["c"]), passkeys.parse_credential(data.get("credential")),
+                                      str(data.get("name") or ""))
+    if inv is not None:
+        if db.query(PasskeyInvite).filter(PasskeyInvite.id == inv.id, PasskeyInvite.used_at.is_(None)).update(
+                {PasskeyInvite.used_at: dt.datetime.utcnow()}, synchronize_session=False) != 1:
+            db.rollback()
+            raise HTTPException(409, "Link mời vừa được dùng — nhờ quản trị tạo link mới.")
+    service.audit(db, user, request, "auth.passkey.register", name=pk.name, viaInvite=inv is not None, synced=pk.backed_up)
+    user.last_login_at = dt.datetime.utcnow()
+    db.commit()
+    passkeys.clear_state(response)
+    if inv is not None:                       # first passkey through an invite: signed in straight away
+        _set_session(response, user)
+    return {"ok": True, "passkey": passkeys.passkey_out(pk)}
+
+
+@router.get("/passkeys")
+def my_passkeys(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.query(UserPasskey).filter(UserPasskey.user_id == user.id).order_by(UserPasskey.created_at).all()
+    s = get_settings()
+    return {"items": [passkeys.passkey_out(p) for p in rows], "local": (user.auth_source or "local") == "local",
+            "enabled": s.passkey_enabled() or user.username.lower() in s.breakglass(),
+            "hasPassword": (user.password_hash or "").startswith("$2") and s.password_enabled_for(user.username)}
+
+
+@router.delete("/passkeys/{passkey_id}")
+def delete_my_passkey(passkey_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..spend import service
+    pk = db.query(UserPasskey).filter(UserPasskey.id == passkey_id, UserPasskey.user_id == user.id).first()
+    if not pk:
+        raise HTTPException(404, "Không tìm thấy passkey.")
+    left = db.query(UserPasskey).filter(UserPasskey.user_id == user.id).count() - 1
+    can_password = (user.password_hash or "").startswith("$2") and get_settings().password_enabled_for(user.username)
+    if left == 0 and not can_password:
+        raise HTTPException(409, "Đây là passkey cuối cùng và tài khoản không đăng nhập bằng mật khẩu — thêm passkey khác trước khi xoá.")
+    service.audit(db, user, request, "auth.passkey.delete", name=pk.name)
+    db.delete(pk)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/logout")

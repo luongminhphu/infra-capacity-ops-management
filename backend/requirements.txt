@@ -14,3 +14,4 @@ defusedxml==0.7.1  # openpyxl uses it automatically: safe XML parsing of uploade
 cryptography>=42  # Fernet: secrets saved in Settings (also required by python-jose[cryptography])
 python-docx==1.2.0  # đọc / ghi .docx: mẫu tờ trình (module Chi phí & Hợp đồng)
 anthropic==2.8.0  # AI soạn tờ trình (tuỳ chọn, chỉ gọi khi admin bật)
+webauthn==2.5.2  # passkey (WebAuthn) cho tài khoản cục bộ

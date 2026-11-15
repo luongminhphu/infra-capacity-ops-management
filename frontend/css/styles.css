@@ -1100,3 +1100,10 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .bom-summary td input{width:100%;border:1px solid transparent;background:transparent;color:var(--text-primary);padding:2px 4px;}
 .bom-summary td input:hover,.bom-summary td input:focus{border-color:var(--field-border);background:var(--field-bg);}
 .bom-model td{font-weight:600;}
+
+/* ---------- Đăng nhập: SSO Entra ID + Passkey ---------- */
+.login-hint{margin:6px 0 10px;font-size:12px;line-height:1.45;color:var(--text-secondary);text-align:center;}
+.login-invite{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;}
+#btnLoginPasskey{width:100%;justify-content:center;gap:8px;margin-top:4px;}
+.ap-guide ol{margin:8px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;line-height:1.5;}
+.ap-guide code{font-size:12px;}

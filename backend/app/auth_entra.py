@@ -106,7 +106,7 @@ def build_login(s: Settings, next_path: Optional[str]) -> Tuple[str, str]:
     state, nonce, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(24), secrets.token_urlsafe(48)
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
     params = {
-        "client_id": s.entra_client_id, "response_type": "code", "redirect_uri": s.entra_redirect_uri,
+        "client_id": s.entra_client_id, "response_type": "code", "redirect_uri": s.oidc_redirect_uri(),
         "response_mode": "query", "scope": "openid profile email", "state": state, "nonce": nonce,
         "code_challenge": challenge, "code_challenge_method": "S256",
     }
@@ -170,7 +170,7 @@ def complete_login(s: Settings, flow_cookie: Optional[str], state: Optional[str]
         raise EntraError("Thiếu mã xác thực từ Entra ID.")
     tok = _http_json(metadata(s)["token_endpoint"], {
         "client_id": s.entra_client_id, "client_secret": s.entra_client_secret, "grant_type": "authorization_code",
-        "code": code, "redirect_uri": s.entra_redirect_uri, "code_verifier": flow["v"], "scope": "openid profile email",
+        "code": code, "redirect_uri": s.oidc_redirect_uri(), "code_verifier": flow["v"], "scope": "openid profile email",
     })
     if not tok.get("id_token"):
         raise EntraError("Entra ID không trả về ID token.")
@@ -184,5 +184,6 @@ def logout_url(s: Settings) -> Optional[str]:
         return None
     if not end:
         return None
-    q = {"post_logout_redirect_uri": s.entra_post_logout_redirect_uri} if s.entra_post_logout_redirect_uri else {}
+    post = s.entra_post_logout_redirect_uri or (s.public_base() + "/" if s.public_base() else "")
+    q = {"post_logout_redirect_uri": post} if post else {}
     return end + ("?" + urllib.parse.urlencode(q) if q else "")

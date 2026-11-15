@@ -43,7 +43,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Báo cáo PDF | `report_pdf.py` (helper dùng chung) + `report_*.py` |
 | Excel | `excel_sizing.py`, `excel_backup.py`, `routers/export.py` |
 | Schema DB | `models.py` + migration bổ sung trong `database.py::ensure_schema()` |
-| Auth | `security.py` (`get_current_user`, `require_admin`), `auth_entra.py`, `routers/auth.py` |
+| Auth | `security.py` (`get_current_user`, `require_admin`), `auth_entra.py` (SSO Entra ID OIDC), `passkeys.py` (WebAuthn cho tài khoản cục bộ, link mời), `routers/auth.py`, `routers/users_admin.py` (tài khoản, passkey, trạng thái App Proxy); `PUBLIC_URL` = URL ngoài (App Proxy); UI `frontend/js/views/passkey.js` |
 | MCP server (chỉ đọc) | `mcp_server.py`, `observability.py` |
 | Chi phí & Hợp đồng IT (`spend`) | `backend/app/spend/` (`models.py`, `service.py`, `fiscal.py`, `roles.py`, `files.py`, `notify.py`, `reminders.py`, `capex.py`, `report.py`, `contracts.py`, `proposal_doc.py`, `ai.py`, `quotes.py`, `renovation.py`), `routers/spend.py`, `spend_admin.py`, `spend_capex.py`, `spend_reports.py`, `spend_contracts.py`, `spend_payments.py`, `spend_proposals.py`, `spend_quotes.py`, `spend_renovations.py`, `report_spend.py`, `report_renovation.py` (PDF), `excel_spend.py`, `excel_quotes.py`, `excel_renovation.py`, `frontend/js/views/spend.js`, `spend_capex.js`, `spend_report.js`, `spend_contract.js`, `spend_payment.js`, `spend_proposal.js`, `spend_quote.js`, `spend_renovation.js`; thiết kế `docs/design/spend-module.md`, `spend-vendor-quotes.md` |
 | Chuẩn hoá BOM | `backend/app/bom.py` (đọc Dell configurator / Cisco CCW / HPE / thường, phân loại, tóm tắt), `excel_bom.py`, `routers/bom.py`, `frontend/js/views/bom.js` |

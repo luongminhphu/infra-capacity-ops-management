@@ -27,10 +27,18 @@
     <h2>Infra Capacity Ops Management</h2>
     <p class="lead">Đăng nhập để theo dõi capacity, backup, compliance và license của hạ tầng.</p>
     <div id="loginError" role="alert"></div>
+    <p class="login-hint hidden" id="loginEntraHint">Tài khoản công ty (Microsoft Entra ID) — đăng nhập một lần, theo chính sách MFA của công ty.</p>
     <a class="btn btn-primary btn-sso hidden" id="btnLoginEntra" href="/api/auth/oidc/login">
       <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
       <span id="btnLoginEntraLabel">Đăng nhập bằng Microsoft</span>
     </a>
+    <button class="btn btn-secondary btn-sso hidden" type="button" id="btnLoginPasskey"><i data-lucide="fingerprint"></i><span>Đăng nhập bằng Passkey</span></button>
+    <p class="login-hint hidden" id="loginPasskeyHint">Face ID / Touch ID trên iPhone, Mac hoặc Windows Hello. Trên máy tính: chọn “Dùng điện thoại” rồi quét mã QR bằng iPhone.</p>
+    <div class="login-invite hidden" id="passkeyInvite">
+      <p class="lead" id="passkeyInviteText"></p>
+      <button class="btn btn-primary btn-sso" type="button" id="btnInviteRegister"><i data-lucide="fingerprint"></i><span>Tạo passkey và đăng nhập</span></button>
+      <p class="login-hint">Mở link này trên iPhone của bạn (Safari) để lưu passkey vào iCloud Keychain — dùng được trên mọi thiết bị Apple của bạn.</p>
+    </div>
     <button class="login-alt hidden" type="button" id="btnShowLocalLogin">Tài khoản khẩn cấp (break-glass)</button>
     <div class="login-divider hidden" id="loginDivider"><span>hoặc</span></div>
     <div id="localLoginFields">
@@ -73,6 +81,7 @@
       </div>
       <div class="sidebar-foot-actions">
         <button class="btn icon-btn" id="themeToggle" type="button" aria-label="Chuyển giao diện sáng/tối" title="Giao diện sáng/tối"><i data-lucide="sun-moon"></i></button>
+        <button class="btn icon-btn" id="btnMyPasskeys" type="button" aria-label="Passkey của tôi" title="Passkey của tôi"><i data-lucide="key-round"></i></button>
         <button class="btn btn-secondary btn-sm" id="btnLogout" type="button"><i data-lucide="log-out"></i>Đăng xuất</button>
       </div>
     </div>
@@ -1020,6 +1029,12 @@
             <div id="spendSettingsMount"></div>
           </section>
 
+          <section class="panel hidden" id="authPanel" data-set-tab="auth">
+            <div class="panel-head"><div><div class="panel-title">Đăng nhập & bảo mật <span class="badge-admin">Admin</span></div>
+              <p class="panel-sub">SSO Microsoft Entra ID cho tài khoản công ty; tài khoản cục bộ đăng nhập bằng Passkey (Face ID / Touch ID, không mật khẩu). Chạy sau Microsoft Entra Application Proxy để không phải mở app ra Internet.</p></div></div>
+            <div id="authSettingsMount"></div>
+          </section>
+
           <section class="panel hidden" id="aiPanel" data-set-tab="ai">
             <div class="panel-head"><div><div class="panel-title">AI dùng chung <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Một cấu hình cho mọi tính năng AI: soạn tờ trình, đọc báo giá PDF, tóm tắt khác biệt báo giá, bản tin trang chủ, tổng kết báo cáo PDF. Số liệu luôn do hệ thống tính; AI chỉ viết / tóm tắt và mọi lượt gọi được ghi lại.</p></div></div>
@@ -1092,6 +1107,7 @@
 <script src="js/views/ai_data.js?v=__ASSET_V__"></script>
 <script src="js/views/ai_assist.js?v=__ASSET_V__"></script>
 <script src="js/views/bom.js?v=__ASSET_V__"></script>
+<script src="js/views/passkey.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

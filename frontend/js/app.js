@@ -109,6 +109,8 @@ const NAV_GROUPS = [
       desc: 'Năm tài chính, loại chi phí, mốc nhắc, kênh email / Discord, mẫu tờ trình và AI soạn tờ trình.', scope: [], spendRole: 'viewer', feature: 'spend' },
     { id: 'set-ai', view: 'settings', sub: 'ai', icon: 'bot', label: 'AI & MCP', title: 'Cài đặt — AI & MCP',
       desc: 'MCP server chỉ đọc cho AI phân tích log / hiệu suất của app (admin).', scope: [] },
+    { id: 'set-auth', view: 'settings', sub: 'auth', icon: 'shield-check', label: 'Đăng nhập & bảo mật', title: 'Cài đặt — đăng nhập & bảo mật',
+      desc: 'SSO Entra ID, passkey cho tài khoản cục bộ, App Proxy (admin).', scope: [] },
     { id: 'set-brand', view: 'settings', sub: 'brand', icon: 'image', label: 'Thương hiệu', title: 'Cài đặt — thương hiệu',
       desc: 'Logo màn hình đăng nhập.', scope: [] },
   ] },
@@ -150,7 +152,7 @@ const MENU = [
     { key: 'settings', label: 'Cài đặt', icon: 'settings', tabs: [
       ['settings', '', 'Tiêu chí & ngưỡng'], ['set-sources', 'sources', 'Nguồn dữ liệu'], ['bk-config', 'backup', 'Backup'],
       ['set-features', 'features', 'Tính năng'], ['set-spend', 'spend', 'Chi phí & nhắc hạn'], ['set-ai', 'ai', 'AI & MCP'],
-      ['set-brand', 'brand', 'Thương hiệu']] },
+      ['set-auth', 'auth', 'Đăng nhập & bảo mật'], ['set-brand', 'brand', 'Thương hiệu']] },
   ] },
 ];
 const PAGE_ROUTE = {};      // page id -> { entry, group, path, tab }
@@ -361,6 +363,13 @@ function showAppShell() {
 window.onApiUnauthorized = () => showLoginScreen();
 
 /* ---------- Login ---------- */
+async function finishLogin(user) {
+  currentUser = user;
+  $('#currentUserLabel').textContent = user.displayName || user.username;
+  showAppShell();
+  await initAppData();
+}
+
 async function handleLoginSubmit(e) {
   e.preventDefault();
   const btn = $('#btnLogin');
@@ -370,11 +379,7 @@ async function handleLoginSubmit(e) {
   btn.disabled = true;
   btn.textContent = 'Đang đăng nhập...';
   try {
-    const user = await api.login(username, password);
-    currentUser = user;
-    $('#currentUserLabel').textContent = user.displayName || user.username;
-    showAppShell();
-    await initAppData();
+    await finishLogin(await api.login(username, password));
   } catch (err) {
     $('#loginError').textContent = err.message || 'Đăng nhập thất bại.';
   } finally {
@@ -384,6 +389,7 @@ async function handleLoginSubmit(e) {
 }
 
 async function handleLogout() {
+  try { sessionStorage.setItem('ico.noAuto', '1'); } catch (err) { /* stay on the login page after sign-out */ }
   let res = null;
   try { res = await api.logout(); } catch (err) { /* ignore */ }
   if (res && res.logoutUrl) { window.location.href = res.logoutUrl; return; }  // also end the Microsoft session
@@ -410,6 +416,7 @@ async function setupLoginOptions() {
     entraBtn.href = '/api/auth/oidc/login?next=' + encodeURIComponent(next);
     if (cfg.entraLabel) $('#btnLoginEntraLabel').textContent = cfg.entraLabel;
     entraBtn.classList.remove('hidden');
+    const hint = $('#loginEntraHint'); if (hint && (cfg.passkey || cfg.password)) hint.classList.remove('hidden');
   }
   const showLocal = () => {
     local.classList.remove('hidden');
@@ -417,8 +424,16 @@ async function setupLoginOptions() {
     if (cfg.entra) $('#loginDivider').classList.remove('hidden');
     $('#loginUsername').required = true; $('#loginPassword').required = true;
   };
-  if (cfg.local || !cfg.entra) {
+  if (typeof setupPasskeyLogin === 'function') setupPasskeyLogin(cfg, params);
+  if (cfg.entraAuto && cfg.entra && !loginError && !params.get('passkey_invite') && !sessionStorage.getItem('ico.noAuto')) {
+    window.location.href = entraBtn.href; return;                // seamless SSO behind App Proxy
+  }
+  if ((cfg.local && cfg.password !== false) || (!cfg.entra && !cfg.passkey)) {
     showLocal();
+  } else if (cfg.local && cfg.password === false) {
+    local.classList.add('hidden');
+    $('#loginUsername').required = false; $('#loginPassword').required = false;
+    if (cfg.passkey && !cfg.entra) $('#loginDivider').classList.add('hidden');
   } else {
     local.classList.add('hidden');
     $('#loginUsername').required = false; $('#loginPassword').required = false;
