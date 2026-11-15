@@ -19,6 +19,7 @@ from ..models import AppSetting, BackupPolicySnapshot, BackupScheduleRule, Backu
 from ..security import get_current_user
 from ..timeutil import to_iso_utc
 
+from ..backup.service import _csv_days, _keys, _vms, build_summary, schedule_rules, scope_rules, thresholds  # noqa: F401,E402
 from ..features import require_feature
 router = APIRouter(prefix="/api/backup", tags=["backup"], dependencies=[Depends(require_feature("backup"))])
 
@@ -40,15 +41,6 @@ def _cfg(key: str):
     return cfg
 
 
-def _keys(server: Optional[str]) -> Optional[List[str]]:
-    return None if not server or server == "all" else [server]
-
-
-def thresholds(db: Session) -> analysis.BackupThresholds:
-    overrides = {r.key: r.value for r in db.query(AppSetting).filter(AppSetting.key.like("backup_%")).all()}
-    return analysis.thresholds_from(overrides)
-
-
 def _server_public(cfg, db: Session) -> Dict[str, Any]:
     last_ok = (db.query(BackupSyncRun).filter(BackupSyncRun.nbu_key == cfg.key, BackupSyncRun.status == "ok",
                                               BackupSyncRun.jobs_fetched.isnot(None))
@@ -63,32 +55,6 @@ def _server_public(cfg, db: Session) -> Dict[str, Any]:
         "lastStatus": "error" if err else ("ok" if last_ok else None),
         "lastError": err, "warning": last_ok.error_message if last_ok else None,
     }
-
-
-def _vms(db: Session):
-    _, vms, _ = data_access.get_latest_combined(db, include_import=True)
-    return vms
-
-
-def scope_rules(db: Session) -> List[Dict[str, Any]]:
-    return [{"vcenterKey": r.vcenter_key, "cluster": r.cluster, "host": r.host}
-            for r in db.query(BackupScopeRule).order_by(BackupScopeRule.vcenter_key, BackupScopeRule.cluster, BackupScopeRule.host).all()]
-
-
-def _csv_days(v: Optional[str]) -> List[int]:
-    return [int(x) for x in (v or "").split(",") if x.strip().isdigit()]
-
-
-def schedule_rules(db: Session) -> List[Dict[str, Any]]:
-    return [{"id": r.id, "system": r.system, "policyPatterns": r.policy_patterns or "", "fullDays": _csv_days(r.full_days),
-             "incrDays": _csv_days(r.incr_days), "startTime": r.start_time, "endTime": r.end_time,
-             "retentionDays": r.retention_days, "enabled": bool(r.enabled), "note": r.note}
-            for r in db.query(BackupScheduleRule).order_by(BackupScheduleRule.system).all()]
-
-
-def build_summary(db: Session, server: Optional[str], days: int) -> Dict[str, Any]:
-    return analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=_vms(db), scope=scope_rules(db),
-                                 schedules=schedule_rules(db))
 
 
 @router.get("/servers")

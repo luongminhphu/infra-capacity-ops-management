@@ -72,7 +72,7 @@ def backup_items(db: Session) -> List[Dict[str, Any]]:
     from .config import get_settings
     if not get_settings().netbackups():
         return []
-    from .routers.backup import build_summary
+    from .backup.service import build_summary
     rep = build_summary(db, "all", 7)
     if not rep.get("available", True) and not rep.get("kpis"):
         return []

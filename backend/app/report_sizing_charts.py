@@ -7,7 +7,7 @@ with no JavaScript and no network.
 """
 from typing import Any, Dict, List, Optional
 
-from .report_pdf import COLORS, _finite, _nice_ceiling, esc
+from .pdf_kit import COLORS, _finite, _nice_ceiling, esc
 
 FONT = 'font-family="Roboto, Noto Sans, sans-serif"'
 

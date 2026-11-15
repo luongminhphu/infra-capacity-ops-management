@@ -6,7 +6,7 @@ vs entitlement vs shortfall, then the basis (rules, formula, assumptions,
 data gaps). Target length 2–3 pages."""
 from typing import Any, Dict, List, Optional
 
-from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
+from .pdf_kit import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
                          html_to_pdf_bytes)
 from .report_planning import _planning_css
 

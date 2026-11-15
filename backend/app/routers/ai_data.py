@@ -36,8 +36,8 @@ def _ai(fn):
 def backup_analysis(server: Optional[str] = Query(default="all"), days: int = Query(default=7, ge=1, le=90),
                     user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _feature(db, "backup")
-    from . import backup as backup_router
-    rep = backup_router.build_summary(db, server, days)
+    from ..backup.service import build_summary
+    rep = build_summary(db, server, days)
     return _ai(lambda: ai_data.analyze_backup(db, user, rep))
 
 
@@ -126,8 +126,8 @@ def mapping_delete(mapping_id: int, user: User = Depends(require_admin), db: Ses
 @router.post("/ai/os-classify")
 def os_classify(vcenter: Optional[str] = Query(default="all"), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # The OS page (Tài sản → Hệ điều hành) is not part of the License module: no feature gate.
-    from . import licensing as lic
-    _, classified, _ = lic._load_inventory(db, vcenter)
+    from ..licensing.inventory import _load_inventory
+    _, classified, _ = _load_inventory(db, vcenter)
     return _ai(lambda: ai_data.classify_os(db, user, classified))
 
 
@@ -148,6 +148,6 @@ def vm_changes(vcenter: Optional[str] = Query(default="all"), months: int = Quer
                clusters: Optional[str] = Query(default=None), hosts: Optional[str] = Query(default=None),
                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from .. import history
-    from .dashboard import _scope_keys, _split_csv
+    from ..scope import scope_keys as _scope_keys, split_csv as _split_csv
     ch = history.get_vm_changes(db, _scope_keys(vcenter), months, clusters=_split_csv(clusters), hosts=_split_csv(hosts))
     return _ai(lambda: ai_data.summarize_changes(db, user, ch))

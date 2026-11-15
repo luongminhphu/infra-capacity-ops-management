@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 from openpyxl import Workbook
 
-from .excel_sizing import MONEY, _print_setup, _section, _sheet_title, _table, _tile, _widths, _write_rows
+from .excel_style import MONEY, _print_setup, _section, _sheet_title, _table, _tile, _widths, _write_rows
 from .timeutil import VN_TZ
 
 PCT = '0.0"%"'

@@ -6,7 +6,7 @@ Numbers come from routers.spend_renovations.build_detail (the same dict as the w
 """
 from typing import Any, Dict, List, Optional
 
-from .report_pdf import _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, html_to_pdf_bytes
+from .pdf_kit import _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, html_to_pdf_bytes
 from .report_spend import _css, _pill, _table, money_short
 from .spend import renovation as rv
 from .spend.service import money_vn

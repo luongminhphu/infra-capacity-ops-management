@@ -9,7 +9,7 @@ Same page format and visual language as the capacity operations reports
 """
 from typing import Any, Dict, List, Optional
 
-from .report_pdf import (COLORS, _base_css, _exec_visual_css, _now_str, esc, html_to_pdf_bytes, svg_donut,
+from .pdf_kit import (COLORS, _base_css, _exec_visual_css, _now_str, esc, html_to_pdf_bytes, svg_donut,
                          svg_line_chart)
 from .report_sizing_charts import FONT, svg_hbars
 from .timeutil import to_vn_str, parse_iso_to_vn_str

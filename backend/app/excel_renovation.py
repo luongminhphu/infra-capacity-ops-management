@@ -15,7 +15,7 @@ from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
 from .excel_quotes import BOX, HEAD_FILL, _head, _txt
-from .excel_sizing import MONEY, NAVY, _fill, _font, _print_setup, _sheet_title, _widths
+from .excel_style import MONEY, NAVY, _fill, _font, _print_setup, _sheet_title, _widths
 from .spend import renovation as rv
 from .timeutil import VN_TZ
 

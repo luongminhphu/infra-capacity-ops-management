@@ -7,7 +7,7 @@ used by that template."""
 from typing import Any, Dict, List, Optional
 
 from . import platforms
-from .report_pdf import COLORS, STATUS_COLOR, _stat_tiles_html, esc, fmt_int, fmt_num, fmt_pct, html_to_pdf_bytes
+from .pdf_kit import COLORS, STATUS_COLOR, _stat_tiles_html, esc, fmt_int, fmt_num, fmt_pct, html_to_pdf_bytes
 
 PRIORITY_CSS = {"cao": "priority-cao", "tb": "priority-tb", "thap": "priority-thap", "info": "priority-info"}
 PRIORITY_TXT = {"cao": "Quyết định chính", "tb": "Kèm theo", "thap": "Tuỳ chọn", "info": "Thông tin"}

@@ -11,6 +11,8 @@ from ..models import ClusterAggregate, User
 from ..security import get_current_user
 from ..timeutil import to_vn_date
 
+from ..scope import scope_keys as _scope_keys, split_csv as _split_csv
+
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
@@ -118,19 +120,8 @@ def _days_span(trend: List[dict]) -> float:
     return span_days / max(1, len(trend) - 1)
 
 
-def _split_csv(value: Optional[str]) -> Optional[list]:
-    """None when the param is omitted; [] when given but empty (explicit "none")."""
-    if value is None:
-        return None
-    return [v.strip() for v in value.split(",") if v.strip()]
 
 
-def _scope_keys(vcenter: Optional[str]):
-    if not vcenter or vcenter == "all":
-        return None
-    if vcenter in ("import", "__none__", "none"):
-        return [None]
-    return [vcenter]
 
 
 @router.get("/history")

@@ -13,7 +13,7 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Font
 
-from .excel_sizing import (BLUE, CRIT, CRIT_BG, NAVY, NUM, NUM1, OK, OK_BG, TEAL, WARN, WARN_BG, _fill, _font, _print_setup,
+from .excel_style import (BLUE, CRIT, CRIT_BG, NAVY, NUM, NUM1, OK, OK_BG, TEAL, WARN, WARN_BG, _fill, _font, _print_setup,
                            _section, _sheet_title, _table, _tile, _widths, _write_rows)
 from .timeutil import VN_TZ
 

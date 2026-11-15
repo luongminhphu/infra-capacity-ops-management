@@ -23,16 +23,12 @@ MAX_BYTES = 25 * 1024 * 1024
 MAX_ROWS = 1000                     # listing cap
 MAX_PER_USER = 100                  # each user's oldest copies are trimmed beyond this (never other users')
 RETENTION_DAYS = 400
-# Only these report exports are archived (path regex, kind, label, feature, scope). The scope is the
-# minimum right to READ the copy and must match the route's own guard: "spend" = spend viewer.
-KINDS = [
-    (r"^/api/spend/renovations/[^/]+/export\.pdf$", "renovation", "Cải tạo văn phòng", "spend", "spend"),
-    (r"^/api/spend/reports/budget\.pdf$", "spend", "Ngân sách & chi phí", "spend", "spend"),
-    (r"^/api/backup/report/pdf$", "backup", "Backup", "backup", "general"),
-    (r"^/api/licensing/report/pdf$", "license", "License", "license", "general"),
-    (r"^/api/sizing/pdf$", "sizing", "Sizing máy chủ", "sizing", "general"),
-    (r"^/api/reports/pdf$", "capacity", "Capacity", None, "general"),
-]
+# Only exports declared archivable in exports.EXPORTS are kept. The scope is the minimum right to READ
+# the copy and comes from the export's own role: "spend" = spend viewer.
+from . import exports as _exports  # noqa: E402
+
+KINDS = [(e["rx"], e["group"], _exports.GROUP_LABELS[e["group"]], e["feature"], "spend" if (e["role"] or "").startswith("spend:") else "general")
+         for e in _exports.EXPORTS if e["archive"]]
 _KIND_RX = [(re.compile(rx), k, s) for rx, k, _, _, s in KINDS]
 KIND_LABELS = {k: lbl for _, k, lbl, _, _ in KINDS}
 KIND_FEATURE = {k: f for _, k, _, f, _ in KINDS}

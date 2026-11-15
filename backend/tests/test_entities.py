@@ -15,7 +15,7 @@ VMS = [{"vm": "sql-prod-01", "cluster": "PRD", "host": "esx01.corp.local", "vcpu
 @pytest.fixture(autouse=True)
 def _data(app_, monkeypatch):
     from app import data_access
-    from app.routers import entities
+    from app.services import entities
     entities._cache.clear()
     monkeypatch.setattr(data_access, "get_latest_combined", lambda db, keys=None, include_import=True: (HOSTS, VMS, []))
 
@@ -73,7 +73,7 @@ def test_license_off_hides_os_and_esxi(app_, admin):
 
 def test_devices_like_is_escaped(app_, editor):
     editor.post("/api/spend/opex", json=_opex(assets=[{"serial": "SN-X", "hostName": "esxA1.corp.local"}]))
-    from app.routers.entities import _devices_for_host
+    from app.services.entities import _devices_for_host
     from app.database import SessionLocal
     db = SessionLocal()
     assert _devices_for_host(db, "esx_1") == [] and _devices_for_host(db, "esx%") == []

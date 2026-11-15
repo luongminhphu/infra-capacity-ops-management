@@ -9,7 +9,7 @@ spend.report.build_budget_report — the same dict the web dashboard and the Exc
 """
 from typing import Any, Dict, List, Optional
 
-from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, bar_cell, esc,
+from .pdf_kit import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, bar_cell, esc,
                          html_to_pdf_bytes, svg_bar_chart)
 from .spend.service import date_vn, money_vn
 
