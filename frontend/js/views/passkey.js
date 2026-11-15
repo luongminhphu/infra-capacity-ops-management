@@ -57,8 +57,7 @@ function setupPasskeyLogin(cfg, params) {
     alt.onclick = () => { $('#localLoginFields').classList.remove('hidden'); alt.classList.add('hidden'); $('#loginDivider').classList.remove('hidden');
       $('#loginUsername').required = true; $('#loginPassword').required = true; $('#loginUsername').focus(); };
   }
-  const invite = params.get('passkey_invite');
-  if (invite) pkShowInvite(invite);
+  if (window.pkInviteToken) pkShowInvite(window.pkInviteToken);
 }
 
 async function loginWithPasskey() {
@@ -76,7 +75,7 @@ async function loginWithPasskey() {
 async function pkShowInvite(token) {
   const box = $('#passkeyInvite');
   try {
-    const info = await apiRequest(`/auth/passkey/invite?token=${encodeURIComponent(token)}`);
+    const info = await apiRequest('/auth/passkey/invite', { method: 'POST', body: JSON.stringify({ token }) });
     $('#passkeyInviteText').textContent = `Tạo passkey cho tài khoản ${info.displayName || info.username} (${info.username}).`;
     box.classList.remove('hidden');
     // Only the invite button while registering; the normal choices come back afterwards (e.g. after sign-out).
@@ -91,13 +90,35 @@ async function pkShowInvite(token) {
         const options = await apiRequest('/auth/passkey/register/options', { method: 'POST', body: JSON.stringify({ invite: token }) });
         const credential = await pkCreate(options);
         await apiRequest('/auth/passkey/register/verify', { method: 'POST', body: JSON.stringify({ invite: token, credential }) });
-        history.replaceState(null, '', window.location.pathname + window.location.hash);
+        window.pkInviteToken = null;
         box.classList.add('hidden');
         box.restore();
         await finishLogin(await apiRequest('/auth/me'));
       } catch (err) { $('#loginError').textContent = pkError(err); b.disabled = false; }
     };
   } catch (err) { $('#loginError').textContent = err.message; }
+}
+
+/* ---------- Step-up: Face ID (or password) again before changing passkeys ---------- */
+async function pkReauth(hasPasskeys) {
+  if (hasPasskeys) {
+    const options = await apiRequest('/auth/passkey/login/options', { method: 'POST' });
+    const credential = await pkGet(options);
+    await apiRequest('/auth/passkey/reauth/verify', { method: 'POST', body: JSON.stringify({ credential }) });
+    return;
+  }
+  const pw = $('#pkPw');
+  if (!pw || !pw.value) throw new Error('Nhập mật khẩu hiện tại để xác nhận, rồi bấm lại.');
+  await apiRequest('/auth/reauth', { method: 'POST', body: JSON.stringify({ password: pw.value }) });
+}
+
+async function pkWithReauth(fn, hasPasskeys) {
+  try { return await fn(); }
+  catch (err) {
+    if (err.status !== 428) throw err;
+    await pkReauth(hasPasskeys);
+    return fn();
+  }
 }
 
 /* ---------- Passkey của tôi (every local user) ---------- */
@@ -119,9 +140,11 @@ async function pkMyDialog() {
       <button class="btn btn-ghost btn-sm" type="button" data-pk-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
     ${!d.local ? '<p class="muted-sub">Tài khoản Microsoft: quản lý passkey / phương thức đăng nhập ở trang bảo mật của Microsoft (mysignins.microsoft.com).</p>'
       : !d.enabled ? '<p class="muted-sub">Passkey cho tài khoản cục bộ đang tắt.</p>' : `
-    <p class="muted-sub">Đăng nhập bằng Face ID / Touch ID thay cho mật khẩu. Nên có ít nhất 2 passkey (vd iPhone và Mac) phòng khi mất máy.</p>
+    <p class="muted-sub">Đăng nhập bằng Face ID / Touch ID thay cho mật khẩu. Nên có ít nhất 2 passkey (vd iPhone và Mac) phòng khi mất máy.
+      Thêm / xoá passkey cần xác nhận lại danh tính nếu bạn đăng nhập đã quá 10 phút. Xoá một passkey sẽ đăng xuất các phiên khác của tài khoản.</p>
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Passkey</th><th>Tạo lúc</th><th>Dùng gần nhất</th><th></th></tr></thead>
       <tbody>${rows || `<tr><td colspan="4">${uiEmpty('Chưa có passkey.')}</td></tr>`}</tbody></table></div>
+    ${!d.items.length && d.hasPassword ? '<label class="field"><span>Mật khẩu hiện tại (xác nhận trước khi thêm passkey)</span><input type="password" id="pkPw" autocomplete="current-password"></label>' : ''}
     <div class="sim-actions"><input id="pkName" maxlength="80" placeholder="Tên (vd iPhone 16 của Phú)" aria-label="Tên passkey">
       <button class="btn btn-primary btn-sm" type="button" id="pkAdd"><i data-lucide="fingerprint"></i>Thêm passkey trên thiết bị này</button></div>`}
     <p class="criteria-status" id="pkMsg" role="status"></p>`;
@@ -131,7 +154,7 @@ async function pkMyDialog() {
   if (add) add.onclick = async () => {
     add.disabled = true;
     try {
-      const options = await apiRequest('/auth/passkey/register/options', { method: 'POST', body: '{}' });
+      const options = await pkWithReauth(() => apiRequest('/auth/passkey/register/options', { method: 'POST', body: '{}' }), d.items.length > 0);
       const credential = await pkCreate(options);
       await apiRequest('/auth/passkey/register/verify', { method: 'POST', body: JSON.stringify({ credential, name: $('#pkName', dlg).value }) });
       pkMyDialog();
@@ -139,7 +162,7 @@ async function pkMyDialog() {
   };
   dlg.querySelectorAll('[data-pk-del]').forEach(b => { b.onclick = async () => {
     if (!(await uiConfirm('Xoá passkey này? Thiết bị đó sẽ không đăng nhập được nữa.'))) return;
-    try { await apiRequest(`/auth/passkeys/${encodeURIComponent(b.dataset.pkDel)}`, { method: 'DELETE' }); pkMyDialog(); }
+    try { await pkWithReauth(() => apiRequest(`/auth/passkeys/${encodeURIComponent(b.dataset.pkDel)}`, { method: 'DELETE' }), true); pkMyDialog(); }
     catch (err) { uiSetStatus('#pkMsg', err.message, 'error'); }
   }; });
   if (!dlg.open) dlg.showModal();

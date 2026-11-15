@@ -364,6 +364,7 @@ window.onApiUnauthorized = () => showLoginScreen();
 
 /* ---------- Login ---------- */
 async function finishLogin(user) {
+  try { sessionStorage.removeItem('ico.autoTried'); } catch (err) { /* ignore */ }
   currentUser = user;
   $('#currentUserLabel').textContent = user.displayName || user.username;
   showAppShell();
@@ -398,6 +399,9 @@ async function handleLogout() {
 
 /* ---------- Login options (local password / Microsoft Entra ID) ---------- */
 async function setupLoginOptions() {
+  // Invite link: /#passkey_invite=<token> — the fragment never reaches the server; drop it from the address bar now.
+  const inv = /^#passkey_invite=([A-Za-z0-9_-]{20,200})$/.exec(window.location.hash || '');
+  if (inv) { window.pkInviteToken = inv[1]; history.replaceState(null, '', window.location.pathname + window.location.search); }
   loadLoginBranding();
   const params = new URLSearchParams(window.location.search);
   const loginError = params.get('login_error');
@@ -425,7 +429,11 @@ async function setupLoginOptions() {
     $('#loginUsername').required = true; $('#loginPassword').required = true;
   };
   if (typeof setupPasskeyLogin === 'function') setupPasskeyLogin(cfg, params);
-  if (cfg.entraAuto && cfg.entra && !loginError && !params.get('passkey_invite') && !sessionStorage.getItem('ico.noAuto')) {
+  let autoTried = false;
+  try { autoTried = !!sessionStorage.getItem('ico.noAuto') || !!sessionStorage.getItem('ico.autoTried'); } catch (err) { autoTried = true; }
+  if (cfg.entraAuto && cfg.entra && !loginError && !window.pkInviteToken && !autoTried) {
+    // One automatic hop per browser tab: if the session does not stick (cookie refused), the page stays here.
+    try { sessionStorage.setItem('ico.autoTried', '1'); } catch (err) { /* no storage: no auto hop */ }
     window.location.href = entraBtn.href; return;                // seamless SSO behind App Proxy
   }
   if ((cfg.local && cfg.password !== false) || (!cfg.entra && !cfg.passkey)) {

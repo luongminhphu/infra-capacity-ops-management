@@ -7,7 +7,7 @@ environment variables / .env — never hardcoded and never committed to git.
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import Literal, List
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     # ---- Sign-in: local accounts and / or Microsoft Entra ID (OIDC) ----
     # auth_mode: "local" (username / password only), "entra" (Entra ID only; local accounts listed in
     # auth_breakglass_users still work as emergency access), "both".
-    auth_mode: str = Field(default="local")
+    auth_mode: Literal["local", "entra", "both"] = Field(default="local")
     auth_breakglass_users: str = Field(default="")          # comma separated local usernames, e.g. "admin"
     entra_tenant_id: str = Field(default="")
     entra_client_id: str = Field(default="")
@@ -104,7 +104,7 @@ class Settings(BaseSettings):
     entra_auto_redirect: bool = Field(default=False)
     # Local accounts: "passkey" (Face ID / Touch ID / security key, no password — break-glass users keep
     # their password), "password", or "both".
-    auth_local_method: str = Field(default="both")
+    auth_local_method: Literal["passkey", "password", "both"] = Field(default="both")
     passkey_rp_name: str = Field(default="Infra Capacity Ops")
 
     # ---- Admins (MCP server access) ----

@@ -22,8 +22,10 @@ USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9._@-]{2,63}$")
 
 
 def _invite_url(request: Request, token: str) -> str:
+    """The token is in the fragment (#…): browsers never send it, so it stays out of proxy / App Proxy logs."""
+    passkeys.require_public_url(request)
     base = get_settings().public_base() or str(request.base_url).rstrip("/")
-    return f"{base}/?passkey_invite={token}"
+    return f"{base}/#passkey_invite={token}"
 
 
 def _user_out(u: User, n_keys: int, invite) -> Dict[str, Any]:
@@ -86,13 +88,14 @@ def user_passkeys(user_id: int, admin: User = Depends(require_admin), db: Sessio
 
 @router.delete("/users/{user_id}/passkeys/{passkey_id}")
 def revoke_passkey(user_id: int, passkey_id: int, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Lost / replaced phone: the passkey stops working at once (the user's session cookie is not revoked)."""
+    """Lost / replaced phone: the passkey stops working and every session of the account ends."""
     u = _local(db, user_id)
     pk = db.query(UserPasskey).filter(UserPasskey.id == passkey_id, UserPasskey.user_id == u.id).first()
     if not pk:
         raise HTTPException(404, "Không tìm thấy passkey.")
     service.audit(db, admin, request, "auth.passkey.revoke", target=u.username, name=pk.name)
     db.delete(pk)
+    u.session_version = (u.session_version or 0) + 1        # lost phone: its open sessions end now too
     db.commit()
     return {"ok": True}
 

@@ -70,6 +70,7 @@ def _settings(app_):
     db.query(User).filter(User.username.in_(["phu.iphone", "entra.user@corp.example"])).delete(synchronize_session=False)
     db.commit()
     db.close()
+    s.public_url = ORIGIN                      # passkeys / invites need the external URL (here: the test client's)
     yield s
     s.auth_local_method, s.public_url, s.auth_breakglass_users, s.auth_mode = old
 
@@ -77,6 +78,7 @@ def _settings(app_):
 def _invite(admin, username="phu.iphone"):
     r = admin.post("/api/admin/users", json={"username": username, "displayName": "Phú (iPhone)"})
     assert r.status_code == 200, r.text
+    assert "/#passkey_invite=" in r.json()["inviteUrl"]          # fragment: never sent to the server / logs
     return r.json()["inviteUrl"].split("passkey_invite=")[1]
 
 
@@ -97,14 +99,14 @@ def _signin(client, phone, origin=None):
 def test_invite_register_and_usernameless_signin(app_, admin):
     token = _invite(admin)
     anon = TestClient(app_)
-    info = anon.get(f"/api/auth/passkey/invite?token={token}").json()
+    info = anon.post("/api/auth/passkey/invite", json={"token": token}).json()
     assert info["username"] == "phu.iphone"
     phone = SoftAuthenticator()
     r = _register(anon, phone, invite=token)
     assert r.status_code == 200, r.text
     assert r.json()["passkey"]["synced"] is True and r.json()["passkey"]["name"] == "iPhone 16"
     assert anon.get("/api/auth/me").json()["username"] == "phu.iphone"                 # signed in by the invite
-    assert anon.get(f"/api/auth/passkey/invite?token={token}").status_code == 400      # single use
+    assert anon.post("/api/auth/passkey/invite", json={"token": token}).status_code == 400   # single use
     # no password: the password form cannot open this account
     assert TestClient(app_).post("/api/auth/login", json={"username": "phu.iphone", "password": "!passkey"}).status_code == 401
     other = TestClient(app_)
@@ -151,7 +153,9 @@ def test_passkey_only_mode_keeps_breakglass_password(app_, admin, _settings):
     assert cfg["passkey"] is True and cfg["password"] is False
     _settings.auth_breakglass_users = ""
     r = TestClient(app_).post("/api/auth/login", json={"username": ADMIN["username"], "password": ADMIN["password"]})
-    assert r.status_code == 403 and "Passkey" in r.json()["detail"]
+    assert r.status_code == 401 and "Passkey" in r.json()["detail"]
+    # same answer for an unknown name (no account enumeration)
+    assert TestClient(app_).post("/api/auth/login", json={"username": "ghost", "password": "x"}).json()["detail"] == r.json()["detail"]
 
 
 def test_signed_in_user_adds_passkey_and_entra_user_cannot(app_, admin):
@@ -184,7 +188,51 @@ def test_admin_user_rules_and_app_proxy_status(app_, admin, _settings):
     assert st["secureCookies"] is True and st["publicUrl"] == "https://ico-contoso.msappproxy.net"
     assert _settings.oidc_redirect_uri() == "https://ico-contoso.msappproxy.net/api/auth/oidc/callback"
     inv = admin.post(f"/api/admin/users/{row['id']}/passkey-invite").json()["inviteUrl"]
-    assert inv.startswith("https://ico-contoso.msappproxy.net/?passkey_invite=")
+    assert inv.startswith("https://ico-contoso.msappproxy.net/#passkey_invite=")
     # a passkey created for testserver does not work for the external name (bound to the RP ID)
     o = TestClient(app_).post("/api/auth/passkey/login/options").json()
     assert o["rpId"] == "ico-contoso.msappproxy.net"
+
+
+def _old_session(client, username, minutes=30):
+    """Session cookie signed in `minutes` ago (step-up window is 10 minutes)."""
+    import datetime as dt
+    from app.security import create_access_token
+    db = SessionLocal()
+    u = db.query(User).filter(User.username == username).one()
+    tok = create_access_token(u.username, "local", u.session_version or 0, int(dt.datetime.utcnow().timestamp()) - minutes * 60)
+    db.close()
+    client.cookies.set("vco_session", tok)
+    return client
+
+
+def test_step_up_before_changing_passkeys(app_, admin):
+    token = _invite(admin)
+    phone = SoftAuthenticator()
+    assert _register(TestClient(app_), phone, invite=token).status_code == 200
+    c = _old_session(TestClient(app_), "phu.iphone")
+    assert c.get("/api/auth/me").status_code == 200                                   # old session still valid for reading
+    assert c.post("/api/auth/passkey/register/options", json={}).status_code == 428     # stolen cookie alone cannot add a key
+    # step-up with the account's own passkey, then it works
+    o = c.post("/api/auth/passkey/login/options").json()
+    assert c.post("/api/auth/passkey/reauth/verify", json={"credential": phone.get(o)}).status_code == 200
+    assert c.post("/api/auth/passkey/register/options", json={}).status_code == 200
+    # another account's passkey cannot be used for the step-up
+    other = SoftAuthenticator()
+    assert _register(admin, other).status_code == 200
+    c2 = _old_session(TestClient(app_), "phu.iphone")
+    o = c2.post("/api/auth/passkey/login/options").json()
+    assert c2.post("/api/auth/passkey/reauth/verify", json={"credential": other.get(o)}).status_code == 403
+
+
+def test_revoke_ends_sessions_and_public_url_required(app_, admin, _settings):
+    token = _invite(admin)
+    phone = SoftAuthenticator()
+    thief = TestClient(app_)
+    assert _register(thief, phone, invite=token).status_code == 200 and thief.get("/api/auth/me").status_code == 200
+    keys = admin.get(f"/api/admin/users/{_uid('phu.iphone')}/passkeys").json()["items"]
+    admin.delete(f"/api/admin/users/{_uid('phu.iphone')}/passkeys/{keys[0]['id']}")
+    assert thief.get("/api/auth/me").status_code == 401                                 # lost phone: its session ends too
+    _settings.public_url = ""
+    assert admin.post(f"/api/admin/users/{_uid('phu.iphone')}/passkey-invite").status_code == 503
+    assert admin.post("/api/auth/passkey/register/options", json={}).status_code == 503

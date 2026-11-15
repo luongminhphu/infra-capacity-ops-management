@@ -30,20 +30,46 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(username: str, source: str = "local") -> str:
+REAUTH_SECONDS = 600     # adding / deleting a passkey needs a sign-in this recent
+
+
+def create_access_token(username: str, source: str = "local", session_version: int = 0, auth_at: Optional[int] = None) -> str:
+    """Session token. "at" = when the user last proved a credential (password, passkey, Microsoft);
+    "sv" = the account's session version (bumped to sign it out everywhere)."""
     settings = get_settings()
-    expire = dt.datetime.utcnow() + dt.timedelta(minutes=settings.jwt_expire_minutes)
-    payload = {"sub": username, "exp": expire, "src": source}
+    now = dt.datetime.utcnow()
+    payload = {"sub": username, "exp": now + dt.timedelta(minutes=settings.jwt_expire_minutes), "src": source,
+               "sv": int(session_version or 0), "at": int(auth_at if auth_at is not None else now.timestamp())}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def decode_access_token(token: str) -> Optional[str]:
+def decode_session(token: str) -> Optional[dict]:
     settings = get_settings()
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-        return payload.get("sub")
+        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError:
         return None
+
+
+def decode_access_token(token: str) -> Optional[str]:
+    payload = decode_session(token)
+    return payload.get("sub") if payload else None
+
+
+def session_user(db: Session, token: Optional[str]) -> Optional[User]:
+    """The user of a session cookie, or None (expired, signed out everywhere, unknown)."""
+    payload = decode_session(token) if token else None
+    if not payload:
+        return None
+    user = db.query(User).filter(User.username == payload.get("sub")).first()
+    if not user or int(payload.get("sv") or 0) != int(user.session_version or 0):
+        return None
+    return user
+
+
+def recently_authenticated(token: Optional[str]) -> bool:
+    payload = decode_session(token) if token else None
+    return bool(payload) and dt.datetime.utcnow().timestamp() - float(payload.get("at") or 0) <= REAUTH_SECONDS
 
 
 def get_current_user(
@@ -52,12 +78,11 @@ def get_current_user(
 ) -> User:
     if not vco_session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
-    username = decode_access_token(vco_session)
-    if not username:
+    if not decode_access_token(vco_session):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ hoặc đã hết hạn")
-    user = db.query(User).filter(User.username == username).first()
+    user = session_user(db, vco_session)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Người dùng không tồn tại")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập đã kết thúc — đăng nhập lại")
     if not local_login_allowed(user) and (user.auth_source or "local") == "local":
         # AUTH_MODE=entra: local sessions issued earlier stop working, except break-glass accounts.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tài khoản cục bộ đã bị tắt — đăng nhập bằng Microsoft")

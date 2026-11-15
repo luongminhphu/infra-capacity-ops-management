@@ -32,6 +32,8 @@ class User(Base):
     # Source "entra" = granted by an app role (refreshed at each sign-in), "ui" = set by an admin.
     spend_role = Column(String(16), nullable=False, default="none")
     spend_role_source = Column(String(8), nullable=True)
+    # Bumped to sign the account out everywhere (passkey revoked / deleted): sessions carry it as "sv".
+    session_version = Column(Integer, nullable=False, default=0)
 
 
 class ApiToken(Base):

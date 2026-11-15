@@ -20,15 +20,32 @@ from fastapi import HTTPException, Request
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+import logging
+
 from .config import Settings, get_settings
 from .models import PasskeyInvite, User, UserPasskey
 
+logger = logging.getLogger("vco.passkeys")
 STATE_COOKIE = "ico_webauthn"
 STATE_PATH = "/api/auth/passkey"
 STATE_SECONDS = 300
 INVITE_HOURS = 72
 MAX_PER_USER = 10
 TIMEOUT_MS = 120000
+
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+
+def require_public_url(request: Request) -> None:
+    """Passkeys are bound to a domain for good: create them / invite links only for the real
+    external name (PUBLIC_URL), except on localhost for trials."""
+    if get_settings().public_base():
+        return
+    host = (urlsplit(str(request.base_url)).hostname or "").lower()
+    if host not in LOCAL_HOSTS:
+        raise HTTPException(503, "Chưa đặt PUBLIC_URL (URL ngoài, vd App Proxy) — đặt trước khi tạo passkey / link mời, "
+                                 "vì passkey gắn cố định với tên miền.")
 
 
 def relying_party(request: Request, s: Optional[Settings] = None) -> Tuple[str, str]:
@@ -109,6 +126,7 @@ def registration_options(db: Session, user: User, request: Request) -> Tuple[str
     from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor, ResidentKeyRequirement,
                                           UserVerificationRequirement)
     s = get_settings()
+    require_public_url(request)
     rp_id, _ = relying_party(request, s)
     existing = db.query(UserPasskey).filter(UserPasskey.user_id == user.id).all()
     if len(existing) >= MAX_PER_USER:
@@ -129,8 +147,9 @@ def finish_registration(db: Session, user: User, request: Request, challenge: by
     try:
         v = verify_registration_response(credential=credential, expected_challenge=challenge, expected_rp_id=rp_id,
                                          expected_origin=origin, require_user_verification=True)
-    except Exception as exc:  # noqa: BLE001 — library raises several types; message is generic on purpose
-        raise HTTPException(400, f"Không xác minh được passkey ({type(exc).__name__}). Kiểm tra bạn mở đúng địa chỉ {origin}.") from None
+    except Exception:  # noqa: BLE001 — library raises several types; message is generic on purpose
+        logger.warning("passkey registration rejected", exc_info=True)
+        raise HTTPException(400, "Không xác minh được passkey — mở ứng dụng đúng địa chỉ chính thức rồi thử lại.") from None
     cid = bytes_to_base64url(v.credential_id)
     if db.query(UserPasskey.id).filter(UserPasskey.credential_id == cid).first():
         raise HTTPException(409, "Passkey này đã được đăng ký.")
@@ -175,8 +194,9 @@ def finish_authentication(db: Session, request: Request, challenge: bytes, crede
         v = verify_authentication_response(credential=credential, expected_challenge=challenge, expected_rp_id=rp_id, expected_origin=origin,
                                            credential_public_key=base64url_to_bytes(pk.public_key),
                                            credential_current_sign_count=pk.sign_count or 0, require_user_verification=True)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(401, f"Không xác minh được passkey ({type(exc).__name__}).") from None
+    except Exception:  # noqa: BLE001
+        logger.warning("passkey assertion rejected", exc_info=True)
+        raise HTTPException(401, "Không xác minh được passkey.") from None
     user = db.get(User, pk.user_id)
     if not user:
         raise HTTPException(401, "Tài khoản không còn tồn tại.")
