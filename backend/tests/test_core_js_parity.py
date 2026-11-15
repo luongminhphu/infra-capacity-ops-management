@@ -261,10 +261,7 @@ def test_finding_code_matches(js, t):
     assert js["get"](("finding", t)) == capacity.finding_code(*t)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Datastore thresholds differ: core.js appState.policy uses dsWarn=70 / dsHigh=85 (never overwritten), "
-    "capacity.build_datastore_rows defaults to 80 / 90 (as the capacity-math skill documents). "
-    "pct 75 -> JS THEO DÕI vs Python AN TOÀN; pct 87 -> JS CẢNH BÁO vs Python THEO DÕI."))
+# Was a strict xfail: core.js used dsWarn 70 / dsHigh 85; aligned to capacity.py 80 / 90 (approved 16/11/2026).
 def test_datastore_status_matches(js):
     py = {r["name"]: r["status"] for r in capacity.build_datastore_rows(js["ds_vms"])}
     got = {r["name"]: r["status"] for r in js["get"](("datastores",))}
