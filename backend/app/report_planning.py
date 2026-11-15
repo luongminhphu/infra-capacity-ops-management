@@ -11,7 +11,7 @@ from .pdf_kit import (COLORS, PRIORITY_LABEL_VI, STATUS_COLOR, _base_css, _exec_
                          _stat_tiles_html, esc, fmt_int, fmt_num, fmt_pct, html_to_pdf_bytes, status_pill,
                          svg_bar_chart)
 
-SCENARIO_COLORS = ["#15803d", "#2681FF", "#c2410c", "#7c3aed"]  # low, base, high, trend
+SCENARIO_COLORS = ["#187A2C", "#2681FF", "#B82E37", "#B729FE"]  # low, base, high, trend
 
 
 def _sc_color(i: int, sc: Dict[str, Any]) -> str:
@@ -228,7 +228,7 @@ def _roadmap_section(plan: Dict[str, Any]) -> str:
                 f'<td style="text-align:center;{"font-weight:700;color:" + COLORS["crit"] if cp["nodes"] else ""}">{"+" + str(cp["nodes"]) if cp["nodes"] else "0"}</td>'
                 for cp in r["checkpoints"])
             first_td = (f'<td>{esc(c["name"])}</td>' if i == 0 else "<td></td>")
-            base_mark = ' style="background:#f4f8ff;"' if sc.get("base") else ""
+            base_mark = ' style="background:#DFE9F6;"' if sc.get("base") else ""
             rows += (f'<tr{base_mark}>{first_td}<td><span class="dot" style="display:inline-block;width:7px;height:7px;border-radius:2px;background:{_sc_color(i, sc)};margin-right:4px;"></span>{esc(sc["label"])} +{sc["growthPct"]:.1f}%</td>'
                      f'{cells}<td>{esc(r["final"]["binding"])}</td><td>{esc(r["firstNeedLabel"] or "—")}</td><td><b>{esc(r["orderByLabel"] or "—")}</b></td></tr>')
     # totals

@@ -286,7 +286,7 @@ def _demand(result, params, best) -> str:
     ]
     demand_tbl = _table(["Tài nguyên", "Yêu cầu", f"Sau tăng trưởng (+{n(g)}%)", "Ghi chú"], rows, cls="num-table",
                         aligns=["left", "right", "right", "left"], widths=["14%", "18%", "22%", ""])
-    bucket_colors = ["#bfdbfe", "#60a5fa", "#2681FF", "#1d4ed8", "#074B9B"]
+    bucket_colors = ["#C7D8F0", "#588EDA", "#2681FF", "#165AB8", "#074B9B"]
     segs = [{"label": b["label"], "value": b["count"], "color": bucket_colors[i]} for i, b in enumerate(wl["sizeBuckets"])]
     donut = svg_donut(segs, size=112, center_label=n(d["vmCount"]), center_sub="VM")
     leg = "".join(f'<div class="leg-row"><span class="radar-swatch" style="background:{s["color"]};"></span>{esc(s["label"])}: <b>{n(s["value"])}</b> VM</div>'
@@ -367,7 +367,7 @@ def _options(result, currency, show: Optional[Dict[str, bool]] = None) -> str:
         if any_price:
             cells.append(money_short(adv["costs"]["tco"], currency) if _tco_comparable(r, result) else "—")
         cells.append(_row_status(r))
-        style = f' style="background:{COLORS["ok_bg"]};"' if r["recommended"] else (' style="color:#475467;font-style:italic;"' if r.get("suggested") else "")
+        style = f' style="background:{COLORS["ok_bg"]};"' if r["recommended"] else (' style="color:#465F83;font-style:italic;"' if r.get("suggested") else "")
         body.append({"style": style, "cells": cells})
     header = ["Phương án", "Host CPU / RAM / dự phòng", "Tổng host", "Yếu tố quyết định", "vCPU : core",
               "Mất 1 host: CPU / RAM", "Chứa thêm (VM)", "Core license"]
@@ -514,12 +514,12 @@ def svg_architecture(best, params, result) -> str:
     local = params.storage_mode == "local"
     W, H = 680, 268
     generic = params.platform == "generic"
-    nets = [("Quản lý (Management)", "#074B9B"), (pf["migration"] if not generic else "Di chuyển VM", "#7c3aed"),
-            ((f"Lưu trữ ({pf['hci_short']})" if not generic else "Lưu trữ HCI") if local else "Lưu trữ (iSCSI / FC)", "#0891b2"),
-            ("Mạng VM (Production)", "#15803d")]
+    nets = [("Quản lý (Management)", "#074B9B"), (pf["migration"] if not generic else "Di chuyển VM", "#B729FE"),
+            ((f"Lưu trữ ({pf['hci_short']})" if not generic else "Lưu trữ HCI") if local else "Lưu trữ (iSCSI / FC)", "#23A4B8"),
+            ("Mạng VM (Production)", "#187A2C")]
     x0, x1 = 128, W - 10
     ny = [26, 44, 62, 80]
-    parts = [f'<svg width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="Roboto, Noto Sans, sans-serif">']
+    parts = [f'<svg width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="Inter, Noto Sans, sans-serif">']
     for (label, color), y in zip(nets, ny):
         parts.append(f'<line x1="{x0}" y1="{y}" x2="{x1}" y2="{y}" stroke="{color}" stroke-width="2.4"/>')
         parts.append(f'<text x="{x0 - 12}" y="{y + 3}" text-anchor="end" font-size="8" font-weight="700" fill="{color}">{esc(label)}</text>')
@@ -550,16 +550,16 @@ def svg_architecture(best, params, result) -> str:
     # storage
     sy = hy + hh + 26
     if local:
-        parts.append(f'<rect x="{x0}" y="{sy}" width="{x1 - x0}" height="32" rx="5" fill="#e0f2fe" stroke="#0891b2"/>')
-        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 13}" text-anchor="middle" font-size="8.4" font-weight="800" fill="#075985">{esc(pf["hci"] if not generic else "Lưu trữ HCI")} (dùng chung) — {esc(cap(result["demand"]["storageNeededGB"]))} thô</text>')
-        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 25}" text-anchor="middle" font-size="7.2" fill="#075985">Gộp ổ đĩa của {nh} host · hệ số bảo vệ ×{esc(n(params.storage_protection_factor, 2).rstrip("0").rstrip(","))}</text>')
+        parts.append(f'<rect x="{x0}" y="{sy}" width="{x1 - x0}" height="32" rx="5" fill="#E2F1F4" stroke="#23A4B8"/>')
+        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 13}" text-anchor="middle" font-size="8.4" font-weight="800" fill="#11468F">{esc(pf["hci"] if not generic else "Lưu trữ HCI")} (dùng chung) — {esc(cap(result["demand"]["storageNeededGB"]))} thô</text>')
+        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 25}" text-anchor="middle" font-size="7.2" fill="#11468F">Gộp ổ đĩa của {nh} host · hệ số bảo vệ ×{esc(n(params.storage_protection_factor, 2).rstrip("0").rstrip(","))}</text>')
         for i in range(shown):
             cx = hx0 + i * (hw + gap) + hw / 2
-            parts.append(f'<line x1="{cx:.1f}" y1="{hy + hh}" x2="{cx:.1f}" y2="{sy}" stroke="#0891b2" stroke-dasharray="3 2"/>')
+            parts.append(f'<line x1="{cx:.1f}" y1="{hy + hh}" x2="{cx:.1f}" y2="{sy}" stroke="#23A4B8" stroke-dasharray="3 2"/>')
     else:
-        parts.append(f'<rect x="{(x0 + x1) / 2 - 150:.1f}" y="{sy}" width="300" height="32" rx="5" fill="#e0f2fe" stroke="#0891b2"/>')
-        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 13}" text-anchor="middle" font-size="8.4" font-weight="800" fill="#075985">Hệ thống lưu trữ SAN dùng chung</text>')
-        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 25}" text-anchor="middle" font-size="7.2" fill="#075985">Cấp {esc(cap(result["demand"]["storageNeededGB"]))} cho cụm</text>')
+        parts.append(f'<rect x="{(x0 + x1) / 2 - 150:.1f}" y="{sy}" width="300" height="32" rx="5" fill="#E2F1F4" stroke="#23A4B8"/>')
+        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 13}" text-anchor="middle" font-size="8.4" font-weight="800" fill="#11468F">Hệ thống lưu trữ SAN dùng chung</text>')
+        parts.append(f'<text x="{(x0 + x1) / 2:.1f}" y="{sy + 25}" text-anchor="middle" font-size="7.2" fill="#11468F">Cấp {esc(cap(result["demand"]["storageNeededGB"]))} cho cụm</text>')
     # central management
     parts.append(f'<rect x="0" y="{hy}" width="{x0 - 16}" height="{hh}" rx="4" fill="#fff" stroke="#074B9B" stroke-dasharray="4 2"/>')
     mgr = pf["manager"] if not generic else "Quản trị tập trung"
@@ -588,9 +588,9 @@ def _stackbar(best, d, p) -> str:
     n_tot, red, n_fail = best["hostsTotal"], best["redundancy"], best["failure"]["hostsLeft"]
     util = max(0.05, min(1.0, p["max_util_pct"] / 100.0))
     ph, prof = best["perHost"], best["profile"]
-    segs_def = [("request", "Yêu cầu", "#2681FF", "#fff"), ("growth", "Dự phòng tăng trưởng", "#93c5fd", COLORS["ink"]),
-                ("free", "Còn trống", "#bbf7d0", COLORS["ink"]), ("safe", f"Vùng an toàn {n(100 - p['max_util_pct'])}%", "#fde68a", COLORS["ink"]),
-                ("red", f"Dự phòng N+{red}", "#fca5a5", COLORS["ink"]), ("hv", "Hypervisor", "#cbd5e1", COLORS["ink"])]
+    segs_def = [("request", "Yêu cầu", "#2681FF", "#fff"), ("growth", "Dự phòng tăng trưởng", "#9DBCE7", COLORS["ink"]),
+                ("free", "Còn trống", "#DBF0DF", COLORS["ink"]), ("safe", f"Vùng an toàn {n(100 - p['max_util_pct'])}%", "#E1CB75", COLORS["ink"]),
+                ("red", f"Dự phòng N+{red}", "#FFADB1", COLORS["ink"]), ("hv", "Hypervisor", "#CED5DE", COLORS["ink"])]
     rows_html = ""
     for label, total, usable_host, req, planned in (
         ("CPU", prof["cores"] * max(1.0, p["ht_factor"]) * p["cpu_ratio"] * n_tot, ph["logicalCpu"] * p["cpu_ratio"], d["vcpu"], d["vcpuPlanned"]),
@@ -910,15 +910,15 @@ def _existing_chart(existing: List[Dict[str, Any]]) -> str:
     rows = existing[:10]
     labels = [e["name"] for e in rows]
     val = lambda e, k: e.get(k) if e.get(k) is not None else 0  # noqa: E731
-    cpu = svg_bar_chart(labels, [{"name": "Trước", "color": "#93c5fd", "values": [val(e, "cpuBefore") for e in rows]},
+    cpu = svg_bar_chart(labels, [{"name": "Trước", "color": "#9DBCE7", "values": [val(e, "cpuBefore") for e in rows]},
                                  {"name": "Sau", "color": COLORS["primary"], "values": [val(e, "cpuAfter") for e in rows]}],
                         width=330, height=160, threshold=100, threshold_label="Ngưỡng", unit="%")
-    ramc = svg_bar_chart(labels, [{"name": "Trước", "color": "#67e8f9", "values": [val(e, "ramBefore") for e in rows]},
+    ramc = svg_bar_chart(labels, [{"name": "Trước", "color": "#78D5E3", "values": [val(e, "ramBefore") for e in rows]},
                                   {"name": "Sau", "color": COLORS["accent"], "values": [val(e, "ramAfter") for e in rows]}],
                          width=330, height=160, threshold=100, threshold_label="Ngưỡng", unit="%")
     return f"""<table class="grid2 keep"><tr>
-      <td><div class="chart-card"><div class="chart-card-title">CPU (% ngưỡng chính sách) trước / sau tiếp nhận</div>{cpu}{_legend([("#93c5fd", "Trước"), (COLORS["primary"], "Sau")])}</div></td>
-      <td><div class="chart-card"><div class="chart-card-title">RAM (% ngưỡng chính sách) trước / sau tiếp nhận</div>{ramc}{_legend([("#67e8f9", "Trước"), (COLORS["accent"], "Sau")])}</div></td>
+      <td><div class="chart-card"><div class="chart-card-title">CPU (% ngưỡng chính sách) trước / sau tiếp nhận</div>{cpu}{_legend([("#9DBCE7", "Trước"), (COLORS["primary"], "Sau")])}</div></td>
+      <td><div class="chart-card"><div class="chart-card-title">RAM (% ngưỡng chính sách) trước / sau tiếp nhận</div>{ramc}{_legend([("#78D5E3", "Trước"), (COLORS["accent"], "Sau")])}</div></td>
     </tr></table>"""
 
 
@@ -931,10 +931,10 @@ def _css(header_left: str, header_right: str, date_txt: str) -> str:
     return f"""
 @page {{
   size: A4; margin: 18mm 15mm 16mm 15mm;
-  @top-left {{ text-transform:none; content: "{q(header_left)}"; font-family:'Roboto','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; letter-spacing:.03em; }}
-  @top-right {{ text-transform:none; content: "{q(header_right)}"; font-family:'Roboto','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; }}
-  @bottom-left {{ text-transform:none; content: "Ngày lập {q(date_txt)}"; font-family:'Roboto','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; }}
-  @bottom-right {{ text-transform:none; content: "Trang " counter(page) " / " counter(pages); font-family:'Roboto','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; }}
+  @top-left {{ text-transform:none; content: "{q(header_left)}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; letter-spacing:.03em; }}
+  @top-right {{ text-transform:none; content: "{q(header_right)}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; }}
+  @bottom-left {{ text-transform:none; content: "Ngày lập {q(date_txt)}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; }}
+  @bottom-right {{ text-transform:none; content: "Trang " counter(page) " / " counter(pages); font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{c['faint']}; }}
 }}
 @page cover {{ @top-left {{ content:none; }} @top-right {{ content:none; }} @bottom-left {{ content:none; }} @bottom-right {{ content:none; }} }}
 *, *::before, *::after {{ box-sizing:border-box; }}
@@ -950,7 +950,7 @@ html, body {{ margin:0; padding:0; }}
 .chart-card {{ width:100%; margin-bottom:0; padding:8px 10px; }}
 .callout {{ background:{c['surface']}; border:1px solid {c['border']}; border-left:3px solid {c['accent']}; border-radius:0 5px 5px 0; padding:7px 10px; font-size:9.3px; line-height:1.5; }}
 .callout b {{ color:{c['primary_dark']}; }}
-.callout.note {{ border-left-color:{c['primary_dark']}; background:#f5f8fe; }}
+.callout.note {{ border-left-color:{c['primary_dark']}; background:#F4F6F8; }}
 .note-line {{ margin-top:8px; font-size:9.2px; color:{c['muted']}; }}
 .muted {{ color:{c['muted']}; }} .small {{ font-size:8.2px; }} .warn-txt {{ color:{c['warn']}; font-weight:700; white-space:nowrap; }}
 table {{ width:100%; }}

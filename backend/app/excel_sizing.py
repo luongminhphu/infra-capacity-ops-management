@@ -97,7 +97,7 @@ def _dashboard(wb, result, payload_meta, data_ws, refs) -> None:
         sub.append(f"Mã: {payload_meta['documentCode']}")
     sub.append(f"Ngày: {dt.date.today().strftime('%d/%m/%Y')}")
     ws["A3"] = "   ·   ".join(sub)
-    ws["A3"].font = _font(9.5, False, "DCE7F7")
+    ws["A3"].font = _font(9.5, False, "DFE9F6")
     for cell in ("A1", "A2", "A3"):
         ws[cell].alignment = Alignment(vertical="center", indent=1)
     ws.row_dimensions[1].height = 20
@@ -357,7 +357,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
         ch.add_data(Reference(ws, min_col=2, max_col=7, min_row=top, max_row=top + 2), titles_from_data=True)
         ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + 2))
         _style_chart(ch, f"Phân bổ năng lực — {prof['name']} × {n}")
-        _color_series(ch, ["2681FF", "93C5FD", "86EFAC", "FCD34D", "FCA5A5", "CBD5E1"])
+        _color_series(ch, ["2681FF", "93C5FD", "86EFAC", "E1CB75", "FFADB1", "CBD5E1"])
         refs["alloc"] = ch
 
     # 5. Projection
@@ -574,8 +574,8 @@ def _options_sheet(wb, result, subtitle: str) -> None:
                 cell.font = _font(10, True)
     rng = lambda col: f"{col}{start + 1}:{col}{last}"  # noqa: E731
     ws.conditional_formatting.add(rng("H"), DataBarRule(start_type="num", start_value=0, end_type="max", color=BLUE))
-    ws.conditional_formatting.add(rng("W"), ColorScaleRule(start_type="num", start_value=40, start_color="FBE4E2",
-                                                           mid_type="num", mid_value=70, mid_color="FDF1E0", end_type="num", end_value=100, end_color="C9EBD3"))
+    ws.conditional_formatting.add(rng("W"), ColorScaleRule(start_type="num", start_value=40, start_color="F2E5E6",
+                                                           mid_type="num", mid_value=70, mid_color="FFF3B8", end_type="num", end_value=100, end_color="DBF0DF"))
     for col in ("L", "M"):
         ws.conditional_formatting.add(rng(col), CellIsRule(operator="greaterThan", formula=["100"], font=Font(color=CRIT, bold=True)))
     ws.conditional_formatting.add(rng("N"), CellIsRule(operator="equal", formula=['"Chưa đạt"'], font=Font(color=CRIT, bold=True), fill=_fill(CRIT_BG)))
@@ -598,8 +598,8 @@ def _options_sheet(wb, result, subtitle: str) -> None:
         lst = _write_rows(ws, row, hdr, srows, fmts={i: NUM for i in range(3, 3 + len(axes))})
         _table(ws, f"A{top}:{get_column_letter(len(hdr))}{lst}", "BangDiem", "TableStyleLight9")
         ws.conditional_formatting.add(f"C{top + 1}:{get_column_letter(len(hdr))}{lst}",
-                                      ColorScaleRule(start_type="num", start_value=0, start_color="FBE4E2", mid_type="num", mid_value=60,
-                                                     mid_color="FDF1E0", end_type="num", end_value=100, end_color="C9EBD3"))
+                                      ColorScaleRule(start_type="num", start_value=0, start_color="F2E5E6", mid_type="num", mid_value=60,
+                                                     mid_color="FFF3B8", end_type="num", end_value=100, end_color="DBF0DF"))
     _print_setup(ws)
 
 
@@ -703,7 +703,7 @@ def _sensitivity_sheet(wb, result, subtitle: str) -> None:
         tno += 1
         _table(ws, f"A{top}:{get_column_letter(1 + len(sw['series']))}{lst}", f"DoNhay{tno}", "TableStyleLight9")
         ws.conditional_formatting.add(f"B{top + 1}:{get_column_letter(1 + len(sw['series']))}{lst}",
-                                      ColorScaleRule(start_type="min", start_color="E8F1FF", end_type="max", end_color="7FB2FF"))
+                                      ColorScaleRule(start_type="min", start_color="DFE9F6", end_type="max", end_color="7FB2FF"))
         for i, x in enumerate(sw["x"]):
             if x == sw["current"]:
                 for c in range(1, 2 + len(sw["series"])):

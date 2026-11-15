@@ -9,23 +9,23 @@ from typing import Any, Dict, List, Optional
 
 from .pdf_kit import COLORS, _finite, _nice_ceiling, esc
 
-FONT = 'font-family="Roboto, Noto Sans, sans-serif"'
+FONT = 'font-family="Inter, Noto Sans, sans-serif"'
 
 # Categorical palette for candidate host profiles (max 8) — first two match the
 # app's primary / accent, the rest are distinguishable on print.
-SERIES_COLORS = ["#2681FF", "#0891b2", "#7c3aed", "#ca8a04", "#db2777", "#15803d", "#ea580c", "#475467"]
+SERIES_COLORS = ["#2681FF", "#23A4B8", "#B729FE", "#A38613", "#898C8F", "#187A2C", "#B82E37", "#465F83"]
 
 # Capacity-allocation segments (cluster stack chart)
 SEG_COLORS = {
     "request": "#2681FF",
-    "growth": "#93c5fd",
-    "free": "#bbf7d0",
-    "headroom": "#fde68a",
-    "redundancy": "#fca5a5",
-    "esxi": "#cbd5e1",
+    "growth": "#9DBCE7",
+    "free": "#DBF0DF",
+    "headroom": "#E1CB75",
+    "redundancy": "#FFADB1",
+    "esxi": "#CED5DE",
 }
 
-EMPTY = '<div style="color:#98a2b3;font-size:10px;padding:8px 0;">Không có dữ liệu.</div>'
+EMPTY = '<div style="color:#597090;font-size:10px;padding:8px 0;">Không có dữ liệu.</div>'
 
 
 def money_short(v: Optional[float], currency: str = "VND") -> str:
@@ -247,7 +247,7 @@ def svg_projection(points: List[Dict[str, Any]], installed: int, width: int = 33
     return "".join(parts)
 
 
-COST_COLORS = {"hw": "#2681FF", "war": "#f59e0b", "lic": "#0891b2"}
+COST_COLORS = {"hw": "#2681FF", "war": "#B89717", "lic": "#23A4B8"}
 
 
 def svg_cost_bars(rows: List[Dict[str, Any]], currency: str, width: int = 330) -> str:

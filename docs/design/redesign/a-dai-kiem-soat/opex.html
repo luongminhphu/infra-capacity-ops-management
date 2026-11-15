@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opex — Hướng A · Đài kiểm soát</title>
+<link rel="stylesheet" href="../_shared/hsc-tokens.css">
+<link rel="stylesheet" href="deck.css">
+<script src="../../../../frontend/vendor/lucide-1.73.0.min.js" defer></script>
+<script src="../_shared/mock.js" defer></script>
+<style>
+  .daysbar { position:relative; height:6px; width:64px; border-radius:3px; background:var(--surface-2); box-shadow:inset 0 0 0 1px var(--line); }
+  .daysbar i { position:absolute; inset:0 auto 0 0; border-radius:3px; background:var(--ink-3); }
+  .dense td.code { font-variant-numeric:var(--num); color:var(--ink-2); }
+  .sel-bar { display:flex; align-items:center; gap:var(--s2); padding:8px var(--pad); background:var(--selected); border-bottom:1px solid var(--line); }
+  .pager { display:flex; align-items:center; gap:var(--s2); padding:10px var(--pad); color:var(--ink-2); }
+  .pager .btn:first-of-type { margin-left:auto; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Bỏ qua đến nội dung chính</a>
+<div class="deck">
+  <nav class="rail" aria-label="Điều hướng chính">
+    <div class="home-mark"><span aria-hidden="true"><i data-lucide="layout-grid"></i></span></div>
+    <a href="trang-chu.html"><i data-lucide="house"></i>Hôm nay<span class="count" aria-label="12 việc cảnh báo">12</span></a>
+    <a href="dieu-hanh.html"><i data-lucide="gauge"></i>Capacity</a>
+    <a href="#"><i data-lucide="database-backup"></i>Backup</a>
+    <a href="#"><i data-lucide="git-branch"></i>Mô phỏng</a>
+    <a href="#" class="more"><i data-lucide="calculator"></i>Sizing</a>
+    <hr>
+    <a href="#"><i data-lucide="server"></i>Tài sản</a>
+    <a href="#"><i data-lucide="badge-check"></i>License</a>
+    <a href="opex.html" aria-current="page"><i data-lucide="wallet"></i>Chi phí</a>
+    <a href="#" class="more"><i data-lucide="shopping-cart"></i>Mua sắm</a>
+    <a href="#" class="more"><i data-lucide="scroll-text"></i>Hợp đồng</a>
+    <div class="spacer"></div>
+    <a href="#" class="more"><i data-lucide="settings"></i>Cài đặt</a>
+  </nav>
+
+  <div>
+    <header class="bar">
+      <div class="crumb">
+        <h1>Ngân sách &amp; chi phí</h1>
+        <div class="tabs" role="tablist" aria-label="Ngân sách & chi phí">
+          <button class="tab" role="tab" aria-selected="false">Tổng quan</button>
+          <button class="tab" role="tab" aria-selected="true">Opex</button>
+          <button class="tab" role="tab" aria-selected="false">Capex</button>
+          <button class="tab" role="tab" aria-selected="false">Kế hoạch năm sau</button>
+        </div>
+      </div>
+      <button class="cmd" type="button" aria-label="Tìm hoặc chạy lệnh (Ctrl K)"><i data-lucide="search"></i><span class="lbl">Tìm host, VM, mã OPX-, hoặc gõ lệnh…</span><kbd>Ctrl K</kbd></button>
+      <button class="iconbtn" type="button" data-toggle-theme aria-pressed="false" aria-label="Đổi giao diện sáng / tối"><i data-lucide="sun-moon"></i></button>
+    </header>
+
+    <main id="main">
+      <section class="panel span-12" aria-label="Tóm tắt Opex năm tài chính 2026">
+        <div class="kpis">
+          <div class="kpi"><span class="lbl">Tổng sau VAT · năm TC 2026</span><b class="num">6,05 tỷ đ<small>8 khoản</small></b></div>
+          <div class="kpi"><span class="lbl">Sắp hết hạn (≤ 90 ngày)</span><b class="num">4<small>2,21 tỷ đ cần gia hạn</small></b></div>
+          <div class="kpi"><span class="lbl">Quá hạn chưa xử lý</span><b class="num">1<small>Thuê kênh truyền DR</small></b></div>
+          <div class="kpi"><span class="lbl">Mốc nhắc</span><b class="num">90 · 60 · 30<small>ngày · email + Discord</small></b></div>
+        </div>
+      </section>
+
+      <section class="panel span-12" aria-labelledby="h-list">
+        <header>
+          <h2 id="h-list">Danh sách Opex</h2><span class="meta">sắp xếp theo ngày hết hạn</span>
+          <div class="act">
+            <button class="btn" type="button"><i data-lucide="upload"></i>Nhập Excel</button>
+            <button class="btn" type="button"><i data-lucide="file-spreadsheet"></i>Xuất Excel</button>
+            <button class="btn primary" type="button"><i data-lucide="plus"></i>Thêm khoản</button>
+          </div>
+        </header>
+        <div class="filters" role="toolbar" aria-label="Bộ lọc Opex">
+          <button class="chip" aria-pressed="true" type="button">Cần theo dõi <span class="n">7</span></button>
+          <button class="chip" aria-pressed="false" type="button">Sắp hết hạn <span class="n">4</span></button>
+          <button class="chip" aria-pressed="false" type="button">Quá hạn <span class="n">1</span></button>
+          <button class="chip" aria-pressed="false" type="button">Tất cả <span class="n">8</span></button>
+          <span style="width:1px;height:20px;background:var(--line);margin:0 4px" aria-hidden="true"></span>
+          <button class="chip" type="button" aria-haspopup="true"><i data-lucide="calendar"></i>Năm TC 2026</button>
+          <button class="chip" type="button" aria-haspopup="true"><i data-lucide="tag"></i>Loại: tất cả</button>
+          <button class="chip" type="button" aria-haspopup="true"><i data-lucide="building-2"></i>NCC: tất cả</button>
+          <button class="chip" type="button" aria-haspopup="true"><i data-lucide="landmark"></i>Cost center</button>
+          <label class="sr-only" for="q">Tìm Opex</label>
+          <input id="q" class="search" type="search" placeholder="Mã, dịch vụ, NCC, số hợp đồng" style="margin-left:auto">
+        </div>
+        <div class="sel-bar" role="status"><strong>2 khoản đã chọn</strong><span style="color:var(--ink-2)">· 798,4 triệu đ</span>
+          <button class="btn" type="button" style="margin-left:auto"><i data-lucide="refresh-cw"></i>Tạo gia hạn</button>
+          <button class="btn" type="button"><i data-lucide="file-text"></i>Soạn tờ trình</button>
+          <button class="btn ghost" type="button">Bỏ chọn</button></div>
+        <div class="grid-wrap" role="region" aria-labelledby="h-list" tabindex="0">
+          <table class="dense">
+            <thead><tr>
+              <th scope="col"><input type="checkbox" aria-label="Chọn tất cả"></th>
+              <th scope="col"><button type="button">Mã</button></th>
+              <th scope="col">Dịch vụ</th>
+              <th scope="col" class="hide-narrow">Nhà cung cấp</th>
+              <th scope="col"><button type="button" aria-sort="ascending">Hết hạn <i data-lucide="arrow-up"></i></button></th>
+              <th scope="col">Còn lại</th>
+              <th scope="col" class="n">Sau VAT (đ)</th>
+              <th scope="col" class="hide-narrow">Phụ trách</th>
+              <th scope="col">Trạng thái</th>
+            </tr></thead>
+            <tbody>
+              <tr data-level="crit"><td><input type="checkbox" aria-label="Chọn OPX-2026-0019"></td><td class="code">OPX-2026-0019</td><td><a href="#">Thuê kênh truyền DR</a></td><td class="hide-narrow">VTBN</td><td class="num">10/11/2026</td>
+                <td><span class="days"><span class="daysbar" aria-hidden="true"><i style="width:0"></i></span>quá 5 ngày</span></td><td class="n">384 000 000</td><td class="hide-narrow">Hạ tầng</td><td><span class="st crit"><i data-lucide="octagon-x"></i>Quá hạn</span></td></tr>
+              <tr data-level="bad" aria-selected="true" style="background:var(--selected)"><td><input type="checkbox" checked aria-label="Chọn OPX-2026-0007"></td><td class="code">OPX-2026-0007</td><td><a href="#">Bảo hành SAN lưu trữ chính</a></td><td class="hide-narrow">SAOMAI</td><td class="num">20/11/2026</td>
+                <td><span class="days"><span class="daysbar" aria-hidden="true"><i style="width:5.5%"></i></span>5 ngày</span></td><td class="n">312 400 000</td><td class="hide-narrow">Hạ tầng</td><td><span class="st bad"><i data-lucide="triangle-alert"></i>Sắp hết hạn</span></td></tr>
+              <tr data-level="bad" aria-selected="true" style="background:var(--selected)"><td><input type="checkbox" checked aria-label="Chọn OPX-2026-0012"></td><td class="code">OPX-2026-0012</td><td><a href="#">Bảo hành 6 host PROD-CLUSTER-A</a></td><td class="hide-narrow">TLG</td><td class="num">12/12/2026</td>
+                <td><span class="days"><span class="daysbar" aria-hidden="true"><i style="width:30%"></i></span>27 ngày</span></td><td class="n">486 000 000</td><td class="hide-narrow">Hạ tầng</td><td><span class="st bad"><i data-lucide="triangle-alert"></i>Sắp hết hạn</span></td></tr>
+              <tr data-level="warn"><td><input type="checkbox" aria-label="Chọn OPX-2026-0004"></td><td class="code">OPX-2026-0004</td><td><a href="#">Bảo trì điều hoà phòng máy</a></td><td class="hide-narrow">HBM</td><td class="num">31/12/2026</td>
+                <td><span class="days"><span class="daysbar" aria-hidden="true"><i style="width:51%"></i></span>46 ngày</span></td><td class="n">132 000 000</td><td class="hide-narrow">Cơ điện</td><td><span class="st warn"><i data-lucide="eye"></i>Sắp hết hạn</span></td></tr>
+              <tr data-level="warn"><td><input type="checkbox" aria-label="Chọn OPX-2026-0003"></td><td class="code">OPX-2026-0003</td><td><a href="#">License phần mềm sao lưu (theo TB)</a></td><td class="hide-narrow">MPT</td><td class="num">02/02/2027</td>
+                <td><span class="days"><span class="daysbar" aria-hidden="true"><i style="width:88%"></i></span>79 ngày</span></td><td class="n">1 284 000 000</td><td class="hide-narrow">Hạ tầng</td><td><span class="st warn"><i data-lucide="eye"></i>Sắp hết hạn</span></td></tr>
+              <tr><td><input type="checkbox" aria-label="Chọn OPX-2026-0015"></td><td class="code">OPX-2026-0015</td><td><a href="#">Giám sát an ninh mạng 24/7</a></td><td class="hide-narrow">APS</td><td class="num">31/03/2027</td>
+                <td><span class="days"><span class="daysbar" aria-hidden="true"><i style="width:100%"></i></span>136 ngày</span></td><td class="n">960 000 000</td><td class="hide-narrow">An ninh</td><td><span class="st ok"><i data-lucide="circle-check"></i>Đang hiệu lực</span></td></tr>
+              <tr><td><input type="checkbox" aria-label="Chọn OPX-2026-0021"></td><td class="code">OPX-2026-0021</td><td><a href="#">Hỗ trợ kỹ thuật ảo hoá (per-core)</a></td><td class="hide-narrow">SAOMAI</td><td class="num">30/06/2027</td>
+                <td><span class="days"><span class="daysbar" aria-hidden="true"><i style="width:100%"></i></span>227 ngày</span></td><td class="n">2 150 000 000</td><td class="hide-narrow">Hạ tầng</td><td><span class="st ok"><i data-lucide="circle-check"></i>Đang hiệu lực</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager"><span>7 khoản · trang 1 / 1</span><button class="btn ghost" type="button" disabled>Trước</button><button class="btn ghost" type="button" disabled>Sau</button></div>
+      </section>
+      <p class="mock-note span-12">Dữ liệu mẫu (môi trường DEMO chưa có Opex). Nhãn và mức trạng thái theo <code>spend/service.py::derived_status</code>: quá hạn → VƯỢT NGƯỠNG, ≤ 30 ngày → CẢNH BÁO, ≤ 90 ngày → THEO DÕI.</p>
+    </main>
+  </div>
+</div>
+</body>
+</html>

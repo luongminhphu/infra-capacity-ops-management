@@ -103,14 +103,14 @@ def build_xlsx(d: Dict[str, Any]) -> bytes:
             cell = ws_.cell(row=tr, column=7 + j, value=c["subtotal"])
             cell.number_format, cell.font = MONEY, _font(10, True)
             if c["id"] == v.get("selected"):
-                cell.fill = _fill("DCFCE7")
+                cell.fill = _fill("E4F4E7")
         for j in range(len(proj_heads)):
             col = get_column_letter(13 + j)
             has = (cw["total"] if j == 0 else hist[j - 1]["total"]) is not None
             cell = ws_.cell(row=tr, column=13 + j, value=f"=SUM({col}{first}:{col}{last})" if has else None)
             cell.number_format, cell.font = MONEY, _font(10, True)
             if not has:
-                _txt(ws_, tr, 13 + j, "không có số liệu", font=_font(9, False, "475467", True))
+                _txt(ws_, tr, 13 + j, "không có số liệu", font=_font(9, False, "465F83", True))
         for col in list(range(1, 7 + len(vcols))) + list(range(11, 13 + len(proj_heads))):
             ws_.cell(row=tr, column=col).fill = _fill(HEAD_FILL)
             ws_.cell(row=tr, column=col).border = BOX
@@ -127,7 +127,7 @@ def build_xlsx(d: Dict[str, Any]) -> bytes:
                 _formula = ws_.cell(row=kr, column=13 + j, value=f"=ROUNDUP({col}{tr}/{int(n)},0)")
                 _formula.number_format, _formula.font = MONEY, _font(10, True)
             else:
-                _txt(ws_, kr, 13 + j, "không có số liệu", font=_font(9, False, "475467", True))
+                _txt(ws_, kr, 13 + j, "không có số liệu", font=_font(9, False, "465F83", True))
             ws_.cell(row=kr, column=13 + j).border = BOX
         row = kr + 3
     ws_.freeze_panes = "C3"

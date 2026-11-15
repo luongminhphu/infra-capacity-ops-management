@@ -54,22 +54,25 @@ def csv_safe(value: Any) -> Any:
 # ---------------------------------------------------------------------------
 # Palette & styles (aligned with the PDF report)
 # ---------------------------------------------------------------------------
-NAVY = "074B9B"
-BLUE = "2681FF"
-TEAL = "0891B2"
-AMBER = "F59E0B"
-INK = "101828"
-MUTED = "475467"
-FAINT = "98A2B3"
-LINE = "D0D5E0"
-SURFACE = "F8FAFC"
-SURFACE2 = "EEF2F7"
-OK, OK_BG = "15803D", "E7F5EC"
-WARN, WARN_BG = "B45309", "FDF1E0"
-CRIT, CRIT_BG = "B91C1C", "FBE4E2"
+# HSC Design System on white (design-system/ico/MASTER.md) — same roles as COLORS in report_pdf.py.
+NAVY = "074B9B"      # HSC logo blue: title band
+BLUE = "165AB8"      # HSC sb40 (6.59 on white)
+TEAL = "147E8F"      # HSC sc30
+AMBER = "A38613"     # HSC sy20
+INK = "0B2D5C"       # HSC sb10, light-theme text
+MUTED = "465F83"
+FAINT = "597090"
+LINE = "CED5DE"
+SURFACE = "F4F6F8"
+SURFACE2 = "EDF1F5"
+OK, OK_BG = "187A2C", "E4F4E7"
+WARN, WARN_BG = "8F7611", "FFF3B8"
+CRIT, CRIT_BG = "8F282D", "F2E5E6"
+# Excel keeps Calibri: Inter is not installed on most machines that open the file (web + PDF use Inter).
 FONT = "Calibri"
 
-SERIES = ["2681FF", "0891B2", "074B9B", "7C3AED", "CA8A04", "DB2777", "15803D", "EA580C"]
+# Validated HSC series first (blue, cyan, magenta), then neutral; never status colors.
+SERIES = ["165AB8", "23A4B8", "B729FE", "898C8F", "074B9B", "147E8F", "7BA5E0", "A38613"]
 SEV = {"critical": ("Nghiêm trọng", CRIT, CRIT_BG), "warning": ("Cảnh báo", WARN, WARN_BG),
        "info": ("Lưu ý", NAVY, SURFACE2), "ok": ("Đạt", OK, OK_BG)}
 READY = {"ok": ("SẴN SÀNG TRIỂN KHAI", OK, OK_BG), "warn": ("TRIỂN KHAI ĐƯỢC · CẦN LƯU Ý", WARN, WARN_BG),
@@ -128,7 +131,7 @@ def _sheet_title(ws, title: str, subtitle: str, ncols: int) -> int:
     ws["A1"].fill = _fill(NAVY)
     ws["A1"].alignment = Alignment(vertical="center", indent=1)
     ws["A2"] = subtitle
-    ws["A2"].font = _font(9.5, False, "DCE7F7")
+    ws["A2"].font = _font(9.5, False, "DFE9F6")
     ws["A2"].fill = _fill(NAVY)
     ws["A2"].alignment = Alignment(vertical="center", indent=1)
     for ref in ("A1", "A2"):                      # titles may carry user / vendor text: never a formula

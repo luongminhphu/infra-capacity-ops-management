@@ -30,34 +30,40 @@ _SVG_UID = itertools.count()
 # paper / PDF viewers).
 # ---------------------------------------------------------------------------
 COLORS = {
-    "ink": "#101828",
-    "muted": "#475467",
-    "faint": "#98a2b3",
-    "border": "#d0d5e0",
-    "divider": "#e4e7ec",
-    "surface": "#f8fafc",
-    "surface2": "#eef2f7",
-    # Synced to HSC's brand blue (design-system tokens: --brand / --logo-blue)
-    # so headline text in the report matches the company logo's blue exactly.
-    "primary": "#2681FF",
+    # HSC Design System on white paper (design-system/ico/MASTER.md, light theme roles).
+    # Text pairs pass WCAG AA on white: ink 13.6, muted 6.51, faint 5.07, ok 5.44, bad 6.03, crit 8.37.
+    "ink": "#0B2D5C",
+    "muted": "#465F83",
+    "faint": "#597090",
+    "border": "#CED5DE",
+    "divider": "#E7EAEF",
+    "surface": "#F4F6F8",
+    "surface2": "#EDF1F5",
+    # Headline blue = HSC sb40 (6.59 on white); logo blue kept for marks / rules.
+    "primary": "#165AB8",
     "primary_dark": "#074B9B",
-    "accent": "#0891b2",
-    "ok": "#15803d",
-    "ok_bg": "#e7f5ec",
-    "warn": "#b45309",
-    "warn_bg": "#fdf1e0",
-    "bad": "#c2410c",
-    "bad_bg": "#fdece1",
-    "crit": "#b91c1c",
-    "crit_bg": "#fbe4e2",
-    "na": "#667085",
-    "na_bg": "#eef1f5",
-    # Darker than "surface2" on purpose: this is the unfilled 100% track
-    # behind every gauge and bar-chart fill (svg_gauge / bar_cell /
-    # svg_ranked_bar_chart), and it needs enough contrast against the white
-    # card background for a reader to register the full 100% extent at a
-    # glance, not just the filled/colored portion.
-    "track_bg": "#c7cfdb",
+    "accent": "#147E8F",
+    "ok": "#187A2C",
+    "ok_bg": "#E4F4E7",
+    # sy10 is 4.40 on white: use for marks and >= 14 px bold numbers only; pill labels are ink.
+    "warn": "#8F7611",
+    "warn_bg": "#FFF3B8",
+    "bad": "#B82E37",
+    "bad_bg": "#F6E6E7",
+    "crit": "#8F282D",
+    "crit_bg": "#F2E5E6",
+    # VƯỢT NGƯỠNG pill is a solid block (white on sr40 = 6.03), same as the web.
+    "crit_solid": "#B82E37",
+    "na": "#597090",
+    "na_bg": "#F0F2F5",
+    # Unfilled 100 % track behind gauges / bar cells: visibly darker than surface2
+    # so the full extent reads at a glance.
+    "track_bg": "#CED5DE",
+    # Chart series validated with the dataviz validator (light): sb40, sc40, sm50; then neutral.
+    "series1": "#165AB8",
+    "series2": "#23A4B8",
+    "series3": "#B729FE",
+    "series_other": "#898C8F",
 }
 
 STATUS_COLOR = {"ok": ("ok", "ok_bg"), "warn": ("warn", "warn_bg"), "bad": ("bad", "bad_bg"),
@@ -105,12 +111,42 @@ def fmt_pct(v, decimals: int = 1) -> str:
     return f"{v:.{decimals}f}%"
 
 
+# Status glyphs (lucide paths) — the 4 levels differ by shape and weight, not by hue alone,
+# so a black-and-white print still reads (MASTER.md §Trạng thái).
+_STATUS_GLYPH = {
+    "ok": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    "warn": '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
+    "bad": '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    "crit": '<path d="M2.59 16.73A2 2 0 0 1 2 15.31V8.69a2 2 0 0 1 .59-1.41l4.69-4.69A2 2 0 0 1 8.69 2h6.62a2 2 0 0 1 1.41.59l4.69 4.69A2 2 0 0 1 22 8.69v6.62a2 2 0 0 1-.59 1.41l-4.69 4.69a2 2 0 0 1-1.41.59H8.69a2 2 0 0 1-1.41-.59z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+    "na": '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3.3"/>',
+}
+
+
 def status_pill(status: Optional[Dict[str, str]]) -> str:
+    """Status mark: label in ink, hue in the glyph + tint; crit is a solid block with white text."""
     if not status:
         status = {"text": "NA", "cls": "na"}
-    fg_key, bg_key = STATUS_COLOR.get(status.get("cls", "na"), STATUS_COLOR["na"])
-    return (f'<span class="pill" style="color:{COLORS[fg_key]};background:{COLORS[bg_key]};'
-            f'border-color:{COLORS[fg_key]}33">{esc(status.get("text", "NA"))}</span>')
+    cls = status.get("cls", "na")
+    if cls not in _STATUS_GLYPH:
+        cls = "na"
+    fg_key, bg_key = STATUS_COLOR.get(cls, STATUS_COLOR["na"])
+    text_color, glyph_color, bg = COLORS["ink"], COLORS[fg_key], COLORS[bg_key]
+    extra = ""
+    if cls == "crit":
+        text_color = glyph_color = "#FFFFFF"
+        bg = COLORS["crit_solid"]
+    elif cls == "ok":
+        bg = "#FFFFFF"
+        extra = f"border-color:{COLORS['border']};"
+    elif cls == "warn":
+        glyph_color = COLORS["ink"]
+    elif cls == "bad":
+        extra = f"border-left:2px solid {COLORS['bad']};"
+    glyph = (f'<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="{glyph_color}" stroke-width="2.6" '
+             f'stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px">'
+             f'{_STATUS_GLYPH[cls]}</svg>')
+    return (f'<span class="pill" style="color:{text_color};background:{bg};border-color:{bg};{extra}">'
+            f'{glyph}{esc(status.get("text", "NA"))}</span>')
 
 
 def bar_cell(pct: Optional[float], cls: str = "ok", width_px: int = 108, height_px: int = 15, max_scale: float = 100.0) -> str:
@@ -146,11 +182,11 @@ def bar_cell(pct: Optional[float], cls: str = "ok", width_px: int = 108, height_
     ]
     if fill_w_draw >= label_w_est:
         cx = fill_w_draw / 2.0
-        parts.append(f'<text x="{cx:.1f}" y="{text_y}" text-anchor="middle" font-family="Roboto, Noto Sans, sans-serif" '
+        parts.append(f'<text x="{cx:.1f}" y="{text_y}" text-anchor="middle" font-family="Inter, Noto Sans, sans-serif" '
                      f'font-size="{font_size}" font-weight="700" fill="#ffffff">{esc(label)}</text>')
     else:
         lx = min(width_px - 2, fill_w_draw + 4)
-        parts.append(f'<text x="{lx:.1f}" y="{text_y}" text-anchor="start" font-family="Roboto, Noto Sans, sans-serif" '
+        parts.append(f'<text x="{lx:.1f}" y="{text_y}" text-anchor="start" font-family="Inter, Noto Sans, sans-serif" '
                      f'font-size="{font_size}" font-weight="700" fill="{COLORS["muted"]}">{esc(label)}</text>')
     if _finite(pct) and pct > max_scale:
         # Fill is clamped to the cell's full width above -- mark genuine
@@ -195,12 +231,12 @@ def svg_donut(segments: List[Dict[str, Any]], size: int = 120, hole: float = 0.6
     center = ""
     if center_label is not None:
         label_y = cy + (2 if not center_sub else -2)
-        center += (f'<text x="{cx}" y="{label_y:.1f}" text-anchor="middle" font-family="Roboto, Noto Sans, sans-serif" '
+        center += (f'<text x="{cx}" y="{label_y:.1f}" text-anchor="middle" font-family="Inter, Noto Sans, sans-serif" '
                    f'font-size="{size*0.16:.1f}" font-weight="800" fill="{COLORS["ink"]}">{esc(center_label)}</text>')
         if center_sub:
-            center += (f'<text x="{cx}" y="{cy+size*0.14:.1f}" text-anchor="middle" font-family="Roboto, Noto Sans, sans-serif" '
+            center += (f'<text x="{cx}" y="{cy+size*0.14:.1f}" text-anchor="middle" font-family="Inter, Noto Sans, sans-serif" '
                        f'font-size="{size*0.075:.1f}" fill="{COLORS["muted"]}">{esc(center_sub)}</text>')
-    return f'<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" font-family="Roboto, Noto Sans, sans-serif">{"".join(arcs)}{center}</svg>'
+    return f'<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" font-family="Inter, Noto Sans, sans-serif">{"".join(arcs)}{center}</svg>'
 
 
 GAUGE_ZONES_CPU_RAM = ((0.0, 80.0, "ok"), (80.0, 100.0, "warn"))
@@ -238,7 +274,7 @@ def svg_gauge(pct: Optional[float], color: str, size: int = 132, max_scale: floa
         return (f'<path d="M {xa:.1f} {ya:.1f} A {r:.1f} {r:.1f} 0 0 1 {xb:.1f} {yb:.1f}" fill="none" stroke="{stroke}" '
                 f'stroke-width="{width:.1f}" stroke-opacity="{opacity}" stroke-linecap="{cap}"/>')
 
-    parts = [f'<svg width="{w:.0f}" height="{h:.0f}" viewBox="0 0 {w:.0f} {h:.0f}" font-family="Roboto, Noto Sans, sans-serif">']
+    parts = [f'<svg width="{w:.0f}" height="{h:.0f}" viewBox="0 0 {w:.0f} {h:.0f}" font-family="Inter, Noto Sans, sans-serif">']
     # Zone bands (light tints) underneath, so they read as "background".
     for lo, hi, cls in zones:
         fg_key, _ = STATUS_COLOR.get(cls, STATUS_COLOR["na"])
@@ -315,7 +351,7 @@ def svg_bar_chart(labels: List[str], series: List[Dict[str, Any]], width: int = 
     line (e.g. 100% of the overcommit policy) gives the bars a reference,
     and each bar carries its own value label so no legend lookup is needed."""
     if not labels:
-        return '<div style="color:#98a2b3;font-size:11px;padding:8px 0;">Không có dữ liệu.</div>'
+        return '<div style="color:#597090;font-size:11px;padding:8px 0;">Không có dữ liệu.</div>'
     n_groups = len(labels)
     label_chars = max(6, int((width - 60) / n_groups / 5.2))
     wrapped = [_wrap_label(lb, label_chars) for lb in labels]
@@ -342,7 +378,7 @@ def svg_bar_chart(labels: List[str], series: List[Dict[str, Any]], width: int = 
     def y_of(v: float) -> float:
         return pad_t + plot_h * (1 - max(0.0, min(1.0, v / mx)))
 
-    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Roboto, Noto Sans, sans-serif">']
+    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Inter, Noto Sans, sans-serif">']
     # Soft plot background so the chart reads as one visual block.
     parts.append(f'<rect x="{pad_l}" y="{pad_t}" width="{plot_w:.1f}" height="{plot_h:.1f}" rx="4" fill="{COLORS["surface2"]}"/>')
     steps = 4
@@ -393,7 +429,7 @@ def svg_ranked_bar_chart(rows: List[Dict[str, Any]], width: int = 330, height: O
     """
     rows = [r for r in rows if _finite(r.get("pct"))]
     if not rows:
-        return '<div style="color:#98a2b3;font-size:11px;padding:8px 0;">Không có dữ liệu.</div>'
+        return '<div style="color:#597090;font-size:11px;padding:8px 0;">Không có dữ liệu.</div>'
     rows = sorted(rows, key=lambda r: r["pct"], reverse=True)[:top_n]
 
     row_h = 20
@@ -409,7 +445,7 @@ def svg_ranked_bar_chart(rows: List[Dict[str, Any]], width: int = 330, height: O
     height = height if height is not None else pad_t + len(rows) * row_h + 6
     plot_w = width - pad_l - pad_r
 
-    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Roboto, Noto Sans, sans-serif">']
+    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Inter, Noto Sans, sans-serif">']
     for i, r in enumerate(rows):
         pct = r["pct"]
         cls = r.get("cls", "na")
@@ -464,7 +500,8 @@ def svg_ranked_bar_chart(rows: List[Dict[str, Any]], width: int = 330, height: O
 # the VM added/removed appendix. Both consume the dicts produced by
 # app.history so the PDF always agrees with the web panel.
 # ---------------------------------------------------------------------------
-HISTORY_SERIES_COLORS = ["#2563eb", "#0891b2", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#ca8a04", "#64748b"]
+# HSC series validated for white paper (dataviz validator): 3 hues, then neutral; never status colors.
+HISTORY_SERIES_COLORS = ["#165AB8", "#23A4B8", "#B729FE", "#898C8F", "#074B9B", "#147E8F", "#7BA5E0", "#A38613"]
 
 
 def _fmt_short_date(iso: Optional[str]) -> str:
@@ -498,7 +535,7 @@ def svg_line_chart(dates: List[str], series: List[Dict[str, Any]], width: int = 
     threshold line, sparse dd/mm date labels and a value tag on the latest
     point of every solid line so the reader sees "now" without a legend."""
     if not dates or len(dates) < 2:
-        return '<div style="color:#98a2b3;font-size:9px;padding:8px 0;">Chưa đủ dữ liệu lịch sử.</div>'
+        return '<div style="color:#597090;font-size:9px;padding:8px 0;">Chưa đủ dữ liệu lịch sử.</div>'
     pad_l, pad_r, pad_t, pad_b = 32, 8, 14, 20
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b
@@ -514,7 +551,7 @@ def svg_line_chart(dates: List[str], series: List[Dict[str, Any]], width: int = 
     def y_of(v: float) -> float:
         return pad_t + plot_h * (1 - max(0.0, min(1.0, v / mx)))
 
-    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Roboto, Noto Sans, sans-serif">']
+    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Inter, Noto Sans, sans-serif">']
     parts.append(f'<rect x="{pad_l}" y="{pad_t}" width="{plot_w:.1f}" height="{plot_h:.1f}" rx="4" fill="{COLORS["surface2"]}"/>')
     steps = 4
     for i in range(steps + 1):
@@ -693,7 +730,7 @@ def _history_section_html(history: Optional[Dict[str, Any]], vm_changes: Optiona
         '</div>')
 
 
-EMPTY_CLUSTER_ROW = '<tr><td colspan="12" style="color:#98a2b3;">Không có cluster nào trong phạm vi.</td></tr>'
+EMPTY_CLUSTER_ROW = '<tr><td colspan="12" style="color:#597090;">Không có cluster nào trong phạm vi.</td></tr>'
 
 
 def _vm_changes_excluded_note(vm_changes: Dict[str, Any], compact: bool = False) -> str:
@@ -753,7 +790,7 @@ def _vm_changes_appendix_html(vm_changes: Optional[Dict[str, Any]]) -> str:
 
     def _grouped(items: List[Dict[str, Any]], cols: int, render_row) -> str:
         if not items:
-            return f'<tr><td colspan="{cols}" style="color:#98a2b3;">Không có VM nào.</td></tr>'
+            return f'<tr><td colspan="{cols}" style="color:#597090;">Không có VM nào.</td></tr>'
         out = []
         current_cluster = object()
         for r in items:
@@ -916,14 +953,14 @@ def _base_css(report_title: str, generated_at: str) -> str:
 @page {{
   size: A4;
   margin: 16mm 14mm 18mm 14mm;
-  @top-left {{ content: "Infra Capacity Ops Management"; font-family:'Roboto','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']}; letter-spacing:.04em; text-transform:uppercase; }}
-  @top-right {{ content: "{report_title}"; font-family:'Roboto','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']}; letter-spacing:.04em; text-transform:uppercase; }}
-  @bottom-left {{ content: "Tạo lúc {generated_at}"; font-family:'Roboto','Noto Sans',sans-serif; font-size:8px; color:{COLORS['faint']}; }}
-  @bottom-right {{ content: "Trang " counter(page) " / " counter(pages); font-family:'Roboto','Noto Sans',sans-serif; font-size:8px; color:{COLORS['faint']}; }}
+  @top-left {{ content: "Infra Capacity Ops Management"; font-family:'Inter','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']}; letter-spacing:.04em; text-transform:uppercase; }}
+  @top-right {{ content: "{report_title}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']}; letter-spacing:.04em; text-transform:uppercase; }}
+  @bottom-left {{ content: "Tạo lúc {generated_at}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{COLORS['faint']}; }}
+  @bottom-right {{ content: "Trang " counter(page) " / " counter(pages); font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{COLORS['faint']}; }}
 }}
 * {{ box-sizing:border-box; }}
-body {{ font-family:'Roboto','Noto Sans',sans-serif; color:{COLORS['ink']}; font-size:10.3px; line-height:1.5; }}
-h1,h2,h3,h4 {{ font-family:'Roboto','Noto Sans',sans-serif; font-weight:700; color:{COLORS['ink']}; margin:0; }}
+body {{ font-family:'Inter','Noto Sans',sans-serif; color:{COLORS['ink']}; font-size:10.3px; line-height:1.5; }}
+h1,h2,h3,h4 {{ font-family:'Inter','Noto Sans',sans-serif; font-weight:700; color:{COLORS['ink']}; margin:0; }}
 .cover-title {{ font-size:22px; font-weight:800; color:{COLORS['primary_dark']}; margin-bottom:2px; }}
 .cover-sub {{ font-size:12px; color:{COLORS['muted']}; margin-bottom:14px; }}
 .eyebrow {{ font-size:8.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:{COLORS['accent']}; margin-bottom:4px; }}
@@ -942,7 +979,7 @@ thead {{ display:table-header-group; }}
 tr {{ break-inside:avoid; }}
 th {{ text-align:left; background:{COLORS['surface2']}; color:{COLORS['muted']}; font-size:7.8px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; padding:5px 6px; border-bottom:1px solid {COLORS['border']}; }}
 td {{ padding:4.5px 6px; border-bottom:1px solid {COLORS['divider']}; vertical-align:middle; }}
-tbody tr:nth-child(even) {{ background:#fbfcfe; }}
+tbody tr:nth-child(even) {{ background:#F7F8FA; }}
 .pill {{ display:inline-block; padding:1.5px 7px; border-radius:3px; font-size:8px; font-weight:700; border:1px solid; white-space:nowrap; }}
 .insight-box {{ background:{COLORS['surface']}; border:1px solid {COLORS['border']}; border-left:3px solid {COLORS['accent']}; border-radius:0 6px 6px 0; padding:9px 12px; margin-bottom:8px; font-size:9.5px; }}
 .insight-box b {{ color:{COLORS['primary_dark']}; }}
@@ -975,10 +1012,10 @@ tbody tr:nth-child(even) {{ background:#fbfcfe; }}
 .radar-legend-item {{ display:flex; align-items:center; gap:5px; font-size:8.3px; color:{COLORS['ink']}; margin-bottom:3px; }}
 .radar-swatch {{ width:9px; height:9px; border-radius:2px; display:inline-block; flex:none; }}
 .exec-brief {{ border:1px solid {COLORS['border']}; border-radius:8px; padding:11px 14px 10px; margin:2px 0 4px; background:{COLORS['surface']}; border-left:5px solid {COLORS['primary']}; }}
-.exec-brief.ok {{ background:#f2faf5; border-left-color:{COLORS['ok']}; }}
-.exec-brief.warn {{ background:#fff8ec; border-left-color:{COLORS['warn']}; }}
-.exec-brief.bad {{ background:#fff3ea; border-left-color:{COLORS['bad']}; }}
-.exec-brief.crit {{ background:#fdf0ef; border-left-color:{COLORS['crit']}; }}
+.exec-brief.ok {{ background:#E4F4E7; border-left-color:{COLORS['ok']}; }}
+.exec-brief.warn {{ background:#FFF3B8; border-left-color:{COLORS['warn']}; }}
+.exec-brief.bad {{ background:#F6E6E7; border-left-color:{COLORS['bad']}; }}
+.exec-brief.crit {{ background:#F2E5E6; border-left-color:{COLORS['crit']}; }}
 .exec-brief-head {{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }}
 .exec-brief-title {{ font-size:8.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:{COLORS['muted']}; }}
 .exec-brief-headline {{ font-size:12.5px; font-weight:700; color:{COLORS['ink']}; line-height:1.4; margin-bottom:6px; }}
@@ -987,10 +1024,10 @@ tbody tr:nth-child(even) {{ background:#fbfcfe; }}
 .exec-brief-decision {{ font-size:9.6px; padding-top:6px; border-top:1px dashed {COLORS['border']}; color:{COLORS['ink']}; }}
 .exec-brief-decision b {{ color:{COLORS['primary_dark']}; }}
 .rec-card {{ border:1px solid {COLORS['border']}; border-left:4px solid {COLORS['primary']}; border-radius:0 7px 7px 0; padding:8px 11px 7px; margin-bottom:7px; background:{COLORS['surface']}; break-inside:avoid; }}
-.rec-card.prio-cao {{ border-left-color:{COLORS['crit']}; background:#fdf5f4; }}
-.rec-card.prio-tb {{ border-left-color:{COLORS['warn']}; background:#fffaf1; }}
-.rec-card.tone-opportunity {{ border-left-color:{COLORS['accent']}; background:#f0f9fb; }}
-.rec-card.tone-ok {{ border-left-color:{COLORS['ok']}; background:#f2faf5; }}
+.rec-card.prio-cao {{ border-left-color:{COLORS['crit']}; background:#F6E6E7; }}
+.rec-card.prio-tb {{ border-left-color:{COLORS['warn']}; background:#FFF3B8; }}
+.rec-card.tone-opportunity {{ border-left-color:{COLORS['accent']}; background:#E2F1F4; }}
+.rec-card.tone-ok {{ border-left-color:{COLORS['ok']}; background:#E4F4E7; }}
 .rec-head {{ display:flex; align-items:center; gap:7px; margin-bottom:5px; }}
 .rec-num {{ flex:none; width:16px; height:16px; border-radius:50%; background:{COLORS['ink']}; color:#fff; font-size:8.5px; font-weight:800; text-align:center; line-height:16px; }}
 .rec-title {{ flex:1; font-size:10.6px; font-weight:700; color:{COLORS['ink']}; }}
@@ -1008,10 +1045,10 @@ tbody tr:nth-child(even) {{ background:#fbfcfe; }}
 .ref-codes-inline {{ margin-top:2px; font-size:7.5px; color:{COLORS['muted']}; font-family:'DejaVu Sans Mono', monospace; }}
 td.code-cell {{ font-family:'DejaVu Sans Mono', monospace; font-size:7.5px; font-weight:700; color:{COLORS['primary_dark']}; white-space:nowrap; }}
 .sign-box {{ display:inline-block; width:64px; height:16px; border:1px dashed {COLORS['border']}; border-radius:3px; }}
-.gauge-card.ok {{ background:#f2faf5; }}
-.gauge-card.warn {{ background:#fff8ec; }}
-.gauge-card.bad {{ background:#fff3ea; }}
-.gauge-card.crit {{ background:#fdf0ef; }}
+.gauge-card.ok {{ background:#E4F4E7; }}
+.gauge-card.warn {{ background:#FFF3B8; }}
+.gauge-card.bad {{ background:#F6E6E7; }}
+.gauge-card.crit {{ background:#F2E5E6; }}
 .gauge-card.na {{ background:{COLORS['surface2']}; }}
 .gauge-caption {{ font-size:8.3px; color:{COLORS['muted']}; margin-top:1px; }}
 .chart-card.soft {{ background:{COLORS['surface']}; }}
@@ -1597,7 +1634,7 @@ def svg_runway_chart(growth: Dict[str, Any], model: Dict[str, Any], include_stor
     height = pad_t + len(resources) * group_h
     plot_w = width - pad_l - pad_r
     x_of = lambda m: pad_l + min(max(m, 0.0), max_months) / max_months * plot_w
-    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Roboto, Noto Sans, sans-serif">']
+    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Inter, Noto Sans, sans-serif">']
     parts.append(f'<rect x="{pad_l}" y="{pad_t-4}" width="{plot_w}" height="{height-pad_t+2}" fill="{COLORS["surface2"]}" rx="3"/>')
     for m, lb in ((6, "6 th"), (12, "1 năm"), (18, "18 th"), (24, "2 năm"), (30, "30 th"), (36, "3 năm")):
         x = x_of(m)
@@ -1639,7 +1676,7 @@ def svg_count_bars(rows: List[Dict[str, Any]], width: int = 200, color: Optional
     height = pad_t + len(rows) * row_h + 2
     plot_w = width - pad_l - pad_r
     mx = max(r["count"] for r in rows) or 1
-    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Roboto, Noto Sans, sans-serif">']
+    parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" font-family="Inter, Noto Sans, sans-serif">']
     for i, r in enumerate(rows):
         y = pad_t + i * row_h
         name = str(r.get("name", ""))

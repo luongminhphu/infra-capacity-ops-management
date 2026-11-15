@@ -262,7 +262,9 @@ function chartPalette() {
   return { text:g('--text'), muted:g('--muted'), divider:g('--divider'), primary:g('--primary'), accent:g('--accent'), ok:g('--ok'), warn:g('--warn'), bad:g('--bad'), crit:g('--crit'), faint:g('--faint'),
     // Series / sequential colours for multi-line or stacked charts.
     series: [1, 2, 3, 4, 5, 6, 7, 8].map(i => g(`--chart-s${i}`)), deep: g('--chart-deep'), amber: g('--chart-index'),
-    seq: [1, 2, 3, 4, 5].map(i => g(`--chart-seq-${i}`)) };
+    seq: [1, 2, 3, 4, 5].map(i => g(`--chart-seq-${i}`)),
+    // MASTER.md §Biểu đồ: grid / axis ink and threshold bands (80–100 % THEO DÕI, > 100 % VƯỢT NGƯỠNG).
+    grid: g('--chart-grid'), axis: g('--chart-axis'), bandWarn: g('--chart-band-warn'), bandBad: g('--chart-band-bad') };
 }
 
 function destroyChart(key) {
@@ -301,4 +303,9 @@ function highlightSortHeaders(tableId, tableKey) {
     th.classList.remove('sorted', 'sorted-asc');
     if (s && th.dataset.key === s.key) th.classList.add(s.dir === 'desc' ? 'sorted' : 'sorted-asc');
   });
+}
+
+/* Charts use the product font (self-hosted Inter) instead of Chart.js' Helvetica default. */
+if (window.Chart) {
+  Chart.defaults.font.family = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
 }

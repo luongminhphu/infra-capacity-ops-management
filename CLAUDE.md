@@ -72,9 +72,11 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 5. **Giao diện và báo cáo viết tiếng Việt**, có dấu đầy đủ, văn phong ngắn, nêu thẳng vấn đề →
    quyết định. Code, tên biến, comment code viết tiếng Anh. Field dữ liệu dùng camelCase giống
    frontend (`ramGB`, `isPoweredOn`, `vcpu`...).
-6. **Design**: dùng token trong `frontend/css/styles.css` và `COLORS` trong `report_pdf.py`,
-   không hard-code màu mới. Trạng thái luôn là 4 mức AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG.
-   Xem skill `hsc-design-system` và `pdf-report`.
+6. **Design**: nguồn sự thật là `design-system/ico/MASTER.md` (+ `pages/*.md` ghi đè theo trang). Màu và font là
+   HSC (Inter tự host ở `frontend/vendor/`, PDF dùng `fonts-inter`); dùng token trong `frontend/css/styles.css`,
+   `COLORS` trong `report_pdf.py`, palette trong `excel_style.py` — không hard-code màu mới, chữ phải đạt WCAG AA.
+   Trạng thái luôn là 4 mức AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG, hiển thị bằng glyph + nhãn (`uiPill`,
+   `status_pill`). Xem skill `hsc-design-system` và `pdf-report`.
 7. **Bảo mật**:
    - Endpoint mới phải chọn rõ `Depends(get_current_user)` hay `Depends(require_admin)`;
      thao tác thay đổi cấu hình hệ thống, user, tính năng nên dùng `require_admin`.
@@ -97,8 +99,12 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 - `vmware-collector` — đọc vCenter bằng pyVmomi, demo generator, scheduler.
 - `netbackup-api` — NetBackup REST chỉ đọc, parser, mã lỗi, RPO.
 - `capacity-math` — công thức overcommit, HT, ngưỡng, N+1, dự phóng, mã đối soát.
-- `hsc-design-system` — token màu / chữ / khoảng cách, light/dark, trạng thái.
+- `hsc-design-system` — design system ICO trên nền HSC (trỏ về `design-system/ico/MASTER.md`).
 - `pdf-report` — quy ước báo cáo PDF A4 bằng WeasyPrint.
+- `ui-ux-pro-max` — tra cứu style / bảng màu / font / UX guideline (bên thứ ba, `nextlevelbuilder/ui-ux-pro-max-skill`,
+  cài bằng `npx skills add`; mã nằm ở `.agents/skills/`, `.claude/skills/ui-ux-pro-max` là symlink, phiên bản ghim trong
+  `skills-lock.json`). Chạy `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<từ khoá>" --design-system`.
+  Gợi ý của skill chỉ là tham khảo: quy tắc của `design-system/ico/MASTER.md` luôn được ưu tiên.
 
 Quét bảo mật: chạy `/security-review` (thay đổi đang chờ) hoặc `/claude-security`
 (quét sâu cả repo) trong Claude Code trước khi tạo PR.

@@ -23,7 +23,7 @@ THIN = Side(style="thin", color=FAINT)
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 SCORE = "0.00"
 QTY = "#,##0.###"
-HEAD_FILL = "DCE7F7"
+HEAD_FILL = "DFE9F6"
 
 
 def _txt(ws, row: int, col: int, value: Any, **style):
@@ -123,7 +123,7 @@ def build_comparison_xlsx(d: Dict[str, Any], comp: Dict[str, Any], lines: Dict[i
                 ws.cell(row=r, column=c0 + 1, value=cell.get("unitPriceVnd")).number_format = MONEY
                 ws.cell(row=r, column=c0 + 2, value=cell.get("amountVnd")).number_format = MONEY
                 if str(c["quotationId"]) == row.get("minQuotation") and n > 1 and row.get("spreadPct"):
-                    ws.cell(row=r, column=c0 + 2).fill = _fill("DCFCE7")
+                    ws.cell(row=r, column=c0 + 2).fill = _fill("E4F4E7")
             amount_refs.append(f"{get_column_letter(c0 + 2)}{r}")
         if amount_refs:
             _formula(ws, r, ncols, f"=IF(COUNT({','.join(amount_refs)})=0,\"\",MIN({','.join(amount_refs)}))", MONEY)
@@ -259,13 +259,13 @@ def build_evaluation_xlsx(d: Dict[str, Any]) -> bytes:
     _txt(ws, 1, 1, "PHIẾU ĐÁNH GIÁ NHÀ CUNG CẤP", font=Font(name="Calibri", size=16, bold=True, color=NAVY),
          alignment=Alignment(horizontal="center", vertical="center"))
     ws.merge_cells(f"A3:{L}3")
-    _txt(ws, 3, 1, f"(EVALUATION FORM) · {d['code']}", font=_font(10, False, "475467"), alignment=Alignment(horizontal="center"))
+    _txt(ws, 3, 1, f"(EVALUATION FORM) · {d['code']}", font=_font(10, False, "465F83"), alignment=Alignment(horizontal="center"))
 
     def field(row: int, col: int, label: str, value: Any, span_to: int) -> None:
         _txt(ws, row, col, label, font=_font(10, True))
         ws.merge_cells(start_row=row, start_column=col + 2, end_row=row, end_column=span_to)
         _txt(ws, row, col + 2, value if value not in (None, "") else "", font=_font(10),
-             border=Border(bottom=Side(style="dotted", color="98A2B3")))
+             border=Border(bottom=Side(style="dotted", color="597090")))
 
     date = ev.get("date")
     field(6, 1, "Bộ phận đánh giá:", ev.get("department"), 6)
@@ -337,7 +337,7 @@ def build_evaluation_xlsx(d: Dict[str, Any]) -> bytes:
         ws.cell(row=r, column=col).border = BOX
         ws.cell(row=r, column=col).fill = _fill(HEAD_FILL)
     r += 2
-    _txt(ws, r, 1, "Thang điểm 1–10. Xếp loại: ≥ 8 A · ≥ 7 B · ≥ 6 C · dưới 6 Không đạt.", font=_font(9, False, "475467", True))
+    _txt(ws, r, 1, "Thang điểm 1–10. Xếp loại: ≥ 8 A · ≥ 7 B · ≥ 6 C · dưới 6 Không đạt.", font=_font(9, False, "465F83", True))
     r += 2
     mid = max(8, last_col - 2)
     _txt(ws, r, 2, "Người thực hiện đánh giá", font=_font(10, True), alignment=Alignment(horizontal="center"))

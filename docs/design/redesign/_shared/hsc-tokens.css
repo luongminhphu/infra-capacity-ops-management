@@ -1,0 +1,112 @@
+/* =====================================================================
+   ICO redesign — shared HSC foundation for all three directions.
+   Colors and font are HSC Design System (unchanged primitives, Inter).
+   What changes vs. frontend/css/styles.css: which HSC step each semantic
+   role points to, so every text/status pairing passes WCAG 2.2 AA
+   (ratios measured, see docs/design/redesign/README.md §3).
+   ===================================================================== */
+
+:root {
+  /* HSC primitives (subset used by the mockups, values verbatim) */
+  --sg30:#187A2C; --sg40:#21A33B; --sg60:#34CB52;
+  --sy10:#8F7611; --sy20:#A38613; --sy30:#B89717; --sy50:#FFD400;
+  --sr30:#8F282D; --sr40:#B82E37; --sr50:#FF0011; --sr70:#FF525A; --sr80:#FF7077;
+  --sb10:#0B2D5C; --sb40:#165AB8; --sb50:#2681FF; --sb60:#588EDA; --sb90:#C7D8F0; --sb100:#DFE9F6;
+  --sc40:#23A4B8; --sm50:#B729FE; --chart-portfolio:#C552FF;
+  --n10:#000000; --n20:#14171A; --n30:#222629; --n40:#272C33; --n50:#2F353D; --n60:#33383D; --n70:#454B52; --n80:#4D545C; --n100:#898C8F;
+  --cm10:#FFFFFF;
+
+  /* Type: Inter (HSC). Self-hosted in frontend/vendor/ in phase 2 — no CDN. */
+  --font: "Inter", "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: "Inter Display", var(--font);
+  --num: tabular-nums lining-nums;
+  --fs-12:12px; --fs-13:13px; --fs-14:14px; --fs-16:16px; --fs-18:18px; --fs-20:20px; --fs-24:24px; --fs-28:28px; --fs-36:36px; --fs-48:48px;
+  --fw-r:400; --fw-m:500; --fw-sb:600; --fw-b:700;
+
+  /* Spacing (HSC 4-pt) + radii (HSC) */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:64px;
+  --r-xs:2px; --r-sm:4px; --r-md:8px; --r-lg:12px; --r-xl:20px; --r-pill:100px;
+
+  /* Motion (HSC durations, one easing for enter, faster exit) */
+  --t-fast:120ms; --t-base:160ms; --t-slow:200ms; --ease:cubic-bezier(.2,0,0,1); --ease-exit:cubic-bezier(.4,0,1,1);
+
+  /* ── Semantic: dark (product default) ───────────────────────────── */
+  color-scheme: dark;
+  --bg:#000000; --surface:var(--n20); --surface-2:var(--n30); --raised:var(--n40);
+  --line:var(--n50); --line-strong:var(--n80); --line-soft:rgba(214,231,255,.10);
+  --ink:#FFFFFF;
+  --ink-2:rgba(214,231,255,.64);   /* 6.46:1 on n20 (was .52 = 4.68) */
+  --ink-3:rgba(214,231,255,.56);   /* ≥ 4.62:1 on every dark surface incl. raised n40 (was .32 = 2.57) */
+  --brand:var(--sb50); --link:var(--sb60);
+  --primary-bg:#1F5FD6; --primary-bg-hover:#3377FF; --primary-ink:#FFFFFF; /* 5.73:1 (old #3377FF = 4.02) */
+  --hover:rgba(51,119,255,.12); --selected:rgba(51,119,255,.20); --focus:#588EDA;
+
+  /* Status — text always in ink; hue lives in glyph + tint + fill weight.
+     ok: outline glyph · warn: tint · bad: stronger tint + bar · crit: solid fill */
+  --ok:var(--sg60);   --ok-tint:rgba(52,203,82,.14);
+  --warn:var(--sy50); --warn-tint:rgba(255,212,0,.16);
+  --bad:var(--sr70);  --bad-tint:rgba(255,82,90,.18);
+  --crit:var(--sr40); --crit-ink:#FFFFFF;           /* white on #B82E37 = 6.03:1 */
+  --na:var(--n100);   --na-tint:rgba(214,231,255,.08);
+
+  /* Charts — categorical slots validated (dataviz validator, all 6 checks pass) */
+  --c1:var(--sb50); --c2:var(--sc40); --c3:var(--chart-portfolio); --c-other:var(--n100);
+  --c-grid:rgba(214,231,255,.10); --c-axis:rgba(214,231,255,.52);
+  --c-band-warn:rgba(255,212,0,.10); --c-band-bad:rgba(255,82,90,.12);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg:#FFFFFF; --surface:#F4F6F8; --surface-2:#FFFFFF; --raised:#E5EBF2;
+  --line:rgba(11,45,92,.12); --line-strong:rgba(11,45,92,.32); --line-soft:rgba(11,45,92,.08);
+  --ink:var(--sb10);
+  --ink-2:rgba(11,45,92,.76);      /* 6.21:1 on #F4F6F8 */
+  --ink-3:rgba(11,45,92,.68);      /* ≥ 4.62:1 on every light surface incl. raised (was .40 = 2.29) */
+  --brand:var(--sb40); --link:var(--sb40);           /* #165AB8 on white 6.59:1 (sb50 = 3.71) */
+  --primary-bg:var(--sb40); --primary-bg-hover:#1F5FD6; --primary-ink:#FFFFFF;
+  --hover:rgba(11,45,92,.06); --selected:rgba(22,90,184,.12); --focus:var(--sb40);
+
+  --ok:var(--sg40);   --ok-tint:rgba(33,163,59,.12);  /* glyph 3.30:1 ≥ 3:1 non-text */
+  --warn:var(--sy10); --warn-tint:rgba(255,212,0,.28);
+  --bad:var(--sr40);  --bad-tint:rgba(184,46,55,.12);
+  --crit:var(--sr40); --crit-ink:#FFFFFF;
+  --na:rgba(11,45,92,.52); --na-tint:rgba(11,45,92,.06);
+
+  --c1:var(--sb40); --c2:var(--sc40); --c3:var(--sm50); --c-other:#898C8F;
+  --c-grid:rgba(11,45,92,.10); --c-axis:rgba(11,45,92,.66);
+  --c-band-warn:rgba(255,212,0,.18); --c-band-bad:rgba(184,46,55,.08);
+}
+
+/* ── Base ───────────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-font-smoothing:antialiased; text-size-adjust:100%; }
+body { background:var(--bg); color:var(--ink); font:var(--fw-r) var(--fs-14)/1.5 var(--font); font-size-adjust:from-font; min-height:100dvh; }
+button,input,select,textarea { font:inherit; color:inherit; }
+button { cursor:pointer; background:none; border:0; }
+a { color:var(--link); text-underline-offset:2px; }
+:focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:var(--r-sm); }
+.num, td.n, .kpi b { font-variant-numeric:var(--num); }
+svg.lucide { width:1em; height:1em; stroke-width:1.75; flex:none; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.skip { position:absolute; left:-999px; top:8px; z-index:99; background:var(--surface); padding:var(--s2) var(--s4); border-radius:var(--r-sm); }
+.skip:focus { left:8px; }
+.mock-note { font-size:var(--fs-12); color:var(--ink-3); }
+
+/* ── Status mark (shared by all directions; text never colored) ─────── */
+.st { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 8px 0 6px; border-radius:var(--r-sm);
+      font-size:var(--fs-12); font-weight:var(--fw-sb); letter-spacing:.01em; white-space:nowrap; color:var(--ink); }
+.st svg { width:14px; height:14px; stroke-width:2.25; }
+.st.ok   { background:transparent; box-shadow:inset 0 0 0 1px var(--line); } .st.ok svg { color:var(--ok); }
+.st.warn { background:var(--warn-tint); } .st.warn svg { color:var(--warn); }
+[data-theme="light"] .st.warn svg { color:var(--sb10); }
+.st.bad  { background:var(--bad-tint); box-shadow:inset 3px 0 0 var(--bad); } .st.bad svg { color:var(--bad); }
+.st.crit { background:var(--crit); color:var(--crit-ink); } .st.crit svg { color:var(--crit-ink); }
+.st.na   { background:var(--na-tint); color:var(--ink-2); }
+
+/* ── Logo slot: company logo keeps its own aspect ratio ─────────────── */
+.logo { display:block; height:28px; width:auto; max-width:140px; object-fit:contain; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:1ms !important; animation-iteration-count:1 !important; transition-duration:1ms !important; scroll-behavior:auto !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation:none !important; }
+}

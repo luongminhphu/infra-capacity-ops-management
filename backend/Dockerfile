@@ -8,9 +8,9 @@ WORKDIR /app
 # WeasyPrint (PDF report export) needs Pango/Cairo/GDK-Pixbuf for text shaping
 # and rendering, plus shared-mime-info for MIME detection. fonts-dejavu-core
 # and fonts-noto-core supply glyph coverage for Vietnamese diacritics in PDFs.
-# fonts-roboto provides the Roboto typeface used as the project-wide font,
-# matching the web dashboard (loaded from Google Fonts, see frontend/index.html)
-# so PDF reports render with the same typeface as the live UI.
+# fonts-inter provides Inter (HSC Design System typeface, incl. Inter Display) so PDF
+# reports render with the same font as the web UI, which self-hosts Inter in
+# frontend/vendor/inter-5.2.5 (no CDN). Noto / DejaVu remain as glyph fallbacks.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     fonts-dejavu-core \
     fonts-noto-core \
-    fonts-roboto \
+    fonts-inter \
     && rm -rf /var/lib/apt/lists/*
 
 # Commit the image was built from — shown by the MCP tools next to errors and timings,
