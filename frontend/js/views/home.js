@@ -151,7 +151,7 @@ function homeRenderDetail() {
   const i = homeState.data.items.find(x => x.key === homeState.selected);
   if (!i) { box.innerHTML = uiEmpty('Chọn một việc ở danh sách bên trái.'); return; }
   const sd = homeSplitDetail(i.detail);
-  const people = homeState.assignees;
+  const people = homeState.assignees && homeState.assignees.key === i.key ? homeState.assignees.list : null;
   const assignSel = people ? `<label class="field hm-assign"><span>Ai xử lý</span><select data-home-assign>
       <option value="">— Chưa giao —</option>${people.map(p => `<option value="${esc(p.username)}"${i.assignee && i.assignee.username === p.username ? ' selected' : ''}>${esc(p.displayName)}</option>`).join('')}</select></label>`
     : `<button class="btn btn-secondary btn-sm" type="button" data-home-load-people><i data-lucide="user-plus"></i>${i.assignee ? 'Đổi người xử lý' : 'Giao việc'}</button>`;
@@ -248,7 +248,7 @@ function homeBind() {
     }
     if ((b = t('.hm-row'))) return homeSelect(b.dataset.key);
     if (t('[data-home-load-people]')) {
-      try { homeState.assignees = await apiRequest('/inbox/assignees'); homeRenderDetail(); const s = $('[data-home-assign]'); if (s) s.focus(); }
+      try { homeState.assignees = { key: homeState.selected, list: await apiRequest(`/inbox/assignees?key=${encodeURIComponent(homeState.selected)}`) }; homeRenderDetail(); const s = $('[data-home-assign]'); if (s) s.focus(); }
       catch (err) { uiAlert(err.message); }
       return;
     }

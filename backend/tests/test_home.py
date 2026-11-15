@@ -207,8 +207,11 @@ def test_inbox_assignee_set_shown_cleared_and_permission_checked(app_, admin, ed
     items = admin.get("/api/inbox").json()["items"]
     cap = next(i for i in items if i["source"] == "capacity")
     assert cap["assignee"] is None
-    names = {u["username"] for u in admin.get("/api/inbox/assignees").json()}
+    names = {u["username"] for u in admin.get("/api/inbox/assignees", params={"key": cap["key"]}).json()}
     assert {"admin", "editor1"} <= names
+    # not a user directory: an item key is required and must be visible to the caller
+    assert admin.get("/api/inbox/assignees").status_code == 404
+    assert editor.get("/api/inbox/assignees", params={"key": "no-such-item"}).status_code == 404
     r = admin.post("/api/inbox/assign", json={"key": cap["key"], "assignee": "editor1"})
     assert r.status_code == 200 and r.json()["assignee"]["username"] == "editor1"
     # shared: the editor sees who handles it, and so does anyone else

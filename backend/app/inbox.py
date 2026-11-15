@@ -6,6 +6,7 @@ needed to see them; the router filters per user and applies the user's acks.
 
 Levels follow the 4 standard statuses: crit (VƯỢT NGƯỠNG), bad (CẢNH BÁO), warn (THEO DÕI),
 plus task (việc chờ ai đó xử lý) and info."""
+from urllib.parse import quote
 import datetime as dt
 import hashlib
 import logging
@@ -128,7 +129,7 @@ def spend_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
         d = st["daysLeft"]
         out.append(item("spend", level, _key("opx", o.code, level), f"{o.code} — {o.title}",
                         f"{'Quá hạn ' + str(-d) + ' ngày' if d < 0 else 'Hết hạn sau ' + str(d) + ' ngày'} ({service.date_vn(o.end_date)}) · "
-                        f"{service.money_vn(o.amount_gross)}.", page="spend-opex", query=f"code={o.code}", due=o.end_date,
+                        f"{service.money_vn(o.amount_gross)}.", page="spend-opex", query=f"code={quote(o.code)}", due=o.end_date,
                         feature="spend", role="spend:viewer"))
     pays = (db.query(ContractPayment, Contract).join(Contract, Contract.id == ContractPayment.contract_id)
             .filter(ContractPayment.status.in_(("pending", "submitted")), ContractPayment.due_date.isnot(None),
