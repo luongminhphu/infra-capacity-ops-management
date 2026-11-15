@@ -485,6 +485,19 @@ class DataSource(Base):
 
 
 # ---------------------------------------------------------------- super app (SA2)
+class InboxAssignment(Base):
+    """Who handles an inbox item ("Ai xử lý"): one assignee per item key, shared by every user.
+    The key includes the level, so an escalated item comes back unassigned for re-triage."""
+    __tablename__ = "inbox_assignments"
+    __table_args__ = (UniqueConstraint("item_key", name="uq_inbox_assignment"),)
+
+    id = Column(Integer, primary_key=True)
+    item_key = Column(String(255), nullable=False)
+    assignee = Column(String(255), nullable=False, index=True)       # User.username
+    assigned_by = Column(String(255), nullable=False)
+    assigned_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 class InboxAck(Base):
     """A user marked an inbox item done or snoozed it (the item key includes its level, so a worse
     level shows again)."""

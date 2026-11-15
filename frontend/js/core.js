@@ -655,12 +655,14 @@ function loadSampleData() {
   refreshAll();
 }
 
-function showValidationBanner(errors, warnings) {
+function showValidationBanner(errors, warnings, info = []) {
   const banner = $('#validationBanner');
-  if (!errors.length && !warnings.length) { banner.classList.remove('show', 'error', 'warn'); banner.innerHTML = ''; return; }
+  if (!errors.length && !warnings.length && !info.length) { banner.classList.remove('show', 'error', 'warn', 'info'); banner.innerHTML = ''; return; }
   banner.classList.add('show');
   banner.classList.toggle('error', errors.length > 0);
   banner.classList.toggle('warn', errors.length === 0 && warnings.length > 0);
+  banner.classList.toggle('info', !errors.length && !warnings.length);
+  if (!errors.length && !warnings.length) { banner.innerHTML = info.map(i => `<span>${esc(i)}</span>`).join(' '); return; }
   let html = '';
   if (errors.length) html += `<strong>${errors.length} lỗi dữ liệu:</strong><ul>${errors.slice(0,8).map(e => `<li>${esc(e)}</li>`).join('')}</ul>`;
   if (warnings.length) html += `<strong>${warnings.length} cảnh báo:</strong><ul>${warnings.slice(0,8).map(w => `<li>${esc(w)}</li>`).join('')}</ul>`;

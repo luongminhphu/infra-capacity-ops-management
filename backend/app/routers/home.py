@@ -3,13 +3,13 @@ import datetime as dt
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from .. import inbox, ops_alerts
 from ..database import get_db
 from ..features import get_features, is_on
-from ..models import InboxAck, User, UserPref
+from ..models import AuditLog, InboxAck, InboxAssignment, User, UserPref
 from ..security import get_current_user, is_admin, require_admin
 from ..spend.fiscal import today_vn
 from ..spend.roles import has_role
@@ -60,6 +60,7 @@ def get_inbox(show: str = Query(default="open", pattern="^(open|all|done)$"), fr
     items, errors = inbox.collect(db, use_cache=not fresh)
     features = get_features(db)
     acks = {a.item_key: a for a in db.query(InboxAck).filter(InboxAck.username == user.username)}
+    assigned = _assignments(db, [it["key"] for it in items])
     out, counts = [], {k: 0 for k in inbox.LEVELS}
     for it in items:
         if not inbox.visible(it, user, features):
@@ -72,7 +73,8 @@ def get_inbox(show: str = Query(default="open", pattern="^(open|all|done)$"), fr
             counts[it["level"]] += 1
         out.append({**{k: v for k, v in it.items() if k not in ("role", "feature", "push")}, "due": _iso(it["due"]),
                     "levelLabel": inbox.LEVEL_LABELS[it["level"]], "sourceLabel": inbox.SOURCE_LABELS[it["source"]],
-                    "ack": {"state": a.state, "until": _iso(a.until)} if a else None})
+                    "ack": {"state": a.state, "until": _iso(a.until)} if a else None,
+                    "assignee": assigned.get(it["key"])})
     sources = {s: {"label": inbox.SOURCE_LABELS[s], "worst": None, "count": 0} for s in inbox.SOURCE_LABELS}
     for it in out:
         if it["ack"] and show != "done":
@@ -122,6 +124,68 @@ def ack_item(data: Dict[str, Any] = Body(...), user: User = Depends(get_current_
     db.add(row)
     db.commit()
     return {"ok": True, "until": _iso(until)}
+
+
+def _display(u: Optional[User], username: str) -> str:
+    return (u.display_name or u.username) if u else username
+
+
+def _assignments(db: Session, keys: List[str]) -> Dict[str, Dict[str, Any]]:
+    """item key -> {username, displayName, assignedBy, assignedAt}; two queries whatever the item count."""
+    if not keys:
+        return {}
+    rows = db.query(InboxAssignment).filter(InboxAssignment.item_key.in_(keys)).all()
+    names = {r.assignee for r in rows} | {r.assigned_by for r in rows}
+    users = {u.username: u for u in db.query(User).filter(User.username.in_(names))} if names else {}
+    return {r.item_key: {"username": r.assignee, "displayName": _display(users.get(r.assignee), r.assignee),
+                         "assignedBy": _display(users.get(r.assigned_by), r.assigned_by),
+                         "assignedAt": r.assigned_at.isoformat() if r.assigned_at else None} for r in rows}
+
+
+@router.get("/inbox/assignees")
+def inbox_assignees(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """People an item can be given to (name only — no email, role or login details)."""
+    rows = db.query(User.username, User.display_name).order_by(User.display_name, User.username).limit(500).all()
+    return [{"username": u, "displayName": d or u} for u, d in rows]
+
+
+@router.post("/inbox/assign")
+def assign_item(request: Request, data: Dict[str, Any] = Body(...), user: User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    """Set or clear "Ai xử lý" of an inbox item. The caller must see the item, and the assignee too
+    (otherwise the item would vanish from their inbox)."""
+    key = str(data.get("key") or "")[:255]
+    target = data.get("assignee")
+    if not key or (target is not None and not isinstance(target, str)):
+        raise HTTPException(400, "Thao tác không hợp lệ.")
+    items, _ = inbox.collect(db)
+    it = next((x for x in items if x["key"] == key), None)
+    features = get_features(db)
+    if it is None or not inbox.visible(it, user, features):
+        raise HTTPException(404, "Không tìm thấy việc này, có thể nó đã được xử lý. Tải lại hộp việc.")
+    row = db.query(InboxAssignment).filter_by(item_key=key).first()
+    if not target:
+        if row:
+            db.delete(row)
+            db.add(AuditLog(username=user.username, action="inbox.unassign",
+                            client_ip=request.client.host if request.client else None,
+                            detail=json.dumps({"key": key, "was": row.assignee}, ensure_ascii=False)))
+        db.commit()
+        return {"ok": True, "assignee": None}
+    who = db.query(User).filter(User.username == target[:255]).first()
+    if who is None:
+        raise HTTPException(400, "Không có người dùng này.")
+    if not inbox.visible(it, who, features):
+        raise HTTPException(400, f"{_display(who, who.username)} không có quyền xem việc này nên không giao được.")
+    # keep the table small: items resolve and keys change with the level
+    db.query(InboxAssignment).filter(InboxAssignment.assigned_at < dt.datetime.utcnow() - dt.timedelta(days=180)).delete()
+    row = row or InboxAssignment(item_key=key)
+    row.assignee, row.assigned_by, row.assigned_at = who.username, user.username, dt.datetime.utcnow()
+    db.add(row)
+    db.add(AuditLog(username=user.username, action="inbox.assign", client_ip=request.client.host if request.client else None,
+                    detail=json.dumps({"key": key, "assignee": who.username}, ensure_ascii=False)))
+    db.commit()
+    return {"ok": True, "assignee": _assignments(db, [key]).get(key)}
 
 
 @router.get("/agenda")

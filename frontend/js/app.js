@@ -751,9 +751,10 @@ async function loadLiveData() {
     appState.reportTimestamp = new Date().toISOString();
     appState.validation = { errors: [], warnings: [] };
     const footprintNote = data.runMeta && data.runMeta.length
-      ? [`Dữ liệu tổng hợp từ: ${data.runMeta.map(r => `${r.vcenterKey === 'import' ? 'Import thủ công' : r.vcenterKey} (${r.finishedAt ? new Date(r.finishedAt).toLocaleString('vi-VN') : 'n/a'})`).join(', ')}.`]
+      ? [`Dữ liệu từ ${data.runMeta.map(r => `${r.vcenterKey === 'import' ? 'import thủ công' : r.vcenterKey} (${r.finishedAt ? new Date(r.finishedAt).toLocaleString('vi-VN') : 'chưa rõ giờ'})`).join(', ')}.`]
       : [];
-    showValidationBanner([], footprintNote);
+    // Where the numbers come from is information, not a warning: one quiet line (MASTER.md, trang-chu.md).
+    showValidationBanner([], [], footprintNote);
     refreshAll(); // renders whichever page is active, including Điều hành
   } catch (err) {
     console.error('Không tải được dữ liệu vCenter', err);
@@ -778,6 +779,7 @@ async function initAppData() {
   applyInitialRoute();
   await Promise.all([loadFeatures(), applyUserPrefs()]);
   if (typeof initAdminSettings === 'function') initAdminSettings(currentUser);
+  if (typeof homeRefreshBadges === 'function') homeRefreshBadges();   // sidebar counts (MASTER.md §6)
   try {
     const policy = await api.getSettings();
     if (policy) {

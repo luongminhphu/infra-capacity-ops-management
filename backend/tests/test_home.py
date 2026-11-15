@@ -7,7 +7,7 @@ import pytest
 
 from app import inbox, ops_alerts, secrets_box
 from app.database import SessionLocal
-from app.models import InboxAck, OpsAlertState, UserPref
+from app.models import AuditLog, InboxAck, InboxAssignment, OpsAlertState, UserPref
 from app.spend.fiscal import today_vn
 from app.spend.models import SpendNotifyChannel
 
@@ -23,7 +23,7 @@ VMS = [{"name": f"vm{i}", "cluster": "PRD", "host": "esx0", "vcpu": 20, "ramGB":
 @pytest.fixture(autouse=True)
 def _clean(app_, monkeypatch):
     db = SessionLocal()
-    for m in (InboxAck, UserPref, OpsAlertState):
+    for m in (InboxAck, InboxAssignment, UserPref, OpsAlertState):
         db.query(m).delete()
     db.commit()
     db.close()
@@ -201,3 +201,47 @@ def test_ops_alerts_respect_features_and_retry_failed_sends(app_, admin, monkeyp
     db.query(SpendNotifyChannel).delete()
     db.commit()
     db.close()
+
+
+def test_inbox_assignee_set_shown_cleared_and_permission_checked(app_, admin, editor):
+    items = admin.get("/api/inbox").json()["items"]
+    cap = next(i for i in items if i["source"] == "capacity")
+    assert cap["assignee"] is None
+    names = {u["username"] for u in admin.get("/api/inbox/assignees").json()}
+    assert {"admin", "editor1"} <= names
+    r = admin.post("/api/inbox/assign", json={"key": cap["key"], "assignee": "editor1"})
+    assert r.status_code == 200 and r.json()["assignee"]["username"] == "editor1"
+    # shared: the editor sees who handles it, and so does anyone else
+    mine = next(i for i in editor.get("/api/inbox").json()["items"] if i["key"] == cap["key"])
+    assert mine["assignee"]["username"] == "editor1" and mine["assignee"]["assignedBy"]
+    db = SessionLocal()
+    assert db.query(AuditLog).filter_by(action="inbox.assign").count() >= 1
+    db.close()
+    assert admin.post("/api/inbox/assign", json={"key": cap["key"], "assignee": "nobody"}).status_code == 400
+    assert admin.post("/api/inbox/assign", json={"key": "no-such-item", "assignee": "editor1"}).status_code == 404
+    assert admin.post("/api/inbox/assign", json={"key": cap["key"], "assignee": 5}).status_code == 400
+    r = editor.post("/api/inbox/assign", json={"key": cap["key"], "assignee": None})
+    assert r.status_code == 200 and r.json()["assignee"] is None
+    assert next(i for i in admin.get("/api/inbox").json()["items"] if i["key"] == cap["key"])["assignee"] is None
+
+
+def test_inbox_assign_refuses_people_who_cannot_see_the_item(app_, admin, editor):
+    # admin-only items (role 'admin') cannot be given to a non-admin
+    from app import inbox as ib
+    key = "test|admin-only"
+    real = ib._compute
+    ib.invalidate()
+
+    def fake(db, today):
+        items, errs = real(db, today)
+        return items + [ib.item("system", "warn", key, "Chỉ admin", role="admin")], errs
+    import pytest as _pt
+    mp = _pt.MonkeyPatch()
+    mp.setattr(ib, "_compute", fake)
+    try:
+        r = admin.post("/api/inbox/assign", json={"key": key, "assignee": "editor1"})
+        assert r.status_code == 400 and "không có quyền" in r.json()["detail"]
+        assert editor.post("/api/inbox/assign", json={"key": key, "assignee": "admin"}).status_code == 404
+    finally:
+        mp.undo()
+        ib.invalidate()
