@@ -136,6 +136,13 @@ def test_excel_output_formulas_and_text_safety():
     assert any("*2" in f for f in formulas)                                                            # 1 unit × 2 units
     assert any(f.startswith("=ROUND(") and "*10/100" in f for f in formulas)                           # VAT 10 %
     assert "17.000 USD" in texts                                                                       # price row in the summary box
+    qty_cells = [ws.cell(row=c.row, column=5) for c in ws["E"] if isinstance(c.value, (int, float))]
+    assert qty_cells and all(c.number_format == "#,##0" for c in qty_cells if float(c.value).is_integer())  # "2", not "2."
+
+
+def test_quantity_format_keeps_fraction_only_when_needed():
+    assert excel_bom._qty_fmt(2) == "#,##0" and excel_bom._qty_fmt(2.0) == "#,##0"
+    assert excel_bom._qty_fmt(1.5) == "#,##0.##" and excel_bom._qty_fmt(None) == "#,##0.##"
 
 
 def test_api(app_, admin, editor):

@@ -549,6 +549,10 @@ async function handleStorageCriteriaToggle(e) {
   try { localStorage.setItem('vco.includeStorage', enabled ? '1' : '0'); } catch (err) { /* ignore */ }
   updateCriteriaSummary();
   refreshAll();
+  if (!uiIsAdmin()) {
+    setCriteriaStatus(`Chỉ áp dụng trên màn hình của bạn. ${ADMIN_ONLY_NOTE}`, '');
+    return;
+  }
   try {
     await api.updateSettings({ include_storage: enabled });
     setCriteriaStatus(enabled ? 'Đã bật đánh giá Storage (đã lưu cho toàn hệ thống).' : 'Đã tắt đánh giá Storage (đã lưu cho toàn hệ thống).', 'ok');
@@ -661,6 +665,24 @@ async function handleRemoveLogo() {
   } catch (err) {
     setLogoStatus(`Xóa logo thất bại: ${err.message}`, 'error');
   }
+}
+
+/* Non-admins keep the live (on-screen) threshold / storage what-if, but cannot save or change the logo. */
+function applySharedConfigGates() {
+  const admin = uiIsAdmin();
+  const saveThr = $('#btnSaveThresholds');
+  if (saveThr) {
+    saveThr.disabled = !admin;
+    saveThr.title = admin ? '' : ADMIN_ONLY_NOTE;
+    if (!admin) setThresholdStatus(`${ADMIN_ONLY_NOTE} Ngưỡng nhập ở đây chỉ áp dụng trên màn hình của bạn.`, null);
+    else if (($('#thresholdStatus') || {}).textContent?.startsWith(ADMIN_ONLY_NOTE)) setThresholdStatus('', null);
+  }
+  const pick = document.querySelector('label[for="logoUploadInput"]');
+  if (pick) pick.classList.toggle('hidden', !admin);
+  const removeBtn = $('#btnRemoveLogo');
+  if (removeBtn) removeBtn.classList.toggle('hidden', !admin);
+  if (!admin) setLogoStatus(ADMIN_ONLY_NOTE, null);
+  else if (($('#logoUploadStatus') || {}).textContent === ADMIN_ONLY_NOTE) setLogoStatus('', null);
 }
 
 function bindLogoUploadDropdown() {
@@ -791,6 +813,7 @@ async function initAppData() {
   applyInitialRoute();
   await Promise.all([loadFeatures(), applyUserPrefs()]);
   if (typeof initAdminSettings === 'function') initAdminSettings(currentUser);
+  applySharedConfigGates();
   if (typeof homeRefreshBadges === 'function') homeRefreshBadges();   // sidebar counts (MASTER.md §6)
   try {
     const policy = await api.getSettings();

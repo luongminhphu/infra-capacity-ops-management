@@ -51,7 +51,8 @@ def _filter_scope(rows: List[Dict[str, Any]], sc: Dict[str, Any]) -> List[Dict[s
 
 def _overrides_map(db: Session) -> Dict[str, Dict[str, Any]]:
     out: Dict[str, Dict[str, Any]] = {}
-    for o in db.query(VmOsOverride).all():
+    # Oldest first so the newest override wins if pre-index duplicates exist (DAT-08).
+    for o in db.query(VmOsOverride).order_by(VmOsOverride.updated_at.asc(), VmOsOverride.id.asc()).all():
         d = _override_dict(o)
         out[os_classify.override_key(o.vcenter_key, o.instance_uuid, o.vm)] = d
     return out
