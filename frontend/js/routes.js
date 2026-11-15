@@ -145,7 +145,7 @@ const callIf = (name, ...args) => { if (typeof window[name] === 'function') wind
    needed — uiRequire('spend').then(...)). Same ?v= fingerprint as index.html, same origin only. */
 const ASSET_V = (() => { try { return new URL(document.currentScript.src).searchParams.get('v') || ''; } catch (e) { return ''; } })();
 const MODULES = {
-  spend: ['spend', 'spend_capex', 'spend_report', 'spend_contract', 'spend_proposal', 'spend_payment', 'spend_quote', 'spend_renovation', 'spend_plan'],
+  spend: ['spend', 'spend_capex', 'spend_report', 'spend_contract', 'spend_proposal', 'spend_payment', 'spend_quote', 'spend_renovation', 'spend_plan', 'spend_import'],
   bom: ['bom'],
 };
 const moduleLoads = {};

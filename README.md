@@ -20,7 +20,7 @@ Menu chia hai miền, mỗi mục gồm các tab trong trang. Địa chỉ trang
 | | **Mô phỏng & quy hoạch** | What-if capacity (thêm / nâng cấp host, thêm / resize VM), quy hoạch tài nguyên theo kịch bản, what-if license |
 | | **Sizing máy chủ** | Sizing từ danh sách VM, so sánh phương án, TCO, PDF / Excel tư vấn |
 | Quản lý thông tin | **Tài sản / License** | Inventory host / VM, ESXi & phần cứng, hệ điều hành; đánh giá license và quyền sử dụng |
-| | **Ngân sách & chi phí** | Opex có nhắc hạn (email / Discord), Capex, báo cáo ngân sách theo năm tài chính, **kế hoạch năm sau** (tự gợi ý gia hạn + % tăng giá, trần ngân sách, duyệt, theo dõi thực hiện) |
+| | **Ngân sách & chi phí** | Opex có nhắc hạn (email / Discord), Capex, báo cáo ngân sách theo năm tài chính, **kế hoạch năm sau** (tự gợi ý gia hạn + % tăng giá, trần ngân sách, duyệt, theo dõi thực hiện), **nhập Opex / Capex từ file Excel** đang quản lý |
 | | **Mua sắm** | Nhà cung cấp, so sánh báo giá (đọc Excel / Word / PDF), cải tạo văn phòng, **Chuẩn hoá BOM** (Dell / Cisco / HPE → một mẫu Excel) |
 | | **Hợp đồng & thanh toán** | Hợp đồng có version và so sánh, đợt thanh toán, hồ sơ chứng từ |
 | | **Tài liệu** | Tờ trình theo mẫu .docx, Trung tâm báo cáo, Kho báo cáo |

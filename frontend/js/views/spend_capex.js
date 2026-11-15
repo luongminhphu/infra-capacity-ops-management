@@ -51,7 +51,7 @@ function cpxRender() {
     <section class="table-card">
       <div class="panel-head">
         <div><div class="panel-title">Dự án Capex</div><p class="panel-sub">Mỗi hạng mục có thời hạn bảo hành / license sẽ sinh một khoản Opex gia hạn “Dự kiến” khi dự án được duyệt.</p></div>
-        <div class="panel-toolbar">${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-cpx-new><i data-lucide="plus"></i>Thêm dự án</button>' : ''}</div>
+        <div class="panel-toolbar">${spCan('editor') ? '<button class="btn btn-secondary btn-sm" type="button" data-sp-import="capex" title="Đổ dữ liệu từ file Excel đang quản lý"><i data-lucide="upload"></i>Nhập Excel</button><button class="btn btn-primary btn-sm" type="button" data-cpx-new><i data-lucide="plus"></i>Thêm dự án</button>' : ''}</div>
       </div>
       <div class="sp-filters">
         <label class="field"><span>Năm tài chính</span><select data-cpx-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `NTC ${y}`, f.fy)).join('')}</select></label>

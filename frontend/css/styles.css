@@ -844,6 +844,10 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .src-result.ok{color:var(--status-success);}
 .src-result.err,.src-result.error{color:var(--status-error);}
 .ui-dialog-narrow{width:min(480px,94vw);}
+.sp-import-dlg{width:min(1180px,96vw);}
+.sp-imp-sum{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:var(--space-3) 0;font-size:var(--fs-caption);color:var(--text-secondary);}
+.sp-imp-table{max-height:52vh;overflow:auto;}
+
 @media (max-width:640px){.src-grid{grid-template-columns:1fr;}}
 .muted-row td{opacity:.6;}
 

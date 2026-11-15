@@ -674,6 +674,20 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   **Excel** đủ từng dòng: Tổng quan, Chi tiết, Hết hạn theo quý, Từ Capex, Nhà cung cấp, Bộ lọc. Ô chữ do người
   dùng nhập luôn ghi dạng văn bản (không thành công thức Excel).
 
+**Nhập Opex / Capex từ Excel (đã có)** — nút **Nhập Excel** ở trang Opex và Capex (quyền Biên tập). Thiết kế:
+[`docs/design/spend-import.md`](design/spend-import.md).
+
+- Dùng **file mẫu**, hoặc chính file đang theo dõi. Chỉ cần một dòng tiêu đề có các cột cần thiết (tên cột tiếng Việt
+  hoặc tiếng Anh); phía trên có thể có dòng tên bảng.
+- **Kiểm tra trước khi nhập:** từng dòng hiện *Tạo mới / Bỏ qua (trùng) / Lỗi* kèm lý do. Có thể chọn chỉ nhập các dòng
+  hợp lệ.
+- **Không tạo trùng:** khoản đã có (cùng nội dung + nhà cung cấp + ngày bắt đầu, hoặc trùng mã) và dự án đã có (cùng
+  tên + năm tài chính) được bỏ qua. Nhập lại cùng một file là an toàn.
+- **Opex nhiều năm:** các kỳ nối tiếp của cùng dịch vụ được tự liên kết *Đã gia hạn*, nên lịch sử gia hạn và kế hoạch
+  năm sau dùng được ngay.
+- **Capex:** mỗi dòng là một hạng mục; các dòng cùng tên dự án gộp thành một dự án. Dự án *Đã duyệt* tự sinh Opex gia
+  hạn. Nếu đã nhập các Opex đó từ file Opex, để *Số năm bảo hành* = 0 để tránh trùng.
+
 **Kế hoạch ngân sách năm sau (đã có)** — Ngân sách & chi phí → *Kế hoạch năm sau*. Thiết kế:
 [`docs/design/spend-budget-plan.md`](design/spend-budget-plan.md).
 

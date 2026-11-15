@@ -140,7 +140,7 @@ function spRenderPage() {
       <div class="panel-head">
         <div><div class="panel-title">Danh sách Opex</div><p class="panel-sub">Bấm một dòng để xem chi tiết, gia hạn hoặc ngừng. Sắp xếp theo ngày hết hạn.</p></div>
         <div class="panel-toolbar">
-          ${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-sp-new><i data-lucide="plus"></i>Thêm khoản</button>' : ''}
+          ${spCan('editor') ? '<button class="btn btn-secondary btn-sm" type="button" data-sp-import="opex" title="Đổ dữ liệu từ file Excel đang quản lý"><i data-lucide="upload"></i>Nhập Excel</button><button class="btn btn-primary btn-sm" type="button" data-sp-new><i data-lucide="plus"></i>Thêm khoản</button>' : ''}
         </div>
       </div>
       <div class="sp-filters">
