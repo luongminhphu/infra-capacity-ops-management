@@ -77,6 +77,7 @@ async function renderSpendView() {
   if (spState.sub === 'capex' && typeof renderCapexPage === 'function') { await renderCapexPage(); return; }
   if (spState.sub === 'overview' && typeof renderSpendOverview === 'function') { await renderSpendOverview(); return; }
   if (spState.sub === 'contracts' && typeof renderContractsPage === 'function') { await renderContractsPage(); return; }
+  if (spState.sub === 'proposals' && typeof renderProposalsPage === 'function') { await renderProposalsPage(); return; }
   await spLoadList();
   spRenderPage();
   spBindPage();
@@ -244,7 +245,7 @@ async function spOpenDetail(code) {
     </dl>
     ${it.description ? `<p class="sp-desc">${esc(it.description)}</p>` : ''}
     <h4 class="sp-h">Hợp đồng</h4>${(it.contracts || []).length ? `<ul class="sp-files">${it.contracts.map(c => `<li><button class="btn btn-ghost btn-sm sp-link" type="button" data-ct-goto="${esc(c.code)}">${esc(c.code)}</button> ${esc(c.title)}</li>`).join('')}</ul>` : '<p class="muted-sub">Chưa có hợp đồng.</p>'}
-    ${spCan('editor') ? '<button class="btn btn-ghost btn-sm" type="button" data-ct-new-for="1"><i data-lucide="plus"></i>Tạo hợp đồng cho khoản này</button>' : ''}
+    ${spCan('editor') ? '<div class="sp-inline"><button class="btn btn-ghost btn-sm" type="button" data-ct-new-for="1"><i data-lucide="plus"></i>Tạo hợp đồng cho khoản này</button><button class="btn btn-ghost btn-sm" type="button" data-pp-new-for="1"><i data-lucide="file-text"></i>Soạn tờ trình</button></div>' : ''}
     <h4 class="sp-h">Thiết bị liên quan</h4>${assets}
     <h4 class="sp-h">File đính kèm</h4>${filesHtml}
     <details class="sp-history" id="spHistory"><summary>Lịch sử thay đổi</summary><div class="muted-sub">Đang tải…</div></details>`;
@@ -267,6 +268,7 @@ async function spOpenDetail(code) {
     if (cpx && typeof cpxOpenDetail === 'function') return cpxOpenDetail(cpx.dataset.cpxGoto);
     const ct = e.target.closest('[data-ct-goto]');
     if (ct && typeof ctOpenDetail === 'function') return ctOpenDetail(ct.dataset.ctGoto);
+    if (e.target.closest('[data-pp-new-for]') && typeof ppOpenCreate === 'function') return ppOpenCreate({ opexCodes: [it.code], subject: it.title });
     if (e.target.closest('[data-ct-new-for]') && typeof ctOpenCreate === 'function') return ctOpenCreate({ kind: 'opex', code: it.code, title: `Hợp đồng ${it.title}` });
     const del = e.target.closest('[data-sp-detach]');
     if (del && confirm('Xoá file đính kèm này?')) {
@@ -479,6 +481,8 @@ async function spRenderSettings() {
           <label class="field"><span>Mốc nhắc (ngày trước hạn)</span><input type="text" id="spSetDays" value="${esc(s.reminderDays.join(', '))}" ${dis} placeholder="90, 60, 30"></label>
           <label class="field"><span>Giờ gửi nhắc hằng ngày (giờ VN)</span><select id="spSetHour" ${dis}>${hours}</select></label>
           <label class="field"><span>Địa chỉ ứng dụng (link trong tin nhắc)</span><input type="text" id="spSetUrl" value="${esc(s.appBaseUrl)}" ${dis} placeholder="https://ico.congty.vn"></label>
+          <label class="field"><span>Đơn vị đề xuất mặc định (tờ trình)</span><input type="text" id="spSetDept" maxlength="128" value="${esc(s.proposalDepartment || '')}" ${dis} placeholder="Phòng Hạ tầng IT"></label>
+          <label class="field"><span>Chờ xoá version hợp đồng cũ (ngày)</span><input type="number" id="spSetPurge" min="1" max="365" value="${esc(s.purgeDays)}" ${dis}></label>
         </div>
         <p class="panel-sub">Năm tài chính đặt tên theo năm bắt đầu (tháng 4: 04/2026–03/2027 = NTC 2026). Đổi tháng bắt đầu không làm thay đổi năm tài chính của các khoản đã lưu.</p>
         ${admin ? '<div class="sim-actions"><button class="btn btn-primary btn-sm" type="button" id="spSetSave">Lưu cài đặt</button><span class="criteria-status" id="spSetStatus"></span></div>' : ''}
@@ -500,7 +504,8 @@ async function spRenderSettings() {
     const days = $('#spSetDays').value.split(/[,;\s]+/).filter(Boolean).map(Number);
     try {
       await apiRequest('/spend/settings', { method: 'PUT', body: JSON.stringify({ fiscalStartMonth: Number($('#spSetMonth').value),
-        reminderDays: days, reminderHour: Number($('#spSetHour').value), appBaseUrl: $('#spSetUrl').value.trim() }) });
+        reminderDays: days, reminderHour: Number($('#spSetHour').value), appBaseUrl: $('#spSetUrl').value.trim(),
+        proposalDepartment: $('#spSetDept').value.trim(), purgeDays: Number($('#spSetPurge').value) }) });
       await spLoadMeta(true); spRenderSettings(); msg('Đã lưu cài đặt.', true);
     } catch (err) { msg(err.message); }
   });
@@ -584,7 +589,9 @@ async function spRenderAdmin() {
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Thời gian</th><th>Khoản</th><th>Mốc</th><th>Kênh</th><th>Kết quả</th><th></th></tr></thead>
           <tbody>${logRows || '<tr><td colspan="6" class="empty-note">Chưa có lượt nhắc nào.</td></tr>'}</tbody></table></div>
       </div>
-    </div>`;
+    </div>
+    <div id="ppAdminMount"></div>`;
+  if (typeof ppRenderAdmin === 'function') ppRenderAdmin($('#ppAdminMount'));
   refreshIcons();
   const msg = (t, ok) => { const el = $('#spSettingsMsg'); el.textContent = t || ''; el.className = 'criteria-status' + (t ? (ok ? ' ok' : ' error') : ''); };
   spOnce('#spSmtpSave', async () => {

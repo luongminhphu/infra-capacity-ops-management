@@ -75,6 +75,8 @@ const NAV_GROUPS = [
       desc: 'Dự án mua mới gồm nhiều hạng mục; tự sinh Opex gia hạn bảo hành / license dự kiến cho các năm sau.', scope: [] },
     { id: 'spend-contracts', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'contracts', icon: 'scroll-text', label: 'Hợp đồng', title: 'Hợp đồng',
       desc: 'Hợp đồng gắn Opex / Capex, version theo từng bên chỉnh sửa, so sánh, chốt Final, bản ký và lịch xoá version cũ.', scope: [] },
+    { id: 'spend-proposals', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'proposals', icon: 'file-text', label: 'Tờ trình', title: 'Tờ trình',
+      desc: 'Soạn tờ trình Mẫu A (trình TGĐ) / Mẫu B (trình Ban Mua sắm) từ mẫu .docx của công ty, AI viết nội dung theo dữ liệu Opex / Capex.', scope: [] },
   ] },
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',

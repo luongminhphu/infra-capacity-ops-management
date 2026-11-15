@@ -937,3 +937,9 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .ct-who{display:block;font-size:var(--fs-micro);line-height:var(--lh-micro);font-weight:var(--fw-semibold);color:var(--ct-c);text-transform:uppercase;letter-spacing:.04em;}
 .ct-upload{border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:var(--space-3);margin:var(--space-3) 0;}
 .ct-upload input[type="text"]{width:100%;}
+/* Tờ trình (spend_proposal.js) */
+.pp-rec-title{font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);margin:var(--space-3) 0 var(--space-2);}
+.pp-rec-row{display:grid;grid-template-columns:120px 80px minmax(0,1fr) minmax(0,1.2fr) auto;gap:var(--space-2);margin-bottom:var(--space-2);}
+.pp-rec-row select,.pp-rec-row input{height:var(--control-h-sm);width:100%;}
+.sp-form select[multiple]{height:auto;padding:var(--space-1);}
+@media (max-width:640px){.pp-rec-row{grid-template-columns:1fr 1fr;}}

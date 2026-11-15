@@ -159,6 +159,7 @@ async function cpxOpenDetail(code) {
     spCan('admin') ? btn('id="cpxDelete"', 'Xoá', 'btn-secondary btn-danger') : '',
     '<span class="src-spacer"></span>',
     canConfirm && p.items.some(i => i.opex && i.opex.state === 'managed') ? btn('id="cpxConfirm"', 'Xác nhận Opex đã chọn') : '',
+    spCan('editor') ? btn('id="cpxProposal"', 'Soạn tờ trình') : '',
     spCan('editor') && p.status !== 'closed' ? btn('id="cpxEdit"', 'Sửa') : '',
     moves,
   ].join('');
@@ -177,6 +178,7 @@ async function cpxOpenDetail(code) {
     }
   };
   spOnce('#cpxEdit', async () => cpxOpenForm(p));
+  spOnce('#cpxProposal', async () => { if (typeof ppOpenCreate === 'function') ppOpenCreate({ capexCode: p.code, subject: p.name }); });
   spOnce('#cpxConfirm', async () => {
     const codes = $$('[data-cpx-pick]:checked').map(b => b.dataset.cpxPick);
     if (!codes.length) { spMsg('Chọn ít nhất một khoản Opex “Theo Capex”.'); return; }
