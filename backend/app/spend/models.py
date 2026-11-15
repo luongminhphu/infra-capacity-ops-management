@@ -293,3 +293,64 @@ class SpendSavedFilter(Base):
     filters_json = Column(Text, nullable=False)
     shared = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+CONTRACT_STATUSES = ("draft", "negotiating", "final", "signed")
+EDITOR_PARTIES = ("legal", "finance", "partner")
+
+
+class Contract(_Audited, Base):
+    """A contract tied to exactly one Opex item or one Capex project (CHECK). Versions form a
+    single branch: an upload must name the latest version it was based on (current_version_no,
+    optimistic lock) and UNIQUE (contract_id, version_no) on the versions backs it up.
+    The final version is referenced by number (no FK, avoiding a circular FK with versions)."""
+    __tablename__ = "contracts"
+    __table_args__ = (
+        CheckConstraint("(opex_id IS NOT NULL AND capex_project_id IS NULL) OR "
+                        "(opex_id IS NULL AND capex_project_id IS NOT NULL)", name="ck_contract_one_link"),
+        CheckConstraint(_in("status", CONTRACT_STATUSES), name="ck_contract_status"),
+        CheckConstraint("(status IN ('final', 'signed')) = (final_version_no IS NOT NULL)", name="ck_contract_final"),
+        CheckConstraint("(status = 'signed') = (signed_file_id IS NOT NULL)", name="ck_contract_signed"),
+        CheckConstraint("current_version_no >= 0", name="ck_contract_version"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(20), nullable=False, unique=True)
+    title = Column(String(255), nullable=False)
+    vendor_id = Column(Integer, ForeignKey("spend_vendors.id", ondelete="RESTRICT"), nullable=True, index=True)
+    opex_id = Column(Integer, ForeignKey("opex_items.id", ondelete="RESTRICT"), nullable=True, index=True)
+    capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
+    status = Column(String(12), nullable=False, default="draft")
+    note = Column(Text, nullable=True)
+    current_version_no = Column(Integer, nullable=False, default=0)
+    final_version_no = Column(Integer, nullable=True)
+    finalized_at = Column(DateTime, nullable=True)
+    finalized_by = Column(String(255), nullable=True)
+    signed_file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    signed_at = Column(DateTime, nullable=True)
+    signed_by = Column(String(255), nullable=True)
+    purge_due_at = Column(DateTime, nullable=True, index=True)
+    purge_cancelled_at = Column(DateTime, nullable=True)
+    purge_cancelled_by = Column(String(255), nullable=True)
+    purge_done_at = Column(DateTime, nullable=True)
+
+
+class ContractVersion(Base):
+    """Immutable upload (v1, v2 …). Only the purge job touches a row afterwards: it deletes the
+    file bytes and clears text_content, keeping the metadata and the hash for the audit."""
+    __tablename__ = "contract_versions"
+    __table_args__ = (
+        UniqueConstraint("contract_id", "version_no", name="uq_contract_version"),
+        CheckConstraint(_in("editor_party", EDITOR_PARTIES), name="ck_contract_version_party"),
+        CheckConstraint("version_no >= 1", name="ck_contract_version_no"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="RESTRICT"), nullable=False, index=True)
+    version_no = Column(Integer, nullable=False)
+    editor_party = Column(String(8), nullable=False)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=False)
+    text_content = Column(Text, nullable=True)        # JSON list of paragraphs, for comparing versions
+    note = Column(String(1000), nullable=True)
+    uploaded_by = Column(String(255), nullable=False)
+    uploaded_at = Column(DateTime, nullable=False, default=utcnow)

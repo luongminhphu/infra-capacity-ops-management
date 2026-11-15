@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from ..models import User
 from . import codes, fiscal, service
-from .models import CapexItem, CapexProject, OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendReminderLog
+from .models import CapexItem, CapexProject, Contract, OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendReminderLog
 from .settings import SpendSettings
 
 GENERATING_STATUSES = ("approved", "in_progress", "closed")
@@ -157,7 +157,8 @@ def reconcile(db: Session, project: CapexProject, cfg: SpendSettings, user: User
 
 
 def _drop(db: Session, o: OpexItem, out, user: User, request, project: CapexProject) -> None:
-    if is_managed(o):
+    has_contract = db.query(Contract.id).filter(Contract.opex_id == o.id).first() is not None
+    if is_managed(o) and not has_contract:
         out["removed"].append(o.code)
         service.audit(db, user, request, "spend.opex.delete", code=o.code, capex=project.code, before=service.snapshot(o),
                       reason="Hạng mục Capex bị xoá hoặc không còn sinh gia hạn")

@@ -153,7 +153,14 @@ def tick(now: Optional[dt.datetime] = None) -> Optional[Dict[str, object]]:
         local = now.replace(tzinfo=dt.timezone.utc).astimezone(fiscal.VN_TZ)
         if local.hour < cfg.reminder_hour:
             return None
-        return run(db, now)
+        summary = run(db, now)
+        try:
+            from .contracts import purge_due        # files of old contract versions after Final
+            purge_due(db, now)
+        except Exception:  # noqa: BLE001 — a purge error must not hide the reminder result
+            db.rollback()
+            logger.exception("Contract purge failed; retrying next cycle")
+        return summary
     finally:
         db.close()
 
