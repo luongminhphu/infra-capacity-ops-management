@@ -131,8 +131,12 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
 
 **Chuẩn hoá BOM (Quản lý thông tin)** — tải file Excel BOM thô, xuất một file Excel trình bày chuẩn, giống nhau cho mọi hãng:
 - Nhận ra **Dell Solutions Configurator** (dòng sản phẩm + option, giá option tính cho 1 máy), **Cisco CCW estimate**
-  (số dòng 1.0 / 1.1…, giá net nếu có), **HPE** và bảng kê thông thường (dòng tiêu đề nhóm hoặc dòng model bắt đầu cấu hình mới).
-- Gom theo đầu mục: Máy chủ, Thiết bị mạng, Tường lửa, Lưu trữ, SAN Switch, Cân bằng tải, Sao lưu, Phần mềm & License, Dịch vụ.
+  (danh sách phẳng — thiết bị chính bắt đầu cấu hình mới — hoặc có số dòng 1.0 / 1.1; giá net, thời hạn dịch vụ),
+  **HPE Aruba IRIS** (Line# 1.0 / 1.1, dòng "INCLUDED" giá incl. được ẩn), HPE One Config và bảng kê thông thường.
+  Số lượng linh kiện của Cisco / HPE là tổng cho mọi thiết bị; hộp thông số quy về 1 thiết bị. Thiết bị giống hệt nhau
+  ở nhiều dòng được gộp (cộng số lượng); cùng model khác option được đánh số "(cấu hình 1)", "(cấu hình 2)".
+- Gom theo đầu mục: Máy chủ, Thiết bị mạng, Tường lửa, Lưu trữ, SAN Switch, Cân bằng tải, Sao lưu, Phụ kiện (module quang,
+  cáp), Phần mềm & License, Dịch vụ.
   Sửa được tên, đầu mục, số lượng và từng thông số trước khi xuất.
 - Mỗi cấu hình có **hộp thông số cho 1 thiết bị**: máy chủ (model, CPU, RAM tổng, ổ đĩa, cổng mạng, cổng HBA, module quang,
   nguồn, bảo hành); switch (cổng, tốc độ, module quang, license Basic / Advanced / DNA…); firewall (throughput, cổng,

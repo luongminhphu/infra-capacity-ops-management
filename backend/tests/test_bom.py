@@ -153,3 +153,59 @@ def test_api(app_, admin, editor):
     assert editor.post("/api/bom/export", json={"configs": []}).status_code == 400
     from fastapi.testclient import TestClient
     assert TestClient(app_).post("/api/bom/export", json={"configs": []}).status_code == 401
+
+
+def cisco_flat_estimate():
+    h = ["Part Number", "Smart Account Mandatory", "Description", "Service Duration (Months)", "Estimated Lead Time (Days)",
+         "Unit List Price", "Pricing Term", "Qty", "Unit Net Price", "Disc(%)", "Extended Net Price"]
+    return _xlsx([["Price Estimate"], [], ["", "", "", "", "", "", "", "", "All prices are shown in USD"], h,
+                  ["C9200L-24T-4X-E", "-", "Catalyst 9200L 24-port data, 4 x 10G, Network Essentials", "---", 30, 3000, "", 4, 3000, 0, 12000],
+                  ["CON-SNT-C92L24XE", "-", "SNTC-8X5XNBD Catalyst 9200L 24-port", 12, "N/A", 300, "", 4, 300, 0, 1200],
+                  ["C9200L-DNA-E-24-3Y", "-", "C9200L Cisco DNA Essentials, 24-port, 3 Year Term license", 36, "N/A", 500, "", 4, 500, 0, 2000],
+                  ["C9200L-STACK-KIT", "-", "Cisco Catalyst 9200L Stack Module", "---", 14, 1000, "", 4, 1000, 0, 4000],
+                  ["SFP-10G-SR=", "-", "10GBASE-SR SFP Module", "---", 14, 900, "", 8, 900, 0, 7200],
+                  ["C9300-48P-A", "-", "Catalyst 9300 48-port PoE+, Network Advantage", "---", 30, 8000, "", 2, 8000, 0, 16000],
+                  ["CON-SNT-C930048P", "-", "SNTC-8X5XNBD Catalyst 9300 48-port PoE+", 12, "N/A", 800, "", 2, 800, 0, 1600],
+                  [], ["", "", "", "", "", "", "", "", "Total Price:", "", 44000]])
+
+
+def hpe_iris():
+    h = ["Line#", "Part Number", "Description", "Manufacturer", "Unit Price", "Quantity", "Sub Total", "Discount", "Total", "Price List"]
+    hp = "Hewlett Packard Enterprise"
+    return _xlsx([h,
+                  ["1.0", "SW-A", "HPE Aruba Networking CX 6300M 24p Smart Rate 1/2.5/5/10G Class6 PoE 4SFP56 Switch", hp, 20000, 1, 20000, 0, 20000, "PL (USD)"],
+                  ["1.1", "SVC-A", "Aruba 3Y FC NBD Exch HW 6300M SVC [for SW-A]", hp, 1000, 1, 1000, 0, 1000, "PL (USD)"],
+                  ["1.2", "PSU-A", "HPE Aruba Networking X372 54VDC 680W Power Supply", hp, 900, 1, 900, 0, 900, "PL (USD)"],
+                  ["1.3", "PSU-A      ABB", "  INCLUDED: Power Cord - Europe localization", hp, "incl.", 1, None, None, None, ""],
+                  ["2.0", "SW-A", "HPE Aruba Networking CX 6300M 24p Smart Rate 1/2.5/5/10G Class6 PoE 4SFP56 Switch", hp, 20000, 1, 20000, 0, 20000, "PL (USD)"],
+                  ["2.1", "SVC-A", "Aruba 3Y FC NBD Exch HW 6300M SVC [for SW-A]", hp, 1000, 1, 1000, 0, 1000, "PL (USD)"],
+                  ["2.2", "PSU-A", "HPE Aruba Networking X372 54VDC 680W Power Supply", hp, 900, 1, 900, 0, 900, "PL (USD)"],
+                  ["2.3", "PSU-A      ABB", "  INCLUDED: Power Cord - Europe localization", hp, "incl.", 1, None, None, None, ""],
+                  ["3.0", "SUB-AP", "HPE Aruba Networking Central AP Foundation 3-year Subscription", hp, 400, 10, 4000, 0, 4000, "PL (USD)"],
+                  ["3.1", "SUB-SW", "HPE Aruba Networking Central Switch Class-2 Foundation 3-year Subscription", hp, 1000, 2, 2000, 0, 2000, "PL (USD)"],
+                  ["4.0", "DAC-1", "HPE Aruba Networking 10G SFP+ to SFP+ 3m Direct Attach Copper Cable", hp, 300, 4, 1200, 0, 1200, "PL (USD)"],
+                  ["", "", "Quote Total", "", "", "", "", "", 51000, ""]])
+
+
+def test_cisco_flat_estimate():
+    d = bom.parse(cisco_flat_estimate())
+    assert d["layout"] == "cisco_ccw" and sum(c["total"] for c in d["configs"]) == 44000
+    a, b = d["configs"]
+    assert a["title"].startswith("Catalyst 9200L 24-port") and a["qty"] == 4 and a["qtyMode"] == "total" and len(a["items"]) == 5
+    assert b["title"].startswith("Catalyst 9300 48-port") and b["qty"] == 2 and b["total"] == 17600
+    s = dict(a["summary"])
+    assert s["Module quang (SFP)"] == "2 × 10GBASE-SR SFP Module"                                        # 8 for 4 switches
+    assert s["License"] == "DNA Essentials" and "(12 tháng)" in s["Bảo hành / hỗ trợ"] and s["Giá 1 thiết bị"] == "6.600"
+
+
+def test_hpe_iris_merges_identical_devices():
+    d = bom.parse(hpe_iris())
+    assert d["layout"] == "hpe_iris" and sum(c["total"] for c in d["configs"]) == 51000                   # = Quote Total
+    sw, sub, dac = d["configs"]
+    assert sw["qty"] == 2 and sw["total"] == 43800 and "Gộp 1 cấu hình" in d["warnings"][0]               # lines 1.0 + 2.0
+    assert [i["empty"] for i in sw["items"]] == [False, False, False, True]                              # INCLUDED: power cord
+    s = dict(sw["summary"])
+    assert s["Nguồn"].startswith("1 × HPE Aruba Networking X372") and "SVC" in s["Bảo hành / hỗ trợ"]
+    assert s["Tốc độ"].startswith("1/2.5/5/10GbE") and s["Giá 1 thiết bị"] == "21.900"
+    assert sub["category"] == "software" and dict(sub["summary"])["Thành tiền"] == "6.000"
+    assert dac["category"] == "accessory" and dac["qty"] == 4

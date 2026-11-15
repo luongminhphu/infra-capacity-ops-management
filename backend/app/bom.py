@@ -32,6 +32,7 @@ CATEGORIES: List[Tuple[str, str]] = [
     ("san_switch", "SAN Switch"),
     ("load_balancer", "Cân bằng tải (Load Balancer)"),
     ("backup", "Sao lưu (Backup)"),
+    ("accessory", "Phụ kiện (module quang, cáp)"),
     ("software", "Phần mềm & License"),
     ("service", "Dịch vụ & Bảo hành"),
     ("other", "Khác"),
@@ -43,7 +44,7 @@ KEYWORDS: Dict[str, List[str]] = {
     "server": ["server", "poweredge", "proliant", "thinksystem", "ucs c", "ucs b", "ucs x", "synergy", "rack server", "may chu", "server node",
                "xeon", "epyc", "rdimm", "lrdimm", "boss", "idrac", "ilo", "xcc"],
     "network": ["network", "switch", "catalyst", "nexus", "aruba", "juniper ex", "qfx", "access switch", "core switch", "distribution switch", "leaf", "spine",
-                "ethernet switch", "switch layer", "l3 switch", "l2 switch", "thiet bi mang", "router", "access point", "wireless", "s5248", "s4148",
+                "ethernet switch", "switch layer", "wi fi", "802 11", "access point", "ap-6", "ap 6", "l3 switch", "l2 switch", "thiet bi mang", "router", "access point", "wireless", "s5248", "s4148",
                 "cx 6", "cx 8", "ce6", "ce12", "huawei s", "dna advantage", "dna essentials"],
     "firewall": ["fortigate", "palo alto", "pa-", "checkpoint", "check point", "firewall", "tuong lua", "sophos", "ngfw", "utm", "srx",
                  "threat prevention", "fortiguard", "utp bundle"],
@@ -52,6 +53,7 @@ KEYWORDS: Dict[str, List[str]] = {
     "san_switch": ["mds 9", "brocade", "g620", "g720", "g730", "sn3600", "sn6600", "san switch", "fc switch", "fibre channel switch", "connectrix",
                    "ds-6", "ports on demand"],
     "load_balancer": ["big-ip", "f5", "netscaler", "citrix adc", "a10", "thunder", "load balancer", "can bang tai", "kemp", "avi", "ltm"],
+    "accessory": ["transceiver", "direct attach", "dac", "sfp", "qsfp", "patch cord", "fiber cable", "cap quang", "mount bracket"],
     "backup": ["data domain", "powerprotect", "veeam", "commvault", "netbackup", "tape", "lto", "backup", "sao luu", "storeonce"],
     "software": ["vsphere", "vmware", "windows server", "sql server", "red hat", "rhel", "microsoft", "subscription", "phan mem", "license key",
                  "vcenter", "vcf", "vvf", "license", "licenses", "orchestrator", "automation platform", "nativeedge"],
@@ -59,6 +61,7 @@ KEYWORDS: Dict[str, List[str]] = {
                 "bao hanh", "support service", "dao tao", "training", "lap dat", "cau hinh", "implementation"],
 }
 LAYOUT_LABELS = {"dell_configurator": "Dell Solutions Configurator", "cisco_ccw": "Cisco Commerce Workspace (CCW)",
+                 "hpe_iris": "HPE Aruba (IRIS)",
                  "hpe": "HPE (One Config / báo giá)", "generic": "BOM thông thường"}
 # Base-model patterns: a line matching one starts a new configuration (when the current one already has a model).
 MODEL_RE = re.compile(
@@ -99,6 +102,7 @@ class Config:
     qty: Optional[int] = None            # set by layouts that state it (Dell configurator "Product Qty")
     price_basis: str = "total"           # "per_unit": line totals are for ONE unit (× qty for the configuration)
     unit_price: Optional[Decimal] = None # vendor's price of one unit, to cross-check the lines
+    qty_mode: Optional[str] = None       # known from the layout (CCW / IRIS children: "total"); None = guess
 
 
 # ---------------------------------------------------------------- reading
@@ -165,7 +169,7 @@ def parse(data: bytes) -> Dict[str, Any]:
     except Exception as exc:  # noqa: BLE001 — malformed file
         raise ValueError(f"Không đọc được file Excel ({type(exc).__name__}).") from None
     for name, rows in sheets:
-        conf = _dell_configurator(name, rows) or _cisco_ccw(name, rows)
+        conf = _dell_configurator(name, rows) or _line_quote(name, rows)
         if conf is not None:
             return conf
     best = None
@@ -252,63 +256,83 @@ def _dell_configurator(sheet: str, rows: List[List[Any]]) -> Optional[Dict[str, 
             "categories": [{"key": k, "label": lbl} for k, lbl in CATEGORIES], "configs": out, "warnings": warnings}
 
 
-# ---------------------------------------------------------------- Cisco Commerce Workspace (CCW) estimate
+# ---------------------------------------------------------------- line-numbered quotes: Cisco CCW, HPE Aruba IRIS
 _LINE_NO = re.compile(r"^\d+(\.\d+)*$")
+_CHASSIS_EXCLUDE = re.compile(r"module|cable|power supply|license|licence|kit\b|sfp|qsfp|transceiver|stack|fan|rack|bracket|mount|"
+                              r"\bsntc?\b|smart ?net|subscription|plug-n-play|\bspare\b", re.IGNORECASE)
 
 
-def _cisco_ccw(sheet: str, rows: List[List[Any]]) -> Optional[Dict[str, Any]]:
-    """Hierarchical line numbers: 1.0 = product (a configuration), 1.1 / 1.2.1 = its options and services.
-    Child quantities are for all units of the parent (CCW). Net price when present, list price otherwise."""
-    for h, r in enumerate(rows[:40]):
-        cells = [_norm(c) for c in r]
-        if any(c in ("line number", "line no", "line", "line #") for c in cells) and any("part number" in c or c == "sku" for c in cells) \
-                and any("description" in c for c in cells):
-            break
-    else:
-        return None
-    cells = [_norm(c) for c in rows[h]]
-
-    def col(*names, contains=None):
+def _quote_columns(cells: List[str]) -> Dict[str, Optional[int]]:
+    def col(*names, contains=None, exclude=None):
         for i, c in enumerate(cells):
+            if exclude and any(x in c for x in exclude):
+                continue
             if c in names or (contains and all(w in c for w in contains)):
                 return i
         return None
-    m = {"line": col("line number", "line no", "line", "line #"), "pn": col("part number", "sku", contains=["part", "number"]),
-         "desc": col("description", contains=["description"]), "qty": col("qty", "quantity"),
-         "unit_net": col(contains=["unit", "net"]), "ext_net": col(contains=["extended", "net"]),
-         "unit_list": col(contains=["unit", "list"]), "ext_list": col(contains=["extended", "list"]),
-         "duration": col(contains=["duration"])}
-    if m["qty"] is None:
+    unit = col(contains=["unit", "net"])
+    ext = col(contains=["extended", "net"])
+    if unit is None:
+        unit = col("unit price", "price", contains=["unit", "price"], exclude=["list"])
+    if ext is None:
+        ext = col("total", "total price", "extended price", "ext price", "line total", exclude=["sub"])
+    if unit is None:
+        unit = col(contains=["unit", "list"])
+    if ext is None:
+        ext = col(contains=["extended", "list"])
+    return {"line": col("line number", "line no", "line", "line #"), "pn": col("part number", "sku", "product number", contains=["part", "number"]),
+            "desc": col("description", contains=["description"]), "qty": col("qty", "quantity"), "unit": unit, "ext": ext,
+            "duration": col(contains=["duration"]), "vendor": col("manufacturer", "vendor")}
+
+
+def _line_quote(sheet: str, rows: List[List[Any]]) -> Optional[Dict[str, Any]]:
+    """Cisco CCW estimate (flat, or with line numbers 1.0 / 1.1) and HPE Aruba IRIS (Line# 1.0 / 1.1).
+    A line x.0 is one device; its children follow. Child quantities are for ALL units of the device.
+    In a flat Cisco estimate a new device starts at a chassis line (model pattern, not a module /
+    licence / service / cable). Net price when present, otherwise the unit / list price."""
+    for h, r in enumerate(rows[:40]):
+        cells = [_norm(c) for c in r]
+        m = _quote_columns(cells)
+        if m["pn"] is not None and m["desc"] is not None and m["qty"] is not None and (
+                m["line"] is not None or any("service duration" in c or "smart account" in c for c in cells)):
+            break
+    else:
         return None
+    hierarchical = m["line"] is not None
     configs: List[Config] = []
     warnings: List[str] = []
     cur: Optional[Config] = None
-    n_items, found = 0, 0
+    n_items, found, vendors = 0, 0, set()
     for rowno, r in enumerate(rows[h + 1:], start=h + 2):
-        no = _text(_cell(r, m["line"]), 20)
-        if not _LINE_NO.match(no):
+        pn = _text(_cell(r, m["pn"]), 80)
+        desc = _text(_cell(r, m["desc"]), 1000)
+        no = _text(_cell(r, m["line"]), 20) if hierarchical else ""
+        if hierarchical and not _LINE_NO.match(no):
+            continue
+        if not hierarchical and (not pn or not desc):
+            continue
+        qty = parse_number(_cell(r, m["qty"]))
+        if qty is None:
             continue
         found += 1
-        desc = _text(_cell(r, m["desc"]), 1000)
-        pn = _text(_cell(r, m["pn"]), 80)
-        qty = parse_number(_cell(r, m["qty"]))
-        unit = parse_number(_cell(r, m["unit_net"])) if m["unit_net"] is not None else None
-        ext = parse_number(_cell(r, m["ext_net"])) if m["ext_net"] is not None else None
-        if unit is None and ext is None:
-            unit = parse_number(_cell(r, m["unit_list"])) if m["unit_list"] is not None else None
-            ext = parse_number(_cell(r, m["ext_list"])) if m["ext_list"] is not None else None
-        if ext is None and unit is not None and qty is not None:
+        unit = parse_number(_cell(r, m["unit"])) if m["unit"] is not None else None
+        ext = parse_number(_cell(r, m["ext"])) if m["ext"] is not None else None
+        if ext is None and unit is not None:
             ext = unit * qty
+        if m["vendor"] is not None and _cell(r, m["vendor"]):
+            vendors.add(_text(_cell(r, m["vendor"]), 60))
         dur = _text(_cell(r, m["duration"]), 10) if m["duration"] is not None else ""
-        if dur and dur not in ("0", "---", "-"):
+        if dur and dur not in ("0", "---", "-", "N/A"):
             desc = f"{desc} ({dur} tháng)"
-        top = re.fullmatch(r"\d+(\.0)?", no) is not None
+        if hierarchical:
+            top = re.fullmatch(r"\d+(\.0)?", no) is not None
+        else:
+            top = cur is None or (bool(MODEL_RE.search(desc)) and not _CHASSIS_EXCLUDE.search(desc) and not pn.upper().startswith("CON-")
+                                  and not pn.endswith("="))
         if top:
-            cur = Config(title=desc[:200] or pn, explicit_title=True, qty=_int(qty) or 1, price_basis="total")
-            configs.append(cur)
+            cur = Config(title=desc[:140], explicit_title=True, qty=_int(qty) or 1, price_basis="total", qty_mode="total")
             cur.model_line = 0
-        elif cur is None:
-            continue
+            configs.append(cur)
         if n_items >= MAX_ITEMS:
             warnings.append(f"Quá {MAX_ITEMS} dòng hàng — phần sau bị bỏ.")
             break
@@ -316,14 +340,57 @@ def _cisco_ccw(sheet: str, rows: List[List[Any]]) -> Optional[Dict[str, Any]]:
         n_items += 1
     if found < 2 or not configs:
         return None
-    for c in configs:                     # a top line named by its PN only: use a model pattern from the first description
-        c.title = _model_title(c.items[0].desc) if MODEL_RE.search(c.items[0].desc) else c.title
-    head = " ".join(_text(x) for r in rows[:h] for x in r if x is not None)
-    cur_txt = " ".join(_text(x) for x in rows[h] if x is not None) + " " + head
+    before = len(configs)
+    configs = merge_identical(configs)
+    if len(configs) < before:
+        warnings.append(f"Gộp {before - len(configs)} cấu hình giống hệt nhau (cộng số lượng).")
+    head = " ".join(_text(x) for rr in rows[:h + 1] for x in rr if x is not None)
+    is_hpe = any("hewlett" in v.lower() or "aruba" in v.lower() for v in vendors) or re.search(r"aruba|\bhpe\b", " ".join(c.title for c in configs), re.IGNORECASE)
+    layout = "hpe_iris" if is_hpe else "cisco_ccw"
+    cur_txt = head + " " + " ".join(_text(x) for rr in rows[h + 1:h + 3] for x in rr if x is not None)
+    number_titles(configs)
     out = [config_out(c, i) for i, c in enumerate(configs[:MAX_CONFIGS])]
-    return {"sheet": sheet, "headerRow": h + 1, "layout": "cisco_ccw", "columns": {k: v + 1 for k, v in m.items() if v is not None},
+    return {"sheet": sheet, "headerRow": h + 1, "layout": layout, "columns": {k: v + 1 for k, v in m.items() if v is not None},
             "currency": "VND" if re.search(r"\bvnd\b", cur_txt, re.IGNORECASE) else "USD", "projectName": "",
             "categories": [{"key": k, "label": lbl} for k, lbl in CATEGORIES], "configs": out, "warnings": warnings}
+
+
+def _signature(c: Config) -> Tuple:
+    n = config_qty(c)
+    per = lambda q: (q / n) if c.price_basis == "total" and q is not None else q  # noqa: E731
+    return (c.price_basis, tuple((i.pn.upper(), i.desc, per(i.qty), per(i.total)) for i in c.items))
+
+
+def number_titles(configs: List[Config]) -> None:
+    """Same model with different options: "… (cấu hình 1)", "… (cấu hình 2)" so they can be told apart."""
+    by: Dict[str, List[Config]] = {}
+    for c in configs:
+        by.setdefault(c.title, []).append(c)
+    for title, group in by.items():
+        if len(group) > 1:
+            for k, c in enumerate(group, 1):
+                c.title = f"{title[:120]} (cấu hình {k})"
+
+
+def merge_identical(configs: List[Config]) -> List[Config]:
+    """Same device with the same options listed several times (IRIS / CCW line per site): one
+    configuration with the quantities added up."""
+    out: List[Config] = []
+    seen: Dict[Tuple, Config] = {}
+    for c in configs:
+        sig = _signature(c)
+        if sig in seen:
+            base = seen[sig]
+            k = config_qty(c)
+            if base.price_basis == "total":
+                for a, b in zip(base.items, c.items):
+                    a.qty = (a.qty or Decimal(0)) + (b.qty or Decimal(0))
+                    a.total = (a.total or Decimal(0)) + (b.total or Decimal(0)) if (a.total is not None or b.total is not None) else None
+            base.qty = config_qty(base) + k
+            continue
+        seen[sig] = c
+        out.append(c)
+    return out
 
 
 def sheets_header(sheets, name, h):
@@ -412,6 +479,10 @@ def classify(title: str, descs: Sequence[str]) -> str:
             s += min(body.count(w), 5)
         scores[cat] = s
     # licences / services only win when nothing physical scores
+    if re.search(r"subscription|licen[cs]e|\bsaas\b", t) and not MODEL_RE.search(title):
+        return "software"                                   # "Aruba Central … Subscription", "DNA … Term license"
+    if re.search(r"transceiver|direct attach|\bdac\b|patch cord|\bcable\b|mount|bracket", t) and len(descs) <= 2:
+        return "accessory"                                  # a lone optic / cable / bracket line                                   # "Aruba Central … Subscription", "DNA … Term license"
     hw = {k: v for k, v in scores.items() if k not in ("software", "service")}
     best_hw = max(hw, key=hw.get)
     if hw[best_hw] >= 3:
@@ -455,7 +526,7 @@ def _fmt(d: Decimal) -> str:
 
 _GB = re.compile(r"(\d+(?:[.,]\d+)?)\s*(tb|gb)\b", re.IGNORECASE)
 _PORTS = re.compile(r"\b(single|dual|quad|one|two|four|\d{1,2})[\s-]*(?:port|p)\b", re.IGNORECASE)
-_SPEED = re.compile(r"(?<![\d.])(\d{1,3}(?:\.5)?(?:/\d{1,3})*)\s*(?:gbe|ge|gb(?:/s)?|gbps|g)\b(?!\s*(?:ram|memory|dimm|byte))", re.IGNORECASE)
+_SPEED = re.compile(r"(?<![\d.])(\d{1,3}(?:\.5)?(?:/\d{1,3}(?:\.5)?)*)\s*(?:gbe|ge|gb(?:/s)?|gbps|g)\b(?!\s*(?:ram|memory|dimm|byte))", re.IGNORECASE)
 _WORDNUM = {"single": 1, "one": 1, "dual": 2, "two": 2, "quad": 4, "four": 4}
 
 
@@ -562,6 +633,9 @@ def summarise(cat: str, c: Config, n: int, mode: str) -> List[List[str]]:
                  ["License / module", _license_tier(alltext) or listing(lic)],
                  ["Triển khai", "Cặp HA (2 thiết bị)" if n == 2 else (f"{n} thiết bị" if n > 1 else "1 thiết bị")]]
     else:
+        if cat in ("software", "service") and c.model_line is not None:      # the first line is a product too
+            comps = [(c.items[c.model_line], _per_unit(c.items[c.model_line].qty, n, mode))] + comps
+            rows[0][1] = _text(c.title, 200)
         main = [(i, q) for i, q in comps if not (i.module and _module_kind(i.module) == "misc") and not re.match(r"(for |subscription duration)", _norm(i.desc))]
         rows += [["Thành phần chính", listing(main[:5]) if main else ""]]
     if cat not in ("service", "software"):
@@ -569,7 +643,7 @@ def summarise(cat: str, c: Config, n: int, mode: str) -> List[List[str]]:
     return [r for r in rows if r[1]]
 
 
-_EMPTY = re.compile(r"^(no|none|not included|without|decline)\b|factory integrat|^(hpe )?integration of|^localization", re.IGNORECASE)
+_EMPTY = re.compile(r"^(no|none|not included|included:|without|decline)\b|^included:|factory integrat|^(hpe )?integration of|^localization", re.IGNORECASE)
 
 
 def is_empty(i: Item) -> bool:
@@ -630,7 +704,7 @@ def _ports_txt(found) -> str:
 
 
 _PORT_GROUP = re.compile(r"\b(\d{1,3})\s*[x×]\s*(\d{1,3}(?:/\d{1,3})*\s*(?:gbe|ge|gb|g|m)\b(?:\s*(?:sfp28|sfp\+|sfp|qsfp28|qsfp\+|qsfp-dd|qsfp|rj-?45|base-t))?)", re.IGNORECASE)
-_PORT_GROUP2 = re.compile(r"\b(\d{1,3})[\s-]*port[s]?\b(?:\s*(\d{1,3}(?:/\d{1,3})*\s*g\w*))?", re.IGNORECASE)
+_PORT_GROUP2 = re.compile(r"\b(\d{1,3})(?:[\s-]*port[s]?|p)\b(?:\s*(\d{1,3}(?:/\d{1,3})*\s*g\w*))?", re.IGNORECASE)
 
 
 def _port_groups(text: str) -> str:
@@ -662,12 +736,12 @@ def _license_tier(text: str) -> str:
 def config_out(c: Config, idx: int, category: Optional[str] = None, qty_mode: Optional[str] = None) -> Dict[str, Any]:
     n = config_qty(c)
     cat = category or classify(c.title, [i.desc for i in c.items])
-    mode = qty_mode or guess_qty_mode(c, n)
+    mode = qty_mode or c.qty_mode or guess_qty_mode(c, n)
     total = sum((i.total for i in c.items if i.total is not None), Decimal(0))
     if c.price_basis == "per_unit":
         total = total * n
     return {"id": idx, "title": c.title, "category": cat, "qty": n, "qtyMode": mode, "priceBasis": c.price_basis,
-            "summary": summarise(cat, c, n, mode) + price_rows(c, n),
+            "summary": summarise(cat, c, n, mode) + price_rows(c, n, cat),
             "items": [{"pn": i.pn, "desc": i.desc, "module": i.module, "unit": i.unit, "qty": _num(i.qty), "price": _num(i.price),
                        "total": _num(i.total), "isModel": k == c.model_line, "empty": is_empty(i)} for k, i in enumerate(c.items)],
             "total": _num(total)}
@@ -680,12 +754,15 @@ def money_text(d: Optional[Decimal]) -> str:
     return s.replace(",", "X").replace(".", ",").replace("X", ".")   # 1.234.567,89 (Vietnamese)
 
 
-def price_rows(c: Config, n: int) -> List[List[str]]:
-    """Price lines of the summary box: one unit and the whole configuration."""
+def price_rows(c: Config, n: int, cat: str = "") -> List[List[str]]:
+    """Price lines of the summary box: one unit and the whole configuration (licences / services:
+    the total only — a "unit" means nothing for a bundle of subscriptions)."""
     lines = [i.total for i in c.items if i.total is not None]
     if not lines:
         return []
     total = sum(lines, Decimal(0))
+    if cat in ("software", "service") and c.price_basis == "total":
+        return [["Thành tiền", money_text(total.quantize(Decimal("0.01")))]]
     if c.price_basis == "per_unit":
         unit, whole = total, total * n
     else:
@@ -715,4 +792,4 @@ def resummarise(cfg: Dict[str, Any]) -> List[List[str]]:
     c.price_basis = "per_unit" if cfg.get("priceBasis") == "per_unit" else "total"
     n = int(cfg.get("qty") or config_qty(c))
     return summarise(cfg.get("category") if cfg.get("category") in CATEGORY_LABELS else "other", c, max(1, n),
-                     cfg.get("qtyMode") if cfg.get("qtyMode") in ("per_unit", "total") else "per_unit") + price_rows(c, max(1, n))
+                     cfg.get("qtyMode") if cfg.get("qtyMode") in ("per_unit", "total") else "per_unit") + price_rows(c, max(1, n), cfg.get("category") or "")
