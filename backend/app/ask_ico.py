@@ -152,7 +152,7 @@ class Toolbox:
 
 def ask(db: Session, user: User, question: str) -> Dict[str, Any]:
     """Raises AiBlocked / AiError (safe messages)."""
-    from .spend import ai as transport
+    from .shared import ai_transport as transport
     q = " ".join(str(question or "").split())[:MAX_QUESTION]
     if len(q) < 3:
         raise ValueError("Câu hỏi quá ngắn.")

@@ -46,7 +46,7 @@ def _today():
 def check_and_notify(db: Session, post=None) -> Dict[str, int]:
     """Compare the current push items with the stored state; send one Discord message per
     channel for the new ones (and the cleared ones). Returns counters."""
-    from .spend.notify import NotifyError, _post_json, validate_discord_url
+    from .shared.webhook import WebhookError as NotifyError, post_json as _post_json, validate_discord_url
     post = post or _post_json
     from .features import get_features
     items, _ = inbox._compute(db, _today())

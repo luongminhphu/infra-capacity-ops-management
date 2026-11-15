@@ -646,7 +646,7 @@ def rows_to_vmspecs(table: List[List[Any]]) -> Dict[str, Any]:
 def parse_vm_file(filename: str, content: bytes) -> Dict[str, Any]:
     name = (filename or "").lower()
     if name.endswith((".xlsx", ".xlsm")):
-        from .platform import xlsx_io
+        from .shared import xlsx_io
         try:
             sheets = xlsx_io.read_rows(content, max_sheets=20, max_rows=20000, max_cols=60)
         except xlsx_io.XlsxError as exc:

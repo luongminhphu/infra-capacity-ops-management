@@ -296,7 +296,7 @@ def parse_schedule_xlsx(data: bytes) -> List[Dict[str, Any]]:
     """Blocks: a system name in column B, a weekday header row (Monday … Sunday) below it,
     the backup type per day on the next row (values or IF formulas) and label / value pairs
     in columns J / K: 'Full Backup', 'Full backup Retention (days)', 'Start time', 'End Time'."""
-    from ..platform import xlsx_io
+    from ..shared import xlsx_io
 
     # Formulas kept (data_only=False): the template computes the daily type with IF(…).
     sheets = xlsx_io.read_rows(data, max_sheets=20, max_rows=3000, max_cols=30, data_only=False)
