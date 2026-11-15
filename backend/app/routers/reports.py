@@ -10,6 +10,7 @@ from .. import capacity, data_access, history, planning, report_pdf, report_plan
 from ..config import get_settings
 from ..database import get_db
 from ..models import ReportLogo, User
+from ..features import ensure_feature, require_feature
 from ..security import get_current_user
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -56,6 +57,8 @@ def export_pdf(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if view == "planning":
+        ensure_feature(db, "planning")
     settings = get_settings()
     policy = data_access.get_effective_policy(db, settings)
     if storage is not None:
@@ -165,7 +168,7 @@ def _finite_or_none(v):
     return v if isinstance(v, (int, float)) and math.isfinite(v) else None
 
 
-@router.get("/planning")
+@router.get("/planning", dependencies=[Depends(require_feature("planning"))])
 def planning_result(
     vcenter: Optional[str] = Query(default="all"),
     horizon: int = Query(default=36, ge=6, le=60),

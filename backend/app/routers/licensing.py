@@ -19,10 +19,14 @@ from ..database import get_db
 from ..licensing import assess as assess_mod
 from ..licensing import os_classify, rules as rules_mod, whatif as whatif_mod
 from ..models import LicenseAssessment, LicenseEntitlement, LicenseRuleSet, ReportLogo, User, VmOsOverride
+from ..features import require_feature
 from ..security import get_current_user
 from ..timeutil import to_iso_utc
 
 router = APIRouter(prefix="/api/licensing", tags=["licensing"])
+# Asset endpoints above (clusters, inventory, OS overrides) serve Tài sản → ESXi / Hệ điều hành and stay on
+# whatever the License module switch says. Everything that is license assessment lives on this router.
+license_router = APIRouter(prefix="/api/licensing", tags=["licensing"], dependencies=[Depends(require_feature("license"))])
 
 
 # ---------------------------------------------------------------------------
@@ -254,13 +258,13 @@ class RuleVerifyIn(BaseModel):
     note: Optional[str] = None
 
 
-@router.get("/rules")
+@license_router.get("/rules")
 def list_rules(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     rules_mod.seed_rule_sets(db)
     return rules_mod.list_rules(db)
 
 
-@router.post("/rules/{rule_id}/versions")
+@license_router.post("/rules/{rule_id}/versions")
 def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     base = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not base:
@@ -269,7 +273,7 @@ def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends
     return rules_mod.rule_to_dict(nv)
 
 
-@router.post("/rules/{rule_id}/activate")
+@license_router.post("/rules/{rule_id}/activate")
 def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
@@ -279,7 +283,7 @@ def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depe
     return rules_mod.list_rules(db)
 
 
-@router.post("/rules/{rule_id}/deactivate")
+@license_router.post("/rules/{rule_id}/deactivate")
 def deactivate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
@@ -289,7 +293,7 @@ def deactivate_rule(rule_id: int, db: Session = Depends(get_db), user: User = De
     return rules_mod.list_rules(db)
 
 
-@router.post("/rules/{rule_id}/verify")
+@license_router.post("/rules/{rule_id}/verify")
 def verify_rule(rule_id: int, payload: RuleVerifyIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
@@ -316,7 +320,7 @@ class EntitlementIn(BaseModel):
     note: Optional[str] = None
 
 
-@router.get("/entitlements")
+@license_router.get("/entitlements")
 def list_entitlements(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return {"items": _entitlements(db), "products": assess_mod.PRODUCT_LABEL,
             "metrics": {"core": "core", "pack2": "pack 2 core", "pack16": "pack 16 core", "cpu": "CPU (legacy)"},
@@ -346,7 +350,7 @@ def _apply_ent(row: LicenseEntitlement, p: EntitlementIn, user: User):
     row.updated_by = user.username
 
 
-@router.post("/entitlements")
+@license_router.post("/entitlements")
 def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     row = LicenseEntitlement()
     _apply_ent(row, payload, user)
@@ -356,7 +360,7 @@ def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), us
     return _ent_dict(row)
 
 
-@router.put("/entitlements/{ent_id}")
+@license_router.put("/entitlements/{ent_id}")
 def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     row = db.query(LicenseEntitlement).filter(LicenseEntitlement.id == ent_id).first()
     if not row:
@@ -367,7 +371,7 @@ def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depend
     return _ent_dict(row)
 
 
-@router.delete("/entitlements/{ent_id}")
+@license_router.delete("/entitlements/{ent_id}")
 def delete_entitlement(ent_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     row = db.query(LicenseEntitlement).filter(LicenseEntitlement.id == ent_id).first()
     if not row:
@@ -393,7 +397,7 @@ def _run_assess(db: Session, vcenter: Optional[str], cluster: Optional[str], clu
     return result, inputs
 
 
-@router.get("/assess")
+@license_router.get("/assess")
 def assess_live(vcenter: Optional[str] = Query(default="all"), cluster: Optional[str] = Query(default=None),
                 clusters: Optional[str] = Query(default=None),
                 db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -421,7 +425,7 @@ def _snap_meta(s: LicenseAssessment) -> Dict[str, Any]:
             "scope": json.loads(s.scope_json or "{}"), "resultHash": s.result_hash, "summary": summary}
 
 
-@router.post("/assessments")
+@license_router.post("/assessments")
 def create_snapshot(payload: SnapshotIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     result, inputs = _run_assess(db, payload.vcenter, payload.cluster, payload.clusters)
     snap = LicenseAssessment(
@@ -436,13 +440,13 @@ def create_snapshot(payload: SnapshotIn, db: Session = Depends(get_db), user: Us
     return _snap_meta(snap)
 
 
-@router.get("/assessments")
+@license_router.get("/assessments")
 def list_snapshots(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     rows = db.query(LicenseAssessment).order_by(LicenseAssessment.created_at.desc()).limit(100).all()
     return [_snap_meta(s) for s in rows]
 
 
-@router.get("/assessments/{snap_id}")
+@license_router.get("/assessments/{snap_id}")
 def get_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     s = db.query(LicenseAssessment).filter(LicenseAssessment.id == snap_id).first()
     if not s:
@@ -452,7 +456,7 @@ def get_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depen
     return meta
 
 
-@router.post("/assessments/{snap_id}/recompute")
+@license_router.post("/assessments/{snap_id}/recompute")
 def recompute_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Re-run the engine on the stored inputs and compare hashes — proves the
     snapshot is reproducible independent of the current inventory."""
@@ -465,7 +469,7 @@ def recompute_snapshot(snap_id: int, db: Session = Depends(get_db), user: User =
     return {"id": s.id, "storedHash": s.result_hash, "recomputedHash": h, "reproducible": h == s.result_hash}
 
 
-@router.delete("/assessments/{snap_id}")
+@license_router.delete("/assessments/{snap_id}")
 def delete_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     s = db.query(LicenseAssessment).filter(LicenseAssessment.id == snap_id).first()
     if not s:
@@ -486,7 +490,7 @@ class WhatifIn(BaseModel):
     scenario: Dict[str, Any]
 
 
-@router.post("/whatif")
+@license_router.post("/whatif")
 def whatif(payload: WhatifIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     if payload.scenario.get("type") not in whatif_mod.SCENARIO_TYPES:
         raise HTTPException(400, f"scenario.type phải thuộc {whatif_mod.SCENARIO_TYPES}")
@@ -512,7 +516,7 @@ def _ascii_slug(v: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", t).strip("_")[:40]
 
 
-@router.get("/report/pdf")
+@license_router.get("/report/pdf")
 def report_pdf(vcenter: Optional[str] = Query(default="all"), cluster: Optional[str] = Query(default=None),
                clusters: Optional[str] = Query(default=None), snapshot: Optional[int] = Query(default=None),
                preparedBy: Optional[str] = Query(default=None),

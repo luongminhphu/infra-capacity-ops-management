@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from .. import capacity, data_access
 from ..config import get_settings
 from ..database import get_db
-from ..features import get_features
+from ..features import get_features, is_on
 from ..models import User
 from ..security import get_current_user
 from ..spend.roles import has_role
@@ -54,7 +54,7 @@ def _like(q: str) -> str:
 
 
 def _spend_ok(user: User, features: Dict[str, bool]) -> bool:
-    return features.get("spend") is not False and has_role(user, "viewer")
+    return is_on(features, "spend") and has_role(user, "viewer")
 
 
 # ================================================================ search
@@ -84,7 +84,7 @@ def search(q: str = Query(min_length=2, max_length=80), user: User = Depends(get
             n += 1
             if n >= PER_TYPE:
                 break
-    if features.get("backup") is not False:
+    if is_on(features, "backup"):
         from ..models import BackupJob
         names = (db.query(BackupJob.client_name).filter(func.lower(BackupJob.client_name).like(_like(t)))
                  .distinct().limit(PER_TYPE).all())
@@ -178,7 +178,7 @@ def host_card(name: str = Query(min_length=1, max_length=255), vcenter: str = Qu
     out = {
         "type": "host", "name": h["host"], "vcenterKey": h.get("vcenterKey") or "", "cluster": h.get("cluster"),
         "hardware": {k: h.get(k) for k in ("vendor", "model", "cpuModel", "cpuSockets", "cores", "cpuThreads", "ramGB", "status",
-                                           *(("esxiVersion", "esxiBuild") if features.get("license") is not False else ()))},
+                                           *(("esxiVersion", "esxiBuild") if is_on(features, "license") else ()))},
         "capacity": {"vcpuUsed": row.get("vcpuUsed"), "ramUsedGB": row.get("ramUsedGB"), "cpuPct": _num(row.get("cpuPct")),
                      "ramPct": _num(row.get("ramPct")), "vmCount": row.get("vmCount"),
                      "overall": _status(row["overall"]) if row.get("overall") else None},
@@ -205,7 +205,7 @@ def vm_card(name: str = Query(min_length=1, max_length=255), vcenter: str = Quer
     policy = data_access.get_effective_policy(db, get_settings())
     features = get_features(db)
     os_ = None
-    if features.get("license") is not False:
+    if is_on(features, "license"):
         ov = _overrides_map(db).get(os_classify.override_key(v.get("vcenterKey"), v.get("instanceUuid"), v.get("vm")))
         os_ = os_classify.classify_vm(v, ov)
     out = {
@@ -215,7 +215,7 @@ def vm_card(name: str = Query(min_length=1, max_length=255), vcenter: str = Quer
         "os": {"category": os_.get("category"), "label": os_.get("categoryLabel"), "version": os_.get("osVersion"),
                "edition": os_.get("osEdition"), "source": os_.get("source"), "overridden": bool(os_.get("overridden"))} if os_ else None,
         "findings": _findings_for(hosts, vms, policy, v["vm"]),
-        "backup": _backup_for_vm(db, v) if features.get("backup") is not False else None,
+        "backup": _backup_for_vm(db, v) if is_on(features, "backup") else None,
     }
     return out
 

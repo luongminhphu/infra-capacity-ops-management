@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .. import inbox, ops_alerts
 from ..database import get_db
-from ..features import get_features
+from ..features import get_features, is_on
 from ..models import InboxAck, User, UserPref
 from ..security import get_current_user, is_admin, require_admin
 from ..spend.fiscal import today_vn
@@ -65,11 +65,11 @@ def get_inbox(show: str = Query(default="open", pattern="^(open|all|done)$"), fr
         s["count"] += 1
         if s["worst"] is None or inbox.LEVEL_RANK[it["level"]] < inbox.LEVEL_RANK[s["worst"]]:
             s["worst"] = it["level"]
-    if features.get("backup") is False:
+    if not is_on(features, "backup"):
         sources.pop("backup")
-    if features.get("license") is False:
+    if not is_on(features, "license"):
         sources.pop("license")
-    if features.get("spend") is False or not has_role(user, "viewer"):
+    if not is_on(features, "spend") or not has_role(user, "viewer"):
         sources.pop("spend")
     if not is_admin(user):
         sources.pop("system")
@@ -125,14 +125,14 @@ def agenda(days: int = Query(default=120, ge=7, le=400), user: User = Depends(ge
         n = (d - today).days
         return "crit" if n < 0 else "bad" if n <= bad else "warn" if n <= warn else "ok"
 
-    if features.get("license") is not False:
+    if is_on(features, "license"):
         from ..models import LicenseEntitlement
         for e in db.query(LicenseEntitlement).filter(LicenseEntitlement.valid_to.isnot(None)):
             d = e.valid_to.date()
             if d <= end and (d - today).days >= -90:
                 add(d, "license", f"License {e.product} hết hạn", f"{e.quantity:g} {e.metric} · {e.scope_cluster or e.scope_vcenter or 'toàn bộ'}",
                     "lic-assess", tone_of(d))
-    if features.get("spend") is not False and has_role(user, "viewer"):
+    if is_on(features, "spend") and has_role(user, "viewer"):
         from ..spend import service
         from ..spend.models import Contract, ContractPayment, OpexItem, Quotation, QuoteRequest, SpendVendor
         vendors = {v.id: service.vendor_label(v) for v in db.query(SpendVendor)}

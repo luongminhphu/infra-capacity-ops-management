@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .. import ai_data, ai_platform
 from ..database import get_db
-from ..features import get_features
+from ..features import ensure_feature
 from ..models import ImportMapping, User
 from ..security import get_current_user, is_admin, require_admin
 from ..spend import ai as transport
@@ -19,8 +19,7 @@ router = APIRouter(prefix="/api", tags=["ai-data"])
 
 
 def _feature(db: Session, key: str) -> None:
-    if not get_features(db).get(key, True):
-        raise HTTPException(404, "Tính năng đang tắt (Cài đặt → Tính năng).")
+    ensure_feature(db, key)
 
 
 def _ai(fn):
