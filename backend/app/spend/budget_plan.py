@@ -21,7 +21,9 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
+from sqlalchemy import update
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from ..models import User
 from . import codes, fiscal, service
@@ -360,7 +362,7 @@ def apply(db: Session, plan: BudgetPlan, cfg: SpendSettings, user: User, request
                 "amountNet": l.amount_net, "vatPct": l.vat_pct, "amountGross": l.amount_gross, "fiscalYear": plan.fiscal_year, "costCenterId": l.cost_center_id,
                 "ownerName": user.display_name or user.username, "status": "planned",
             }, cfg, user, request)
-            l.applied_code = o.code
+            _claim_line(db, l, o.code, user)
         else:
             p = CapexProject(code=codes.next_code(db, "capex", plan.fiscal_year), fiscal_year=plan.fiscal_year, name=l.title,
                              description=l.note, cost_center_id=l.cost_center_id, owner_name=user.display_name or user.username,
@@ -371,11 +373,25 @@ def apply(db: Session, plan: BudgetPlan, cfg: SpendSettings, user: User, request
                              quantity=1, amount_net=l.amount_net, vat_pct=l.vat_pct, amount_gross=l.amount_gross,
                              start_date=l.start_date, coverage_years=0))
             service.audit(db, user, request, "spend.capex.create", code=p.code, plan=plan_label(plan))
-            l.applied_code = p.code
-        l.updated_at, l.updated_by = dt.datetime.utcnow(), user.username
+            _claim_line(db, l, p.code, user)
         out["created"].append(l.applied_code)
     service.audit(db, user, request, "spend.plan.apply", plan=plan_label(plan), created=out["created"], skipped=out["skipped"])
     return out
+
+
+def _claim_line(db: Session, line: BudgetPlanLine, code: str, user: User) -> None:
+    """Mark the line applied only if nobody else did: UPDATE ... WHERE applied_code IS NULL.
+    0 rows -> a concurrent apply got there first; raising rolls back the Opex / Capex this
+    request just created, so each line yields exactly one booking."""
+    now = dt.datetime.utcnow()
+    res = db.execute(update(BudgetPlanLine)
+                     .where(BudgetPlanLine.id == line.id, BudgetPlanLine.applied_code.is_(None))
+                     .values(applied_code=code, updated_at=now, updated_by=user.username)
+                     .execution_options(synchronize_session=False))
+    if res.rowcount != 1:
+        raise HTTPException(409, "Kế hoạch đang được áp dụng bởi thao tác khác — tải lại để xem kết quả.")
+    for attr, val in (("applied_code", code), ("updated_at", now), ("updated_by", user.username)):
+        set_committed_value(line, attr, val)
 
 
 def plan_label(plan: BudgetPlan) -> str:

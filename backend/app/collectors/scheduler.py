@@ -26,27 +26,19 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
-from .. import capacity
+from .. import capacity, data_access
 from ..config import Settings, VCenterConfig, get_settings
 from ..database import SessionLocal
 from ..models import ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, VmSnapshot
 from ..vcenter import client as vcenter_client
 from ..vcenter import demo_generator
 from .locks import SourceBusy, source_lock
+from . import retention
 
 logger = logging.getLogger("vco.scheduler")
 
 IDLE_CPU_PCT = 5.0
 PREVIOUS_RUNS = 5        # look for a VM's previous snapshot in this many recent successful runs
-
-
-def _policy_from_settings(s: Settings) -> capacity.Policy:
-    return capacity.Policy(
-        cpu_overcommit_max=s.cpu_overcommit_max,
-        ram_overcommit_max=s.ram_overcommit_max,
-        ht_factor=s.ht_factor,
-        idle_days=s.idle_days,
-    )
 
 
 def _enrich_activity(db: Session, vcenter_key: str, vm_rows: List[Dict[str, Any]],
@@ -149,7 +141,9 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
         db.flush()
         now = dt.datetime.utcnow()
         _enrich_activity(db, cfg.key, vm_rows, now)
-        policy = _policy_from_settings(settings)
+        # Same policy as the live dashboard (env defaults + admin overrides in app_settings),
+        # so stored aggregates / findings match what users saw when the snapshot was taken.
+        policy = data_access.get_effective_policy(db, settings)
         common = {"run_id": run.id, "vcenter_key": cfg.key, "captured_at": now}
 
         _bulk(db, HostSnapshot, [{
@@ -371,6 +365,7 @@ async def scheduler_loop(app_settings: Settings):
             skipped = [r.get("vcenterKey") or r.get("key") for r in results if r.get("skipped")]
             _beat(interval)
             await asyncio.to_thread(_ops_alerts)
+            await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
             logger.info("Scheduled sync of %d sources finished in %.1fs%s%s", len(results),
                         (dt.datetime.utcnow() - started).total_seconds(),
                         f"; failed: {', '.join(failed)} (retry next cycle)" if failed else "",
