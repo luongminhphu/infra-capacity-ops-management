@@ -943,3 +943,23 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .pp-rec-row select,.pp-rec-row input{height:var(--control-h-sm);width:100%;}
 .sp-form select[multiple]{height:auto;padding:var(--space-1);}
 @media (max-width:640px){.pp-rec-row{grid-template-columns:1fr 1fr;}}
+/* Thanh toán hợp đồng (spend_payment.js) */
+.pay-summary{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);font-size:var(--fs-body-sm);margin-bottom:var(--space-2);font-variant-numeric:var(--numeric-features);}
+.pay-item{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:var(--space-2);}
+.pay-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.1fr);gap:var(--space-3);align-items:center;padding:var(--space-2) var(--space-3);cursor:pointer;font-size:var(--fs-body-sm);}
+.pay-row:hover,.pay-row:focus-visible{background:var(--overlay-hover);outline:none;}
+.pay-row .num{text-align:right;}
+.pay-row > div:nth-child(4){white-space:nowrap;}
+.pay-row .muted-sub{white-space:normal;}
+.pay-body{display:none;padding:0 var(--space-3) var(--space-3);border-top:1px solid var(--border-subtle);}
+.pay-item.open .pay-body{display:block;}
+.pay-docs{list-style:none;margin:var(--space-2) 0;padding:0;display:flex;flex-direction:column;gap:var(--space-1);}
+.pay-doc{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;font-size:var(--fs-body-sm);}
+.pay-doc a{color:var(--text-brand);}
+.pay-doc .muted-sub{margin-top:0;}
+.pay-file{cursor:pointer;}
+.pay-form{border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:var(--space-3);margin:var(--space-2) 0;}
+.pay-paid-form{align-items:flex-end;margin:var(--space-2) 0;}
+.pay-paid-form input{height:var(--control-h-sm);}
+.pay-def-row{grid-template-columns:minmax(0,1fr) auto auto auto;}
+@media (max-width:760px){.pay-row{grid-template-columns:1fr 1fr;}}

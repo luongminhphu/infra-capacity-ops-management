@@ -173,6 +173,8 @@ async function ctOpenDetail(code) {
     </dl>
     ${c.note ? `<p class="sp-desc">${esc(c.note)}</p>` : ''}
     ${purge}
+    <h4 class="sp-h">Thanh toán</h4>
+    <div id="ctPayments"><p class="muted-sub">Đang tải…</p></div>
     ${upload}
     <h4 class="sp-h">Lịch sử version</h4>
     ${timeline ? `<ol class="ct-timeline">${timeline}</ol>` : '<p class="muted-sub">Chưa có version nào.</p>'}
@@ -187,6 +189,7 @@ async function ctOpenDetail(code) {
     c.status === 'draft' && spCan('editor') && c.currentVersion ? btn('id="ctNegotiate"', 'Chuyển sang đàm phán') : '',
   ].join('');
   spDialog(`${esc(c.code)} — ${esc(c.title)}`, body, actions);
+  if (typeof payRender === 'function') payRender(c.code);
   const reopen = async () => { await ctRefresh(); await ctOpenDetail(c.code); };
   const post = (path, payload) => apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}/${path}`, { method: 'POST', body: JSON.stringify(payload || {}) });
   $('#spDialogBody').onclick = (e) => {

@@ -590,7 +590,9 @@ async function spRenderAdmin() {
           <tbody>${logRows || '<tr><td colspan="6" class="empty-note">Chưa có lượt nhắc nào.</td></tr>'}</tbody></table></div>
       </div>
     </div>
-    <div id="ppAdminMount"></div>`;
+    <div id="ppAdminMount"></div>
+    <div id="payDefaultsMount"></div>`;
+  if (typeof payRenderDefaults === 'function') payRenderDefaults($('#payDefaultsMount'));
   if (typeof ppRenderAdmin === 'function') ppRenderAdmin($('#ppAdminMount'));
   refreshIcons();
   const msg = (t, ok) => { const el = $('#spSettingsMsg'); el.textContent = t || ''; el.className = 'criteria-status' + (t ? (ok ? ' ok' : ' error') : ''); };
