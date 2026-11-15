@@ -99,8 +99,8 @@
       <div class="topbar-scope" id="topbarScope" aria-label="Phạm vi dữ liệu">
         <span class="scope-label"><i data-lucide="filter"></i>Phạm vi</span>
         <select id="vcenterSelect" title="Chọn vCenter" data-scope="vcenter"></select>
-        <select id="filterCluster" data-scope="cluster"><option value="all">Tất cả cluster</option></select>
-        <select id="filterHost" data-scope="host"><option value="all">Tất cả host</option></select>
+        <select id="filterCluster" data-scope="cluster" aria-label="Phạm vi: cluster"><option value="all">Tất cả cluster</option></select>
+        <select id="filterHost" data-scope="host" aria-label="Phạm vi: host"><option value="all">Tất cả host</option></select>
         <span class="pill na" id="dataFootprint" data-scope="footprint">Hosts: 0 | VMs: 0</span>
       </div>
       <div class="topbar-actions">
@@ -133,9 +133,9 @@
 
         <section class="panel" id="execDecisionPanel">
           <div class="panel-head">
-            <div><div class="panel-title">Danh mục quyết định cần phê duyệt</div><p class="panel-sub">Nội dung cần phê duyệt hoặc ghi nhận chủ trương, xếp theo ưu tiên.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">Danh mục quyết định cần phê duyệt</div><p class="panel-sub">Nội dung cần phê duyệt hoặc ghi nhận chủ trương, xếp theo ưu tiên.</p></div>
           </div>
-          <div class="table-wrap"><table class="data-table" id="execDecisionTable">
+          <div class="table-wrap" role="region" tabindex="0" aria-label="Bảng quyết định"><table class="data-table" id="execDecisionTable">
             <thead><tr><th>#</th><th>Nội dung quyết định</th><th>Ưu tiên</th><th>Thời điểm</th><th>Rủi ro tránh được / lợi ích</th></tr></thead>
             <tbody></tbody>
           </table></div>
@@ -145,18 +145,18 @@
 
         <section class="chart-grid chart-grid-2">
           <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Xu hướng sử dụng tài nguyên</div><p class="panel-sub">Tổng vCPU / RAM đã dùng so với tổng năng lực vật lý, một snapshot mỗi ngày.</p></div></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Xu hướng sử dụng tài nguyên</div><p class="panel-sub">Tổng vCPU / RAM đã dùng so với tổng năng lực vật lý, một snapshot mỗi ngày.</p></div></div>
             <div class="chart-wrap"><canvas id="chartExecTrend" role="img" aria-label="Xu hướng CPU và RAM theo phần trăm công suất vật lý"></canvas></div>
             <div class="exec-forecasts"><div class="insight-card" id="execForecastCpu"></div><div class="insight-card" id="execForecastRam"></div></div>
           </article>
           <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Theo vCenter</div><p class="panel-sub">CPU / RAM theo % ngưỡng overcommit.</p></div></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Theo vCenter</div><p class="panel-sub">CPU / RAM theo % ngưỡng overcommit.</p></div></div>
             <div id="execByVcenter"></div>
           </article>
         </section>
 
         <section class="card panel-flush">
-          <div class="panel-head"><div><div class="panel-title">Cluster rủi ro cao nhất</div><p class="panel-sub">Xếp theo % ngưỡng overcommit CPU / RAM, cao nhất trước — ưu tiên đầu tư / mở rộng.</p></div></div>
+          <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Cluster rủi ro cao nhất</div><p class="panel-sub">Xếp theo % ngưỡng overcommit CPU / RAM, cao nhất trước — ưu tiên đầu tư / mở rộng.</p></div></div>
           <div id="execTopRisk"></div>
         </section>
 
@@ -164,7 +164,7 @@
 
         <section class="panel" id="execRecommendationsPanel">
           <div class="panel-head">
-            <div><div class="panel-title">Nhận định &amp; đề xuất</div><p class="panel-sub">Mỗi đề xuất gồm ý nghĩa, việc cần làm, rủi ro nếu chưa hành động và nội dung cần phê duyệt; System Owner của từng cluster chịu trách nhiệm xử lý.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">Nhận định &amp; đề xuất</div><p class="panel-sub">Mỗi đề xuất gồm ý nghĩa, việc cần làm, rủi ro nếu chưa hành động và nội dung cần phê duyệt; System Owner của từng cluster chịu trách nhiệm xử lý.</p></div>
           </div>
           <div id="execRecommendations"></div>
         </section>
@@ -175,35 +175,35 @@
         <section class="kpi-grid" id="capacityKpis"></section>
 
         <section class="card panel-flush">
-          <div class="panel-head"><div><div class="panel-title">Theo cluster</div><p class="panel-sub" id="clusterUtilSub">CPU / RAM / Storage % sử dụng theo từng cluster.</p></div></div>
+          <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Theo cluster</div><p class="panel-sub" id="clusterUtilSub">CPU / RAM / Storage % sử dụng theo từng cluster.</p></div></div>
           <div id="clusterUtilSm"></div>
         </section>
 
         <section class="chart-grid chart-grid-host">
           <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">10 host dùng nhiều nhất</div><p class="panel-sub">CPU / RAM theo % ngưỡng overcommit của từng host.</p></div></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">10 host dùng nhiều nhất</div><p class="panel-sub">CPU / RAM theo % ngưỡng overcommit của từng host.</p></div></div>
             <div class="chart-wrap chart-wrap-tall"><canvas id="chartHostUtil" aria-label="10 host dùng nhiều nhất, CPU và RAM theo phần trăm ngưỡng" role="img"></canvas></div>
           </article>
           <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Trạng thái nguồn VM</div><p class="panel-sub">Bật / tắt trong phạm vi đang xem.</p></div></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Trạng thái nguồn VM</div><p class="panel-sub">Bật / tắt trong phạm vi đang xem.</p></div></div>
             <div id="powerStateBox"></div>
           </article>
         </section>
 
         <section class="chart-grid chart-grid-2" id="datastoreChartGrid">
           <article class="card chart-card" id="datastoreChartCard">
-            <div class="panel-head"><div><div class="panel-title">Phân bổ tài nguyên theo datastore</div><p class="panel-sub">Provisioned vs Used theo datastore.</p></div></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Phân bổ tài nguyên theo datastore</div><p class="panel-sub">Provisioned vs Used theo datastore.</p></div></div>
             <div class="chart-wrap"><canvas id="chartDatastore"></canvas></div>
           </article>
           <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Overcommit ratio</div><p class="panel-sub">CPU / RAM overcommit theo cluster (vCPU:pCPU, vRAM:pRAM).</p></div></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Overcommit ratio</div><p class="panel-sub">CPU / RAM overcommit theo cluster (vCPU:pCPU, vRAM:pRAM).</p></div></div>
             <div class="chart-wrap"><canvas id="chartOvercommit"></canvas></div>
           </article>
         </section>
 
         <section class="panel">
           <div class="panel-head">
-            <div><div class="panel-title">Phân bổ theo cluster</div><p class="panel-sub">Chi tiết capacity, usage và overcommit từng cluster.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">Phân bổ theo cluster</div><p class="panel-sub">Chi tiết capacity, usage và overcommit từng cluster.</p></div>
             <div class="panel-toolbar">
               <button class="btn btn-secondary btn-sm" type="button" data-nav-link="history"><i data-lucide="trending-up"></i>Xem xu hướng</button>
             </div>
@@ -232,19 +232,19 @@
 
         <section class="panel">
           <div class="panel-head">
-            <div><div class="panel-title">Phát hiện compliance</div><p class="panel-sub">Host CPU / RAM vượt ngưỡng, overcommit cluster, VM idle / tắt lâu / cấp dư vCPU. Mỗi phát hiện có mã đối soát dùng chung với báo cáo PDF.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div><p class="panel-sub">Host CPU / RAM vượt ngưỡng, overcommit cluster, VM idle / tắt lâu / cấp dư vCPU. Mỗi phát hiện có mã đối soát dùng chung với báo cáo PDF.</p></div>
             <div class="panel-toolbar">
               <div class="search-box">
                 <i data-lucide="search"></i>
-                <input type="text" id="complianceSearch" placeholder="Tìm theo mã đối soát, tên, cluster, host...">
+                <input type="text" id="complianceSearch" aria-label="Tìm phát hiện compliance" placeholder="Tìm theo mã đối soát, tên, cluster, host...">
               </div>
-              <select id="complianceSeverityFilter">
+              <select id="complianceSeverityFilter" aria-label="Lọc theo mức độ">
                 <option value="all">Mọi mức độ</option>
                 <option value="critical">Nghiêm trọng</option>
                 <option value="warning">Cảnh báo</option>
                 <option value="info">Thông tin</option>
               </select>
-              <select id="complianceTypeFilter">
+              <select id="complianceTypeFilter" aria-label="Lọc theo loại kiểm tra">
                 <option value="all">Mọi loại kiểm tra</option>
                 <option value="host_cpu">Host CPU vượt ngưỡng</option>
                 <option value="host_ram">Host RAM vượt ngưỡng</option>
@@ -270,11 +270,11 @@
       <section id="viewInventory" class="view-section hidden">
         <section class="table-card">
           <div class="panel-head">
-            <div><div class="panel-title">Host</div><p class="panel-sub">Toàn bộ ESXi host đã import hoặc đồng bộ, kèm mức sử dụng.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">Host</div><p class="panel-sub">Toàn bộ ESXi host đã import hoặc đồng bộ, kèm mức sử dụng.</p></div>
             <div class="panel-toolbar">
               <div class="search-box">
                 <i data-lucide="search"></i>
-                <input type="text" id="hostSearch" placeholder="Tìm host...">
+                <input type="text" id="hostSearch" aria-label="Tìm host" placeholder="Tìm host...">
               </div>
               <button class="btn btn-secondary btn-sm" id="btnExportHostsXlsx" type="button" title="Xuất các host đang hiển thị (theo bộ lọc hiện tại) ra file Excel"><i data-lucide="download"></i>Xuất Excel</button>
             </div>
@@ -294,16 +294,16 @@
 
         <section class="table-card">
           <div class="panel-head">
-            <div><div class="panel-title">VM</div><p class="panel-sub">Toàn bộ VM đã import hoặc đồng bộ, kèm trạng thái và mức sử dụng disk.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">VM</div><p class="panel-sub">Toàn bộ VM đã import hoặc đồng bộ, kèm trạng thái và mức sử dụng disk.</p></div>
             <div class="panel-toolbar">
               <div class="search-box">
                 <i data-lucide="search"></i>
-                <input type="text" id="vmSearch" placeholder="Tìm VM, IP...">
+                <input type="text" id="vmSearch" aria-label="Tìm VM hoặc IP" placeholder="Tìm VM, IP...">
               </div>
               <select id="vmClusterFilter" title="Lọc VM theo cluster">
                 <option value="all">Mọi cluster</option>
               </select>
-              <select id="vmStatusFilter">
+              <select id="vmStatusFilter" aria-label="Lọc VM theo trạng thái">
                 <option value="all">Mọi trạng thái</option>
                 <option value="on">Powered On</option>
                 <option value="off">Powered Off</option>
@@ -330,23 +330,23 @@
       <section id="viewWhatif" class="view-section hidden">
         <section class="panel">
           <div class="panel-head">
-            <div><div class="panel-title">Kịch bản mẫu</div><p class="panel-sub">Chọn nhanh một kịch bản chuẩn để mô phỏng tác động lên capacity.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">Kịch bản mẫu</div><p class="panel-sub">Chọn nhanh một kịch bản chuẩn để mô phỏng tác động lên capacity.</p></div>
           </div>
           <div class="scenario-grid" id="scenarioTemplates"></div>
         </section>
 
         <div class="layout-2col">
           <aside class="side-card">
-            <h4>Cluster mục tiêu</h4>
+            <h3>Cluster mục tiêu</h3>
             <div class="field">
-              <select id="whatifClusterSelect"></select>
+              <select id="whatifClusterSelect" aria-label="Cluster mô phỏng"></select>
             </div>
             <div class="legend-list">
               <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>An toàn (&lt;80% ngưỡng overcommit)</div>
               <div class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>Theo dõi (80–100% ngưỡng overcommit)</div>
               <div class="legend-item"><span class="legend-dot" style="background:var(--crit)"></span>Vượt ngưỡng (&gt;100% ngưỡng overcommit)</div>
             </div>
-            <h4 class="side-card-h4-gap">Lịch sử simulation</h4>
+            <h3 class="side-card-h4-gap">Lịch sử simulation</h3>
             <div class="sim-list" id="simHistoryList"><div class="empty-note">Chưa có simulation nào.</div></div>
             <button class="btn btn-secondary btn-sm btn-block" id="btnClearSimHistory" type="button">Xoá lịch sử</button>
           </aside>
@@ -372,7 +372,7 @@
       <section id="viewSizing" class="view-section hidden">
         <section class="table-card">
           <div class="panel-head">
-            <div><div class="panel-title">Danh sách VM yêu cầu</div><p class="panel-sub">Team Dev cung cấp danh sách máy chủ ảo cho dự án mới (số lượng, vCPU, RAM, Disk). Nhập trực tiếp vào bảng hoặc import file Excel/CSV theo mẫu; từ tổng nhu cầu này hệ thống tính số host vật lý cần mua.</p></div>
+            <div><div class="panel-title" role="heading" aria-level="2">Danh sách VM yêu cầu</div><p class="panel-sub">Team Dev cung cấp danh sách máy chủ ảo cho dự án mới (số lượng, vCPU, RAM, Disk). Nhập trực tiếp vào bảng hoặc import file Excel/CSV theo mẫu; từ tổng nhu cầu này hệ thống tính số host vật lý cần mua.</p></div>
             <div class="panel-toolbar">
               <input type="file" id="sizingFile" accept=".xlsx,.xlsm,.csv,.txt" hidden>
               <button class="btn btn-secondary btn-sm" id="btnSizingImport" type="button" title="Đọc file .xlsx hoặc .csv: cột Tên VM, Số lượng, vCPU, RAM (GB), Disk (GB), Ghi chú"><i data-lucide="upload"></i>Import Excel/CSV</button>
@@ -396,7 +396,7 @@
 
         <div class="layout-2col">
           <aside class="side-card">
-            <h4>Giả định sizing</h4>
+            <h3>Giả định sizing</h3>
             <div class="sizing-params">
               <div class="field"><label for="szEnv">Tên dự án / hệ thống</label><input id="szEnv" placeholder="VD: Core Banking phase 2"></div>
               <div class="field"><label for="szPlatform" title="Quyết định tên gọi trong báo cáo (hypervisor, HA, lưu trữ HCI, quản trị), quy tắc license và tài nguyên dành cho nền tảng. Chọn 'Trung lập' khi chưa chốt nền tảng.">Nền tảng ảo hoá</label>
@@ -500,7 +500,7 @@
                       </div>
                     </div>
                     <p class="logo-upload-hint" id="szLogoHint">Không chọn → dùng logo mặc định trong Cài đặt báo cáo. PNG / JPEG / SVG / WEBP, tối đa 2MB; áp dụng cho PDF và Excel Sizing (logo SVG chỉ hiển thị trên PDF).</p>
-                    <button class="btn btn-primary btn-sm" id="btnSizingPdf" type="button" style="align-self:flex-start;">Tạo PDF</button>
+                    <button class="btn btn-primary btn-sm" id="btnSizingPdf" type="button" style="align-self:flex-start;flex:none;">Tạo PDF</button>
                     <p class="logo-upload-hint hidden" id="szPdfStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
@@ -520,7 +520,7 @@
         <div class="layout-2col layout-2col-wide">
           <section class="panel planning-page-panel">
             <div class="panel-head">
-              <div><div class="panel-title">Giả định quy hoạch</div><p class="panel-sub">Dự phóng tăng trưởng CPU/RAM theo ba kịch bản và tính thời điểm cần bổ sung node máy chủ cho từng cluster trong phạm vi đã chọn.</p></div>
+              <div><div class="panel-title" role="heading" aria-level="2">Giả định quy hoạch</div><p class="panel-sub">Dự phóng tăng trưởng CPU/RAM theo ba kịch bản và tính thời điểm cần bổ sung node máy chủ cho từng cluster trong phạm vi đã chọn.</p></div>
             </div>
             <div class="planning-form">
               <label class="planning-field"><span>Thời gian dự phóng</span>
@@ -544,7 +544,7 @@
             </div>
           </section>
           <aside class="side-card">
-            <h4>Nội dung báo cáo</h4>
+            <h3>Nội dung báo cáo</h3>
             <ul class="lic-list planning-outline">
               <li>Tóm tắt: cluster nào cần bổ sung node và khi nào, theo kịch bản cơ sở.</li>
               <li>Dự phóng CPU/RAM theo ba kịch bản tăng trưởng (thấp, cơ sở, cao).</li>
@@ -586,7 +586,7 @@
           <div class="reports-main">
             <section class="panel rpt-intro">
               <div class="panel-head panel-head-tight">
-                <div><div class="panel-title">Trung tâm báo cáo</div><p class="panel-sub">Mọi báo cáo PDF và dữ liệu Excel / CSV của hệ thống, nhóm theo chức năng. Mở “Tuỳ chọn” trên từng báo cáo để tinh chỉnh (được ghi nhớ cho lần sau); bật “Chọn nhiều” để xuất nhiều báo cáo một lần.</p></div>
+                <div><div class="panel-title" role="heading" aria-level="2">Trung tâm báo cáo</div><p class="panel-sub">Mọi báo cáo PDF và dữ liệu Excel / CSV của hệ thống, nhóm theo chức năng. Mở “Tuỳ chọn” trên từng báo cáo để tinh chỉnh (được ghi nhớ cho lần sau); bật “Chọn nhiều” để xuất nhiều báo cáo một lần.</p></div>
                 <div class="panel-toolbar rpt-batch" id="rptBatch">
                   <button class="btn btn-secondary btn-sm" type="button" data-rpt-batch="toggle"><i data-lucide="list-checks"></i>Chọn nhiều</button>
                   <span class="rpt-batch-on muted" id="rptBatchCount">Đã chọn 0</span>
@@ -607,7 +607,7 @@
             <!-- Capacity & vận hành -->
             <section class="panel rpt-group" data-rpt-group="capacity">
               <div class="panel-head">
-                <div><div class="panel-title"><i data-lucide="layout-dashboard"></i>Capacity &amp; vận hành</div>
+                <div><div class="panel-title" role="heading" aria-level="2"><i data-lucide="layout-dashboard"></i>Capacity &amp; vận hành</div>
                   <p class="panel-sub">Phạm vi: vCenter trên thanh lọc phía trên; cluster / host và loại finding theo tuỳ chọn bên phải.</p></div>
               </div>
               <div class="report-grid">
@@ -656,7 +656,7 @@
             <!-- Quy hoạch & Sizing -->
             <section class="panel rpt-group" data-rpt-group="planning">
               <div class="panel-head">
-                <div><div class="panel-title"><i data-lucide="calendar-range"></i>Quy hoạch &amp; Sizing</div>
+                <div><div class="panel-title" role="heading" aria-level="2"><i data-lucide="calendar-range"></i>Quy hoạch &amp; Sizing</div>
                   <p class="panel-sub">Dùng giả định đã nhập ở trang Quy hoạch tài nguyên và dữ liệu sizing gần nhất (danh sách VM, cấu hình host ứng viên, tuỳ chỉnh báo cáo).</p></div>
               </div>
               <div class="report-grid">
@@ -708,7 +708,7 @@
             <!-- License & Inventory -->
             <section class="panel rpt-group" data-rpt-group="license">
               <div class="panel-head">
-                <div><div class="panel-title"><i data-lucide="badge-check"></i>License &amp; Inventory</div>
+                <div><div class="panel-title" role="heading" aria-level="2"><i data-lucide="badge-check"></i>License &amp; Inventory</div>
                   <p class="panel-sub">Phạm vi: vCenter trên thanh lọc và các cluster đã chọn ở trang Đánh giá license (đợt mua).</p></div>
               </div>
               <div class="report-grid">
@@ -744,7 +744,7 @@
             <!-- Backup -->
             <section class="panel rpt-group" data-rpt-group="backup">
               <div class="panel-head">
-                <div><div class="panel-title"><i data-lucide="database-backup"></i>Backup</div>
+                <div><div class="panel-title" role="heading" aria-level="2"><i data-lucide="database-backup"></i>Backup</div>
                   <p class="panel-sub">Phạm vi cần backup, ngưỡng và lịch kiểm tra theo cấu hình ở các trang Backup.</p></div>
                 <div class="panel-toolbar">
                   <select id="rptBkServer" data-opt="bk.server" title="Máy chủ backup"><option value="all">Tất cả máy chủ backup</option></select>
@@ -782,7 +782,7 @@
             <!-- Chi phí & ngân sách (module spend) -->
             <section class="panel rpt-group" data-rpt-group="spend">
               <div class="panel-head">
-                <div><div class="panel-title"><i data-lucide="wallet"></i>Chi phí &amp; ngân sách</div>
+                <div><div class="panel-title" role="heading" aria-level="2"><i data-lucide="wallet"></i>Chi phí &amp; ngân sách</div>
                   <p class="panel-sub">Mặc định năm tài chính hiện tại và năm sau, Opex + Capex. Lọc chi tiết và lưu bộ lọc ở trang Tổng quan chi phí.</p></div>
               </div>
               <div class="report-grid">
@@ -878,7 +878,7 @@
         <div class="settings-grid">
           <section class="panel" data-set-tab="criteria">
             <div class="panel-head">
-              <div><div class="panel-title">Tiêu chí đánh giá</div><p class="panel-sub">Áp dụng cho dashboard, compliance, báo cáo PDF và quy hoạch.</p></div>
+              <div><div class="panel-title" role="heading" aria-level="2">Tiêu chí đánh giá</div><p class="panel-sub">Áp dụng cho dashboard, compliance, báo cáo PDF và quy hoạch.</p></div>
             </div>
             <label class="finding-filter-item criteria-locked" title="CPU luôn được đánh giá"><input type="checkbox" checked disabled><span>CPU (overcommit vCPU:pCPU)</span></label>
             <label class="finding-filter-item criteria-locked" title="RAM luôn được đánh giá"><input type="checkbox" checked disabled><span>RAM (overcommit vRAM:pRAM)</span></label>
@@ -889,7 +889,7 @@
 
           <section class="panel" data-set-tab="criteria">
             <div class="panel-head">
-              <div><div class="panel-title">Ngưỡng đánh giá</div><p class="panel-sub">Thay đổi áp dụng ngay trên màn hình; bấm Lưu để báo cáo PDF và các phiên làm việc khác dùng cùng ngưỡng.</p></div>
+              <div><div class="panel-title" role="heading" aria-level="2">Ngưỡng đánh giá</div><p class="panel-sub">Thay đổi áp dụng ngay trên màn hình; bấm Lưu để báo cáo PDF và các phiên làm việc khác dùng cùng ngưỡng.</p></div>
             </div>
             <div class="settings-form">
               <div class="field">
@@ -917,7 +917,7 @@
 
           <section class="panel" data-set-tab="sources">
             <div class="panel-head">
-              <div><div class="panel-title">Nguồn dữ liệu</div><p class="panel-sub">Dữ liệu live đọc từ vCenter (tài khoản chỉ đọc) và dữ liệu import thủ công; lịch sử được lưu để phân tích xu hướng.</p></div>
+              <div><div class="panel-title" role="heading" aria-level="2">Nguồn dữ liệu</div><p class="panel-sub">Dữ liệu live đọc từ vCenter (tài khoản chỉ đọc) và dữ liệu import thủ công; lịch sử được lưu để phân tích xu hướng.</p></div>
             </div>
             <div class="table-scroll table-scroll-flat">
               <table class="data-table" id="vcenterSourceTable">
@@ -943,7 +943,7 @@
 
           <section class="panel" id="featuresPanel" data-set-tab="features">
             <div class="panel-head">
-              <div><div class="panel-title">Tính năng</div><p class="panel-sub">Bật / tắt module trên menu, trang và Trung tâm báo cáo cho mọi người dùng. Dữ liệu và việc thu thập vẫn giữ nguyên khi tắt.</p></div>
+              <div><div class="panel-title" role="heading" aria-level="2">Tính năng</div><p class="panel-sub">Bật / tắt module trên menu, trang và Trung tâm báo cáo cho mọi người dùng. Dữ liệu và việc thu thập vẫn giữ nguyên khi tắt.</p></div>
             </div>
             <div class="feature-list" id="featureList"></div>
             <p class="criteria-status" id="featureStatus"></p>
@@ -951,7 +951,7 @@
 
           <section class="panel" id="loginLogoPanel" data-set-tab="brand">
             <div class="panel-head">
-              <div><div class="panel-title">Logo màn hình đăng nhập</div><p class="panel-sub">Hiển thị trên màn hình đăng nhập (trước khi đăng nhập). Khác với logo trang bìa báo cáo PDF.</p></div>
+              <div><div class="panel-title" role="heading" aria-level="2">Logo màn hình đăng nhập</div><p class="panel-sub">Hiển thị trên màn hình đăng nhập (trước khi đăng nhập). Khác với logo trang bìa báo cáo PDF.</p></div>
             </div>
             <div class="logo-upload-preview login-logo-preview">
               <span class="logo-upload-empty" id="loginLogoEmpty">Chưa có logo — dùng biểu tượng mặc định</span>
@@ -968,7 +968,7 @@
 
           <section class="panel hidden" id="sourcesPanel" data-set-tab="sources">
             <div class="panel-head">
-              <div><div class="panel-title">Kết nối nguồn dữ liệu <span class="badge-admin">Admin</span></div>
+              <div><div class="panel-title" role="heading" aria-level="2">Kết nối nguồn dữ liệu <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Thêm vCenter và máy chủ backup NetBackup ngay trên giao diện: địa chỉ, tài khoản chỉ đọc, mật khẩu / API key (lưu mã hoá, không hiển thị lại). Thay đổi có hiệu lực ở lần đồng bộ kế tiếp, không cần khởi động lại.</p></div>
               <div class="panel-toolbar">
                 <button class="btn btn-secondary btn-sm hidden" type="button" id="btnSrcImportEnv">Chuyển cấu hình biến môi trường vào giao diện</button>
@@ -988,7 +988,7 @@
 
           <dialog class="src-dialog" id="srcDialog" aria-labelledby="srcDialogTitle">
             <form method="dialog" id="srcForm" novalidate>
-              <div class="src-dialog-head"><div class="panel-title" id="srcDialogTitle">Thêm vCenter</div>
+              <div class="src-dialog-head"><div class="panel-title" role="heading" aria-level="2" id="srcDialogTitle">Thêm vCenter</div>
                 <button class="btn btn-ghost btn-sm" type="button" data-src-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
               <div class="src-grid">
                 <div class="field"><label for="srcName">Tên hiển thị</label><input id="srcName" required maxlength="128" placeholder="vCenter HCM DC1"></div>
@@ -1017,32 +1017,32 @@
 
           <section class="panel panel-wide hidden" id="spendSettingsPanel" data-set-tab="spend">
             <div class="panel-head">
-              <div><div class="panel-title">Chi phí &amp; nhắc hạn</div>
+              <div><div class="panel-title" role="heading" aria-level="2">Chi phí &amp; nhắc hạn</div>
               <p class="panel-sub">Năm tài chính, mốc nhắc hạn, loại chi phí, kênh gửi nhắc (email / Discord) và vai trò người dùng của module Chi phí &amp; Hợp đồng IT.</p></div>
             </div>
             <div id="spendSettingsMount"></div>
           </section>
 
           <section class="panel panel-wide hidden" id="usersPanel" data-set-tab="users">
-            <div class="panel-head"><div><div class="panel-title">Người dùng &amp; quyền <span class="badge-admin">Admin</span></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Người dùng &amp; quyền <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Mọi tài khoản ở một chỗ: nguồn đăng nhập (Entra ID / cục bộ), passkey, link mời và vai trò từng module.</p></div></div>
             <div id="usersSettingsMount"></div>
           </section>
 
           <section class="panel hidden" id="authPanel" data-set-tab="auth">
-            <div class="panel-head"><div><div class="panel-title">Đăng nhập & bảo mật <span class="badge-admin">Admin</span></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Đăng nhập & bảo mật <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">SSO Microsoft Entra ID cho tài khoản công ty; tài khoản cục bộ đăng nhập bằng Passkey (Face ID / Touch ID, không mật khẩu). Chạy sau Microsoft Entra Application Proxy để không phải mở app ra Internet.</p></div></div>
             <div id="authSettingsMount"></div>
           </section>
 
           <section class="panel hidden" id="aiPanel" data-set-tab="ai">
-            <div class="panel-head"><div><div class="panel-title">AI dùng chung <span class="badge-admin">Admin</span></div>
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">AI dùng chung <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Một cấu hình cho mọi tính năng AI: soạn tờ trình, đọc báo giá PDF, tóm tắt khác biệt báo giá, bản tin trang chủ, tổng kết báo cáo PDF. Số liệu luôn do hệ thống tính; AI chỉ viết / tóm tắt và mọi lượt gọi được ghi lại.</p></div></div>
             <div id="aiSettingsMount"></div>
           </section>
           <section class="panel hidden" id="mcpPanel" data-set-tab="ai">
             <div class="panel-head">
-              <div><div class="panel-title">AI / MCP server <span class="badge-admin">Admin</span></div>
+              <div><div class="panel-title" role="heading" aria-level="2">AI / MCP server <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Cho AI client (vd Claude Code) đọc <b>log và hiệu suất của ứng dụng</b> qua MCP — chỉ đọc, không có dữ liệu hạ tầng; host/IP trong log được che. Đề xuất sửa code đi qua pull request.</p></div>
             </div>
             <p class="mcp-state" id="mcpState"></p>

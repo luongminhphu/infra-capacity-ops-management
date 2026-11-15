@@ -71,13 +71,13 @@ function renderExecutiveForecastCard(elId, label, forecast, unavailableReason) {
   const el = $(elId);
   if (!forecast) {
     el.classList.remove('risk');
-    el.innerHTML = `<h4>${esc(label)}</h4><p>${esc(unavailableReason || 'Chưa có dữ liệu dự báo.')}</p>`;
+    el.innerHTML = `<h3 class="exec-fc-h">${esc(label)}</h3><p>${esc(unavailableReason || 'Chưa có dữ liệu dự báo.')}</p>`;
     return;
   }
   const isRisk = forecast.daysTo100Pct && forecast.daysTo100Pct <= 180;
   el.classList.toggle('risk', !!isRisk);
   el.innerHTML = `
-    <h4>${esc(label)} — hiện tại ${fmtNum(forecast.currentPct, 0)}% công suất vật lý</h4>
+    <h3 class="exec-fc-h">${esc(label)} — hiện tại ${fmtNum(forecast.currentPct, 0)}% công suất vật lý</h3>
     <p>${esc(forecast.insight)}</p>`;
 }
 

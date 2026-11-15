@@ -126,7 +126,7 @@ async function renderArchiveView() {
   catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
   const size = (b) => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
   mount.innerHTML = `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title">Kho báo cáo</div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Kho báo cáo</div>
       <p class="panel-sub">Bản PDF đúng như lúc xuất. Bật “Lưu vào kho” ở <a href="#/docs/reports">Trung tâm báo cáo</a> để mỗi lần xuất được lưu một bản. Mỗi người giữ tối đa ${esc(d.maxPerUser)} bản, ${esc(d.retentionDays)} ngày.</p></div>
       <div class="panel-toolbar"><select id="archKind" aria-label="Loại báo cáo"><option value="">Mọi loại</option>${Object.entries(d.kinds).map(([k, l]) => `<option value="${esc(k)}"${archState.kind === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
         <label class="finding-filter-item"><input type="checkbox" id="archMine" ${archState.mine ? 'checked' : ''}><span>Chỉ của tôi</span></label></div></div>

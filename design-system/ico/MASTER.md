@@ -121,6 +121,8 @@ suốt luồng. Lỗi nói chuyện gì xảy ra và cách sửa, không xin l�
 - [ ] Dark + light, ≥ 1440 px và < 1024 px; không cuộn ngang trang.
 - [ ] Chữ ≥ 4,5 : 1, glyph / viền điều khiển ≥ 3 : 1; focus nhìn thấy; dùng được hoàn toàn bằng bàn phím.
 - [ ] `prefers-reduced-motion` tôn trọng; không chữ < 12 px.
+- [ ] Mọi ô nhập / chọn có nhãn (`<label>` hoặc `aria-label`; `uiAutoLabel` chỉ là lưới an toàn); vùng bấm ≥ 24 × 24 px.
+- [ ] Không cắt chữ bằng “…” ở dòng danh sách — cho xuống dòng; bảng rộng nằm trong vùng cuộn riêng; tiêu đề không nhảy bậc.
 - [ ] Biểu đồ: ≤ 3 series màu, không màu trạng thái cho series, một trục Y, có “Xem bảng”.
 - [ ] Số liệu khớp giữa web / PDF / Excel ở chế độ DEMO.
 - [ ] `python -m pytest tests -q` (gồm `test_frontend_markup.py`).

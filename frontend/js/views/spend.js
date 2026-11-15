@@ -196,6 +196,7 @@ function spRenderPage() {
       { label: 'Quá hạn chưa xử lý', valueHtml: `<span class="${c.overdue ? 'tone-crit' : ''}">${esc(c.overdue ?? '—')}</span>`, sub: 'Đã qua ngày kết thúc nhưng chưa gia hạn / ngừng' },
       { label: 'Năm tài chính hiện tại', value: String(m.currentFiscalYear), sub: `Bắt đầu tháng ${m.settings.fiscalStartMonth} · vai trò của bạn: ${m.roleLabel}` },
     ])}</div>
+    <h2 class="sr-only">Danh sách Opex</h2>
     <section class="hm-split panel sp-split" aria-label="Danh sách Opex">
       <div class="hm-list">
         <div class="hm-toolbar">
@@ -290,7 +291,7 @@ function spDialog(title, body, actions) {
   const dlg = $('#spDialog');
   $('#spDialogBody').onclick = null;
   $('#spDialogBody').innerHTML = `
-    <div class="src-dialog-head"><div class="panel-title" id="spDialogTitle">${title}</div>
+    <div class="src-dialog-head"><div class="panel-title" role="heading" aria-level="2" id="spDialogTitle">${title}</div>
       <button class="btn btn-ghost btn-sm" type="button" data-sp-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
     <div class="sp-dialog-body">${body}</div>
     <p class="src-result" id="spDialogMsg" role="status"></p>

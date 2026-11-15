@@ -212,9 +212,9 @@ function homeNavBadges(d) {
     const p = per[b.dataset.entry];
     if (!p) { if (c) c.remove(); return; }
     if (!c) { c = document.createElement('span'); c.className = 'nav-count'; b.appendChild(c); }
-    c.textContent = p.n > 99 ? '99+' : String(p.n);
+    // the count is part of the button's name, read as a phrase ("14 việc, có cảnh báo"), not a bare number
+    c.innerHTML = `${p.n > 99 ? '99+' : String(p.n)}<span class="sr-only"> việc${p.hot ? ', có cảnh báo' : ''}</span>`;
     c.classList.toggle('hot', p.hot);
-    c.setAttribute('aria-label', `${p.n} việc${p.hot ? ', có cảnh báo' : ''}`);
   });
 }
 
@@ -318,11 +318,11 @@ function agRender() {
     g.items.push(i);
   });
   $('#agendaMount').innerHTML = `<section class="panel">
-    <div class="panel-head"><div><div class="panel-title">Lịch việc & nhắc hạn</div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Lịch việc & nhắc hạn</div>
       <p class="panel-sub">Mọi mốc có ngày: Opex hết hạn, đợt thanh toán, license hết hạn, báo giá hết hiệu lực — kể cả mốc đã quá hạn trong 90 ngày.</p></div>
       <div class="panel-toolbar">
-        <select data-ag="kind">${spOptSafe('', 'Tất cả loại', agState.kind)}${Object.entries(AG_KIND).map(([k, t]) => spOptSafe(k, t, agState.kind)).join('')}</select>
-        <select data-ag="days">${[30, 60, 120, 180, 365].map(n => spOptSafe(n, `${n} ngày tới`, agState.days)).join('')}</select></div></div>
+        <select data-ag="kind" aria-label="Loại mốc">${spOptSafe('', 'Tất cả loại', agState.kind)}${Object.entries(AG_KIND).map(([k, t]) => spOptSafe(k, t, agState.kind)).join('')}</select>
+        <select data-ag="days" aria-label="Khoảng thời gian">${[30, 60, 120, 180, 365].map(n => spOptSafe(n, `${n} ngày tới`, agState.days)).join('')}</select></div></div>
     ${groups.length ? groups.map(g => `<div class="sp-h">${esc(g.label)}</div><ul class="home-list">${g.items.map(i => `<li class="home-item">
         <div class="home-item-main">${uiPill(i.tone, i.daysLeft < 0 ? `Quá ${-i.daysLeft} ngày` : i.daysLeft === 0 ? 'Hôm nay' : `Còn ${i.daysLeft} ngày`)}
           <span class="muted-sub sr-inline">${esc(spDateSafe(i.date))} · ${esc(AG_KIND[i.kind] || i.kind)}</span>
@@ -373,6 +373,7 @@ async function renderPaymentsPage(keepPane) {
       { label: 'Quá hạn', valueHtml: `<span class="${overdue ? 'tone-crit' : ''}">${overdue}</span>`, sub: 'Đã qua hạn thanh toán, chưa ghi nhận' },
       { label: 'Thiếu hồ sơ bắt buộc', valueHtml: `<span class="${missing ? 'tone-warn' : ''}">${missing}</span>`, sub: 'Chưa nộp được hồ sơ' },
     ])}</div>
+    <h2 class="sr-only">Danh sách đợt thanh toán</h2>
     <section class="hm-split panel sp-split" aria-label="Danh sách đợt thanh toán">
       <div class="hm-list">
         <div class="hm-toolbar"><div class="hm-views" role="group" aria-label="Chế độ xem">${PAY_VIEWS.map(([k, t]) => `<button class="hm-view" type="button" data-paylist="${k}" aria-pressed="${payListState.status === k}">${esc(t)}</button>`).join('')}</div></div>

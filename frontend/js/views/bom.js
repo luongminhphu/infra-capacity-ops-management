@@ -31,14 +31,14 @@ function renderBomView() {
       ${d.warnings.length ? `<div class="insight-box">${d.warnings.map(w => `<div>${uiPill('warn', 'Lưu ý')} ${esc(w)}</div>`).join('')}</div>` : ''}
       ${cats.map((c, ci) => `
         <section class="table-card bom-cat">
-          <div class="panel-head"><div><div class="panel-title">${esc(BOM_ROMAN[ci] || ci + 1)}. ${esc(c.label)}</div></div>
+          <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">${esc(BOM_ROMAN[ci] || ci + 1)}. ${esc(c.label)}</div></div>
             <div class="panel-toolbar"><b>${esc(bomMoney(d.configs.filter(x => x.category === c.key).reduce((s, x) => s + Number(x.total || 0), 0), cur))}</b></div></div>
           ${d.configs.map((x, i) => x.category === c.key ? bomConfigCard(x, i, d, cur) : '').join('')}
         </section>`).join('')}`;
   }
   mount.innerHTML = `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Chuẩn hoá BOM</div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Chuẩn hoá BOM</div>
         <p class="panel-sub">Tải file Excel BOM thô — Dell Solutions Configurator, Cisco CCW, HPE hoặc bảng kê thông thường. Hệ thống gom theo đầu mục, tóm tắt thông số mỗi cấu hình (CPU, RAM, ổ đĩa, cổng mạng, HBA, license…) và xuất file Excel trình bày chuẩn, có công thức tổng.</p></div></div>
       <div class="settings-form bom-form">
         <label class="dropzone sp-span2" id="bomDrop">
