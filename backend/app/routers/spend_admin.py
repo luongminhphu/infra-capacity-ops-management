@@ -84,7 +84,7 @@ def put_smtp(request: Request, data: Dict[str, Any] = Body(...), user: User = De
 # ---------------------------------------------------------------- channels
 def _channel_out(c: SpendNotifyChannel) -> Dict[str, Any]:
     return {"id": c.id, "kind": c.kind, "name": c.name, "enabled": c.enabled, "hasWebhook": bool(c.webhook_enc),
-            "webhookReadable": _readable(c.webhook_enc), "recipients": c.recipients or "", "includeOwner": c.include_owner,
+            "webhookReadable": _readable(c.webhook_enc), "recipients": c.recipients or "", "includeOwner": c.include_owner, "opsAlerts": bool(c.ops_alerts),
             "lastTestAt": to_iso_utc(c.last_test_at), "lastTestOk": c.last_test_ok,
             "updatedAt": to_iso_utc(c.updated_at or c.created_at), "updatedBy": c.updated_by or c.created_by}
 
@@ -107,6 +107,7 @@ def _apply_channel(row: SpendNotifyChannel, data: Dict[str, Any]) -> bool:
                 row.webhook_enc, changed = secrets_box.encrypt(validate_discord_url(str(data["webhookUrl"]))), True
             if not row.webhook_enc:
                 raise HTTPException(400, "Nhập webhook Discord.")
+            row.ops_alerts = bool(data.get("opsAlerts"))
         else:
             recipients = parse_recipients(data.get("recipients"))
             row.recipients = ", ".join(recipients) or None

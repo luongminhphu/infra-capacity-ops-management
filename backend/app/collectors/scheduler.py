@@ -251,6 +251,16 @@ def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
     return run_syncs(tasks, keys, settings.sync_concurrency)
 
 
+def _ops_alerts() -> None:
+    """Discord alerts for capacity / backup at the 90 % level (docs/design/super-app.md decision 5)."""
+    from .. import ops_alerts
+    try:
+        with SessionLocal() as db:
+            ops_alerts.check_and_notify(db)
+    except Exception:  # noqa: BLE001 — an alert failure must not stop the polling loop
+        logger.exception("Operations alerts check failed")
+
+
 async def scheduler_loop(app_settings: Settings):
     """Poll every source each interval, off the API event loop."""
     interval = max(5, app_settings.poll_interval_minutes) * 60
@@ -259,6 +269,7 @@ async def scheduler_loop(app_settings: Settings):
         try:
             results = await asyncio.to_thread(sync_everything, app_settings)
             failed = [r.get("vcenterKey") or r.get("key") for r in results if not r["ok"]]
+            await asyncio.to_thread(_ops_alerts)
             logger.info("Scheduled sync of %d sources finished in %.1fs%s", len(results),
                         (dt.datetime.utcnow() - started).total_seconds(),
                         f"; failed: {', '.join(failed)} (retry next cycle)" if failed else "")

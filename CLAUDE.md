@@ -46,6 +46,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Auth | `security.py` (`get_current_user`, `require_admin`), `auth_entra.py`, `routers/auth.py` |
 | MCP server (chỉ đọc) | `mcp_server.py`, `observability.py` |
 | Chi phí & Hợp đồng IT (`spend`) | `backend/app/spend/` (`models.py`, `service.py`, `fiscal.py`, `roles.py`, `files.py`, `notify.py`, `reminders.py`, `capex.py`, `report.py`, `contracts.py`, `proposal_doc.py`, `ai.py`, `quotes.py`, `renovation.py`), `routers/spend.py`, `spend_admin.py`, `spend_capex.py`, `spend_reports.py`, `spend_contracts.py`, `spend_payments.py`, `spend_proposals.py`, `spend_quotes.py`, `spend_renovations.py`, `report_spend.py`, `report_renovation.py` (PDF), `excel_spend.py`, `excel_quotes.py`, `excel_renovation.py`, `frontend/js/views/spend.js`, `spend_capex.js`, `spend_report.js`, `spend_contract.js`, `spend_payment.js`, `spend_proposal.js`, `spend_quote.js`, `spend_renovation.js`; thiết kế `docs/design/spend-module.md`, `spend-vendor-quotes.md` |
+| Trang chủ / hộp việc / lịch việc / cảnh báo Discord 90% | `backend/app/inbox.py` (nguồn việc từng module, cache 60 s), `ops_alerts.py`, `routers/home.py` (`/api/inbox`, `/api/agenda`, `/api/me/prefs`), `frontend/js/views/home.js` |
 | Giao diện | `frontend/index.html`, `css/styles.css` (HSC design system), `js/core.js`, `js/app.js` (menu `MENU` 2 miền + tab, định tuyến `#/<mục>/<tab>`), `js/ui.js` (pill, trạng thái, hộp xác nhận dùng chung), `js/views/*.js`; thiết kế `docs/design/super-app.md` |
 
 ## Quy tắc bắt buộc

@@ -246,6 +246,7 @@ class SpendNotifyChannel(_Audited, Base):
     webhook_enc = Column(Text, nullable=True)          # secrets_box; never returned by the API
     recipients = Column(Text, nullable=True)           # comma separated e-mail addresses
     include_owner = Column(Boolean, nullable=False, default=False)
+    ops_alerts = Column(Boolean, nullable=True, default=False)   # also receives operations alerts (capacity / backup ≥ 90 %)
     last_test_at = Column(DateTime, nullable=True)
     last_test_ok = Column(Boolean, nullable=True)
 

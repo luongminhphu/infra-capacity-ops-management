@@ -1015,3 +1015,26 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 #szPdfStatus.error{color:var(--crit);font-weight:var(--fw-semibold);}
 #viewSettings .settings-grid .panel:not(.set-off){grid-column:1 / -1;}
 @media (max-width:760px){.page-tabs{margin:var(--space-2) var(--space-4) 0;max-width:calc(100% - 2 * var(--space-4));overflow-x:auto;flex-wrap:nowrap;}}
+
+/* ---------- Trang chủ, lịch việc (SA2) ---------- */
+#homeMount,#agendaMount{display:flex;flex-direction:column;gap:var(--space-4);}
+.home-brief{border:1px solid var(--border);border-left:3px solid var(--brand);border-radius:var(--radius-sm);padding:var(--space-3) var(--space-4);background:var(--bg-surface);}
+.home-brief-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-1);}
+.home-brief-text{margin:0 0 var(--space-2);font-size:var(--fs-body);line-height:var(--lh-body);}
+.home-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--space-3);}
+.home-card{display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-1);padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface);text-align:left;cursor:pointer;color:var(--text-primary);}
+.home-card:hover,.home-card.active{border-color:var(--brand);}
+.home-card-label{font-weight:var(--fw-semibold);font-size:var(--fs-body-sm);}
+.home-card-sub{font-size:var(--fs-caption);color:var(--text-secondary);}
+.home-filters{margin-bottom:var(--space-2);}
+.home-filters .btn.active{color:var(--text-primary);box-shadow:inset 0 -2px 0 var(--brand);}
+.home-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;}
+.home-item{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--border);align-items:flex-start;}
+.home-item:last-child{border-bottom:0;}
+.home-item-main{min-width:0;flex:1;}
+.home-item-title{display:block;margin-top:2px;color:var(--text-primary);font-weight:var(--fw-medium);text-decoration:none;overflow-wrap:anywhere;}
+.home-item-title:hover{color:var(--text-brand);text-decoration:underline;}
+.home-item-detail{margin:2px 0 0;font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);overflow-wrap:anywhere;}
+.home-item-actions{display:flex;align-items:center;gap:var(--space-1);flex-shrink:0;}
+.planning-result{margin-top:var(--space-4);}
+@media (max-width:760px){.home-item{flex-direction:column;}.home-item-actions{flex-wrap:wrap;}}

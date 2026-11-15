@@ -16,18 +16,51 @@ Menu chia theo **công việc**, không theo nguồn dữ liệu: **Vận hành*
 
 | Miền | Mục menu | Tab |
 |---|---|---|
-| — | **Trang chủ** | Tổng quan điều hành: tóm tắt, KPI, xu hướng, nhận định & danh mục quyết định |
+| — | **Trang chủ** | Hôm nay (hộp việc chung) · Điều hành (tóm tắt, KPI, xu hướng, nhận định & danh mục quyết định) |
 | Vận hành | **Capacity & Compliance** | Capacity · Compliance · Xu hướng & biến động |
 | | **Backup** | Tổng quan · Client & RPO · Job · Lịch & tuân thủ · Độ phủ VM · Storage & policy |
+| | **Lịch việc & nhắc hạn** | Mọi mốc có ngày của các module |
 | | **Mô phỏng & quy hoạch** | What-if capacity · Quy hoạch tài nguyên · What-if license |
 | | **Sizing máy chủ** | Bàn làm việc tài liệu sizing |
 | Quản lý thông tin | **Tài sản** | Host & VM · ESXi & phần cứng · Hệ điều hành |
 | | **License** | Đánh giá & quyền sử dụng · Snapshot |
 | | **Ngân sách & chi phí** | Tổng quan ngân sách · Opex · Capex |
 | | **Mua sắm** | Nhà cung cấp · So sánh báo giá · Cải tạo văn phòng |
-| | **Hợp đồng & thanh toán** | Hợp đồng (kèm đợt thanh toán) |
+| | **Hợp đồng & thanh toán** | Hợp đồng · Đợt thanh toán |
 | | **Tài liệu** | Tờ trình · Báo cáo (Trung tâm báo cáo) |
 | Hệ thống | **Cài đặt** | Tiêu chí & ngưỡng · Nguồn dữ liệu · Backup (nguồn & ngưỡng) · Tính năng · Chi phí & nhắc hạn · AI & MCP · Thương hiệu |
+
+**Trang chủ "Hôm nay cần làm"** (chung cho mọi người, lọc theo quyền):
+- **Bản tin capacity** và **thẻ trạng thái từng miền** (Capacity, Backup, License, Chi phí & hợp đồng).
+- **Hộp việc** gom từ mọi module:
+  - cluster vượt ngưỡng / ≥ 90%;
+  - phát hiện backup, tỷ lệ thành công / độ phủ / RPO dưới 90%;
+  - license và Opex sắp hết hạn;
+  - đợt thanh toán đến hạn;
+  - báo giá chờ kiểm tra (Biên tập) / chờ chọn NCC (Duyệt);
+  - tờ trình chờ duyệt (Duyệt).
+- Mỗi mục bấm vào là tới đúng trang (kể cả mở chi tiết khoản Opex). Đánh dấu **Xong** hoặc **Ẩn 7 ngày** theo từng người.
+  Mục xấu đi (lên mức cao hơn) sẽ hiện lại.
+- Bộ lọc được nhớ phía máy chủ (`/api/me/prefs`).
+
+**Lịch việc & nhắc hạn**: mọi mốc có ngày, gồm cả mốc đã quá hạn trong 90 ngày, nhóm theo *Đã quá hạn / 7 ngày tới /
+Trong 30 ngày / theo tháng*:
+- Opex hết hạn
+- Đợt thanh toán
+- License hết hạn
+- Báo giá hết hiệu lực
+
+**Hợp đồng & thanh toán → Đợt thanh toán**: mọi đợt của mọi hợp đồng, kèm tình trạng hồ sơ và tổng chưa thanh toán.
+**Mô phỏng & quy hoạch → Quy hoạch tài nguyên**: nút **Xem kết quả** hiện ngay trên màn hình đề xuất, bảng theo kịch bản
+và theo cluster (cùng engine với PDF).
+
+**Cảnh báo vận hành qua Discord** (mức 90%):
+- Ngưỡng: cluster có CPU hoặc RAM ≥ 90% ngưỡng overcommit, hoặc tỷ lệ backup thành công 7 ngày / độ phủ VM / client đạt
+  RPO dưới 90%.
+- Kiểm tra sau mỗi chu kỳ đồng bộ. Mỗi cảnh báo gửi **một lần**, báo "Đã hết" khi trở lại bình thường, rồi gửi lại nếu
+  tái phát.
+- Gửi tới các kênh Discord (Cài đặt → Chi phí & nhắc hạn) có tick *Nhận cả cảnh báo vận hành*.
+- Admin chạy thử bằng `POST /api/admin/ops-alerts/run`.
 
 Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác

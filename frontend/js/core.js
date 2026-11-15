@@ -1798,7 +1798,7 @@ function populateFilterSelects() {
 function syncViewSections() {
   $$('.view-section').forEach(sec => sec.classList.add('hidden'));
   const map = {
-    executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
+    home:'#viewHome', agenda:'#viewAgenda', executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
     inventory:'#viewInventory', whatif:'#viewWhatif', sizing:'#viewSizing', planning:'#viewPlanning',
     licensing:'#viewLicensing', backup:'#viewBackup', reports:'#viewReports', settings:'#viewSettings', spend:'#viewSpend',
   };
@@ -1816,6 +1816,8 @@ function renderActiveView() {
     renderCapacityKpis(); renderDashboardCharts(); renderClusterTable(); bindSortableHeaders('clusterTable','clusterTable',renderClusterTable); highlightSortHeaders('clusterTable','clusterTable');
   }
   else if (appState.view === 'executive' && typeof renderExecutiveView === 'function') renderExecutiveView();
+  else if (appState.view === 'home' && typeof renderHomeView === 'function') renderHomeView();
+  else if (appState.view === 'agenda' && typeof renderAgendaView === 'function') renderAgendaView();
   else if (appState.view === 'history') {
     // Snapshot-history page (needs the backend; skipped silently in static mode).
     if (typeof renderHistoryPanel === 'function' && typeof api !== 'undefined') renderHistoryPanel('techHistoryMount', { showVmChanges: true, followClusterFilter: true });

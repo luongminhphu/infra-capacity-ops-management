@@ -19,7 +19,7 @@ from ..features import require_feature
 from ..models import User
 from ..spend import files, fiscal, service
 from ..spend.models import (
-    CapexItem, Contract, ContractPayment, OpexItem, PaymentDocDefault, PaymentDocument, SpendFile,
+    CapexItem, Contract, ContractPayment, OpexItem, PaymentDocDefault, PaymentDocument, SpendFile, SpendVendor,
 )
 from ..spend.roles import require_spend
 from ..timeutil import to_iso_utc
@@ -401,3 +401,32 @@ def replace_defaults(request: Request, data: Dict[str, Any] = Body(...), user: U
     service.audit(db, user, request, "spend.payment.defaults", count=len(rows))
     db.commit()
     return list_defaults(user, db)
+
+
+@router.get("/payments")
+def all_payments(status: str = "open", user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+    """Every instalment of every contract (Hợp đồng & thanh toán → Đợt thanh toán), soonest first.
+    status: open (chưa thanh toán) | paid | all."""
+    if status not in ("open", "paid", "all"):
+        _bad("Trạng thái lọc không hợp lệ.")
+    q = db.query(ContractPayment, Contract).join(Contract, Contract.id == ContractPayment.contract_id)
+    if status == "open":
+        q = q.filter(ContractPayment.status.in_(("pending", "submitted")))
+    elif status == "paid":
+        q = q.filter(ContractPayment.status == "paid")
+    rows = q.order_by(ContractPayment.due_date.is_(None), ContractPayment.due_date, Contract.code, ContractPayment.seq).limit(1000).all()
+    today = fiscal.today_vn()
+    vendors = {v.id: service.vendor_label(v) for v in db.query(SpendVendor).filter(SpendVendor.id.in_({c.vendor_id for _, c in rows if c.vendor_id} or {0}))}
+    docs: Dict[int, List[PaymentDocument]] = {}
+    for d in db.query(PaymentDocument).filter(PaymentDocument.payment_id.in_([p.id for p, _ in rows] or [0])):
+        docs.setdefault(d.payment_id, []).append(d)
+    out = []
+    for p, c in rows:
+        ds = docs.get(p.id, [])
+        out.append({"contractCode": c.code, "contractTitle": c.title, "vendor": vendors.get(c.vendor_id), "seq": p.seq, "id": p.id,
+                    "title": p.title, "amount": p.amount, "dueDate": p.due_date.isoformat() if p.due_date else None,
+                    "condition": p.condition, "status": p.status, "statusLabel": STATUS_LABELS[p.status],
+                    "paidAt": p.paid_at.isoformat() if p.paid_at else None, "paidAmount": p.paid_amount,
+                    "docsDone": sum(1 for d in ds if d.done), "docsTotal": len(ds),
+                    "requiredMissing": [d.name for d in ds if d.required and not d.done], **_tone(p, today)})
+    return {"items": out, "openTotal": sum(x["amount"] for x in out if x["status"] != "paid")}

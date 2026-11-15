@@ -106,6 +106,10 @@
 
     <main id="mainContent">
 
+      <!-- ================= TRANG CHỦ · LỊCH VIỆC (super app SA2) ================= -->
+      <section id="viewHome" class="view-section hidden"><div id="homeMount"></div></section>
+      <section id="viewAgenda" class="view-section hidden"><div id="agendaMount"></div></section>
+
       <!-- ================= TỔNG QUAN · ĐIỀU HÀNH ================= -->
       <section id="viewExecutive" class="view-section hidden">
         <section class="card exec-brief-card" id="execBrief" aria-live="polite">
@@ -522,9 +526,11 @@
               </div>
               <p class="logo-upload-hint">Để trống cores/RAM: node mới lấy theo host lớn nhất của từng cluster. Điều kiện đủ năng lực: ≤ mục tiêu % ngưỡng overcommit và vẫn ≤ 100% khi mất 1 host (N+1). Phạm vi cluster/host lấy theo mục Phạm vi báo cáo trong Trung tâm báo cáo.</p>
               <div class="sim-actions">
-                <button class="btn btn-primary" id="btnExportPdfPlan" type="button"><i data-lucide="file-text"></i>Tạo báo cáo PDF</button>
+                <button class="btn btn-primary" id="btnPlanPreview" type="button"><i data-lucide="play"></i>Xem kết quả</button>
+                <button class="btn btn-secondary" id="btnExportPdfPlan" type="button"><i data-lucide="file-text"></i>Tạo báo cáo PDF</button>
                 <button class="btn btn-secondary" type="button" data-nav-link="reports">Phạm vi báo cáo</button>
               </div>
+              <div id="planningResult" class="planning-result" aria-live="polite"></div>
             </div>
           </section>
           <aside class="side-card">
@@ -1058,6 +1064,7 @@
 <script src="js/views/spend_payment.js?v=__ASSET_V__"></script>
 <script src="js/views/spend_quote.js?v=__ASSET_V__"></script>
 <script src="js/views/spend_renovation.js?v=__ASSET_V__"></script>
+<script src="js/views/home.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

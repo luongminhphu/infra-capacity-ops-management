@@ -56,6 +56,7 @@ def ensure_schema() -> None:
         "quote_requests": [("renovation_project_id", "INTEGER REFERENCES renovation_projects(id)"),
                            ("ai_summary", "TEXT"), ("ai_summary_at", "TIMESTAMP"), ("ai_summary_by", "VARCHAR(255)")],
         "proposals": [("quote_request_id", "INTEGER REFERENCES quote_requests(id)")],
+        "spend_notify_channels": [("ops_alerts", "BOOLEAN DEFAULT FALSE")],
         "quotation_lines": [("cost_group_id", "INTEGER REFERENCES renovation_cost_groups(id) ON DELETE SET NULL")],
         "users": [
             ("auth_source", "VARCHAR(16) NOT NULL DEFAULT 'local'"), ("external_id", "VARCHAR(64)"),
