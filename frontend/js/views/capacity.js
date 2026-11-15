@@ -176,7 +176,7 @@ function renderDashboardCharts() {
 
 /* ---------- Compliance ---------- */
 const SEVERITY_PILL = { critical:'crit', warning:'warn', info:'na' };
-const SEVERITY_LABEL = { critical:'Critical', warning:'Warning', info:'Info' };
+const SEVERITY_LABEL = { critical:'Nghiêm trọng', warning:'Cảnh báo', info:'Thông tin' };   // same words as the PDF (SEVERITY_LABEL_VI)
 
 function renderComplianceKpis() {
   const findings = buildComplianceFindings();
@@ -186,51 +186,85 @@ function renderComplianceKpis() {
   const byType = {};
   findings.forEach(f => byType[f.type] = (byType[f.type]||0) + 1);
 
-  const cards = [
-    { label:'Tổng findings', value: findings.length, sub:`Critical ${crit} · Warning ${warn} · Info ${info}`, tone: crit>0?'tone-crit':(warn>0?'tone-warn':'tone-ok') },
-    { label:'Host CPU/RAM vượt ngưỡng', value: (byType.host_cpu||0) + (byType.host_ram||0), sub:'CPU hoặc RAM usage vượt ngưỡng cấu hình', tone:'tone-bad' },
-    { label:'Overcommit ratio vượt ngưỡng', value: (byType.overcommit_cpu||0) + (byType.overcommit_ram||0), sub:'Tỷ lệ vCPU:pCPU hoặc vRAM:pRAM vượt ngưỡng cấu hình', tone:'tone-warn' },
-    { label:'VM cần rà soát', value: (byType.vm_idle||0)+(byType.vm_off||0)+(byType.vm_overprovision||0), sub:'Idle lâu, tắt lâu, hoặc over-provision vCPU', tone:'tone-warn' }
-  ];
-
-  $('#complianceKpis').innerHTML = cards.map(c => `
-    <article class="kpi-card">
-      <div class="label">${esc(c.label)}</div>
-      <div class="value ${c.tone}">${c.value}</div>
-      <div class="sub">${esc(c.sub)}</div>
-    </article>
-  `).join('');
+  const box = $('#complianceKpis');
+  box.className = 'kpi-strip-wrap';
+  box.innerHTML = uiKpiStrip([
+    { label: 'Tổng phát hiện', valueHtml: `<span class="${crit ? 'tone-crit' : warn ? 'tone-warn' : ''}">${fmtInt(findings.length)}</span>`, sub: `Nghiêm trọng ${crit} · Cảnh báo ${warn} · Thông tin ${info}` },
+    { label: 'Host CPU / RAM vượt ngưỡng', value: String((byType.host_cpu || 0) + (byType.host_ram || 0)), sub: 'Mức dùng của host vượt ngưỡng cấu hình' },
+    { label: 'Cluster vượt ngưỡng overcommit', value: String((byType.overcommit_cpu || 0) + (byType.overcommit_ram || 0)), sub: 'vCPU:pCPU hoặc vRAM:pRAM vượt ngưỡng' },
+    { label: 'VM cần rà soát', value: String((byType.vm_idle || 0) + (byType.vm_off || 0) + (byType.vm_overprovision || 0)), sub: 'Idle lâu, tắt lâu hoặc cấp dư vCPU' },
+  ]);
 }
 
+const cpState = { selected: '', bound: false };
+const CP_TONE = { critical: 'crit', warning: 'warn', info: 'na' };
+
+/* Findings as a list grouped by severity → detail pane (pages/danh-sach.md). Same rows / filters as before
+   (getFilteredCompliance); the detail shows the recommendation and links to the host / VM card. */
 function renderComplianceTable() {
-  const rows = getFilteredCompliance();
-  const tbody = $('#complianceTable tbody');
-  $('#complianceRowCount').textContent = `${rows.length} findings`;
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="7"><div class="empty-note">Không có compliance finding phù hợp bộ lọc.</div></td></tr>`; return; }
+  const rows = getFilteredCompliance().slice().sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || String(a.cluster).localeCompare(String(b.cluster)) || String(a.entity).localeCompare(String(b.entity)));
+  const list = $('#complianceList');
+  if (!list) return;
+  $('#complianceRowCount').textContent = `${rows.length} phát hiện`;
+  if (!rows.some(r => r.code === cpState.selected)) cpState.selected = rows.length ? rows[0].code : '';
+  const groups = ['critical', 'warning', 'info'].map(sev => {
+    const g = rows.filter(r => r.severity === sev);
+    if (!g.length) return '';
+    return `<li class="hm-group" role="presentation"><span>${esc(SEVERITY_LABEL[sev])}</span><span>${g.length}</span></li>` + g.map(f => `
+      <li class="hm-row" role="option" id="cp-${esc(f.code)}" data-cp="${esc(f.code)}" aria-selected="${f.code === cpState.selected}">
+        <span class="hm-lv lv-${CP_TONE[f.severity]}" aria-hidden="true"></span>
+        <span class="hm-t">${esc(f.entity)}</span>
+        <span class="hm-r"><code>${esc(f.code)}</code></span>
+        <span class="hm-m">${esc(f.typeLabel)} · ${esc(f.cluster || '—')}${f.vcenterKey ? ' · ' + esc(f.vcenterKey) : ''}</span>
+        <span class="sr-only">${esc(SEVERITY_LABEL[f.severity])}</span></li>`).join('');
+  }).join('');
+  list.innerHTML = groups || `<li role="presentation">${uiEmpty('Không có phát hiện nào khớp bộ lọc.')}</li>`;
+  const sel = list.querySelector('[aria-selected="true"]');
+  if (sel) list.setAttribute('aria-activedescendant', sel.id); else list.removeAttribute('aria-activedescendant');
+  cpRenderDetail(rows);
+  cpBind();
+}
 
-  const sorted = applySort(rows, 'complianceTable', (r, key) => {
-    if (key === 'severity') return SEVERITY_ORDER[r.severity];
-    return r[key];
+function cpRenderDetail(rows) {
+  const box = $('#complianceDetail');
+  const f = (rows || getFilteredCompliance()).find(r => r.code === cpState.selected);
+  if (!box) return;
+  if (!f) { box.innerHTML = uiEmpty('Chọn một phát hiện ở danh sách bên trái.'); return; }
+  const entity = /^host_/.test(f.type) ? uiEntityLink('host', f.entity, f.vcenterKey) : /^vm_/.test(f.type) ? uiEntityLink('vm', f.entity, f.vcenterKey) : `<b>${esc(f.entity)}</b>`;
+  box.innerHTML = `
+    <div class="hm-d-top">${uiPill(CP_TONE[f.severity], SEVERITY_LABEL[f.severity])}<h3>${esc(f.typeLabel)}: ${esc(f.entity)}</h3></div>
+    <div class="hm-d-meta"><span>Mã đối soát <code>${esc(f.code)}</code></span><span>Cluster ${esc(f.cluster || '—')}</span>${f.vcenterKey ? `<span>${esc(f.vcenterKey)}</span>` : ''}</div>
+    <div class="hm-d-sec"><h4>Nên làm gì</h4><p>${esc(f.recommendation)}</p></div>
+    <div class="hm-d-sec"><h4>Chỉ số</h4><p class="mono">${esc(f.metric)}</p></div>
+    <div class="hm-d-sec"><h4>Đối tượng</h4><p>${entity}</p></div>
+    <p class="muted-sub">Mã đối soát giống nhau trên web, PDF Vận hành và PDF Kỹ thuật — dùng để tra ngược từ báo cáo.</p>`;
+}
+
+function cpBind() {
+  const list = $('#complianceList');
+  if (!list || cpState.bound) return;
+  cpState.bound = true;
+  const select = (code, focus) => {
+    cpState.selected = code;
+    list.querySelectorAll('[role="option"]').forEach(o => o.setAttribute('aria-selected', String(o.dataset.cp === code)));
+    const o = list.querySelector(`[data-cp="${CSS.escape(code)}"]`);
+    if (o) { list.setAttribute('aria-activedescendant', o.id); o.scrollIntoView({ block: 'nearest' }); }
+    cpRenderDetail();
+    if (focus) list.focus();
+    else if (matchMedia('(max-width:1023px)').matches) { const d = $('#complianceDetail'); if (d) d.scrollIntoView({ block: 'start' }); }
+  };
+  list.addEventListener('click', (e) => { const o = e.target.closest('[data-cp]'); if (o) select(o.dataset.cp); });
+  list.addEventListener('keydown', (e) => {
+    const codes = [...list.querySelectorAll('[data-cp]')].map(o => o.dataset.cp);
+    const i = codes.indexOf(cpState.selected), k = e.key.toLowerCase();
+    if (k === 'arrowdown' || k === 'j') { e.preventDefault(); if (codes.length) select(codes[Math.min(i + 1, codes.length - 1)], true); }
+    else if (k === 'arrowup' || k === 'k') { e.preventDefault(); if (codes.length) select(codes[Math.max(i - 1, 0)], true); }
   });
-
-  tbody.innerHTML = sorted.map(f => `
-    <tr>
-      <td class="mono finding-code">${esc(f.code)}</td>
-      <td><span class="pill ${SEVERITY_PILL[f.severity]}"><span class="pill-dot"></span>${SEVERITY_LABEL[f.severity]}</span></td>
-      <td>${esc(f.typeLabel)}</td>
-      <td>${/^host_/.test(f.type) ? uiEntityLink('host', f.entity, f.vcenterKey) : /^vm_/.test(f.type) ? uiEntityLink('vm', f.entity, f.vcenterKey) : `<strong>${esc(f.entity)}</strong>`}</td>
-      <td>${esc(f.cluster)}</td>
-      <td class="mono">${esc(f.metric)}</td>
-      <td class="wrap"><div class="recommendation">${esc(f.recommendation)}</div></td>
-    </tr>
-  `).join('');
 }
 
 function renderComplianceView() {
   renderComplianceKpis();
   renderComplianceTable();
-  bindSortableHeaders('complianceTable', 'complianceTable', renderComplianceTable);
-  highlightSortHeaders('complianceTable', 'complianceTable');
 }
 
 /* ---------- Inventory: Host table ---------- */
@@ -259,6 +293,7 @@ function renderHostTable() {
     <tr>
       <td>${esc(h.cluster)}</td>
       <td>${uiEntityLink('host', h.host, h.vcenterKey)}</td>
+      <td>${uiPill(h.overall.cls, h.overall.text)}</td>
       <td class="mono">${fmtInt(h.cores)}</td>
       <td class="mono">${fmtNum(h.ramGB,0)}</td>
       <td class="mono">${fmtInt(h.vcpuUsed)}</td>
@@ -266,7 +301,6 @@ function renderHostTable() {
       <td class="mono">${fmtNum(h.ramUsedGB,0)}</td>
       <td>${barCellHtml(h.ramPct)}</td>
       <td class="mono">${h.vmCount}</td>
-      <td><span class="pill ${h.overall.cls}">${esc(h.overall.text)}</span></td>
     </tr>
   `).join('');
 }
@@ -309,7 +343,7 @@ function renderVmTable() {
       <td>${esc(v.cluster)}</td>
       <td>${esc(v.host || '-')}</td>
       <td>${uiEntityLink('vm', v.vm, v.vcenterKey)}</td>
-      <td><span class="pill ${v.isPoweredOn ? 'ok' : 'na'}">${esc(v.powerState)}</span></td>
+      <td><span class="tag${v.isPoweredOn ? ' tag-on' : ''}">${esc(v.isPoweredOn ? 'Đang bật' : 'Đang tắt')}</span></td>
       <td class="mono">${esc(v.ipAddress || '-')}</td>
       <td class="mono">${fmtInt(v.vcpu)}</td>
       <td class="mono">${fmtNum(v.ramGB,0)}</td>
