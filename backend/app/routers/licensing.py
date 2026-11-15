@@ -1,16 +1,19 @@
 """Inventory & License Assessment API.
 
-All endpoints reuse the existing cookie-JWT auth (`get_current_user`) and the
+Reads use the cookie-JWT auth (`get_current_user`); writes to shared configuration (rule
+versions / activation, entitlements) need `require_admin`. Assessments use the
 latest snapshot per vCenter from data_access, so live-polled and imported
 inventories are assessed through the same path.
 """
+import logging
 import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import data_access, report_license
@@ -20,12 +23,13 @@ from ..licensing import assess as assess_mod
 from ..licensing import os_classify, rules as rules_mod, whatif as whatif_mod
 from ..models import LicenseAssessment, LicenseEntitlement, LicenseRuleSet, ReportLogo, User, VmOsOverride
 from ..features import require_feature
-from ..security import get_current_user
+from ..security import get_current_user, require_admin
 from ..timeutil import to_iso_utc
 
 from ..scope import scope_keys as _scope_keys
 from ..licensing.inventory import _load_inventory, _override_dict, _overrides_map, _filter_scope, _parse_clusters  # noqa: F401,E402
 
+logger = logging.getLogger("vco.routers.licensing")
 router = APIRouter(prefix="/api/licensing", tags=["licensing"])
 # Asset endpoints above (clusters, inventory, OS overrides) serve Tài sản → ESXi / Hệ điều hành and stay on
 # whatever the License module switch says. Everything that is license assessment lives on this router.
@@ -153,23 +157,39 @@ def list_overrides(db: Session = Depends(get_db), user: User = Depends(get_curre
 def upsert_override(payload: OverrideIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     if payload.category not in os_classify.CATEGORIES:
         raise HTTPException(400, f"category phải thuộc {os_classify.CATEGORIES}")
-    q = db.query(VmOsOverride).filter(VmOsOverride.vcenter_key == payload.vcenterKey)
-    if payload.instanceUuid:
-        row = q.filter(VmOsOverride.instance_uuid == payload.instanceUuid).first()
+    # Select-then-insert can race (double click, two users); the partial unique indexes created in
+    # ensure_schema reject the second INSERT, and the retry then updates the row the winner wrote.
+    for attempt in range(2):
+        row = _same_override(db, payload.vcenterKey, payload.instanceUuid, payload.vm).first()
+        if not row:
+            row = VmOsOverride(vcenter_key=payload.vcenterKey, instance_uuid=payload.instanceUuid, vm=payload.vm)
+            db.add(row)
+        row.vm = payload.vm
+        row.category = payload.category
+        row.os_version = payload.osVersion
+        row.os_edition = payload.osEdition
+        row.note = payload.note
+        row.updated_by = user.username
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            if attempt:
+                raise HTTPException(409, "Override vừa được người khác lưu — tải lại rồi thử lại.")
+            continue
+        db.refresh(row)
+        return _override_dict(row)
+
+
+def _same_override(db: Session, vcenter_key: Optional[str], instance_uuid: Optional[str], vm: str):
+    """Rows for one VM (by uuid when known, else by name), newest first — a database created before
+    the unique indexes may still hold duplicates; the newest one is the effective override."""
+    q = db.query(VmOsOverride).filter(VmOsOverride.vcenter_key == vcenter_key)
+    if instance_uuid:
+        q = q.filter(VmOsOverride.instance_uuid == instance_uuid)
     else:
-        row = q.filter(VmOsOverride.instance_uuid.is_(None), VmOsOverride.vm == payload.vm).first()
-    if not row:
-        row = VmOsOverride(vcenter_key=payload.vcenterKey, instance_uuid=payload.instanceUuid, vm=payload.vm)
-        db.add(row)
-    row.vm = payload.vm
-    row.category = payload.category
-    row.os_version = payload.osVersion
-    row.os_edition = payload.osEdition
-    row.note = payload.note
-    row.updated_by = user.username
-    db.commit()
-    db.refresh(row)
-    return _override_dict(row)
+        q = q.filter(VmOsOverride.instance_uuid.is_(None), VmOsOverride.vm == vm)
+    return q.order_by(VmOsOverride.updated_at.desc(), VmOsOverride.id.desc())
 
 
 @router.delete("/overrides/{override_id}")
@@ -177,7 +197,9 @@ def delete_override(override_id: int, db: Session = Depends(get_db), user: User 
     row = db.query(VmOsOverride).filter(VmOsOverride.id == override_id).first()
     if not row:
         raise HTTPException(404, "Không tìm thấy override")
-    db.delete(row)
+    # Remove older duplicates too, otherwise one of them would silently become effective.
+    for r in _same_override(db, row.vcenter_key, row.instance_uuid, row.vm).all():
+        db.delete(r)
     db.commit()
     return {"ok": True}
 
@@ -189,9 +211,22 @@ def delete_override(override_id: int, db: Session = Depends(get_db), user: User 
 class RuleVersionIn(BaseModel):
     params: Dict[str, Any]
     name: Optional[str] = None
-    sourceUrl: Optional[str] = None
+    sourceUrl: Optional[str] = Field(default=None, max_length=500)
     sourceNote: Optional[str] = None
     activate: bool = False
+
+    @field_validator("sourceUrl")
+    @classmethod
+    def _http_url_only(cls, v: Optional[str]) -> Optional[str]:
+        # Rendered as a link for every user: only http(s), never javascript: / data: / file:.
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return ""                   # explicit clear (None keeps the previous version's link)
+        if not v.lower().startswith(("http://", "https://")) or any(c in v for c in " \t\r\n<>\"'"):
+            raise ValueError("Link nguồn phải là địa chỉ http:// hoặc https:// hợp lệ.")
+        return v
 
 
 class RuleVerifyIn(BaseModel):
@@ -205,7 +240,7 @@ def list_rules(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 
 @license_router.post("/rules/{rule_id}/versions")
-def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     base = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not base:
         raise HTTPException(404, "Không tìm thấy rule")
@@ -214,7 +249,7 @@ def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends
 
 
 @license_router.post("/rules/{rule_id}/activate")
-def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
         raise HTTPException(404, "Không tìm thấy rule")
@@ -224,7 +259,7 @@ def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @license_router.post("/rules/{rule_id}/deactivate")
-def deactivate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def deactivate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
         raise HTTPException(404, "Không tìm thấy rule")
@@ -291,7 +326,7 @@ def _apply_ent(row: LicenseEntitlement, p: EntitlementIn, user: User):
 
 
 @license_router.post("/entitlements")
-def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = LicenseEntitlement()
     _apply_ent(row, payload, user)
     db.add(row)
@@ -301,7 +336,7 @@ def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), us
 
 
 @license_router.put("/entitlements/{ent_id}")
-def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = db.query(LicenseEntitlement).filter(LicenseEntitlement.id == ent_id).first()
     if not row:
         raise HTTPException(404, "Không tìm thấy entitlement")
@@ -312,7 +347,7 @@ def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depend
 
 
 @license_router.delete("/entitlements/{ent_id}")
-def delete_entitlement(ent_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_entitlement(ent_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = db.query(LicenseEntitlement).filter(LicenseEntitlement.id == ent_id).first()
     if not row:
         raise HTTPException(404, "Không tìm thấy entitlement")
@@ -477,8 +512,9 @@ def report_pdf(vcenter: Optional[str] = Query(default="all"), cluster: Optional[
     try:
         pdf_bytes = report_license.build_license_pdf(result, logo_data_url=logo_data_url, prepared_by=preparedBy or user.username,
                                                      snapshot=snap_meta)
-    except Exception as exc:  # pragma: no cover - surfaced to the UI
-        raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
+    except Exception as exc:  # noqa: BLE001 — details go to the log, not to the client
+        logger.exception("License PDF render failed")
+        raise HTTPException(status_code=500, detail="Không thể tạo PDF. Vui lòng thử lại hoặc báo quản trị viên kiểm tra log.") from exc
     sc = result.get("scope") or {}
     label = "_".join(_ascii_slug(c) for c in (sc.get("clusters") or [])[:3]) or (_ascii_slug(vcenter) if vcenter and vcenter != "all" else "tat_ca")
     filename = f"ICO_License_executive_summary_{label}{('_snapshot' + str(snapshot)) if snapshot else ''}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"

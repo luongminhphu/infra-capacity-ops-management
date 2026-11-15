@@ -16,6 +16,7 @@ def ensure_schema() -> None:
     the first release (SQLAlchemy's create_all never alters existing tables).
     Safe to call on every start — each ALTER runs only when the column is
     missing, on both SQLite and PostgreSQL."""
+    import logging
     import time
 
     from sqlalchemy import inspect, text
@@ -57,6 +58,7 @@ def ensure_schema() -> None:
                            ("ai_summary", "TEXT"), ("ai_summary_at", "TIMESTAMP"), ("ai_summary_by", "VARCHAR(255)")],
         "proposals": [("quote_request_id", "INTEGER REFERENCES quote_requests(id)")],
         "spend_notify_channels": [("ops_alerts", "BOOLEAN DEFAULT FALSE")],
+        "ops_alert_state": [("source", "VARCHAR(16)"), ("sent_channels", "TEXT")],
         "spend_ai_config": [("tasks_json", "TEXT"), ("mask_names", "BOOLEAN DEFAULT TRUE"), ("budget_usd", "INTEGER DEFAULT 100"),
                             ("alert_usd", "INTEGER DEFAULT 50"), ("alert_month", "VARCHAR(7)"), ("rate_per_hour", "INTEGER DEFAULT 30")],
         "quotation_lines": [("cost_group_id", "INTEGER REFERENCES renovation_cost_groups(id) ON DELETE SET NULL")],
@@ -80,11 +82,41 @@ def ensure_schema() -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
                     if name in indexed:
                         conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_{name} ON {table} ({name})"))
+        # Composite indexes for the hot history queries (audit QRY-03):
+        # * vm_snapshots: history.py filters vcenter_key = ? AND captured_at >= ? (VM changes window);
+        # * snapshot_runs: data_access.latest_run_for_key / scheduler._enrich_activity filter
+        #   vcenter_key, status, source and take the newest finished_at.
+        # Plain CREATE INDEX on purpose: ensure_schema runs inside engine.begin() and PostgreSQL
+        # refuses CREATE INDEX CONCURRENTLY in a transaction. On a large existing vm_snapshots table
+        # the first start blocks writes to it while the index builds (reads are unaffected); for a
+        # very large table create it beforehand by hand with CONCURRENTLY and the same name —
+        # IF NOT EXISTS then makes this a no-op.
+        for name, table, cols in (
+            ("ix_vm_snapshots_vc_captured", "vm_snapshots", "vcenter_key, captured_at"),
+            ("ix_snapshot_runs_latest", "snapshot_runs", "vcenter_key, status, source, finished_at"),
+        ):
+            if table in insp.get_table_names():
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
         # One short name per vendor (used in every comparison / evaluation document and in tờ trình);
         # partial unique index on the lower-cased value works on SQLite and PostgreSQL.
         if "spend_vendors" in insp.get_table_names():
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_spend_vendor_short_name "
                               "ON spend_vendors (lower(short_name)) WHERE short_name IS NOT NULL"))
+        # One OS override per VM (by uuid, or by name when the uuid is unknown). COALESCE because
+        # NULLs never collide in a unique index. Created only when the existing rows are already
+        # unique: duplicates are left for the newest-wins read path, never deleted at startup.
+        if "vm_os_overrides" in insp.get_table_names():
+            for name, cols, where in (
+                ("uq_vm_os_override_uuid", "COALESCE(vcenter_key, ''), instance_uuid", "instance_uuid IS NOT NULL"),
+                ("uq_vm_os_override_name", "COALESCE(vcenter_key, ''), vm", "instance_uuid IS NULL"),
+            ):
+                dup = conn.execute(text(f"SELECT 1 FROM vm_os_overrides WHERE {where} "
+                                        f"GROUP BY {cols} HAVING COUNT(*) > 1 LIMIT 1")).first()
+                if dup is None:
+                    conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS {name} ON vm_os_overrides ({cols}) WHERE {where}"))
+                else:
+                    logging.getLogger("vco.database").warning(
+                        "vm_os_overrides has duplicate rows; %s not created (newest row is used)", name)
         # Entra user principal names can be longer than the original 64-character username column.
         if engine.dialect.name == "postgresql" and "users" in insp.get_table_names():
             col = next((c for c in insp.get_columns("users") if c["name"] == "username"), None)

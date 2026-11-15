@@ -87,10 +87,32 @@ def delete_source(source_id: int, request: Request, user: User = Depends(require
     return {"ok": True}
 
 
+def _target(row: DataSource) -> tuple:
+    o = sources._opts(row) if row.kind == "netbackup" else {}
+    return ((row.host or "").lower(), row.port, (o.get("domainType") or ""), (o.get("domainName") or "").lower())
+
+
+def _target_changed(existing: DataSource, probe: DataSource) -> bool:
+    return _target(existing) != _target(probe)
+
+
+def _drop_reused_secrets(probe: DataSource, data: Dict[str, Any]) -> None:
+    """The form points at another server than the saved source: never send the saved
+    (write-only) password / API key there — only secrets typed in this request are used."""
+    if not data.get("password"):
+        probe.password_enc = None
+    if not data.get("apiKey"):
+        probe.api_key_enc = None
+    if not probe.demo and not (probe.password_enc or probe.api_key_enc):
+        raise sources.SourceError("Đã đổi host / cổng / domain so với nguồn đã lưu: nhập lại mật khẩu "
+                                  "(hoặc API key) để kiểm tra kết nối.")
+
+
 @router.post("/test")
 def test_source(request: Request, data: Dict[str, Any] = Body(...), user: User = Depends(require_admin),
                 db: Session = Depends(get_db)):
-    """Test the values in the form (not saved). An empty password / API key uses the saved one."""
+    """Test the values in the form (not saved). An empty password / API key uses the saved one,
+    only while host, port and NetBackup domain match the saved source (SEC-09)."""
     source_id: Optional[int] = data.get("id")
     existing = _row(db, int(source_id)) if source_id else None
     probe = DataSource(kind=existing.kind if existing else data.get("kind"), key=existing.key if existing else "test",
@@ -98,12 +120,14 @@ def test_source(request: Request, data: Dict[str, Any] = Body(...), user: User =
                        api_key_enc=existing.api_key_enc if existing else None, options=existing.options if existing else None)
     try:
         sources.apply_input(probe, {**data, "key": probe.key, "kind": probe.kind}, creating=existing is None)
+        if existing and _target_changed(existing, probe):
+            _drop_reused_secrets(probe, data)
         message, ok = sources.test_connection(sources.to_config(probe), probe.kind), True
     except sources.SourceError as exc:
         message, ok = str(exc), False
     if existing:
         existing.last_test_at, existing.last_test_ok, existing.last_test_message = dt.datetime.utcnow(), ok, message[:1000]
-        _audit(db, user, "source.test", request, existing, ok=ok)
+        _audit(db, user, "source.test", request, existing, ok=ok, targetHost=probe.host, targetPort=probe.port)
         db.commit()
     return {"ok": ok, "message": message}
 
