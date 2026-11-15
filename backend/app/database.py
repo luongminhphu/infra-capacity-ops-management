@@ -16,6 +16,7 @@ def ensure_schema() -> None:
     the first release (SQLAlchemy's create_all never alters existing tables).
     Safe to call on every start — each ALTER runs only when the column is
     missing, on both SQLite and PostgreSQL."""
+    import logging
     import time
 
     from sqlalchemy import inspect, text
@@ -85,6 +86,21 @@ def ensure_schema() -> None:
         if "spend_vendors" in insp.get_table_names():
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_spend_vendor_short_name "
                               "ON spend_vendors (lower(short_name)) WHERE short_name IS NOT NULL"))
+        # One OS override per VM (by uuid, or by name when the uuid is unknown). COALESCE because
+        # NULLs never collide in a unique index. Created only when the existing rows are already
+        # unique: duplicates are left for the newest-wins read path, never deleted at startup.
+        if "vm_os_overrides" in insp.get_table_names():
+            for name, cols, where in (
+                ("uq_vm_os_override_uuid", "COALESCE(vcenter_key, ''), instance_uuid", "instance_uuid IS NOT NULL"),
+                ("uq_vm_os_override_name", "COALESCE(vcenter_key, ''), vm", "instance_uuid IS NULL"),
+            ):
+                dup = conn.execute(text(f"SELECT 1 FROM vm_os_overrides WHERE {where} "
+                                        f"GROUP BY {cols} HAVING COUNT(*) > 1 LIMIT 1")).first()
+                if dup is None:
+                    conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS {name} ON vm_os_overrides ({cols}) WHERE {where}"))
+                else:
+                    logging.getLogger("vco.database").warning(
+                        "vm_os_overrides has duplicate rows; %s not created (newest row is used)", name)
         # Entra user principal names can be longer than the original 64-character username column.
         if engine.dialect.name == "postgresql" and "users" in insp.get_table_names():
             col = next((c for c in insp.get_columns("users") if c["name"] == "username"), None)

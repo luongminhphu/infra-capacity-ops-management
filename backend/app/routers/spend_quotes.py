@@ -548,7 +548,7 @@ def extract_quotation(code: str, qid: int, request: Request, user: User = Depend
     _store_extracted(db, q, ex)
     db.flush()
     run_checks(db, r, q)
-    q.row_version += 1
+    service.bump_version(db, q)
     db.commit()
     return _quotation_out(db, q, {q.vendor_id: db.get(SpendVendor, q.vendor_id)}, with_lines=True)
 
@@ -584,8 +584,7 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
     r = _request(db, code)
     _editable(r)
     q = _quotation(db, r, qid)
-    if int(data.get("rowVersion") or 0) != q.row_version:
-        raise HTTPException(409, "Báo giá vừa được người khác sửa — tải lại.")
+    service.bump_version(db, q, data.get("rowVersion") or 0)
     t = service._text
     q.quote_no = t(data.get("quoteNo"), "số báo giá", 64)
     for attr, key, label in (("quote_date", "quoteDate", "Ngày báo giá"), ("valid_until", "validUntil", "Hiệu lực")):
@@ -625,7 +624,6 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
             q.extraction_method = "manual"
     q.state = "extracted" if q.state in ("verified", "pending", "failed") else q.state
     q.verified_at = q.verified_by = None
-    q.row_version += 1
     q.updated_at, q.updated_by = dt.datetime.utcnow(), user.username
     db.flush()
     run_checks(db, r, q)
@@ -642,10 +640,9 @@ def verify_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
     q = _quotation(db, r, qid)
     if not db.query(QuotationLine.id).filter_by(quotation_id=q.id, line_type="item").first():
         raise HTTPException(409, "Báo giá chưa có dòng hàng nào.")
-    if data.get("rowVersion") is not None and int(data["rowVersion"]) != q.row_version:
-        raise HTTPException(409, "Báo giá vừa được sửa / đọc lại — tải lại và kiểm tra trước khi xác nhận.")
+    service.bump_version(db, q, data.get("rowVersion"),
+                         "Báo giá vừa được sửa / đọc lại — tải lại và kiểm tra trước khi xác nhận.")
     q.state, q.verified_at, q.verified_by = "verified", dt.datetime.utcnow(), user.username
-    q.row_version += 1
     service.audit(db, user, request, "spend.quote.verify", code=r.code, quotation=q.id)
     db.commit()
     return _detail(db, r)
