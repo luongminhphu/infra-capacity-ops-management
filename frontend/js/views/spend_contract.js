@@ -144,7 +144,9 @@ async function ctOpenDetail(code) {
   const compare = comparable.length >= 2 ? `<div class="sp-inline ct-compare-bar">
       <label class="field"><span>Từ</span><select id="ctFrom">${vOpts(comparable[comparable.length - 2])}</select></label>
       <label class="field"><span>Đến</span><select id="ctTo">${vOpts(comparable[comparable.length - 1])}</select></label>
-      <button class="btn btn-secondary btn-sm" type="button" id="ctCompare">So sánh</button></div>
+      <button class="btn btn-secondary btn-sm" type="button" id="ctCompare">So sánh</button>
+      <button class="btn btn-secondary btn-sm hidden" type="button" data-ai-act="contract-diff" data-ai-gate="contract_diff" data-ai-code="${esc(c.code)}">AI tóm tắt thay đổi</button></div>
+      <div id="ctAiDiff" class="ai-out" aria-live="polite"></div>
       <div id="ctDiff"></div>` : '<p class="muted-sub">Cần ít nhất hai version còn nội dung để so sánh.</p>';
   const upload = open && spCan('editor') ? `<div class="ct-upload">
       <h4 class="sp-h">Upload version mới (v${c.currentVersion + 1})</h4>
@@ -207,6 +209,7 @@ async function ctOpenDetail(code) {
     try { await apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}/versions`, { method: 'POST', body: fd }); await reopen(); spMsg('Đã upload version mới.', true); }
     catch (err) { spMsg(err.message); }
   });
+  if (typeof aiGate === 'function') aiGate($('#spDialog'));
   spOnce('#ctCompare', async () => {
     try {
       const d = await apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}/diff?from=${encodeURIComponent($('#ctFrom').value)}&to=${encodeURIComponent($('#ctTo').value)}`);

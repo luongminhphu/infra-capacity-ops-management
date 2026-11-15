@@ -83,7 +83,7 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
   *Cho phép gửi dữ liệu ra ngoài*.
 - **Công tắc từng tác vụ**: soạn tờ trình, đọc báo giá PDF scan, tóm tắt khác biệt báo giá, **bản tin trang chủ**,
   **tổng kết báo cáo PDF**, **phân tích lỗi backup**, **ánh xạ cột file nhập**, **phân loại hệ điều hành**,
-  **tóm tắt biến động VM**.
+  **tóm tắt biến động VM**, **nhận định sizing**, **tóm tắt thay đổi hợp đồng**, **đọc hoá đơn**, **Hỏi ICO**.
 - **Che tên** host / IP / VM / client backup trước khi gửi (bật mặc định): thay bằng mã `<host:…>` / `<ip:…>`, rồi
   khôi phục trong kết quả.
 - **Hạn mức 100 USD / tháng**: chạm hạn mức thì AI tạm dừng, các chức năng quay về văn bản theo luật.
@@ -112,6 +112,21 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
   chưa ghi đè, kèm độ tin cậy và lý do. Chỉ đề xuất tin cậy cao được tick sẵn. Tick chọn rồi **Ghi đè các VM đã chọn** (dùng ghi đè thủ công sẵn có, ghi chú
   "AI đề xuất").
 - **Capacity → Xu hướng & biến động → AI tóm tắt biến động**: tóm tắt VM thêm / bỏ / đổi cấu hình trong kỳ theo cluster.
+
+**AI nâng cao và Kho báo cáo:**
+- **Sizing → AI nhận định**: diễn giải phương án, rủi ro, câu hỏi cần làm rõ với khách hàng và một đoạn gửi khách
+  (số liệu giữ nguyên từ bộ tính sizing).
+- **Hợp đồng → So sánh version → AI tóm tắt thay đổi**: từng thay đổi gắn chủ đề (thanh toán, giá, phạt, bảo hành,
+  SLA…) và mức rủi ro với bên mua; tối đa 60 thay đổi gửi AI. Quyền như xem so sánh (Chi phí — Xem).
+- **Đợt thanh toán → AI đọc hoá đơn** (hồ sơ có file PDF, vai trò Biên tập): AI chép số hoá đơn, MST, số tiền; **hệ
+  thống** đối chiếu với số tiền đợt, MST nhà cung cấp, mã / tên hợp đồng và kiểm tra tiền trước thuế + VAT = tổng.
+  Không tự tick hồ sơ; có nhật ký. Cùng file thì dùng lại kết quả.
+- **Hỏi ICO** (nút trên thanh trên cùng): hỏi bằng tiếng Việt. AI chỉ dùng công cụ **chỉ đọc**, chạy với quyền của người
+  hỏi: tìm kiếm, thẻ host / VM, capacity cluster, client backup, VM chưa backup, hộp việc. Module tắt hoặc dữ liệu chi phí
+  không đủ quyền thì công cụ không trả. Tối đa 5 vòng tra cứu mỗi câu; câu trả lời kèm link tới thẻ host / VM.
+- **Tài liệu → Kho báo cáo**: tick *Lưu vào kho* ở Trung tâm báo cáo, mỗi PDF xuất ra (Capacity, Backup, License, Sizing,
+  Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Mỗi người giữ tối đa 100 bản (bản cũ nhất của chính
+  người đó bị thay), 400 ngày, 25 MB mỗi bản; cùng nội dung không lưu hai lần. Chỉ các route báo cáo trong danh sách được lưu. Báo cáo chi phí chỉ người có vai trò Chi phí xem được; người lưu hoặc admin xoá được.
 
 Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác

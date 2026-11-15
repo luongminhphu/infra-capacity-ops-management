@@ -260,6 +260,20 @@ def sizing_defaults(user: User = Depends(get_current_user)):
             "platforms": platforms.meta()}
 
 
+@router.post("/ai-narrative")
+def sizing_ai_narrative(payload: SizingPayload, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """A7 — AI explanation of the computed option, risks, questions for the customer."""
+    from .. import ai_advanced, ai_platform
+    from ..spend import ai as transport
+    result = _build(payload)
+    try:
+        return ai_advanced.sizing_narrative(db, user, result)
+    except ai_platform.AiBlocked as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except transport.AiError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.post("/calc")
 def sizing_calc(payload: SizingPayload, user: User = Depends(get_current_user)):
     return _build(payload)

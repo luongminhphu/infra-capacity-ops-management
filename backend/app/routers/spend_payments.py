@@ -309,6 +309,42 @@ async def attach_document_file(code: str, payment_id: int, doc_id: int, request:
     return _out(db, c)
 
 
+@router.post("/contracts/{code}/payments/{payment_id}/documents/{doc_id}/ai-read")
+def read_document_ai(code: str, payment_id: int, doc_id: int, request: Request,
+                     user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
+    """A9 — AI reads the attached invoice PDF; the comparison with the payment (amount, vendor tax
+    code, contract reference) is done here by code. Nothing is changed: the user ticks the document."""
+    from .. import ai_advanced, ai_platform
+    from ..spend import ai as transport
+    c = _contract(db, code)
+    p = _payment(db, c, payment_id)
+    d = _doc(db, p, doc_id)
+    row = db.get(SpendFile, d.file_id) if d.file_id else None
+    if row is None:
+        raise HTTPException(400, "Hồ sơ này chưa có file — tải hoá đơn PDF lên trước.")
+    if row.mime != files.PDF:
+        raise HTTPException(400, "AI chỉ đọc hoá đơn dạng PDF.")
+    try:
+        pdf = files.path_of(row).read_bytes()
+    except OSError:
+        raise HTTPException(410, "Không đọc được file đã lưu.") from None
+    try:
+        inv = ai_advanced.read_invoice(db, user, pdf)
+    except ai_platform.AiBlocked as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except transport.AiError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    vendor = db.get(SpendVendor, c.vendor_id) if c.vendor_id else None
+    checks = ai_advanced.invoice_checks(inv, p.amount, vendor.tax_code if vendor else None, [c.code, c.title])
+    if not inv["isInvoice"]:
+        checks.insert(0, {"key": "kind", "label": "Loại tài liệu", "status": "bad", "invoice": "—", "expected": "Hoá đơn",
+                          "note": "AI cho rằng file này không phải hoá đơn."})
+    service.audit(db, user, request, "spend.payment.doc_ai_read", code=c.code, seq=p.seq, doc=d.name, sha256=row.sha256,
+                  result=[x["status"] for x in checks])
+    db.commit()
+    return {"invoice": inv, "checks": checks, "ok": all(x["status"] in ("ok", "na") for x in checks)}
+
+
 # ---------------------------------------------------------------- status
 @router.post("/contracts/{code}/payments/{payment_id}/submit")
 def submit_payment(code: str, payment_id: int, request: Request, user: User = Depends(require_spend("editor")),

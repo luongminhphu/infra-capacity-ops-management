@@ -132,6 +132,17 @@ def os_classify(vcenter: Optional[str] = Query(default="all"), user: User = Depe
     return _ai(lambda: ai_data.classify_os(db, user, classified))
 
 
+# ---------------------------------------------------------------- A10 Hỏi ICO
+@router.post("/ai/ask")
+def ask_ico(data: Dict[str, Any] = Body(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Question → answer from read-only tools, run with the asking user's rights (SA6)."""
+    from .. import ask_ico as ask_mod
+    try:
+        return _ai(lambda: ask_mod.ask(db, user, data.get("question")))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
 # ---------------------------------------------------------------- A6
 @router.post("/ai/vm-changes")
 def vm_changes(vcenter: Optional[str] = Query(default="all"), months: int = Query(default=12),

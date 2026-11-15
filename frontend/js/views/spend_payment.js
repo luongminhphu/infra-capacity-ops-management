@@ -24,6 +24,8 @@ async function payRender(code) {
           ${p.status !== 'pending' || !spCan('editor') ? 'disabled' : ''}><span>${esc(x.name)}${x.required ? ' <span class="pill-mini">Bắt buộc</span>' : ''}</span></label>
         <span class="muted-sub sr-inline">${x.done ? `${esc(x.doneBy || '')} · ${esc(spTime(x.doneAt))}` : 'Chưa có'}</span>
         ${x.file ? `<a href="/api/spend/files/${encodeURIComponent(x.file.id)}" download>${esc(x.file.name)}</a>` : ''}
+        ${x.file && /\.pdf$/i.test(x.file.name) && spCan('editor') ? `<button class="btn btn-ghost btn-sm hidden" type="button" data-ai-gate="invoice_read" data-ai-act="invoice" data-ai-url="${esc(`/spend/contracts/${encodeURIComponent(code)}/payments/${p.id}/documents/${x.id}/ai-read`)}" data-ai-out="payAi-${esc(x.id)}">AI đọc hoá đơn</button>` : ''}
+        <div class="ai-out pay-ai" id="payAi-${esc(x.id)}" aria-live="polite"></div>
         ${spCan('editor') && p.status === 'pending' ? `<label class="btn btn-ghost btn-sm pay-file">Đính kèm<input type="file" class="hidden" accept=".pdf,.docx,.xlsx" data-pay-file="${esc(p.id)}:${esc(x.id)}"></label>` : ''}
         ${spCan('editor') && p.status === 'pending' ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" data-pay-deldoc="${esc(p.id)}:${esc(x.id)}" aria-label="Xoá hồ sơ ${esc(x.name)}"><i data-lucide="x"></i></button>` : ''}
       </li>`).join('');
@@ -85,6 +87,7 @@ async function payRender(code) {
     ${form}
     ${spCan('editor') && !form ? '<button class="btn btn-ghost btn-sm" type="button" id="payNew"><i data-lucide="plus"></i>Thêm đợt thanh toán</button>' : ''}`;
   refreshIcons();
+  if (typeof aiGate === 'function') aiGate(mount);
   payBind(code);
 }
 
