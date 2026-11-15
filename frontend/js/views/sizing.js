@@ -1027,11 +1027,7 @@ async function onSizingLogoFile(file) {
 
 function szPdfStatus(msg, isError = false) {
   // Inline status inside the options panel — the global banner sits at the top of the page and is easy to miss here.
-  const el = $('#szPdfStatus');
-  if (!el) return;
-  el.textContent = msg || '';
-  el.classList.toggle('sz-pdf-status-error', !!isError);
-  el.classList.toggle('hidden', !msg);
+  uiSetStatus('#szPdfStatus', msg, isError ? 'error' : '', { hideWhenEmpty: true });
 }
 
 async function exportSizingPdf(btn) {
@@ -1072,8 +1068,8 @@ function bindSizingView() {
   st.bound = true;
 
   $('#btnSizingAddRow').addEventListener('click', () => addSizingVmRow());
-  $('#btnSizingClear').addEventListener('click', () => {
-    if (!st.vms.length || confirm('Xoá toàn bộ danh sách VM yêu cầu?')) { st.vms = []; persistSizing(); renderSizingVmTable(); $('#sizingResult').classList.add('hidden'); $('#sizingAdjust').classList.add('hidden'); }
+  $('#btnSizingClear').addEventListener('click', async () => {
+    if (!st.vms.length || await uiConfirm('Xoá toàn bộ danh sách VM yêu cầu?')) { st.vms = []; persistSizing(); renderSizingVmTable(); $('#sizingResult').classList.add('hidden'); $('#sizingAdjust').classList.add('hidden'); }
   });
   $('#btnSizingImport').addEventListener('click', () => $('#sizingFile').click());
   $('#sizingFile').addEventListener('change', e => { importSizingFile(e.target.files && e.target.files[0]); e.target.value = ''; });

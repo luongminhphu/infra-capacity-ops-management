@@ -4,26 +4,34 @@
 Veritas NetBackup**, hỗ trợ **truy vấn live tới 4 vCenter và 4 NetBackup primary server (tài khoản chỉ đọc)** song song với import CSV/JSON thủ công, lưu lịch sử theo thời
 gian bằng PostgreSQL, và giao diện **điều hướng theo luồng công việc** (sidebar trái, HSC design system).
 
-### Cấu trúc giao diện (information architecture)
+### Cấu trúc giao diện (super app — `docs/design/super-app.md`)
 
-Mọi tính năng cũ được giữ nguyên nhưng gom lại theo luồng công việc thực tế; mỗi trang có địa chỉ
-riêng (`#/<trang>`, giữ được khi F5 / chia sẻ link) và thanh **Phạm vi** trên cùng chỉ hiện các bộ lọc
-mà trang đó dùng (vCenter / cluster / host).
+Menu chia theo **công việc**, không theo nguồn dữ liệu: **Vận hành** (theo dõi sống, cảnh báo, mô phỏng) và
+**Quản lý thông tin** (danh mục, hồ sơ, hợp đồng, tài liệu), cùng nhóm **Hệ thống**.
+- Mỗi mục menu gom nhiều trang thành **tab trong trang**.
+- Địa chỉ có dạng `#/<mục>/<tab>`, vd `#/backup/jobs`, `#/procure/quotes`, `#/settings/sources`. Địa chỉ giữ được khi
+  F5 / chia sẻ link. **Link cũ** (`#/bk-jobs`, `#/spend-opex?code=…` trong email nhắc hạn) vẫn mở đúng trang và tự
+  đổi sang địa chỉ mới.
+- Thanh **Phạm vi** trên cùng chỉ hiện các bộ lọc mà trang đó dùng.
 
-| Nhóm | Trang | Nội dung (trước đây nằm ở đâu) |
+| Miền | Mục menu | Tab |
 |---|---|---|
-| Tổng quan | **Điều hành** | Tóm tắt, KPI, xu hướng, nhận định & danh mục quyết định cần phê duyệt (Executive View cũ). |
-| | **Capacity** | KPI CPU/RAM/Storage, biểu đồ utilization, overcommit, bảng cluster (tab Dashboard cũ). |
-| Giám sát | **Compliance** | Findings host/cluster/VM với mã đối soát; bấm mã ở trang Điều hành sẽ nhảy sang đây và lọc sẵn. |
-| | **Xu hướng & biến động** | Biến động CPU/RAM theo snapshot và danh sách VM thêm/bớt/đổi cấu hình (trước nằm cuối Dashboard). |
-| Inventory | **Host & VM** | Bảng host, bảng VM có lọc cluster riêng, xuất Excel (tab Inventory cũ). |
-| | **ESXi & phần cứng**, **Hệ điều hành guest** | Hai tab đầu của License & Inventory cũ; bảng VM có cột IP address (guest.ipAddress, IP chính do VMware Tools báo về) và hostname guest trong tooltip / file Excel. |
-| Quy hoạch | **What-if capacity**, **Sizing máy chủ**, **Quy hoạch tài nguyên** | What-if simulation; sizing host vật lý; form giả định + PDF quy hoạch (trước là dropdown trong header). |
-| License | **Đánh giá license**, **What-if license**, **Snapshot license** | Ba tab còn lại của License & Inventory cũ, kèm thanh chọn phạm vi cluster cho đợt mua. |
-| Backup | **Tổng quan backup**, **Client & RPO**, **Job backup**, **Độ phủ VM**, **Storage & policy**, **Nguồn & ngưỡng** | Giám sát Veritas NetBackup qua REST API chỉ đọc — xem mục *Backup* bên dưới. |
-| Chi phí & Hợp đồng | **Tổng quan chi phí**, **Opex**, **Capex**, **Hợp đồng**, **Tờ trình** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
-| Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi báo cáo xuất tập trung, nhóm theo chức năng (lọc nhanh bằng chip): **Capacity & vận hành** (PDF Vận hành / Kỹ thuật, Excel host & VM, CSV tổng hợp), **Quy hoạch & Sizing** (PDF quy hoạch, Sizing PDF đầy đủ / rút gọn / Excel, mẫu nhập liệu), **License & Inventory** (PDF tổng quan — hiện tại hoặc từ snapshot, Excel đánh giá / ESXi / hệ điều hành), **Backup** (PDF hiện trạng — có / không phụ lục, Excel thống kê; chọn server và kỳ). Mỗi báo cáo có “Tuỳ chọn” riêng (Storage, cửa sổ xu hướng, giả định quy hoạch, hướng đề xuất sizing…) được ghi nhớ; “Chọn nhiều” để xuất nhiều báo cáo một lần. Khung bên phải: phạm vi cluster / host, loại finding, logo. Nút xuất ở từng trang vẫn giữ. |
-| | **Cài đặt** | Tiêu chí đánh giá (Storage), ngưỡng (idle, overcommit, HT) có nút **Lưu ngưỡng** lên server, trạng thái vCenter, import CSV/JSON, sample data, reset. |
+| — | **Trang chủ** | Tổng quan điều hành: tóm tắt, KPI, xu hướng, nhận định & danh mục quyết định |
+| Vận hành | **Capacity & Compliance** | Capacity · Compliance · Xu hướng & biến động |
+| | **Backup** | Tổng quan · Client & RPO · Job · Lịch & tuân thủ · Độ phủ VM · Storage & policy |
+| | **Mô phỏng & quy hoạch** | What-if capacity · Quy hoạch tài nguyên · What-if license |
+| | **Sizing máy chủ** | Bàn làm việc tài liệu sizing |
+| Quản lý thông tin | **Tài sản** | Host & VM · ESXi & phần cứng · Hệ điều hành |
+| | **License** | Đánh giá & quyền sử dụng · Snapshot |
+| | **Ngân sách & chi phí** | Tổng quan ngân sách · Opex · Capex |
+| | **Mua sắm** | Nhà cung cấp · So sánh báo giá · Cải tạo văn phòng |
+| | **Hợp đồng & thanh toán** | Hợp đồng (kèm đợt thanh toán) |
+| | **Tài liệu** | Tờ trình · Báo cáo (Trung tâm báo cáo) |
+| Hệ thống | **Cài đặt** | Tiêu chí & ngưỡng · Nguồn dữ liệu · Backup (nguồn & ngưỡng) · Tính năng · Chi phí & nhắc hạn · AI & MCP · Thương hiệu |
+
+Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
+Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác
+nhận theo design system (thay `confirm()` của trình duyệt), trạng thái rỗng.
 
 Giao diện dùng HSC design system: dark theme mặc định (nền đen, bề mặt `#14171A`, brand `#2681FF`),
 light theme chuyển bằng nút ở chân sidebar; font Inter, số dùng tabular-nums, màu trạng thái

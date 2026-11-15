@@ -37,7 +37,7 @@ function licState() {
 
 const licNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 const licMoney = (v, cur) => (v === null || v === undefined || !isFinite(v)) ? '—' : `${Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 0 })}${cur && cur !== 'mixed' ? ' ' + cur : ''}`;
-const licPill = (status) => { const s = LIC_STATUS[status] || { cls: 'na', label: status || '—' }; return `<span class="pill ${s.cls}">${esc(s.label)}</span>`; };
+const licPill = (status) => { const s = LIC_STATUS[status] || { cls: 'na', label: status || '—' }; return uiPill(s.cls, s.label); };
 const licRulePill = (status) => { const s = LIC_RULE_STATUS[status] || { cls: 'na', label: status }; return `<span class="pill ${s.cls}">${esc(s.label)}</span>`; };
 const licDate = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('vi-VN', { hour12: false }); };
 const licBool = (v) => v === true ? 'Bật' : v === false ? 'Tắt' : '—';
@@ -88,13 +88,7 @@ function renderLicScopeBar() {
     <span class="lic-scope-note${!all && !globalCl ? ' partial' : ''}">${note}</span>`;
 }
 
-function licSetStatus(msg, isError = false) {
-  const el = $('#licStatus');
-  if (!el) return;
-  el.classList.toggle('hidden', !msg);
-  el.textContent = msg || '';
-  el.style.color = isError ? 'var(--bad)' : '';
-}
+function licSetStatus(msg, isError = false) { uiSetStatus('#licStatus', msg, isError ? 'error' : '', { hideWhenEmpty: true }); }
 
 /* ---------- Data loading ---------- */
 async function licLoad(force = false) {
@@ -685,7 +679,7 @@ async function onLicBodyClick(e) {
       if (st.entEditing?.id) await api.licEntitlementUpdate(st.entEditing.id, payload); else await api.licEntitlementCreate(payload);
       st.entEditing = null; st.entKindDraft = null; await licLoad(true); renderLicBody(); licSetStatus(kind === 'none' ? 'Đã ghi nhận "Chưa có license" và tính lại assessment.' : 'Đã lưu entitlement và tính lại assessment.');
     }
-    else if (act === 'ent-delete') { if (!confirm('Xoá entitlement này?')) return; await api.licEntitlementDelete(id); await licLoad(true); renderLicBody(); }
+    else if (act === 'ent-delete') { if (!await uiConfirm('Xoá entitlement này?')) return; await api.licEntitlementDelete(id); await licLoad(true); renderLicBody(); }
     else if (act === 'rule-edit') { st.ruleEditing = st.rules.find(r => r.id === id); renderLicBody(); $('#licRuleParams')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     else if (act === 'rule-cancel') { st.ruleEditing = null; renderLicBody(); }
     else if (act === 'rule-save') {
@@ -695,7 +689,7 @@ async function onLicBodyClick(e) {
       st.ruleEditing = null; await licLoad(true); renderLicBody(); licSetStatus('Đã tạo version rule mới.');
     }
     else if (act === 'rule-activate') { await api.licRuleActivate(id); await licLoad(true); renderLicBody(); }
-    else if (act === 'rule-deactivate') { if (!confirm('Tắt rule này? Assessment sẽ báo thiếu rule cho tới khi kích hoạt version khác.')) return; await api.licRuleDeactivate(id); await licLoad(true); renderLicBody(); }
+    else if (act === 'rule-deactivate') { if (!await uiConfirm('Tắt rule này? Assessment sẽ báo thiếu rule cho tới khi kích hoạt version khác.')) return; await api.licRuleDeactivate(id); await licLoad(true); renderLicBody(); }
     else if (act === 'rule-verify') {
       const note = prompt('Ghi chú xác minh (tài liệu đã đối chiếu, ngày, người):', `Đối chiếu tài liệu nguồn ngày ${new Date().toLocaleDateString('vi-VN')}`);
       if (note === null) return;
@@ -712,7 +706,7 @@ async function onLicBodyClick(e) {
     else if (act === 'snap-view') { const full = await api.licSnapshotGet(id); st.viewingSnapshot = full; st.sub = 'assess'; if (typeof syncNavState === 'function') syncNavState(); renderLicBody(); }
     else if (act === 'snap-close') { st.viewingSnapshot = null; renderLicBody(); }
     else if (act === 'snap-recompute') { const r = await api.licSnapshotRecompute(id); const el = $(`#licRecomp${id}`); if (el) el.innerHTML = r.reproducible ? ' <span class="pill ok">tái lập đúng</span>' : ` <span class="pill crit">khác: ${esc(r.recomputedHash)}</span>`; }
-    else if (act === 'snap-delete') { if (!confirm(`Xoá snapshot #${id}?`)) return; await api.licSnapshotDelete(id); st.snaps = await api.licSnapshots(); renderLicBody(); }
+    else if (act === 'snap-delete') { if (!await uiConfirm(`Xoá snapshot #${id}?`)) return; await api.licSnapshotDelete(id); st.snaps = await api.licSnapshots(); renderLicBody(); }
   } catch (err) {
     licSetStatus(`Thao tác thất bại: ${err.message}`, true);
   }

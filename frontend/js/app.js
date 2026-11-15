@@ -87,13 +87,70 @@ const NAV_GROUPS = [
   { label: 'Báo cáo & cài đặt', items: [
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
       desc: 'Mọi báo cáo PDF và dữ liệu Excel / CSV, nhóm theo chức năng: Capacity & vận hành, Quy hoạch & Sizing, License & Inventory, Backup.', scope: ['vcenter'] },
-    { id: 'settings', view: 'settings', icon: 'settings', label: 'Cài đặt', title: 'Cài đặt',
-      desc: 'Tiêu chí và ngưỡng đánh giá, nguồn dữ liệu vCenter và import thủ công.', scope: [] },
+    { id: 'settings', view: 'settings', sub: 'criteria', icon: 'settings', label: 'Cài đặt', title: 'Cài đặt — tiêu chí & ngưỡng',
+      desc: 'Tiêu chí và ngưỡng đánh giá capacity / compliance, dùng chung cho màn hình, báo cáo PDF và quy hoạch.', scope: [] },
+    { id: 'set-sources', view: 'settings', sub: 'sources', icon: 'plug', label: 'Nguồn dữ liệu', title: 'Cài đặt — nguồn dữ liệu',
+      desc: 'Trạng thái vCenter, import thủ công và kết nối vCenter / NetBackup (admin).', scope: [] },
+    { id: 'set-features', view: 'settings', sub: 'features', icon: 'toggle-right', label: 'Tính năng', title: 'Cài đặt — tính năng',
+      desc: 'Bật / tắt module cho mọi người dùng.', scope: [] },
+    { id: 'set-spend', view: 'settings', sub: 'spend', icon: 'bell-ring', label: 'Chi phí & nhắc hạn', title: 'Cài đặt — chi phí & nhắc hạn',
+      desc: 'Năm tài chính, loại chi phí, mốc nhắc, kênh email / Discord, mẫu tờ trình và AI soạn tờ trình.', scope: [], spendRole: 'viewer', feature: 'spend' },
+    { id: 'set-ai', view: 'settings', sub: 'ai', icon: 'bot', label: 'AI & MCP', title: 'Cài đặt — AI & MCP',
+      desc: 'MCP server chỉ đọc cho AI phân tích log / hiệu suất của app (admin).', scope: [] },
+    { id: 'set-brand', view: 'settings', sub: 'brand', icon: 'image', label: 'Thương hiệu', title: 'Cài đặt — thương hiệu',
+      desc: 'Logo màn hình đăng nhập.', scope: [] },
   ] },
 ];
+
+/* ---------- Super-app menu (docs/design/super-app.md §2.1) ----------
+   Two domains (Vận hành / Quản lý thông tin) + Hệ thống. Each menu entry groups
+   existing pages (NAV_ITEMS ids) as in-page tabs; `path` is the hash route of a tab
+   (#/backup/jobs). Old ids (#/bk-jobs) still work and are rewritten to the new path. */
+const MENU = [
+  { label: '', entries: [
+    { key: 'home', label: 'Trang chủ', icon: 'house', tabs: [['executive', '', 'Tổng quan']] },
+  ] },
+  { label: 'Vận hành', entries: [
+    { key: 'capacity', label: 'Capacity & Compliance', icon: 'gauge', tabs: [
+      ['dashboard', '', 'Capacity'], ['compliance', 'compliance', 'Compliance'], ['history', 'trends', 'Xu hướng & biến động']] },
+    { key: 'backup', label: 'Backup', icon: 'database-backup', tabs: [
+      ['bk-overview', '', 'Tổng quan'], ['bk-clients', 'clients', 'Client & RPO'], ['bk-jobs', 'jobs', 'Job'],
+      ['bk-schedule', 'schedule', 'Lịch & tuân thủ'], ['bk-coverage', 'coverage', 'Độ phủ VM'], ['bk-storage', 'storage', 'Storage & policy']] },
+    { key: 'simulate', label: 'Mô phỏng & quy hoạch', icon: 'git-branch', tabs: [
+      ['whatif', '', 'What-if capacity'], ['planning', 'planning', 'Quy hoạch tài nguyên'], ['lic-whatif', 'license', 'What-if license']] },
+    { key: 'sizing', label: 'Sizing máy chủ', icon: 'calculator', tabs: [['sizing', '', 'Sizing']] },
+  ] },
+  { label: 'Quản lý thông tin', entries: [
+    { key: 'assets', label: 'Tài sản', icon: 'server', tabs: [
+      ['inventory', '', 'Host & VM'], ['lic-hardware', 'hardware', 'ESXi & phần cứng'], ['lic-os', 'os', 'Hệ điều hành']] },
+    { key: 'license', label: 'License', icon: 'badge-check', tabs: [
+      ['lic-assess', '', 'Đánh giá & quyền sử dụng'], ['lic-snapshots', 'snapshots', 'Snapshot']] },
+    { key: 'budget', label: 'Ngân sách & chi phí', icon: 'wallet', tabs: [
+      ['spend-overview', '', 'Tổng quan ngân sách'], ['spend-opex', 'opex', 'Opex'], ['spend-capex', 'capex', 'Capex']] },
+    { key: 'procure', label: 'Mua sắm', icon: 'shopping-cart', tabs: [
+      ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
+    { key: 'contracts', label: 'Hợp đồng & thanh toán', icon: 'scroll-text', tabs: [['spend-contracts', '', 'Hợp đồng']] },
+    { key: 'docs', label: 'Tài liệu', icon: 'file-text', tabs: [['spend-proposals', '', 'Tờ trình'], ['reports', 'reports', 'Báo cáo']] },
+  ] },
+  { label: 'Hệ thống', entries: [
+    { key: 'settings', label: 'Cài đặt', icon: 'settings', tabs: [
+      ['settings', '', 'Tiêu chí & ngưỡng'], ['set-sources', 'sources', 'Nguồn dữ liệu'], ['bk-config', 'backup', 'Backup'],
+      ['set-features', 'features', 'Tính năng'], ['set-spend', 'spend', 'Chi phí & nhắc hạn'], ['set-ai', 'ai', 'AI & MCP'],
+      ['set-brand', 'brand', 'Thương hiệu']] },
+  ] },
+];
+const PAGE_ROUTE = {};      // page id -> { entry, group, path, tab }
+const PATH_PAGE = {};       // 'backup/jobs' -> 'bk-jobs'
+MENU.forEach(g => g.entries.forEach(en => en.tabs.forEach(([id, slug, tab]) => {
+  const path = slug ? `${en.key}/${slug}` : en.key;
+  PAGE_ROUTE[id] = { entry: en, group: g, path, tab };
+  PATH_PAGE[path] = id;
+})));
+const DEFAULT_PAGE = 'executive';
 const NAV_ITEMS = {};
 NAV_GROUPS.forEach(g => g.items.forEach(it => { NAV_ITEMS[it.id] = it; }));
-let activeNavId = 'dashboard';
+NAV_ITEMS.executive.title = 'Trang chủ';
+let activeNavId = DEFAULT_PAGE;
 
 /* Modules switched off in Settings → Tính năng disappear from the menu, routes and report centre. */
 let appFeatures = {};
@@ -114,7 +171,7 @@ function applyFeatures(features) {
     $$(`[data-rpt-group="${g}"]`).forEach(el => el.classList.toggle('feature-off', !on));
   });
   if (!navItemVisible(currentNavId())) {
-    history.replaceState(null, '', '#/dashboard');
+    history.replaceState(null, '', '#/home');
     applyInitialRoute();
   }
   syncNavState();
@@ -131,14 +188,16 @@ function refreshIcons() {
   }
 }
 
+const entryTabs = (en) => en.tabs.map(t => t[0]).filter(id => navItemVisible(id));
+
 function renderSidebarNav() {
   const nav = $('#mainNav');
   if (!nav) return;
-  nav.innerHTML = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(it => navItemVisible(it.id)) }))
-    .filter(g => g.items.length).map(g => `
+  nav.innerHTML = MENU.map(g => ({ ...g, entries: g.entries.filter(en => entryTabs(en).length) }))
+    .filter(g => g.entries.length).map(g => `
     <div class="nav-group">
-      <div class="nav-group-label">${esc(g.label)}</div>
-      ${g.items.map(it => `<button type="button" class="nav-item" data-nav="${it.id}" title="${esc(it.desc)}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></button>`).join('')}
+      ${g.label ? `<div class="nav-group-label">${esc(g.label)}</div>` : ''}
+      ${g.entries.map(en => `<button type="button" class="nav-item" data-nav="${entryTabs(en)[0]}" data-entry="${en.key}" title="${esc(en.tabs.map(t => t[2]).join(' · '))}"><i data-lucide="${en.icon}"></i><span>${esc(en.label)}</span></button>`).join('')}
     </div>`).join('');
   if (!nav.dataset.bound) {
     nav.dataset.bound = '1';
@@ -153,6 +212,10 @@ function renderSidebarNav() {
 /* Which nav entry is current — derived from state so views that change
    state themselves (e.g. "Xem snapshot" switching to the assessment) stay in sync. */
 function currentNavId() {
+  if (appState.view === 'settings') {
+    const hitT = Object.values(NAV_ITEMS).find(it => it.view === 'settings' && it.sub === (appState.settingsSub || 'criteria'));
+    return hitT ? hitT.id : 'settings';
+  }
   if (appState.view === 'licensing') {
     const sub = (typeof licState === 'function' ? licState().sub : 'hardware') || 'hardware';
     const hit = Object.values(NAV_ITEMS).find(it => it.view === 'licensing' && it.sub === sub);
@@ -169,25 +232,38 @@ function currentNavId() {
     return hitB ? hitB.id : 'bk-overview';
   }
   const hit = Object.values(NAV_ITEMS).find(it => it.view === appState.view);
-  return hit ? hit.id : 'dashboard';
+  return hit ? hit.id : DEFAULT_PAGE;
 }
 
 function syncNavState() {
   activeNavId = currentNavId();
   const item = NAV_ITEMS[activeNavId];
+  const route = PAGE_ROUTE[activeNavId];
   $$('#mainNav .nav-item').forEach(b => {
-    const on = b.dataset.nav === activeNavId;
+    const on = !!route && b.dataset.entry === route.entry.key;
     b.classList.toggle('active', on);
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
-  const group = NAV_GROUPS.find(g => g.items.includes(item));
-  const groupEl = $('#pageGroup'); if (groupEl) groupEl.textContent = group ? group.label : '';
-  const titleEl = $('#pageTitle'); if (titleEl) titleEl.textContent = item.title;
+  const groupEl = $('#pageGroup'); if (groupEl) groupEl.textContent = route ? (route.group.label || 'ICO') : '';
+  const title = route ? route.entry.label : item.title;
+  const titleEl = $('#pageTitle'); if (titleEl) titleEl.textContent = title;
   const descEl = $('#pageDesc'); if (descEl) descEl.textContent = item.desc;
-  document.title = `${item.title} — Infra Capacity Ops Management`;
+  document.title = `${route && route.entry.tabs.length > 1 ? `${route.tab} — ${title}` : title} — Infra Capacity Ops Management`;
+  renderPageTabs(route);
   updateScopeControls(item);
-  const want = `#/${activeNavId}`;
-  if (location.hash !== want) history.replaceState(null, '', want);
+  const want = `#/${route ? route.path : activeNavId}`;
+  const keep = (location.hash.match(/\?.*$/) || [''])[0];     // ?code=… links of reminders stay usable
+  if (location.hash.replace(/\?.*$/, '') !== want) history.replaceState(null, '', want + keep);
+}
+
+/* In-page tabs of the current menu entry (hidden when the entry has a single page). */
+function renderPageTabs(route) {
+  const bar = $('#pageTabs');
+  if (!bar) return;
+  const tabs = route ? route.entry.tabs.filter(([id]) => navItemVisible(id)) : [];
+  bar.classList.toggle('hidden', tabs.length < 2);
+  bar.innerHTML = tabs.map(([id, , label]) => `<button class="sim-tab${id === activeNavId ? ' active' : ''}" type="button" role="tab"
+      aria-selected="${id === activeNavId}" data-nav-link="${id}">${esc(label)}</button>`).join('');
 }
 
 /* Show only the global filters that apply to the current page. */
@@ -200,13 +276,18 @@ function updateScopeControls(item) {
 
 function closeSidebar() { document.body.classList.remove('nav-open'); }
 
-function navigateTo(id) {
-  const item = navItemVisible(id) ? NAV_ITEMS[id] : NAV_ITEMS.dashboard;
+function applyPageState(item) {
   appState.view = item.view;
   appState.perspective = item.view === 'executive' ? 'executive' : 'technical';
   if (item.view === 'licensing' && typeof licState === 'function') licState().sub = item.sub || 'hardware';
   if (item.view === 'backup' && typeof bkState === 'function') bkState().sub = item.sub || 'overview';
   if (item.view === 'spend' && typeof spState !== 'undefined') spState.sub = item.sub || 'opex';
+  if (item.view === 'settings') appState.settingsSub = item.sub || 'criteria';
+}
+
+function navigateTo(id) {
+  const item = navItemVisible(id) ? NAV_ITEMS[id] : NAV_ITEMS[DEFAULT_PAGE];
+  applyPageState(item);
   closeSidebar();
   syncViewSections();
   renderActiveView();
@@ -214,20 +295,19 @@ function navigateTo(id) {
   if (main) window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
+/* #/backup/jobs (new path) or #/bk-jobs (old page id, kept working). */
 function navIdFromHash() {
-  const m = /^#\/([a-z-]+)/.exec(location.hash || '');
-  return m && navItemVisible(m[1]) ? m[1] : null;
+  const m = /^#\/([a-z0-9/-]+)/.exec(location.hash || '');
+  if (!m) return null;
+  const raw = m[1].replace(/\/+$/, '');
+  const id = PATH_PAGE[raw] || (NAV_ITEMS[raw] ? raw : null);
+  return id && navItemVisible(id) ? id : null;
 }
 
 /* Apply the hash route to state without rendering (used before the first data load). */
 function applyInitialRoute() {
-  const id = navIdFromHash() || 'dashboard';
-  const item = NAV_ITEMS[id];
-  appState.view = item.view;
-  appState.perspective = item.view === 'executive' ? 'executive' : 'technical';
-  if (item.view === 'licensing' && typeof licState === 'function') licState().sub = item.sub || 'hardware';
-  if (item.view === 'backup' && typeof bkState === 'function') bkState().sub = item.sub || 'overview';
-  if (item.view === 'spend' && typeof spState !== 'undefined') spState.sub = item.sub || 'opex';
+  const id = navIdFromHash() || DEFAULT_PAGE;
+  applyPageState(NAV_ITEMS[id]);
   syncViewSections();
 }
 
@@ -557,13 +637,7 @@ function bindPdfFindingFilterDropdown() {
 }
 
 /* ---------- Assessment criteria (Storage on/off) ---------- */
-function setCriteriaStatus(message, kind) {
-  const el = $('#criteriaStatus');
-  if (!el) return;
-  el.textContent = message || '';
-  el.classList.remove('ok', 'error');
-  if (kind) el.classList.add(kind);
-}
+function setCriteriaStatus(message, kind) { uiSetStatus('#criteriaStatus', message, kind || ''); }
 
 function updateCriteriaSummary() {
   const cb = $('#criteriaStorageToggle');

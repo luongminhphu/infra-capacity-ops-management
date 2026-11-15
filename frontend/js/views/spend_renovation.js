@@ -183,12 +183,12 @@ async function rnAction(act, btn) {
   if (act === 'pdf') return qtDownload(rnUrl(d.code, 'export.pdf'), `cai-tao-${d.floor}.pdf`, btn);
   if (act === 'pull') return run(() => apiRequest(rnUrl(d.code, 'pull-quotes'), { method: 'POST' }), 'Đã lấy báo giá trúng theo nhóm chi phí.');
   if (act === 'close') {
-    if (!confirm('Chốt thực chi? Nhóm chưa có thực chi sẽ lấy theo báo giá trúng; dự án trở thành dữ liệu lịch sử cho các tầng sau.')) return;
+    if (!await uiConfirm('Chốt thực chi? Nhóm chưa có thực chi sẽ lấy theo báo giá trúng; dự án trở thành dữ liệu lịch sử cho các tầng sau.')) return;
     return run(() => apiRequest(rnUrl(d.code, 'close'), { method: 'POST' }), 'Đã chốt.');
   }
   if (act === 'reopen') return run(() => apiRequest(rnUrl(d.code, 'reopen'), { method: 'POST' }));
   if (act === 'delete') {
-    if (!confirm(`Xoá dự án ${d.code} và toàn bộ số liệu?`)) return;
+    if (!await uiConfirm(`Xoá dự án ${d.code} và toàn bộ số liệu?`)) return;
     try { await apiRequest(rnUrl(d.code), { method: 'DELETE' }); rnState.current = null; renderRenovationsPage(); } catch (err) { rnMsg(err.message); }
     return;
   }

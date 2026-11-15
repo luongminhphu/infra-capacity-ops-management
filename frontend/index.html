@@ -100,6 +100,7 @@
       </div>
     </header>
     <p class="page-desc" id="pageDesc"></p>
+    <div class="sim-tabbar page-tabs hidden" id="pageTabs" role="tablist" aria-label="Trang con"></div>
 
     <div class="validation-banner" id="validationBanner"></div>
 
@@ -849,7 +850,7 @@
       <!-- ================= CÀI ĐẶT ================= -->
       <section id="viewSettings" class="view-section hidden">
         <div class="settings-grid">
-          <section class="panel">
+          <section class="panel" data-set-tab="criteria">
             <div class="panel-head">
               <div><div class="panel-title">Tiêu chí đánh giá</div><p class="panel-sub">Áp dụng cho dashboard, compliance, báo cáo PDF và quy hoạch.</p></div>
             </div>
@@ -860,7 +861,7 @@
             <p class="criteria-status" id="criteriaStatus"></p>
           </section>
 
-          <section class="panel">
+          <section class="panel" data-set-tab="criteria">
             <div class="panel-head">
               <div><div class="panel-title">Ngưỡng đánh giá</div><p class="panel-sub">Thay đổi áp dụng ngay trên màn hình; bấm Lưu để báo cáo PDF và các phiên làm việc khác dùng cùng ngưỡng.</p></div>
             </div>
@@ -888,7 +889,7 @@
             </div>
           </section>
 
-          <section class="panel">
+          <section class="panel" data-set-tab="sources">
             <div class="panel-head">
               <div><div class="panel-title">Nguồn dữ liệu</div><p class="panel-sub">Dữ liệu live đọc từ vCenter (tài khoản chỉ đọc) và dữ liệu import thủ công; lịch sử được lưu để phân tích xu hướng.</p></div>
             </div>
@@ -914,7 +915,7 @@
             </div>
           </section>
 
-          <section class="panel" id="featuresPanel">
+          <section class="panel" id="featuresPanel" data-set-tab="features">
             <div class="panel-head">
               <div><div class="panel-title">Tính năng</div><p class="panel-sub">Bật / tắt module trên menu, trang và Trung tâm báo cáo cho mọi người dùng. Dữ liệu và việc thu thập vẫn giữ nguyên khi tắt.</p></div>
             </div>
@@ -922,7 +923,7 @@
             <p class="criteria-status" id="featureStatus"></p>
           </section>
 
-          <section class="panel" id="loginLogoPanel">
+          <section class="panel" id="loginLogoPanel" data-set-tab="brand">
             <div class="panel-head">
               <div><div class="panel-title">Logo màn hình đăng nhập</div><p class="panel-sub">Hiển thị trên màn hình đăng nhập (trước khi đăng nhập). Khác với logo trang bìa báo cáo PDF.</p></div>
             </div>
@@ -939,7 +940,7 @@
             <p class="logo-upload-status" id="loginLogoStatus"></p>
           </section>
 
-          <section class="panel hidden" id="sourcesPanel">
+          <section class="panel hidden" id="sourcesPanel" data-set-tab="sources">
             <div class="panel-head">
               <div><div class="panel-title">Kết nối nguồn dữ liệu <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Thêm vCenter và máy chủ backup NetBackup ngay trên giao diện: địa chỉ, tài khoản chỉ đọc, mật khẩu / API key (lưu mã hoá, không hiển thị lại). Thay đổi có hiệu lực ở lần đồng bộ kế tiếp, không cần khởi động lại.</p></div>
@@ -988,7 +989,7 @@
             </form>
           </dialog>
 
-          <section class="panel panel-wide hidden" id="spendSettingsPanel">
+          <section class="panel panel-wide hidden" id="spendSettingsPanel" data-set-tab="spend">
             <div class="panel-head">
               <div><div class="panel-title">Chi phí &amp; nhắc hạn</div>
               <p class="panel-sub">Năm tài chính, mốc nhắc hạn, loại chi phí, kênh gửi nhắc (email / Discord) và vai trò người dùng của module Chi phí &amp; Hợp đồng IT.</p></div>
@@ -996,7 +997,7 @@
             <div id="spendSettingsMount"></div>
           </section>
 
-          <section class="panel hidden" id="mcpPanel">
+          <section class="panel hidden" id="mcpPanel" data-set-tab="ai">
             <div class="panel-head">
               <div><div class="panel-title">AI / MCP server <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Cho AI client (vd Claude Code) đọc <b>log và hiệu suất của ứng dụng</b> qua MCP — chỉ đọc, không có dữ liệu hạ tầng; host/IP trong log được che. Đề xuất sửa code đi qua pull request.</p></div>
@@ -1040,6 +1041,7 @@
 
 <script src="js/api.js?v=__ASSET_V__"></script>
 <script src="js/core.js?v=__ASSET_V__"></script>
+<script src="js/ui.js?v=__ASSET_V__"></script>
 <script src="js/views/history.js?v=__ASSET_V__"></script>
 <script src="js/views/executive.js?v=__ASSET_V__"></script>
 <script src="js/views/sizing.js?v=__ASSET_V__"></script>

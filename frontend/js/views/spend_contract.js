@@ -214,14 +214,14 @@ async function ctOpenDetail(code) {
     } catch (err) { spMsg(err.message); }
   });
   spOnce('#ctFinalize', async () => {
-    if (!confirm('Chốt Final? Sau khi chốt không nhận version mới; file các version khác sẽ bị xoá sau thời gian chờ.')) return;
+    if (!await uiConfirm('Chốt Final? Sau khi chốt không nhận version mới; file các version khác sẽ bị xoá sau thời gian chờ.')) return;
     try { await post('finalize', { versionNo: Number($('#ctFinalV').value) }); await reopen(); } catch (err) { spMsg(err.message); }
   });
   spOnce('#ctNegotiate', async () => { try { await post('negotiate'); await reopen(); } catch (err) { spMsg(err.message); } });
   spOnce('#ctPurgeCancel', async () => { try { await post('purge/cancel'); await reopen(); } catch (err) { spMsg(err.message); } });
   spOnce('#ctPurgeResume', async () => { try { await post('purge/resume'); await reopen(); } catch (err) { spMsg(err.message); } });
   spOnce('#ctDelete', async () => {
-    if (!confirm(`Xoá vĩnh viễn ${c.code} và toàn bộ file version? Thao tác được ghi nhật ký.`)) return;
+    if (!await uiConfirm(`Xoá vĩnh viễn ${c.code} và toàn bộ file version? Thao tác được ghi nhật ký.`)) return;
     try { await apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}`, { method: 'DELETE' }); $('#spDialog').close(); ctRefresh(); }
     catch (err) { spMsg(err.message); }
   });

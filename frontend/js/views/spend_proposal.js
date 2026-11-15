@@ -181,7 +181,7 @@ async function ppOpenDetail(code, note) {
     catch (err) { spMsg(err.message); }
   });
   spOnce('#ppDelete', async () => {
-    if (!confirm(`Xoá ${p.code} và file tờ trình? Thao tác được ghi nhật ký.`)) return;
+    if (!await uiConfirm(`Xoá ${p.code} và file tờ trình? Thao tác được ghi nhật ký.`)) return;
     try { await apiRequest(`/spend/proposals/${encodeURIComponent(p.code)}`, { method: 'DELETE' }); $('#spDialog').close(); ppRefresh(); }
     catch (err) { spMsg(err.message); }
   });
@@ -262,7 +262,7 @@ async function ppRenderAdmin(mount) {
     const t = (s) => e.target.closest(s);
     let b;
     try {
-      if ((b = t('[data-tpl-del]')) && confirm('Xoá mẫu này?')) { await apiRequest(`/spend/proposals/templates/${encodeURIComponent(b.dataset.tplDel)}`, { method: 'DELETE' }); return rerender(); }
+      if ((b = t('[data-tpl-del]')) && await uiConfirm('Xoá mẫu này?')) { await apiRequest(`/spend/proposals/templates/${encodeURIComponent(b.dataset.tplDel)}`, { method: 'DELETE' }); return rerender(); }
       if ((b = t('[data-rec-add]'))) { mount.querySelector(`[data-rec-kind="${b.dataset.recAdd}"] .pp-rec-rows`).insertAdjacentHTML('beforeend', ppRecRow(recipients.roles, {})); return refreshIcons(); }
       if ((b = t('[data-rec-del]'))) { b.closest('.pp-rec-row').remove(); return; }
       if ((b = t('[data-rec-save]'))) {
