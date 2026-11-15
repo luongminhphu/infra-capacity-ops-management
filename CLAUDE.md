@@ -72,9 +72,10 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 5. **Giao diện và báo cáo viết tiếng Việt**, có dấu đầy đủ, văn phong ngắn, nêu thẳng vấn đề →
    quyết định. Code, tên biến, comment code viết tiếng Anh. Field dữ liệu dùng camelCase giống
    frontend (`ramGB`, `isPoweredOn`, `vcpu`...).
-6. **Design**: nguồn sự thật là `design-system/ico/MASTER.md` (+ `pages/*.md` ghi đè theo trang). Màu và font là
-   HSC (Inter tự host ở `frontend/vendor/`, PDF dùng `fonts-inter`); dùng token trong `frontend/css/styles.css`,
-   `COLORS` trong `report_pdf.py`, palette trong `excel_style.py` — không hard-code màu mới, chữ phải đạt WCAG AA.
+6. **Design**: nguồn sự thật là `design-system/ico/MASTER.md` (+ `pages/*.md` ghi đè theo trang).
+   **App web** dùng bảng màu và font riêng (“Phòng máy”, Be Vietnam Pro + JetBrains Mono tự host ở `frontend/vendor/`)
+   qua token trong `frontend/css/styles.css`. **Báo cáo PDF / Excel** giữ HSC Design System (`COLORS` trong
+   `report_pdf.py`, `excel_style.py`, font Inter qua `fonts-inter`). Không hard-code màu mới, chữ phải đạt WCAG AA.
    Trạng thái luôn là 4 mức AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG, hiển thị bằng glyph + nhãn (`uiPill`,
    `status_pill`). Xem skill `hsc-design-system` và `pdf-report`.
 7. **Bảo mật**:

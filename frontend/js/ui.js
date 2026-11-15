@@ -300,9 +300,9 @@ function highlightSortHeaders(tableId, tableKey) {
   });
 }
 
-/* Charts use the product font (self-hosted Inter) instead of Chart.js' Helvetica default. */
+/* Charts use the product font (self-hosted Be Vietnam Pro) instead of Chart.js' Helvetica default. */
 if (window.Chart) {
-  Chart.defaults.font.family = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+  Chart.defaults.font.family = '"Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
 }
 
 /* ---------- Data marks (MASTER.md §7–8) ----------
@@ -337,7 +337,7 @@ function uiSmallMultiples(rows, opts = {}) {
     ${opts.legend === false ? '' : '<p class="sm-legend">% của ngưỡng overcommit. Vạch mảnh = 80 % (bắt đầu THEO DÕI), vạch đậm = 100 % (ngưỡng).</p>'}`;
 }
 
-/* Common Chart.js scales / legend in design tokens (grid, axis ink, Inter). */
+/* Common Chart.js scales / legend in design tokens (grid, axis ink, product font). */
 function uiChartBase(colors, extra = {}) {
   return Object.assign({ maintainAspectRatio: false, responsive: true,
     plugins: { legend: { labels: { color: colors.text, boxWidth: 12, boxHeight: 12 } } },
