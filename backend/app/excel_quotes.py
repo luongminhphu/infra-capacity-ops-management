@@ -16,10 +16,10 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .excel_sizing import MONEY, NAVY, _fill, _font, _print_setup, _section, _sheet_title, _widths
+from .excel_style import FAINT, MONEY, NAVY, _fill, _font, _print_setup, _section, _sheet_title, _widths
 from .timeutil import VN_TZ
 
-THIN = Side(style="thin", color="98A2B3")
+THIN = Side(style="thin", color=FAINT)
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 SCORE = "0.00"
 QTY = "#,##0.###"

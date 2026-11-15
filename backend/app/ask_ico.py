@@ -70,19 +70,19 @@ class Toolbox:
             return {"loi": str(exc.detail)}
 
     def tim_kiem(self, a):
-        from .routers.entities import search
+        from .services.entities import search
         q = _str(a.get("q"), 80)
         if len(q) < 2:
             raise ValueError("cần ít nhất 2 ký tự")
-        items = search(q=q, user=self.user, db=self.db)["items"][:MAX_LIST]
+        items = search(self.db, self.user, q)["items"][:MAX_LIST]
         for it in items:
             e = it.get("entity") or {}
             self._note(e.get("type"), e.get("name"), e.get("vcenterKey"))
         return [{"loai": it["type"], "ten": it["label"], "mo_ta": it.get("sub")} for it in items]
 
     def thong_tin_host(self, a):
-        from .routers.entities import host_card
-        h = host_card(name=_str(a.get("name"), 255), vcenter="", user=self.user, db=self.db)
+        from .services.entities import host_card
+        h = host_card(self.db, self.user, _str(a.get("name"), 255))
         self._note("host", h["name"], h["vcenterKey"])
         for v in h["vms"][:MAX_LIST]:
             self._note("vm", v["name"], h["vcenterKey"])
@@ -90,8 +90,8 @@ class Toolbox:
                 "so_vm": len(h["vms"]), "vm": h["vms"][:MAX_LIST], "thiet_bi": h.get("devices")}
 
     def thong_tin_vm(self, a):
-        from .routers.entities import vm_card
-        v = vm_card(name=_str(a.get("name"), 255), vcenter="", user=self.user, db=self.db)
+        from .services.entities import vm_card
+        v = vm_card(self.db, self.user, _str(a.get("name"), 255))
         self._note("vm", v["name"], v["vcenterKey"])
         self._note("host", v.get("host"), v["vcenterKey"])
         return {k: v[k] for k in ("name", "cluster", "host", "config", "os", "findings", "backup")}
@@ -110,8 +110,8 @@ class Toolbox:
     def _backup(self):
         if not is_on(self.features, "backup"):
             raise HTTPException(404, "Module Backup đang tắt.")
-        from .routers import backup as backup_router
-        return backup_router.build_summary(self.db, "all", 7)
+        from .backup.service import build_summary
+        return build_summary(self.db, "all", 7)
 
     def backup_client(self, a):
         rep = self._backup()

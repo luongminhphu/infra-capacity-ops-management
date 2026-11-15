@@ -13,29 +13,15 @@ from ..models import ReportLogo, User
 from ..features import ensure_feature, require_feature
 from ..security import get_current_user
 
+from ..scope import scope_keys as _scope_keys, scope_label as _scope_label, split_csv as _split_csv
+
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
-def _scope_keys(vcenter: Optional[str]):
-    return None if (not vcenter or vcenter == "all") else [vcenter]
 
 
-def _scope_label(vcenter: Optional[str]) -> str:
-    return "Toàn bộ vCenter" if (not vcenter or vcenter == "all") else vcenter
 
 
-def _split_csv(value: Optional[str]) -> Optional[list]:
-    """Parse a comma-separated query param.
-
-    Returns None when the param was omitted entirely ("no filter").
-    Returns a list (possibly empty) when the param was explicitly supplied,
-    including an empty string, so a deliberate zero-item selection on the
-    frontend still filters results down to nothing instead of being treated
-    as "no filter".
-    """
-    if value is None:
-        return None
-    return [v.strip() for v in value.split(",") if v.strip()]
 
 
 @router.get("/pdf")

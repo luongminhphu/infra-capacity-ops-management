@@ -34,7 +34,7 @@ def _clean(app_, monkeypatch):
     inbox.invalidate()
     ai_platform._names_cache.update(names=None)
     monkeypatch.setattr(data_access, "get_latest_combined", lambda db, keys=None, include_import=True: (HOSTS, VMS, []))
-    from app.routers import entities
+    from app.services import entities
     entities._cache.clear()
     yield
     inbox.invalidate()

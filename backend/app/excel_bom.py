@@ -15,7 +15,7 @@ from openpyxl.styles import Alignment, Border, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from .bom import CATEGORIES, CATEGORY_LABELS
-from .excel_sizing import BLUE, FAINT, INK, LINE, MUTED, NAVY, SURFACE, _fill, _font, _print_setup, _sheet_title
+from .excel_style import BLUE, FAINT, INK, LINE, MUTED, NAVY, SURFACE, _fill, _font, _print_setup, _sheet_title
 from .timeutil import VN_TZ
 
 ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]

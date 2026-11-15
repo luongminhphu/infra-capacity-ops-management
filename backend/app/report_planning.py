@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from . import planning
 from .capacity import Policy, _finite
-from .report_pdf import (COLORS, PRIORITY_LABEL_VI, STATUS_COLOR, _base_css, _exec_visual_css, _now_str,
+from .pdf_kit import (COLORS, PRIORITY_LABEL_VI, STATUS_COLOR, _base_css, _exec_visual_css, _now_str,
                          _stat_tiles_html, esc, fmt_int, fmt_num, fmt_pct, html_to_pdf_bytes, status_pill,
                          svg_bar_chart)
 

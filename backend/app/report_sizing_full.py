@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from . import platforms, sizing
 from .report_view import customer_view
-from .report_pdf import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc,
+from .pdf_kit import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc,
                          svg_bar_chart, svg_donut, svg_gauge)
 from .report_planning import _planning_css
 from .report_sizing import _existing_table, _pick_target, _reuse_summary_box, _summary_box, _target_detail

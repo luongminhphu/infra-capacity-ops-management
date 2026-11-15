@@ -129,7 +129,7 @@ def budget_facts(r: Dict[str, Any]) -> Dict[str, Any]:
 
 def box_html(s: Optional[Dict[str, Any]], error: Optional[str] = None) -> str:
     """'Tổng kết (AI soạn)' box placed at the top of a PDF report; error → a one-line note."""
-    from .report_pdf import COLORS, STATUS_COLOR, esc
+    from .pdf_kit import COLORS, STATUS_COLOR, esc
     if error:
         return (f'<div class="small-note" style="margin:0 0 8px 0;">Tổng kết bằng AI không chạy: {esc(error)} '
                 f'— báo cáo dùng phần tổng kết theo luật bên dưới.</div>')

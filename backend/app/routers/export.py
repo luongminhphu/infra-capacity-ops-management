@@ -13,11 +13,11 @@ from ..database import get_db
 from ..models import User
 from ..security import get_current_user
 
+from ..scope import scope_keys as _scope_keys
+
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
-def _scope_keys(vcenter: Optional[str]):
-    return None if (not vcenter or vcenter == "all") else [vcenter]
 
 
 @router.get("/csv")

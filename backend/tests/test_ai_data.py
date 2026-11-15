@@ -52,8 +52,8 @@ def _clean(app_, monkeypatch):
     from app import data_access
     ai_platform._names_cache.update(names=None)
     monkeypatch.setattr(data_access, "get_latest_combined", lambda db, keys=None, include_import=True: (HOSTS, VMS, []))
-    from app.routers import backup as backup_router
-    monkeypatch.setattr(backup_router, "build_summary", lambda db, server, days: REPORT)
+    from app.backup import service as backup_service
+    monkeypatch.setattr(backup_service, "build_summary", lambda db, server, days, check_feature=False: REPORT)
     yield
 
 
