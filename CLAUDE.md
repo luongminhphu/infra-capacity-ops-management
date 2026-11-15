@@ -42,6 +42,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Quy hoạch / sizing / license | `planning.py`, `sizing.py`, `sizing_advisory.py`, `licensing/` |
 | Báo cáo PDF | `report_pdf.py` (helper dùng chung) + `report_*.py` |
 | Excel | `excel_sizing.py`, `excel_backup.py`, `routers/export.py` |
+| Dịch vụ nền tảng dùng chung | `backend/app/platform/` — `xlsx_io.py` (mọi chỗ đọc .xlsx upload phải qua `read_rows` / `open_workbook`: chống zip-bomb, chỉ đọc, giới hạn dòng / cột) |
 | Schema DB | `models.py` + migration bổ sung trong `database.py::ensure_schema()` |
 | Auth | `security.py` (`get_current_user`, `require_admin`), `auth_entra.py` (SSO Entra ID OIDC), `passkeys.py` (WebAuthn cho tài khoản cục bộ, link mời), `routers/auth.py`, `routers/users_admin.py` (tài khoản, passkey, trạng thái App Proxy); `PUBLIC_URL` = URL ngoài (App Proxy); UI `frontend/js/views/passkey.js` |
 | MCP server (chỉ đọc) | `mcp_server.py`, `observability.py` |

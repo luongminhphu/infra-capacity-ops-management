@@ -303,8 +303,8 @@ async def import_schedules(file: UploadFile = File(...), db: Session = Depends(g
         parsed = bschedule.parse_schedule_xlsx(data)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 — not an xlsx / corrupt workbook
-        raise HTTPException(400, f"Không đọc được file Excel: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — not an xlsx / corrupt workbook (no internal detail in the answer)
+        raise HTTPException(400, f"Không đọc được file Excel ({type(exc).__name__}).") from exc
     current = {r["system"].lower(): r for r in schedule_rules(db)}
     for r in parsed:
         old = current.pop(r["system"].lower(), None)

@@ -11,13 +11,12 @@ Pipeline (all rule-based; AI is optional, see bom_ai in routers/bom.py):
 Quantities: vendors list component quantities either per unit (Dell) or for all units (HPE). `qtyMode`
 is guessed ("total" when every component quantity is a multiple of the configuration quantity) and can be
 changed by the user; summaries are always per unit."""
-import io
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .spend.quotes import _guard_zip, norm_text, parse_number
+from .spend.quotes import norm_text, parse_number
 
 class BomError(ValueError):
     """A problem with the uploaded file; the message is written by us and safe to show."""
@@ -139,16 +138,10 @@ def _text(v: Any, n: int = 1000) -> str:
     return " ".join(str(v).split())[:n]
 
 
-def read_rows(data: bytes) -> Tuple[List[List[Any]], str]:
-    """All sheets' rows (bounded). Returns [(sheet, rows)] flattened to the best sheet later."""
-    from openpyxl import load_workbook
-    _guard_zip(data)
-    wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-    sheets = []
-    for ws in wb.worksheets[:10]:
-        rows = [list(r) for r in ws.iter_rows(max_row=MAX_ROWS, max_col=MAX_COLS, values_only=True)]
-        sheets.append((ws.title, rows))
-    return sheets
+def read_rows(data: bytes) -> List[Tuple[str, List[List[Any]]]]:
+    """All sheets' rows (bounded, zip-bomb guarded): [(sheet, rows)]."""
+    from .platform import xlsx_io
+    return xlsx_io.read_rows(data, max_sheets=10, max_rows=MAX_ROWS, max_cols=MAX_COLS)
 
 
 def _items_from(rows: List[List[Any]]) -> Tuple[Optional[int], Dict[str, int], List[Tuple[int, List[Any]]]]:

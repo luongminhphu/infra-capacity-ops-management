@@ -246,13 +246,11 @@ def _cells(ws_) -> List[List[Any]]:
 
 
 def read_summarize(data: bytes) -> SummarizeResult:
-    from openpyxl import load_workbook
-    from .quotes import _guard_zip
+    from ..platform import xlsx_io
     try:
-        _guard_zip(data)
-        wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-    except Exception as exc:
-        return SummarizeResult(message=f"Không đọc được file ({type(exc).__name__}).")
+        wb = xlsx_io.open_workbook(data)
+    except xlsx_io.XlsxError as exc:
+        return SummarizeResult(message=str(exc))
     res = SummarizeResult()
     by_floor: Dict[str, ImportedProject] = {}
     for sheet in wb.worksheets[:5]:

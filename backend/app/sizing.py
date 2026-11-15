@@ -646,14 +646,15 @@ def rows_to_vmspecs(table: List[List[Any]]) -> Dict[str, Any]:
 def parse_vm_file(filename: str, content: bytes) -> Dict[str, Any]:
     name = (filename or "").lower()
     if name.endswith((".xlsx", ".xlsm")):
-        import io
-        from openpyxl import load_workbook
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        from .platform import xlsx_io
+        try:
+            sheets = xlsx_io.read_rows(content, max_sheets=20, max_rows=20000, max_cols=60)
+        except xlsx_io.XlsxError as exc:
+            return {"rows": [], "warnings": [str(exc)], "mapping": {}}
         best: Optional[Dict[str, Any]] = None
-        for ws in wb.worksheets:
-            table = [list(r) for r in ws.iter_rows(values_only=True)]
+        for title, table in sheets:
             parsed = rows_to_vmspecs(table)
-            parsed["sheet"] = ws.title
+            parsed["sheet"] = title
             if parsed["rows"] and (best is None or len(parsed["rows"]) > len(best["rows"])):
                 best = parsed
             if best is None:
