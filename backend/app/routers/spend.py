@@ -76,7 +76,7 @@ def meta(user: User = Depends(require_spend("viewer")), db: Session = Depends(ge
                         "renewalPct": float(c.renewal_pct) if c.renewal_pct is not None else None}
                        for c in db.query(SpendCategory).order_by(SpendCategory.sort_order, SpendCategory.id)],
         "categoryGroups": list(CATEGORY_GROUPS),
-        "vendors": [{"id": v.id, "name": v.name, "taxCode": v.tax_code, "active": v.active}
+        "vendors": [{"id": v.id, "name": v.name, "shortName": v.short_name, "taxCode": v.tax_code, "active": v.active}
                     for v in db.query(SpendVendor).order_by(SpendVendor.name)],
         "costCenters": [{"id": c.id, "code": c.code, "name": c.name, "active": c.active}
                         for c in db.query(SpendCostCenter).order_by(SpendCostCenter.code)],
