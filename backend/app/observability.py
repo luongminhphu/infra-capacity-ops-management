@@ -34,6 +34,7 @@ STARTED_AT = dt.datetime.utcnow()
 _lock = threading.Lock()
 _ring: "collections.deque[Dict[str, Any]]" = collections.deque(maxlen=5000)
 _pending_logs: List[Dict[str, Any]] = []
+MAX_PENDING_LOGS = 10000           # WARNING+ entries waiting for the next flush (bounded)
 _buckets: Dict[Tuple[dt.datetime, str, str], Dict[str, Any]] = {}
 _slow_requests: "collections.deque[Dict[str, Any]]" = collections.deque(maxlen=200)
 _queries: Dict[str, Dict[str, Any]] = {}
@@ -133,7 +134,7 @@ class CaptureHandler(logging.Handler):
                 _ring.append(entry)
                 if record.levelno >= logging.WARNING:
                     entry["fingerprint"] = fingerprint(record.name, exc_type, message)
-                    if len(_pending_logs) < 10000:
+                    if len(_pending_logs) < MAX_PENDING_LOGS:
                         _pending_logs.append(entry)
         except Exception:  # noqa: BLE001 — logging must never break the app
             pass
@@ -320,7 +321,16 @@ def flush(force_all_buckets: bool = False) -> None:
         db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()
-        logging.getLogger("ico.obs").exception("Could not persist logs / performance buckets")
+        # Put the batch back (oldest first, same 10 000 cap) so a DB blip does not lose exactly the
+        # WARNING+ logs needed to investigate it; the next flush retries.
+        with _lock:
+            room = max(0, MAX_PENDING_LOGS - len(_pending_logs))
+            dropped = max(0, len(logs) - room)
+            _pending_logs[:0] = logs[dropped:]
+            for k, b in done.items():
+                _buckets.setdefault(k, b)
+        logging.getLogger("ico.obs").exception("Could not persist logs / performance buckets; %d logs kept for retry%s",
+                                               len(logs) - dropped, f", {dropped} dropped (queue full)" if dropped else "")
     finally:
         db.close()
         _internal.reset(token)
