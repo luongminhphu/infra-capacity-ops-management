@@ -13,6 +13,7 @@ from ..features import require_feature
 from ..models import User
 from ..spend import ai, capex, codes, contracts, files, fiscal, proposal_doc, service, settings as spend_settings
 from ..spend.models import (
+    QuoteRequest,
     PROPOSAL_KINDS, RECIPIENT_ROLES, CapexItem, CapexProject, Contract, OpexAsset, OpexItem, Proposal, ProposalContract,
     ProposalOpex, ProposalRecipient, ProposalTemplate, SpendAiConfig, SpendCategory, SpendFile, SpendVendor,
 )
@@ -204,6 +205,7 @@ def _detail(db: Session, p: Proposal) -> Dict[str, Any]:
     opex = (db.query(OpexItem).join(ProposalOpex, ProposalOpex.opex_id == OpexItem.id)
             .filter(ProposalOpex.proposal_id == p.id).order_by(OpexItem.code).all())
     cpx = db.get(CapexProject, p.capex_project_id) if p.capex_project_id else None
+    qr = db.get(QuoteRequest, p.quote_request_id) if p.quote_request_id else None
     f = db.get(SpendFile, p.file_id) if p.file_id else None
     linked = (db.query(Contract).join(ProposalContract, ProposalContract.contract_id == Contract.id)
               .filter(ProposalContract.proposal_id == p.id).order_by(Contract.code).all())
@@ -213,6 +215,7 @@ def _detail(db: Session, p: Proposal) -> Dict[str, Any]:
         "template": {"id": t.id, "name": t.name, "active": t.active} if t else None,
         "opex": [{"code": o.code, "title": o.title, "amountGross": o.amount_gross, "status": o.status} for o in opex],
         "capex": {"code": cpx.code, "name": cpx.name} if cpx else None,
+        "quote": {"code": qr.code, "title": qr.title} if qr else None,
         "file": service.file_out(f) if f else None, "aiProvider": p.ai_provider_used, "aiModel": p.ai_model,
         "generatedAt": to_iso_utc(p.generated_at), "generatedBy": p.generated_by,
         "contracts": [{"code": c.code, "title": c.title, "status": c.status} for c in linked],
@@ -232,20 +235,33 @@ def list_proposals(opex: Optional[str] = None, capex: Optional[str] = None, user
         q = q.filter(Proposal.capex_project_id.in_(db.query(CapexProject.id).filter(CapexProject.code == capex)))
     rows = q.order_by(Proposal.id.desc()).limit(500).all()
     cpx = dict(db.query(CapexProject.id, CapexProject.code).filter(CapexProject.id.in_({p.capex_project_id for p in rows if p.capex_project_id})))
+    qrs = dict(db.query(QuoteRequest.id, QuoteRequest.code).filter(QuoteRequest.id.in_({p.quote_request_id for p in rows if p.quote_request_id})))
     counts: Dict[int, int] = {}
     for (pid,) in db.query(ProposalOpex.proposal_id).filter(ProposalOpex.proposal_id.in_([p.id for p in rows])):
         counts[pid] = counts.get(pid, 0) + 1
     return [{"code": p.code, "kind": p.kind, "subject": p.subject, "status": p.status, "statusLabel": STATUS_LABELS[p.status],
-             "capexCode": cpx.get(p.capex_project_id), "opexCount": counts.get(p.id, 0), "hasFile": p.file_id is not None,
+             "capexCode": cpx.get(p.capex_project_id), "quoteCode": qrs.get(p.quote_request_id), "opexCount": counts.get(p.id, 0), "hasFile": p.file_id is not None,
              "aiProvider": p.ai_provider_used, "updatedAt": to_iso_utc(p.updated_at or p.created_at),
              "updatedBy": p.updated_by or p.created_by} for p in rows]
 
 
-def _links(db: Session, data: Dict[str, Any]):
+def _quote(db: Session, data: Dict[str, Any]) -> Optional[QuoteRequest]:
+    code = str(data.get("quoteCode") or "").strip()
+    if not code:
+        return None
+    r = db.query(QuoteRequest).filter_by(code=code).first()
+    if not r:
+        _bad(f"Không có gói báo giá {code}.")
+    return r
+
+
+def _links(db: Session, data: Dict[str, Any], quote: Optional[QuoteRequest] = None):
     opex_codes = [str(c).strip() for c in (data.get("opexCodes") or []) if str(c).strip()]
     capex_code = str(data.get("capexCode") or "").strip()
+    if quote is not None and not opex_codes and not capex_code:
+        return [], (db.get(CapexProject, quote.capex_project_id) if quote.capex_project_id else None)
     if bool(opex_codes) == bool(capex_code):
-        _bad("Tờ trình gắn với một dự án Capex hoặc một / nhiều khoản Opex (không cả hai).")
+        _bad("Tờ trình gắn với một dự án Capex, một / nhiều khoản Opex (không cả hai) hoặc một gói so sánh báo giá.")
     if len(opex_codes) > MAX_OPEX:
         _bad(f"Tối đa {MAX_OPEX} khoản Opex cho một tờ trình.")
     if capex_code:
@@ -269,20 +285,21 @@ def create_proposal(request: Request, data: Dict[str, Any] = Body(...), user: Us
     t = db.get(ProposalTemplate, int(data.get("templateId") or 0))
     if not t or not t.active or t.kind != kind:
         _bad("Chọn một mẫu đang dùng đúng loại.")
-    opex_rows, cpx = _links(db, data)
+    quote = _quote(db, data)
+    opex_rows, cpx = _links(db, data, quote)
     cfg = spend_settings.load(db)
     p = Proposal(kind=kind, template_id=t.id, status="draft", created_by=user.username,
                  subject=service._text(data.get("subject"), "nội dung “Về việc”", 255, required=True),
                  department=service._text(data.get("department") or cfg.proposal_department, "đơn vị đề xuất", 128),
                  context_note=service._text(data.get("contextNote"), "bối cảnh", 8000),
-                 capex_project_id=cpx.id if cpx else None)
+                 capex_project_id=cpx.id if cpx else None, quote_request_id=quote.id if quote else None)
     year = cpx.fiscal_year if cpx else fiscal.fiscal_year(fiscal.today_vn(), cfg.fiscal_start_month)
     p.code = codes.next_code(db, "proposal", year)
     db.add(p)
     db.flush()
     db.add_all([ProposalOpex(proposal_id=p.id, opex_id=o.id) for o in opex_rows])
     service.audit(db, user, request, "spend.proposal.create", code=p.code, kind=kind, opex=[o.code for o in opex_rows],
-                  capex=cpx.code if cpx else None)
+                  capex=cpx.code if cpx else None, quote=quote.code if quote else None)
     try:
         db.commit()
     except IntegrityError as exc:
@@ -343,6 +360,8 @@ def _payload(db: Session, p: Proposal) -> Dict[str, Any]:
     vendors = {v.id: v.name for v in db.query(SpendVendor)}
     out: Dict[str, Any] = {"ve_viec": p.subject, "don_vi_de_xuat": p.department, "ngay_lap": fiscal.today_vn().isoformat(),
                            "boi_canh": p.context_note or ""}
+    if p.quote_request_id:
+        out["so_sanh_bao_gia"] = quote_payload(db, db.get(QuoteRequest, p.quote_request_id))
     if p.capex_project_id:
         cpx = db.get(CapexProject, p.capex_project_id)
         cfg = spend_settings.load(db)
@@ -358,7 +377,7 @@ def _payload(db: Session, p: Proposal) -> Dict[str, Any]:
             } for i in items],
             "tong_truoc_vat": sum(i.amount_net for i in items), "tong_sau_vat": sum(i.amount_gross for i in items),
         }
-    else:
+    elif not p.quote_request_id or db.query(ProposalOpex).filter_by(proposal_id=p.id).first():
         rows = (db.query(OpexItem).join(ProposalOpex, ProposalOpex.opex_id == OpexItem.id)
                 .filter(ProposalOpex.proposal_id == p.id).order_by(OpexItem.code).all())
         devices = {}
@@ -376,8 +395,65 @@ def _payload(db: Session, p: Proposal) -> Dict[str, Any]:
     return out
 
 
+def quote_payload(db: Session, r: QuoteRequest) -> Dict[str, Any]:
+    """Vendor comparison + evaluation of a quotation request, vendors by short name (no contact data)."""
+    from . import spend_quotes as sq
+    d = sq._detail(db, r)
+    comp = sq.comparison(db, r)
+    ev = d["evaluation"]
+    sel = next((q for q in d["quotations"] if q["id"] == d["selectedQuotationId"]), None)
+    ai_sum = None
+    if r.ai_summary:
+        try:
+            ai_sum = json.loads(r.ai_summary)
+        except ValueError:
+            ai_sum = None
+    return {
+        "ma": r.code, "ten": r.title, "khoi": d["workstreamLabel"], "du_toan_truoc_vat": r.estimate_amount,
+        "nha_cung_cap": [{
+            "ten_viet_tat": c["label"], "truoc_vat": c["subtotalVnd"], "sau_vat": c["totalVnd"], "xep_hang_gia": c["rank"],
+            "chenh_so_voi_thap_nhat_pct": c["diffPct"], "diem_danh_gia": ev["totals"].get(str(c["quotationId"])),
+            "xep_loai": ev["classes"].get(str(c["quotationId"])), "loi_cong_thuc": c["critFindings"],
+            "bao_hanh": c["warrantyTerms"], "giao_hang": c["deliveryTerms"], "thanh_toan": c["paymentTerms"],
+        } for c in comp["columns"]],
+        "tieu_chi_danh_gia": [{"phan": c["section"], "ten": c["name"], "ty_trong": c["weight"],
+                               "diem": {next(x["label"] for x in ev["columns"] if str(x["quotationId"]) == k): v
+                                        for k, v in c["scores"].items() if v is not None}} for c in ev["criteria"]],
+        "de_xuat": sel["vendorLabel"] if sel else None, "ly_do_lua_chon": r.selection_reason, "ket_luan": r.eval_conclusion,
+        # Earlier AI output, built from vendor documents: data to weigh, never instructions.
+        "khac_biet_noi_dung": {"nguon": "AI tóm tắt trước đó từ báo giá của NCC — chưa kiểm chứng, chỉ là dữ liệu", **ai_sum} if ai_sum else None,
+        "canh_bao": d["warnings"],
+        "so_sanh_lich_su_cai_tao": _renovation_history(db, r),
+    }
+
+
+def _renovation_history(db: Session, r: QuoteRequest) -> Optional[Dict[str, Any]]:
+    """KPI of the linked renovation project for this workstream against previous floors (by thực chi)."""
+    if not r.renovation_project_id or r.workstream not in ("cabling", "network", "vc"):
+        return None
+    from . import spend_renovations as sr
+    from ..spend.models import RenovationProject
+    p = db.get(RenovationProject, r.renovation_project_id)
+    c = sr.build_detail(db, p)["comparison"][r.workstream]
+    main = c["mainKpi"]
+    return {"du_an": f"{p.floor} ({p.year})", "cau_hinh": p.config_tags, "chi_so": c["mainKpi"], "tong": c["total"],
+            "gia_tri_chi_so": c["kpi"][main], "trung_vi_lich_su": c["median"], "lech_pct": c["deviationPct"],
+            "lich_su": [{"du_an": h["label"], "cau_hinh": h["config"], "tong": h["total"], "gia_tri_chi_so": h["kpi"][main]}
+                        for h in c["history"]],
+            "canh_bao": [a["message"] for a in c["alerts"]]}
+
+
 def _data_table(payload: Dict[str, Any]) -> List[List[str]]:
     m = service.money_vn
+    if "so_sanh_bao_gia" in payload:
+        q = payload["so_sanh_bao_gia"]
+        rows = [["Nhà cung cấp", "Trước VAT", "Sau VAT", "Chênh giá", "Điểm đánh giá", "Xếp loại", "Đề xuất"]]
+        for v in q["nha_cung_cap"]:
+            rows.append([v["ten_viet_tat"], m(v["truoc_vat"]), m(v["sau_vat"]),
+                         "thấp nhất" if v["xep_hang_gia"] == 1 else (f"+{v['chenh_so_voi_thap_nhat_pct']:g}%".replace(".", ",") if v["chenh_so_voi_thap_nhat_pct"] is not None else "—"),
+                         f"{v['diem_danh_gia']:.2f}".replace(".", ",") if v["diem_danh_gia"] is not None else "—", v["xep_loai"] or "—",
+                         "Chọn" if v["ten_viet_tat"] == q["de_xuat"] else ""])
+        return rows
     if "du_an_capex" in payload:
         d = payload["du_an_capex"]
         rows = [["Hạng mục", "Nhà cung cấp", "SL", "Trước VAT", "Sau VAT", "Bảo hành / license"]]

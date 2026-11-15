@@ -5,6 +5,7 @@ Vendor documents use the vendor SHORT NAME (service.vendor_label) everywhere: co
 headers, evaluation columns, conclusions, exports and tờ trình."""
 import datetime as dt
 import json
+import re
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote as urlquote
@@ -312,8 +313,21 @@ def _detail(db: Session, r: QuoteRequest) -> Dict[str, Any]:
         "quotations": [_quotation_out(db, q, vendors) for q in quotations],
         "evaluation": _evaluation_out(db, r, quotations, vendors), "warnings": warnings,
         "aiEnabled": ai.enabled(db.get(SpendAiConfig, 1)),
+        "aiSummary": _ai_summary_out(r),
+        "contracts": [{"code": c.code, "title": c.title} for c in db.query(Contract).filter_by(capex_project_id=r.capex_project_id)]
+        if r.capex_project_id else [],
         "createdBy": r.created_by, "createdAt": to_iso_utc(r.created_at), "updatedBy": r.updated_by, "updatedAt": to_iso_utc(r.updated_at),
     }
+
+
+def _ai_summary_out(r: QuoteRequest) -> Optional[Dict[str, Any]]:
+    if not r.ai_summary:
+        return None
+    try:
+        data = json.loads(r.ai_summary)
+    except ValueError:
+        return None
+    return {**data, "at": to_iso_utc(r.ai_summary_at), "by": r.ai_summary_by}
 
 
 def _seed_criteria(db: Session, r: QuoteRequest) -> None:
@@ -830,3 +844,170 @@ def export_comparison(code: str, user: User = Depends(require_spend("viewer")), 
 def export_evaluation(code: str, user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
     r = _request(db, code)
     return _download(excel_quotes.build_evaluation_xlsx(_detail(db, r)), f"evaluation-form-{r.code}.xlsx")
+
+
+# ================================================================ V3 — AI differences, unit price history, quick-create
+AI_LINES_PER_QUOTE = 150
+
+
+def _line_vnd(l: QuotationLine, q: Quotation) -> Dict[str, Optional[int]]:
+    fx = _fx(q)
+    amount = l.amount if l.amount is not None else (Decimal(l.qty) * Decimal(l.unit_price) if l.qty is not None and l.unit_price is not None else None)
+    return {"unitPriceVnd": qm.to_int(Decimal(l.unit_price) * fx) if l.unit_price is not None else None,
+            "amountVnd": qm.to_int(Decimal(amount) * fx) if amount is not None else None}
+
+
+def ai_payload(db: Session, r: QuoteRequest) -> Dict[str, Any]:
+    """What the AI sees: scope of the request, and per vendor (short name) its lines, totals and terms.
+    No contacts, internal notes, files or users."""
+    quotations = db.query(Quotation).filter_by(request_id=r.id).order_by(Quotation.id).all()
+    vendors = {v.id: v for v in db.query(SpendVendor).filter(SpendVendor.id.in_([q.vendor_id for q in quotations] or [0]))}
+    out = []
+    for q in quotations:
+        lines = [l for l in _lines(db, q) if l.line_type in ("item", "note")][:AI_LINES_PER_QUOTE]
+        out.append({
+            "ncc": service.vendor_label(vendors.get(q.vendor_id)), "da_kiem_tra": q.state == "verified",
+            "tong_truoc_vat_vnd": _quotation_out(db, q, vendors)["subtotalVnd"], "tong_ncc_ghi_vnd": _quote_total_vnd(q),
+            "vat_pct": _num(q.vat_pct), "hieu_luc_den": _iso(q.valid_until), "giao_hang": q.delivery_terms,
+            "bao_hanh": q.warranty_terms, "thanh_toan": q.payment_terms,
+            "dong": [{"loai": l.line_type, "mo_ta": l.description[:300], "model": l.model, "dvt": l.unit, "sl": _num(l.qty),
+                      **({"don_gia_vnd": _line_vnd(l, q)["unitPriceVnd"], "thanh_tien_vnd": _line_vnd(l, q)["amountVnd"]}
+                         if l.line_type == "item" else {})} for l in lines],
+        })
+    return {"goi": r.title, "khoi": qm.WORKSTREAM_LABELS[r.workstream], "pham_vi": (r.description or "")[:3000] or None,
+            "bao_gia": out}
+
+
+@router.post("/quotes/{code}/ai-summary")
+def ai_summary(code: str, request: Request, user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
+    """AI: differences of content / configuration between the quotations (not prices: those are computed)."""
+    r = _request(db, code)
+    if db.query(Quotation).filter_by(request_id=r.id).count() < 2:
+        raise HTTPException(409, "Cần ít nhất 2 báo giá để so sánh.")
+    cfg = db.get(SpendAiConfig, 1)
+    if not ai.enabled(cfg):
+        raise HTTPException(409, "AI chưa bật hoặc chưa cho phép gửi dữ liệu ra ngoài (Cài đặt → Tờ trình & AI).")
+    payload = ai_payload(db, r)
+    service.audit(db, user, request, "spend.quote.ai_summary", code=r.code, vendors=[v["ncc"] for v in payload["bao_gia"]])
+    db.commit()                                          # the outbound send is recorded even if the call fails
+    try:
+        res = ai.compare_quotes(cfg, payload)
+    except ai.AiError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    r.ai_summary = json.dumps(res, ensure_ascii=False)
+    r.ai_summary_at, r.ai_summary_by = dt.datetime.utcnow(), user.username
+    db.commit()
+    return _detail(db, r)
+
+
+@router.get("/price-history")
+def price_history(q: str, user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+    """Unit prices of an item (model or words of the description) across verified quotations, vendors and years."""
+    term = " ".join(re.sub(r"[%_\\]+", " ", q or "").split())[:80]     # wildcards are never user-controlled
+    if len(term) < 3:
+        _bad("Nhập ít nhất 3 ký tự (model hoặc tên hàng).")
+    like = f"%{term}%"
+    rows = (db.query(QuotationLine, Quotation, QuoteRequest)
+            .join(Quotation, Quotation.id == QuotationLine.quotation_id)
+            .join(QuoteRequest, QuoteRequest.id == Quotation.request_id)
+            .filter(Quotation.state == "verified", QuotationLine.line_type == "item")
+            .filter((QuotationLine.model.ilike(like)) | (QuotationLine.description.ilike(like)))
+            .order_by(QuoteRequest.id.desc()).limit(300).all())
+    vendors = {v.id: v for v in db.query(SpendVendor).filter(SpendVendor.id.in_({q_.vendor_id for _, q_, _ in rows} or {0}))}
+    items, stats = [], {}
+    for l, q_, r in rows:
+        when = q_.quote_date or (q_.verified_at.date() if q_.verified_at else None)
+        price = _line_vnd(l, q_)["unitPriceVnd"]
+        items.append({"date": _iso(when), "year": when.year if when else None, "vendor": service.vendor_label(vendors.get(q_.vendor_id)),
+                      "request": r.code, "requestTitle": r.title, "description": l.description, "model": l.model, "unit": l.unit,
+                      "qty": _num(l.qty), "unitPriceVnd": price, "selected": r.selected_quotation_id == q_.id})
+        if price is not None and when:
+            stats.setdefault((l.model or "").strip().upper() or "—", {}).setdefault(when.year, []).append(price)
+    import statistics
+    return {"items": items, "truncated": len(rows) == 300,
+            "byModel": [{"model": m, "years": [{"year": y, "count": len(v), "min": min(v), "median": int(statistics.median(v)), "max": max(v)}
+                                               for y, v in sorted(ys.items())]} for m, ys in sorted(stats.items())]}
+
+
+def _selected(db: Session, r: QuoteRequest) -> Quotation:
+    if r.status != "selected" or not r.selected_quotation_id:
+        raise HTTPException(409, "Gói chưa chọn nhà cung cấp.")
+    q = db.get(Quotation, r.selected_quotation_id)
+    if q is None:
+        raise HTTPException(409, "Báo giá được chọn không còn.")
+    return q
+
+
+@router.post("/quotes/{code}/capex")
+def create_capex_from_quote(code: str, request: Request, data: Dict[str, Any] = Body(...), user: User = Depends(require_spend("editor")),
+                            db: Session = Depends(get_db)):
+    """Capex project from the selected quotation: one item per line, or one item for the whole quotation."""
+    from . import spend_capex
+    r = db.query(QuoteRequest).filter(QuoteRequest.code == code).with_for_update().first() or _request(db, code)
+    q = _selected(db, r)
+    if r.capex_project_id:
+        raise HTTPException(409, "Gói đã gắn dự án Capex.")
+    v = db.get(SpendVendor, q.vendor_id)
+    vat = Decimal(q.vat_pct) if q.vat_pct is not None else Decimal(10)
+    mode = data.get("mode") or "total"
+    if mode not in ("total", "lines"):
+        _bad("Cách tạo hạng mục không hợp lệ.")
+    base = {"categoryId": data.get("categoryId"), "vendorId": v.id, "vatPct": str(vat),
+            "coverageYears": data.get("coverageYears") or 0, "startDate": data.get("startDate")}
+    if mode == "lines":
+        lines = [l for l in _lines(db, q) if l.line_type == "item"]
+        if len(lines) > spend_capex.MAX_ITEMS:
+            _bad(f"Báo giá có {len(lines)} dòng (tối đa {spend_capex.MAX_ITEMS}) — chọn tạo 1 hạng mục tổng.")
+        items = []
+        for l in lines:
+            amt = _line_vnd(l, q)["amountVnd"]
+            if not amt or amt < 0:
+                continue
+            qty = int(l.qty) if l.qty is not None and Decimal(l.qty) == int(l.qty) and l.qty > 0 else 1
+            items.append({**base, "description": (f"{l.description} {l.model or ''}").strip()[:255], "quantity": qty, "amountNet": amt})
+        if not items:
+            _bad("Báo giá không có dòng hàng có giá trị — chọn tạo 1 hạng mục tổng.")
+        if any(l.line_type == "discount" for l in _lines(db, q)):
+            _bad("Báo giá có dòng chiết khấu — chọn tạo 1 hạng mục tổng để khớp giá trị sau chiết khấu.")
+    else:
+        sub = _quotation_out(db, q, {v.id: v})["subtotalVnd"]
+        if not sub:
+            _bad("Báo giá chưa có giá trị trước VAT.")
+        items = [{**base, "description": f"{r.title} — {service.vendor_label(v)}"[:255], "quantity": 1, "amountNet": sub}]
+    body = {"name": service._text(data.get("name"), "tên dự án", 255) or r.title, "description": f"Tạo từ gói báo giá {r.code}.",
+            "fiscalYear": data.get("fiscalYear") or int(r.code.split("-")[1]), "goLiveDate": data.get("goLiveDate"), "items": items}
+    cfg = spend_settings.load(db)
+    p = CapexProject(status="draft", created_by=user.username, row_version=1)
+    spend_capex._apply_project(db, p, body, cfg)
+    p.code = codes.next_code(db, "capex", p.fiscal_year)
+    db.add(p)
+    db.flush()
+    spend_capex._apply_items(db, p, items, user, request)
+    r.capex_project_id = p.id
+    service.audit(db, user, request, "spend.quote.to_capex", code=r.code, capex=p.code, mode=mode, items=len(items))
+    spend_capex._commit(db, "Không tạo được mã Capex (trùng do thao tác đồng thời) — thử lại.")
+    return {**_detail(db, r), "capexCode": p.code}
+
+
+@router.post("/quotes/{code}/contract")
+def create_contract_from_quote(code: str, request: Request, user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
+    r = db.query(QuoteRequest).filter(QuoteRequest.code == code).with_for_update().first() or _request(db, code)
+    q = _selected(db, r)
+    if not r.capex_project_id:
+        raise HTTPException(409, "Tạo (hoặc gắn) dự án Capex cho gói trước, hợp đồng gắn với dự án Capex.")
+    cpx = db.get(CapexProject, r.capex_project_id)
+    v = db.get(SpendVendor, q.vendor_id)
+    existing = db.query(Contract).filter_by(capex_project_id=cpx.id, vendor_id=v.id).first()
+    if existing:
+        raise HTTPException(409, f"Đã có hợp đồng {existing.code} với {service.vendor_label(v)} cho dự án {cpx.code}.")
+    c = Contract(title=f"Hợp đồng {r.title} — {service.vendor_label(v)}"[:255], status="draft", current_version_no=0,
+                 created_by=user.username, capex_project_id=cpx.id, vendor_id=v.id, note=f"Tạo từ gói báo giá {r.code}.")
+    try:
+        c.code = codes.next_code(db, "contract", cpx.fiscal_year)
+        db.add(c)
+        service.audit(db, user, request, "spend.quote.to_contract", code=r.code, contract=c.code)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Không tạo được mã hợp đồng — thử lại.") from exc
+    return {**_detail(db, r), "contractCode": c.code}

@@ -151,7 +151,7 @@ function qtRenderList() {
       <div class="panel-head">
         <div><div class="panel-title">So sánh báo giá</div>
           <p class="panel-sub">Mỗi gói nhận báo giá của nhiều NCC (mặc định 3). Hệ thống đọc file, kiểm tra công thức tiền, so sánh từng hạng mục và lập phiếu đánh giá NCC.</p></div>
-        <div class="panel-toolbar">${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-qt-new><i data-lucide="plus"></i>Tạo gói báo giá</button>' : ''}</div>
+        <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-qt-prices><i data-lucide="search"></i>Tra cứu đơn giá</button>${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-qt-new><i data-lucide="plus"></i>Tạo gói báo giá</button>' : ''}</div>
       </div>
       ${qtState.error ? `<p class="criteria-status error">${esc(qtState.error)}</p>` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
@@ -171,6 +171,7 @@ function qtBind() {
     const row = e.target.closest('[data-qt-code]');
     if (row) return qtOpen(row.dataset.qtCode);
     if (e.target.closest('[data-qt-new]')) return qtOpenForm();
+    if (e.target.closest('[data-qt-prices]')) return qtOpenPrices();
     if (e.target.closest('[data-qt-back]')) { qtState.current = null; return renderQuotesPage(); }
     const tab = e.target.closest('[data-qt-tab]');
     if (tab) { qtState.tab = tab.dataset.qtTab; return qtRenderDetail(); }
@@ -286,7 +287,7 @@ function qtTabCompare(d) {
       ${cols.map(x => { const cell = r.cells[String(x.quotationId)]; const lo = r.minQuotation === String(x.quotationId) && cols.length > 1 && r.spreadPct;
         return cell ? `<td class="num">${qtNum(cell.unitPriceVnd)}<span class="muted-sub">SL ${esc(qtNum(cell.qty, 3))}</span></td><td class="num${lo ? ' qt-min' : ''}">${qtNum(cell.amountVnd)}</td>` : '<td class="num">—</td><td class="num qt-missing">không có</td>'; }).join('')}</tr>`).join('');
   const foot = (label, key, fmt) => `<tr class="qt-foot"><td></td><td><b>${label}</b></td><td></td>${cols.map(x => `<td></td><td class="num"><b>${fmt(x[key], x)}</b></td>`).join('')}</tr>`;
-  return `<div class="sp-inline qt-bar"><span class="muted-sub">${esc(c.commonRows)}/${esc(c.rows.length)} hạng mục có ở mọi báo giá. Ô xanh: thấp nhất trong hàng.</span>
+  return `${qtAiBlock(d)}<div class="sp-inline qt-bar"><span class="muted-sub">${esc(c.commonRows)}/${esc(c.rows.length)} hạng mục có ở mọi báo giá. Ô xanh: thấp nhất trong hàng.</span>
       <span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-qt-act="xlsx-compare"><i data-lucide="file-spreadsheet"></i>Xuất Excel so sánh</button></div>
     <div class="table-scroll"><table class="data-table qt-matrix">
       <thead><tr><th rowspan="2">#</th><th rowspan="2">Hạng mục</th><th rowspan="2">ĐVT</th>${head}</tr><tr>${sub}</tr></thead>
@@ -346,7 +347,15 @@ function qtTabDecide(d) {
         <div class="sp-dl-item"><dt>Điểm đánh giá</dt><dd>${esc(qtNum(ev.totals[String(sel.id)], 2))} (${esc(ev.classes[String(sel.id)] || '—')})</dd></div>
         <div class="sp-dl-item"><dt>Người chọn</dt><dd>${esc(d.selectedBy || '')} · ${esc(spTime(d.selectedAt))}</dd></div>
       </dl>${d.selectionReason ? `<p class="sp-desc">${esc(d.selectionReason)}</p>` : ''}
-      ${spCan('approver') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="reopen"><i data-lucide="rotate-ccw"></i>Mở lại để sửa</button>' : ''}
+      <div class="sp-h">Bước tiếp theo</div>
+      <div class="sp-inline">
+        ${d.capex ? `<span class="pill ok">Capex ${esc(d.capex.code)}</span>` : (spCan('editor') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-capex"><i data-lucide="package-plus"></i>Tạo dự án Capex</button>' : '')}
+        ${d.contracts.length ? d.contracts.map(c => `<span class="pill ok">HĐ ${esc(c.code)}</span>`).join(' ') : (spCan('editor') && d.capex ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-contract"><i data-lucide="scroll-text"></i>Tạo hợp đồng</button>' : '')}
+        ${spCan('editor') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-proposal"><i data-lucide="file-text"></i>Soạn tờ trình Mẫu B</button>' : ''}
+        <span class="src-spacer"></span>
+        ${spCan('approver') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="reopen"><i data-lucide="rotate-ccw"></i>Mở lại để sửa</button>' : ''}
+      </div>
+      <p class="muted-sub">Tờ trình Mẫu B lấy bảng so sánh, phiếu đánh giá, lý do lựa chọn, tóm tắt khác biệt (nếu có) và so sánh lịch sử cải tạo (nếu gói gắn dự án cải tạo).</p>
       <p class="src-result" id="qtMsg" role="status"></p>`;
   }
   const opts = d.quotations.map(q => `<label class="qt-choice"><input type="radio" name="qtPick" value="${esc(q.id)}"${q.state === 'verified' ? '' : ' disabled'}>
@@ -422,6 +431,10 @@ async function qtAction(act, qid, btn) {
     if (!pick) { qtMsg('Chọn một báo giá đã kiểm tra.'); return; }
     return run(() => apiRequest(qtUrl(code, 'select'), { method: 'POST', body: JSON.stringify({ quotationId: Number(pick.value), reason: $('#qtReason').value }) }), 'Đã chọn nhà cung cấp.');
   }
+  if (act === 'ai-summary') return run(() => apiRequest(qtUrl(code, 'ai-summary'), { method: 'POST' }), 'AI đã tóm tắt khác biệt — đọc và đối chiếu trước khi dùng.');
+  if (act === 'to-capex') return qtOpenToCapex(d);
+  if (act === 'to-contract') return run(async () => { const r = await apiRequest(qtUrl(code, 'contract'), { method: 'POST' }); qtMsg(`Đã tạo hợp đồng ${r.contractCode}.`, true); }, 'Đã tạo hợp đồng.');
+  if (act === 'to-proposal') return qtOpenToProposal(d);
   if (act === 'reopen') {
     if (!confirm('Mở lại gói để sửa? Lựa chọn NCC hiện tại sẽ bị huỷ.')) return;
     return run(() => apiRequest(qtUrl(code, 'reopen'), { method: 'POST' }));
@@ -481,6 +494,91 @@ async function qtOpenLines(qid) {
       await apiRequest(qtUrl(code, 'quotations', qid), { method: 'PUT', body: JSON.stringify(payload) });
       $('#spDialog').close();
       await qtOpen(code);
+    } catch (err) { spMsg(err.message); }
+  });
+}
+
+
+/* ---------- V3: AI differences, unit price history, follow-up ---------- */
+function qtAiBlock(d) {
+  const s = d.aiSummary;
+  const can = spCan('editor') && d.quotations.length >= 2;
+  const btn = can ? `<button class="btn btn-ghost btn-sm" type="button" data-qt-act="ai-summary"${d.aiEnabled ? '' : ' disabled title="AI chưa bật (Cài đặt → Tờ trình & AI)"'}><i data-lucide="sparkles"></i>${s ? 'Phân tích lại' : 'AI: tóm tắt khác biệt nội dung'}</button>` : '';
+  if (!s) return can ? `<div class="qt-ai"><div class="sp-inline"><span class="muted-sub">AI đọc dòng hàng, model, số lượng và điều khoản của từng NCC để chỉ ra khác biệt về nội dung / cấu hình (giá do hệ thống tính).</span><span class="src-spacer"></span>${btn}</div></div>` : '';
+  const list = (title, items) => items.length ? `<div class="sp-h">${title}</div><ul class="sp-cc">${items.map(x => `<li>${x}</li>`).join('')}</ul>` : '';
+  return `<div class="qt-ai">
+    <div class="sp-inline"><b>Khác biệt nội dung (AI)</b><span class="muted-sub sr-inline">${esc(s.by || '')} · ${esc(spTime(s.at))} — cần đối chiếu với báo giá gốc</span><span class="src-spacer"></span>${btn}</div>
+    ${s.summary ? `<p class="sp-desc">${esc(s.summary)}</p>` : ''}
+    ${list('Khác biệt', s.differences.map(x => `<b>${esc(x.topic)}</b>${x.vendors.length ? ` <span class="muted-sub sr-inline">${esc(x.vendors.join(', '))}</span>` : ''} — ${esc(x.detail)}`))}
+    ${list('Rủi ro nếu chọn giá thấp nhất mà chưa làm rõ', s.risks.map(esc))}
+    ${list('Câu hỏi gửi NCC', s.questions.map(esc))}
+  </div>`;
+}
+
+async function qtOpenPrices() {
+  spDialog('Tra cứu đơn giá theo mặt hàng', `
+    <p class="panel-sub">Tìm theo model hoặc tên hàng trong các báo giá <b>đã kiểm tra</b>; đơn giá quy đổi VND, trước VAT.</p>
+    <div class="sp-inline"><input type="text" id="qpQ" maxlength="80" placeholder="Vd: C9300-48T, Meraki, cáp Cat6A"><button class="btn btn-primary btn-sm" type="button" id="qpGo">Tìm</button></div>
+    <div id="qpOut"></div>`, '<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>');
+  $('#spDialog').classList.add('qt-wide');
+  $('#spDialog').addEventListener('close', () => $('#spDialog').classList.remove('qt-wide'), { once: true });
+  const go = async () => {
+    try {
+      const r = await apiRequest(`/spend/price-history?q=${encodeURIComponent($('#qpQ').value.trim())}`);
+      const stats = r.byModel.filter(m => m.model !== '—').map(m => `<tr><td><b>${esc(m.model)}</b></td><td>${m.years.map(y => `${esc(y.year)}: ${esc(qtNum(y.min))} – <b>${esc(qtNum(y.median))}</b> – ${esc(qtNum(y.max))} <span class="muted-sub sr-inline">(${esc(y.count)} báo giá)</span>`).join('<br>')}</td></tr>`).join('');
+      $('#qpOut').innerHTML = `${stats ? `<div class="sp-h">Theo model và năm (thấp nhất – trung vị – cao nhất)</div><div class="table-scroll"><table class="data-table"><tbody>${stats}</tbody></table></div>` : ''}
+        <div class="sp-h">Chi tiết (${esc(r.items.length)}${r.truncated ? '+' : ''} dòng)</div>
+        <div class="table-scroll"><table class="data-table"><thead><tr><th>Ngày</th><th>NCC</th><th>Gói</th><th>Hàng</th><th class="num">SL</th><th class="num">Đơn giá (VND)</th></tr></thead><tbody>
+        ${r.items.map(i => `<tr><td>${esc(spDate(i.date))}</td><td>${esc(i.vendor)}${i.selected ? ' <span class="pill ok">chọn</span>' : ''}</td><td>${esc(i.request)}<span class="muted-sub">${esc(i.requestTitle)}</span></td>
+          <td class="wrap">${esc(i.description)}${i.model ? `<span class="muted-sub">${esc(i.model)}</span>` : ''}</td><td class="num">${esc(qtNum(i.qty, 3))} ${esc(i.unit || '')}</td><td class="num">${esc(qtNum(i.unitPriceVnd))}</td></tr>`).join('') || '<tr><td colspan="6" class="empty-note">Không có dòng nào.</td></tr>'}
+        </tbody></table></div>`;
+      spMsg('');
+    } catch (err) { spMsg(err.message); }
+  };
+  spOnce('#qpGo', go);
+  $('#qpQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+  $('#qpQ').focus();
+}
+
+function qtOpenToCapex(d) {
+  const cats = (spState.meta.categories || []).filter(c => c.active);
+  const sel = d.quotations.find(q => q.id === d.selectedQuotationId);
+  const body = `<form id="qcForm" class="sp-form" novalidate><div class="src-grid">
+      <label class="field sp-span2"><span>Tên dự án</span><input name="name" maxlength="255" value="${esc(d.title)}"></label>
+      <label class="field"><span>Loại chi phí *</span><select name="categoryId">${spOpt('', '— Chọn —', '')}${cats.map(c => spOpt(c.id, c.name, '')).join('')}</select></label>
+      <label class="field"><span>Hạng mục</span><select name="mode">${spOpt('total', `1 hạng mục tổng (${sel ? spMoney(sel.subtotalVnd) : ''})`, 'total')}${spOpt('lines', `Mỗi dòng báo giá một hạng mục (${sel ? sel.itemCount : 0} dòng)`, '')}</select></label>
+      <label class="field"><span>Bảo hành / license (năm)</span><input name="coverageYears" type="number" min="0" max="10" value="0"></label>
+      <label class="field"><span>Bắt đầu bảo hành</span><input name="startDate" type="date"></label>
+    </div></form><p class="muted-sub">NCC: <b>${esc(sel ? sel.vendorLabel : '')}</b>, VAT theo báo giá. Có số năm bảo hành thì Capex tự sinh Opex gia hạn dự kiến.</p>`;
+  spDialog('Tạo dự án Capex từ báo giá được chọn', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+    <button class="btn btn-primary btn-sm" type="button" id="qcSave">Tạo Capex</button>`);
+  spOnce('#qcSave', async () => {
+    const fd = Object.fromEntries(new FormData($('#qcForm')).entries());
+    if (!fd.categoryId) { spMsg('Chọn loại chi phí.'); return; }
+    if (!fd.startDate) delete fd.startDate;
+    try { const r = await apiRequest(qtUrl(d.code, 'capex'), { method: 'POST', body: JSON.stringify(fd) }); $('#spDialog').close(); await qtOpen(d.code); qtMsg(`Đã tạo dự án ${r.capexCode}.`, true); }
+    catch (err) { spMsg(err.message); }
+  });
+}
+
+async function qtOpenToProposal(d) {
+  let tpls = [];
+  try { tpls = (await apiRequest('/spend/proposals/templates')).filter(t => t.active && t.kind === 'B'); } catch (err) { /* shown below */ }
+  if (!tpls.length) { qtMsg('Chưa có mẫu tờ trình Mẫu B đang dùng — admin tải mẫu ở Cài đặt → Tờ trình & AI.'); return; }
+  const sel = d.quotations.find(q => q.id === d.selectedQuotationId);
+  spDialog('Soạn tờ trình Mẫu B từ gói báo giá', `<form id="qpForm" class="sp-form" novalidate><div class="src-grid">
+      <label class="field sp-span2"><span>Về việc *</span><input name="subject" maxlength="255" value="${esc(`Đề xuất lựa chọn nhà cung cấp — ${d.title}`)}"></label>
+      <label class="field"><span>Mẫu</span><select name="templateId">${tpls.map(t => spOpt(t.id, t.name, tpls[0].id)).join('')}</select></label>
+      <label class="field sp-span2"><span>Bối cảnh cho AI (tuỳ chọn)</span><textarea name="contextNote" rows="3" maxlength="8000">${esc(sel ? `Đề xuất chọn ${sel.vendorLabel}. ${d.selectionReason || ''}` : '')}</textarea></label>
+    </div></form>`, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+    <button class="btn btn-primary btn-sm" type="button" id="qpSave">Tạo tờ trình</button>`);
+  spOnce('#qpSave', async () => {
+    const fd = Object.fromEntries(new FormData($('#qpForm')).entries());
+    try {
+      const p = await apiRequest('/spend/proposals', { method: 'POST', body: JSON.stringify({ ...fd, kind: 'B', templateId: Number(fd.templateId), quoteCode: d.code }) });
+      $('#spDialog').close();
+      location.hash = '#/spend-proposals';
+      setTimeout(() => { if (typeof ppOpenDetail === 'function') ppOpenDetail(p.code); }, 400);
     } catch (err) { spMsg(err.message); }
   });
 }

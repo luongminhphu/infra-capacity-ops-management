@@ -652,6 +652,25 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
     sheet Cảnh báo.
   - PDF tóm tắt: tổng kết chênh lệch, báo giá theo khối, so sánh chỉ số, chi tiết theo nhóm.
 
+**V3 — AI và liên kết sau khi chọn NCC (đã có)**
+
+- **AI tóm tắt khác biệt nội dung** (tab *So sánh*): AI đọc dòng hàng, model, số lượng và điều khoản của từng NCC, chỉ
+  ra khác biệt về phạm vi / cấu hình, rủi ro nếu chọn giá thấp nhất mà chưa làm rõ, và câu hỏi cần gửi NCC.
+  - Giá vẫn do hệ thống tính, AI không tính giá.
+  - Gửi đi: tên viết tắt NCC, dòng hàng, tổng tiền, điều khoản. Không gửi liên hệ, file hay người dùng.
+  - Chỉ chạy khi admin đã bật AI. Mỗi lần gửi đều ghi nhật ký.
+- **Tra cứu đơn giá** (trang *So sánh báo giá*): tìm theo model hoặc tên hàng trong các báo giá đã kiểm tra.
+  - Đơn giá quy đổi VND, theo NCC và gói.
+  - Thống kê thấp nhất / trung vị / cao nhất theo model và năm.
+- **Sau khi chọn NCC** (tab *Kết luận*):
+  - *Tạo dự án Capex*: một hạng mục tổng, hoặc mỗi dòng báo giá một hạng mục. NCC và VAT theo báo giá. Có số năm
+    bảo hành thì tự sinh Opex gia hạn.
+  - *Tạo hợp đồng* gắn với dự án Capex đó.
+  - *Soạn tờ trình Mẫu B*. Dữ liệu cho AI và bảng trong tờ trình gồm:
+    - bảng so sánh NCC (trước / sau VAT, chênh giá, điểm, xếp loại), tiêu chí đánh giá, lý do lựa chọn;
+    - tóm tắt khác biệt (nếu đã chạy);
+    - so sánh lịch sử cải tạo (nếu gói gắn dự án cải tạo).
+
 ## Kiến trúc
 
 ```

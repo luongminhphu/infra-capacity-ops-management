@@ -21,7 +21,7 @@ async function renderProposalsPage() {
   const rows = ppState.list.map(p => `<tr data-pp-code="${esc(p.code)}" class="sp-row" tabindex="0">
       <td><b>${esc(p.code)}</b><span class="muted-sub">Mẫu ${esc(p.kind)}</span></td>
       <td class="wrap">${esc(p.subject)}</td>
-      <td>${p.capexCode ? `Capex ${esc(p.capexCode)}` : `${esc(p.opexCount)} khoản Opex`}</td>
+      <td>${p.capexCode ? `Capex ${esc(p.capexCode)}` : (p.opexCount ? `${esc(p.opexCount)} khoản Opex` : '')}${p.quoteCode ? `${p.capexCode || p.opexCount ? ' · ' : ''}So sánh ${esc(p.quoteCode)}` : ''}</td>
       <td>${spPill(...(PP_STATUS[p.status] || ['na', p.statusLabel]))}</td>
       <td>${p.hasFile ? (p.aiProvider === 'anthropic' ? 'AI soạn' : 'Chỉ điền dữ liệu') : '<span class="muted-sub">Chưa soạn</span>'}</td>
       <td>${esc(spTime(p.updatedAt))}<span class="muted-sub">${esc(p.updatedBy || '')}</span></td></tr>`).join('');
@@ -108,7 +108,8 @@ async function ppOpenDetail(code, note) {
   const dl = (label, value) => `<div class="sp-dl-item"><dt>${label}</dt><dd>${value}</dd></div>`;
   const linked = p.capex
     ? `Capex <button class="btn btn-ghost btn-sm sp-link" type="button" data-cpx-goto="${esc(p.capex.code)}">${esc(p.capex.code)}</button><span class="muted-sub">${esc(p.capex.name)}</span>`
-    : `<ul class="sp-files">${p.opex.map(o => `<li><button class="btn btn-ghost btn-sm sp-link" type="button" data-sp-goto="${esc(o.code)}">${esc(o.code)}</button> ${esc(o.title)} <span class="muted-sub sr-inline">${esc(spMoney(o.amountGross))}</span></li>`).join('')}</ul>`;
+    : `<ul class="sp-files">${p.opex.map(o => `<li><button class="btn btn-ghost btn-sm sp-link" type="button" data-sp-goto="${esc(o.code)}">${esc(o.code)}</button> ${esc(o.title)} <span class="muted-sub sr-inline">${esc(spMoney(o.amountGross))}</span></li>`).join('')}</ul>`
+  const linkedQuote = p.quote ? `<p>So sánh báo giá <b>${esc(p.quote.code)}</b> — ${esc(p.quote.title)}</p>` : '';
   const contracts = p.contracts.length ? `<ul class="sp-files">${p.contracts.map(c => `<li><button class="btn btn-ghost btn-sm sp-link" type="button" data-ct-goto="${esc(c.code)}">${esc(c.code)}</button> ${esc(c.title)}
       ${spCan('editor') ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" data-pp-unlink="${esc(c.code)}">Bỏ liên kết</button>` : ''}</li>`).join('')}</ul>` : '<p class="muted-sub">Chưa gắn hợp đồng.</p>';
   const file = p.file
@@ -131,7 +132,7 @@ async function ppOpenDetail(code, note) {
       ${dl('Tạo', `${esc(p.createdBy)} · ${esc(spTime(p.createdAt))}`)}
     </dl>
     ${p.contextNote ? `<p class="sp-desc">${esc(p.contextNote)}</p>` : ''}
-    <h4 class="sp-h">Gắn với</h4>${linked}
+    <h4 class="sp-h">Gắn với</h4>${linkedQuote}${p.capex || p.opex.length ? linked : ""}
     <h4 class="sp-h">Hợp đồng liên quan</h4>${contracts}
     ${spCan('editor') ? '<div class="sp-inline"><input type="text" id="ppContract" list="ppContractList" maxlength="20" placeholder="Mã hợp đồng HD-…" aria-label="Mã hợp đồng"><button class="btn btn-secondary btn-sm" type="button" id="ppLink">Gắn hợp đồng</button><datalist id="ppContractList"></datalist></div>' : ''}
     ${edit}`;
