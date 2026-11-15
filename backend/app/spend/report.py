@@ -105,7 +105,7 @@ def public_filters(f: Dict[str, Any]) -> Dict[str, Any]:
 def fiscal_quarter(d: dt.date, start_month: int) -> Dict[str, Any]:
     fy = fiscal.fiscal_year(d, start_month)
     q = ((d.month - start_month) % 12) // 3 + 1
-    return {"key": f"{fy}-Q{q}", "label": f"Q{q}/NTC {fy}", "fiscalYear": fy, "quarter": q}
+    return {"key": f"{fy}-Q{q}", "label": f"Q{q}/FY {fy}", "fiscalYear": fy, "quarter": q}
 
 
 # ---------------------------------------------------------------- rows
@@ -247,16 +247,16 @@ def build_budget_report(db: Session, filters: Dict[str, Any], cfg: SpendSettings
                           "decision": "Duyệt gia hạn (hoặc ngừng) trước ngày hết hạn", "amount": sum(i["amountGross"] for i in soon),
                           "timeframe": f"Trong {max(cfg.reminder_days)} ngày"})
     if planned_next:
-        decisions.append({"cls": "warn", "title": f"{len(planned_next)} khoản Opex dự kiến của NTC {cur + 1}",
-                          "decision": f"Duyệt đưa vào ngân sách NTC {cur + 1}", "amount": sum(r["amountGross"] for r in planned_next),
-                          "timeframe": f"Trước NTC {cur + 1}"})
+        decisions.append({"cls": "warn", "title": f"{len(planned_next)} khoản Opex dự kiến của FY {cur + 1}",
+                          "decision": f"Duyệt đưa vào ngân sách FY {cur + 1}", "amount": sum(r["amountGross"] for r in planned_next),
+                          "timeframe": f"Trước FY {cur + 1}"})
 
     opex_total = sum(r["amountGross"] for r in rows if r["kind"] == "opex")
     capex_total = total - opex_total
     if compare["inFilter"] and cur_y["total"]:
         change = compare["deltaPct"]
         pct = f"{abs(change):.1f}".replace(".", ",")
-        headline = (f"Ngân sách NTC {cur + 1} {'tăng' if change >= 0 else 'giảm'} {pct}% so với NTC {cur} "
+        headline = (f"Ngân sách FY {cur + 1} {'tăng' if change >= 0 else 'giảm'} {pct}% so với FY {cur} "
                     f"({service.money_vn(next_y['total'])} so với {service.money_vn(cur_y['total'])}).")
     else:
         headline = f"Tổng ngân sách theo bộ lọc: {service.money_vn(total)} ({len(rows)} dòng)."
@@ -286,7 +286,7 @@ def to_json(report: Dict[str, Any]) -> Dict[str, Any]:
 
 def filter_summary(db: Session, f: Dict[str, Any]) -> str:
     """One line describing the filters, for report headers (values are escaped by the caller)."""
-    parts = ["NTC " + ", ".join(str(y) for y in f["fiscalYears"])]
+    parts = ["FY " + ", ".join(str(y) for y in f["fiscalYears"])]
     parts.append({"all": "Opex + Capex", "opex": "chỉ Opex", "capex": "chỉ Capex"}[f["kind"]])
     if f["categoryIds"]:
         parts.append("loại: " + ", ".join(c.name for c in db.query(SpendCategory).filter(SpendCategory.id.in_(f["categoryIds"]))))

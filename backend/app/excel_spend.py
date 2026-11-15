@@ -48,8 +48,8 @@ def build_budget_xlsx(r: Dict[str, Any], scope_label: str) -> bytes:
     _sheet_title(ws, "Kế hoạch ngân sách IT", subtitle, 8)
     _widths(ws, {c: 16 for c in "ABCDEFGH"})
     t, cmp_ = r["totals"], r["compare"]
-    _tile(ws, 4, 1, 2, f"NTC {cmp_['current']['fiscalYear']}", f"{cmp_['current']['total']:,}".replace(",", "."), "đồng")
-    _tile(ws, 4, 3, 2, f"NTC {cmp_['next']['fiscalYear']}", f"{cmp_['next']['total']:,}".replace(",", "."),
+    _tile(ws, 4, 1, 2, f"FY {cmp_['current']['fiscalYear']}", f"{cmp_['current']['total']:,}".replace(",", "."), "đồng")
+    _tile(ws, 4, 3, 2, f"FY {cmp_['next']['fiscalYear']}", f"{cmp_['next']['total']:,}".replace(",", "."),
           "so với năm nay: " + (f"{cmp_['deltaPct']:+.1f}%" if cmp_["deltaPct"] is not None else "—"))
     _tile(ws, 4, 5, 2, "Tổng theo bộ lọc", f"{t['total']:,}".replace(",", "."), f"{t['count']} dòng")
     _tile(ws, 4, 7, 2, "Opex từ Capex", f"{r['fromCapex']['total']:,}".replace(",", "."), f"{r['fromCapex']['count']} khoản")
@@ -70,7 +70,7 @@ def build_budget_xlsx(r: Dict[str, Any], scope_label: str) -> bytes:
 
     # ---- Chi tiết (every row)
     ws = wb.create_sheet("Chi tiết")
-    head = ["Loại", "Mã", "Nội dung", "NTC", "Loại chi phí", "Nhà cung cấp", "Cost center", "Bắt đầu", "Kết thúc",
+    head = ["Loại", "Mã", "Nội dung", "FY", "Loại chi phí", "Nhà cung cấp", "Cost center", "Bắt đầu", "Kết thúc",
             "Trạng thái", "Nguồn gốc", "Dự án Capex", "Phụ trách", "Trước VAT", "Sau VAT"]
     start = _sheet_title(ws, "Chi tiết ngân sách", subtitle, len(head))
     _widths(ws, dict(zip("ABCDEFGHIJKLMNO", [8, 15, 44, 7, 22, 24, 18, 11, 11, 15, 14, 15, 18, 16, 16])))
@@ -84,7 +84,7 @@ def build_budget_xlsx(r: Dict[str, Any], scope_label: str) -> bytes:
 
     # ---- Hết hạn theo quý
     ws = wb.create_sheet("Hết hạn theo quý")
-    head = ["Quý (NTC)", "Mã", "Dịch vụ", "Nhà cung cấp", "Hết hạn", "Còn (ngày)", "Phụ trách", "Sau VAT"]
+    head = ["Quý (FY)", "Mã", "Dịch vụ", "Nhà cung cấp", "Hết hạn", "Còn (ngày)", "Phụ trách", "Sau VAT"]
     start = _sheet_title(ws, "Opex hết hạn theo quý", subtitle, len(head))
     _widths(ws, dict(zip("ABCDEFGH", [14, 15, 44, 24, 11, 11, 18, 16])))
     _rows_table(ws, start, "HetHan", head, [
@@ -94,7 +94,7 @@ def build_budget_xlsx(r: Dict[str, Any], scope_label: str) -> bytes:
 
     # ---- Từ Capex
     ws = wb.create_sheet("Từ Capex")
-    head = ["Mã Opex", "Gia hạn", "NTC", "Nhà cung cấp", "Dự án Capex", "Trạng thái", "Sau VAT"]
+    head = ["Mã Opex", "Gia hạn", "FY", "Nhà cung cấp", "Dự án Capex", "Trạng thái", "Sau VAT"]
     start = _sheet_title(ws, "Opex phát sinh từ Capex", subtitle, len(head))
     _widths(ws, dict(zip("ABCDEFG", [15, 44, 7, 24, 15, 15, 16])))
     _rows_table(ws, start, "TuCapex", head, [

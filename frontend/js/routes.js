@@ -63,6 +63,8 @@ const PAGES = [
       desc: 'Bảo hành, license, bảo trì, dịch vụ thuê ngoài theo năm tài chính; hạn hết hiệu lực và nhắc gia hạn.', scope: [] },
     { id: 'spend-capex', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'capex', icon: 'package-plus', label: 'Capex', title: 'Dự án đầu tư (Capex)',
       desc: 'Dự án mua mới gồm nhiều hạng mục; tự sinh Opex gia hạn bảo hành / license dự kiến cho các năm sau.', scope: [] },
+    { id: 'spend-plan', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'plan', icon: 'calendar-range', label: 'Kế hoạch năm sau', title: 'Kế hoạch ngân sách năm sau',
+      desc: 'Gợi ý từ Opex sắp gia hạn, Opex đã ghi nhận và Capex của năm sau; thêm đề xuất, ưu tiên, trần ngân sách, duyệt và theo dõi thực hiện.', scope: [] },
     { id: 'spend-contracts', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'contracts', icon: 'scroll-text', label: 'Hợp đồng', title: 'Hợp đồng',
       desc: 'Hợp đồng gắn Opex / Capex, version theo từng bên chỉnh sửa, so sánh, chốt Final, bản ký và lịch xoá version cũ.', scope: [] },
     { id: 'spend-vendors', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'vendors', icon: 'building-2', label: 'Nhà cung cấp', title: 'Nhà cung cấp',
@@ -122,7 +124,7 @@ const MENU = [
     { key: 'license', label: 'License', icon: 'badge-check', tabs: [
       ['lic-assess', '', 'Đánh giá & quyền sử dụng'], ['lic-snapshots', 'snapshots', 'Snapshot']] },
     { key: 'budget', label: 'Ngân sách & chi phí', icon: 'wallet', tabs: [
-      ['spend-overview', '', 'Tổng quan ngân sách'], ['spend-opex', 'opex', 'Opex'], ['spend-capex', 'capex', 'Capex']] },
+      ['spend-overview', '', 'Tổng quan ngân sách'], ['spend-opex', 'opex', 'Opex'], ['spend-capex', 'capex', 'Capex'], ['spend-plan', 'plan', 'Kế hoạch năm sau']] },
     { key: 'procure', label: 'Mua sắm', icon: 'shopping-cart', tabs: [
       ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['bom', 'bom', 'Chuẩn hoá BOM'],
       ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
@@ -143,7 +145,7 @@ const callIf = (name, ...args) => { if (typeof window[name] === 'function') wind
    needed — uiRequire('spend').then(...)). Same ?v= fingerprint as index.html, same origin only. */
 const ASSET_V = (() => { try { return new URL(document.currentScript.src).searchParams.get('v') || ''; } catch (e) { return ''; } })();
 const MODULES = {
-  spend: ['spend', 'spend_capex', 'spend_report', 'spend_contract', 'spend_proposal', 'spend_payment', 'spend_quote', 'spend_renovation'],
+  spend: ['spend', 'spend_capex', 'spend_report', 'spend_contract', 'spend_proposal', 'spend_payment', 'spend_quote', 'spend_renovation', 'spend_plan', 'spend_import'],
   bom: ['bom'],
 };
 const moduleLoads = {};

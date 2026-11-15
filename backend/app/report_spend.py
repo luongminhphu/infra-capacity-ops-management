@@ -62,9 +62,9 @@ def _summary(r: Dict[str, Any]) -> str:
     rec = f'<ol class="rec-sum">{items}</ol>' if items else '<div class="small-note">Không có khoản nào cần quyết định trong phạm vi lọc.</div>'
     soon_total = sum(g["total"] for g in r["expiringByQuarter"])
     tiles = _stat_tiles_html([
-        {"label": f"NTC {cmp_['current']['fiscalYear']}", "value": money_short(cmp_["current"]["total"]),
+        {"label": f"FY {cmp_['current']['fiscalYear']}", "value": money_short(cmp_["current"]["total"]),
          "sub": f"Opex {money_short(cmp_['current']['opex'])} · Capex {money_short(cmp_['current']['capex'])}"},
-        {"label": f"NTC {cmp_['next']['fiscalYear']}", "value": money_short(cmp_["next"]["total"]),
+        {"label": f"FY {cmp_['next']['fiscalYear']}", "value": money_short(cmp_["next"]["total"]),
          "sub": "so với năm nay: " + (f"{cmp_['deltaPct']:+.1f}%".replace(".", ",") if cmp_["deltaPct"] is not None else "—"),
          "cls": "warn" if (cmp_["deltaPct"] or 0) > 10 else "na"},
         {"label": "Hết hạn 12 tháng", "value": money_short(soon_total),
@@ -83,11 +83,11 @@ def _summary(r: Dict[str, Any]) -> str:
 
 def _years(r: Dict[str, Any]) -> str:
     ys = r["byYear"]
-    chart = svg_bar_chart([f"NTC {y['fiscalYear']}" for y in ys], [
+    chart = svg_bar_chart([f"FY {y['fiscalYear']}" for y in ys], [
         {"name": "Opex", "color": COLORS["primary"], "values": [_millions(y["opex"]) for y in ys]},
         {"name": "Capex", "color": COLORS["accent"], "values": [_millions(y["capex"]) for y in ys]},
     ], width=330, height=170, unit="")
-    rows = [[f"NTC {y['fiscalYear']}", esc(money_vn(y["opex"])), esc(money_vn(y["capex"])), f"<b>{esc(money_vn(y['total']))}</b>"]
+    rows = [[f"FY {y['fiscalYear']}", esc(money_vn(y["opex"])), esc(money_vn(y["capex"])), f"<b>{esc(money_vn(y['total']))}</b>"]
             for y in ys]
     rows.append(["<b>Tổng</b>", esc(money_vn(r["totals"]["opex"])), esc(money_vn(r["totals"]["capex"])),
                  f"<b>{esc(money_vn(r['totals']['total']))}</b>"])
@@ -115,7 +115,7 @@ def _expiring(r: Dict[str, Any]) -> str:
     if not groups:
         body = '<div class="small-note">Không có khoản Opex nào hết hạn trong 12 tháng tới theo bộ lọc.</div>'
     else:
-        summary = _table(["Quý (theo NTC)", "Số khoản", "Tổng sau VAT"],
+        summary = _table(["Quý (theo FY)", "Số khoản", "Tổng sau VAT"],
                          [[esc(g["label"]), str(g["count"]), esc(money_vn(g["total"]))] for g in groups], (1, 2))
         items = [i for g in groups for i in g["items"]][:MAX_EXPIRING_ROWS]
         detail = _table(["Mã", "Dịch vụ", "Nhà cung cấp", "Hết hạn", "Còn", "Sau VAT", "Phụ trách"], [
@@ -142,8 +142,8 @@ def _d(iso: str):
 def _from_capex(r: Dict[str, Any]) -> str:
     fc = r["fromCapex"]
     items = fc["items"][:MAX_CAPEX_ROWS]
-    by_year = " · ".join(f"NTC {y['fiscalYear']}: <b>{esc(money_vn(y['total']))}</b>" for y in fc["byYear"])
-    table = _table(["Mã Opex", "Gia hạn", "NTC", "Dự án", "Trạng thái", "Sau VAT"], [
+    by_year = " · ".join(f"FY {y['fiscalYear']}: <b>{esc(money_vn(y['total']))}</b>" for y in fc["byYear"])
+    table = _table(["Mã Opex", "Gia hạn", "FY", "Dự án", "Trạng thái", "Sau VAT"], [
         [esc(i["code"]), esc(i["title"]), str(i["fiscalYear"]), esc(i["capexCode"] or "—"),
          _pill(i["statusLabel"], "na" if i["status"] == "planned" else "ok"), esc(money_vn(i["amountGross"]))] for i in items], (5,))
     more = fc["count"] - len(items)

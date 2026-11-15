@@ -16,7 +16,7 @@ from app.spend.models import (
     CapexItem, CapexProject, Contract, ContractVersion, Proposal, ProposalContract, ProposalOpex, ProposalRecipient,
     ProposalTemplate, SpendAiConfig, SpendSavedFilter, ContractPayment, PaymentDocument,
     OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendNotifyChannel,
-    SpendReminderLog, SpendSequence, SpendSmtpConfig, SpendVendor,
+    SpendReminderLog, SpendSequence, SpendSmtpConfig, SpendVendor, BudgetPlan, BudgetPlanLine,
 )
 
 ADMIN = {"username": "admin", "password": "Admin12345!"}
@@ -25,7 +25,7 @@ PW = "User12345!"
 
 def _wipe():
     db = SessionLocal()
-    for model in (EvaluationScore, EvaluationCriterion, QuotationFinding, QuotationLine, Quotation, QuoteRequest, RenovationCost, RenovationProject, RenovationCostGroup, PaymentDocument, ContractPayment, ProposalContract, ProposalOpex, Proposal, ProposalTemplate, ProposalRecipient, SpendAiConfig,
+    for model in (BudgetPlanLine, BudgetPlan, EvaluationScore, EvaluationCriterion, QuotationFinding, QuotationLine, Quotation, QuoteRequest, RenovationCost, RenovationProject, RenovationCostGroup, PaymentDocument, ContractPayment, ProposalContract, ProposalOpex, Proposal, ProposalTemplate, ProposalRecipient, SpendAiConfig,
                   ContractVersion, Contract, SpendReminderLog, OpexAttachment, OpexAsset, SpendFile, SpendNotifyChannel, SpendSmtpConfig, SpendSavedFilter):
         db.query(model).delete()
     db.query(OpexItem).update({OpexItem.renewed_from_id: None})

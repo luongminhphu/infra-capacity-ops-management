@@ -611,7 +611,7 @@ Bật / tắt ở **Cài đặt → Tính năng** (khi tắt, API trả 404).
   dừng nhắc; mỗi khoản chỉ gia hạn được một lần), **Ngừng** (cần lý do), **Xác nhận** / **Kích hoạt lại**
   (quyền Duyệt). Mọi thay đổi số tiền / ngày / trạng thái / file được ghi `audit_log` (xem “Lịch sử thay đổi”).
 - **Năm tài chính**: tháng bắt đầu cấu hình trong Cài đặt; đặt tên theo năm bắt đầu
-  (tháng 4: 01/04/2026 – 31/03/2027 = NTC 2026).
+  (tháng 4: 01/04/2026 – 31/03/2027 = FY 2026).
 - **Nhắc hạn**: chạy hằng ngày sau giờ cấu hình (mặc định 08:00 giờ VN) trong tiến trình app, mốc mặc định
   90 / 60 / 30 ngày. Mỗi mốc của mỗi khoản gửi **một lần** cho mỗi kênh (bảng `spend_reminder_log`, khoá
   UNIQUE). App tắt qua nhiều mốc thì chỉ gửi mốc nhỏ nhất đã tới; gửi lỗi tự thử lại tối đa 5 lần; tiến trình
@@ -650,7 +650,7 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   Dự án **nháp chỉ xem trước** Opex, không đưa vào ngân sách; Opex dự kiến được sinh khi dự án được duyệt.
 - **Quy tắc sinh Opex**: thời hạn đi kèm N năm hết vào ngày cuối kỳ, kỳ gia hạn (1 năm) **bắt đầu ngày hôm
   sau** và thuộc năm tài chính của ngày đó. Ví dụ go-live 15/06/2026: bảo hành 1 năm → gia hạn 15/06/2027
-  (NTC 2027); 3 năm → 15/06/2029 (NTC 2029, năm thứ 4). Mua ngày 29/02/2028, 1 năm → hết 28/02/2029,
+  (FY 2027); 3 năm → 15/06/2029 (FY 2029, năm thứ 4). Mua ngày 29/02/2028, 1 năm → hết 28/02/2029,
   gia hạn từ 01/03/2029. Số tiền = % gia hạn × giá trị trước VAT, làm tròn đến đồng (ví dụ 15% của
   1.234.567.891 đ = 185.185.184 đ).
 - Opex sinh ra có trạng thái **Dự kiến**, liên kết ngược về dự án. Sửa Capex chỉ cập nhật các khoản còn
@@ -673,6 +673,42 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
 - **PDF** theo khung báo cáo Vận hành (2 trang, mở bằng hộp “Tổng kết — vấn đề & quyết định đề nghị”).
   **Excel** đủ từng dòng: Tổng quan, Chi tiết, Hết hạn theo quý, Từ Capex, Nhà cung cấp, Bộ lọc. Ô chữ do người
   dùng nhập luôn ghi dạng văn bản (không thành công thức Excel).
+
+**Nhập Opex / Capex từ Excel (đã có)** — nút **Nhập Excel** ở trang Opex và Capex (quyền Biên tập). Thiết kế:
+[`docs/design/spend-import.md`](design/spend-import.md).
+
+- Dùng **file mẫu**, hoặc chính file đang theo dõi. Chỉ cần một dòng tiêu đề có các cột cần thiết (tên cột tiếng Việt
+  hoặc tiếng Anh); phía trên có thể có dòng tên bảng.
+- **Kiểm tra trước khi nhập:** từng dòng hiện *Tạo mới / Bỏ qua (trùng) / Lỗi* kèm lý do. Có thể chọn chỉ nhập các dòng
+  hợp lệ.
+- **Không tạo trùng:** khoản đã có (cùng nội dung + nhà cung cấp + ngày bắt đầu, hoặc trùng mã) và dự án đã có (cùng
+  tên + năm tài chính) được bỏ qua. Nhập lại cùng một file là an toàn.
+- **Opex nhiều năm:** các kỳ nối tiếp của cùng dịch vụ được tự liên kết *Đã gia hạn*, nên lịch sử gia hạn và kế hoạch
+  năm sau dùng được ngay.
+- **Capex:** mỗi dòng là một hạng mục; các dòng cùng tên dự án gộp thành một dự án. Dự án *Đã duyệt* tự sinh Opex gia
+  hạn. Nếu đã nhập các Opex đó từ file Opex, để *Số năm bảo hành* = 0 để tránh trùng.
+
+**Kế hoạch ngân sách năm sau (đã có)** — Ngân sách & chi phí → *Kế hoạch năm sau*. Thiết kế:
+[`docs/design/spend-budget-plan.md`](design/spend-budget-plan.md).
+
+- **Lập kế hoạch FY sau** (Biên tập). Hệ thống tự gợi ý các dòng:
+  - *Gia hạn*: Opex có kỳ kế tiếp bắt đầu trong năm, tính theo số kỳ × (1 + % tăng giá mặc định, vd 5%);
+  - *Đã ghi nhận*: Opex đã thuộc năm sau, gồm cả Opex sinh từ Capex;
+  - *Dự án Capex*: dự án của năm sau.
+
+  Thêm **đề xuất mới** cho dịch vụ / dự án chưa có.
+- **Mỗi dòng** sửa được: % tăng giá riêng, số tiền nhập tay, ưu tiên (Bắt buộc / Nên có / Tuỳ chọn), nhà cung cấp, ngày
+  bắt đầu. Có thể bỏ một dòng khỏi kế hoạch, nhưng phải ghi lý do.
+- **Trần ngân sách**: dòng làm tổng vượt trần (xếp theo ưu tiên) được đánh dấu *Vượt trần*.
+- **Phân tích**: so với thực tế năm nay, theo loại chi phí, theo quý (dòng tiền).
+- **Làm mới gợi ý**: cập nhật theo dữ liệu mới nhất, không mất phần đã sửa. Nguồn đã đổi thì dòng được đánh dấu để
+  xem lại.
+- **Duyệt và áp dụng:**
+  - Gửi duyệt → Duyệt (quyền Duyệt). Người duyệt thấy việc này trong hộp việc.
+  - Sau khi duyệt, có thể *Tạo Opex / Capex từ đề xuất mới*: tạo Opex *Dự kiến* / Capex *Nháp*.
+  - Muốn đổi kế hoạch đã duyệt thì dùng *Sửa đổi* để tạo bản v2. Duyệt v2 thì v1 thành "Đã thay thế".
+- **Theo dõi thực hiện**: kế hoạch đã duyệt hiện số *Thực hiện / Chênh lệch* từng dòng, theo chuỗi gia hạn và mã đã
+  tạo, cùng danh sách **phát sinh ngoài kế hoạch**. Xuất Excel gồm 4 sheet.
 
 **Giai đoạn 4 — Hợp đồng và version (đã có)**
 
