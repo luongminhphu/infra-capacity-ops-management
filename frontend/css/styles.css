@@ -837,7 +837,8 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .src-spacer{flex:1;}
 .src-result{min-height:18px;font-size:var(--fs-caption);line-height:var(--lh-caption);margin-top:var(--space-2);white-space:pre-wrap;}
 .src-result.ok{color:var(--status-success);}
-.src-result.err{color:var(--status-error);}
+.src-result.err,.src-result.error{color:var(--status-error);}
+.ui-dialog-narrow{width:min(480px,94vw);}
 @media (max-width:640px){.src-grid{grid-template-columns:1fr;}}
 .muted-row td{opacity:.6;}
 

@@ -103,7 +103,7 @@ async function ppOpenCreate(prefill) {
 async function ppOpenDetail(code, note) {
   let p;
   try { await spLoadMeta(); await ppLoadCommon(); p = await apiRequest(`/spend/proposals/${encodeURIComponent(code)}`); }
-  catch (err) { alert(err.message); return; }
+  catch (err) { uiAlert(err.message); return; }
   const draft = p.status === 'draft';
   const dl = (label, value) => `<div class="sp-dl-item"><dt>${label}</dt><dd>${value}</dd></div>`;
   const linked = p.capex

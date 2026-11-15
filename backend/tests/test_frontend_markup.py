@@ -52,3 +52,25 @@ def test_sizing_result_sits_in_the_main_column():
     # and the PDF options panel stays inside its dropdown
     pdf = _parse().ancestors["btnSizingPdf"]
     assert any("sz-pdf-panel" in c for _, c in pdf)
+
+
+def test_views_use_the_shared_ui_helpers():
+    """Super app: one component set. Browser alert / prompt / confirm, hand-made downloads and
+    hand-made <dialog> elements live in ui.js only (uiAlert, uiPrompt, uiConfirm, uiDownload, uiDialog)."""
+    import pathlib
+    import re
+    js = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "js"
+    allowed = {"ui.js"}
+    bad = []
+    for f in sorted(js.rglob("*.js")):
+        if f.name in allowed:
+            continue
+        src = f.read_text(encoding="utf-8")
+        for pat, what in ((r"(?<![\w.])(alert|prompt|confirm)\(", "window dialog"), (r"createObjectURL", "manual download"),
+                          (r"createElement\('dialog'\)", "hand-made <dialog>")):
+            for m in re.finditer(pat, src):
+                line = src.count("\n", 0, m.start()) + 1
+                bad.append(f"{f.relative_to(js)}:{line} {what}")
+    # Known exceptions: the Ctrl+K palette (entity.js) and the spend editor dialog (spend.js) are their own UX.
+    bad = [b for b in bad if not (b.startswith("views/entity.js") or b.startswith("views/spend.js")) or "dialog" not in b]
+    assert bad == [], "\n".join(bad)

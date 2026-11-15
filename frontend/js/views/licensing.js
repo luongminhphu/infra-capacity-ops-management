@@ -36,7 +36,7 @@ function licState() {
 }
 
 const licNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
-const licMoney = (v, cur) => (v === null || v === undefined || !isFinite(v)) ? '—' : `${Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 0 })}${cur && cur !== 'mixed' ? ' ' + cur : ''}`;
+const licMoney = (v, cur) => uiMoney(v, cur && cur !== 'mixed' ? cur : '', 0);
 const licPill = (status) => { const s = LIC_STATUS[status] || { cls: 'na', label: status || '—' }; return uiPill(s.cls, s.label); };
 const licRulePill = (status) => { const s = LIC_RULE_STATUS[status] || { cls: 'na', label: status }; return `<span class="pill ${s.cls}">${esc(s.label)}</span>`; };
 const licDate = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('vi-VN', { hour12: false }); };
@@ -696,7 +696,7 @@ async function onLicBodyClick(e) {
     else if (act === 'rule-activate') { await api.licRuleActivate(id); await licLoad(true); renderLicBody(); }
     else if (act === 'rule-deactivate') { if (!await uiConfirm('Tắt rule này? Assessment sẽ báo thiếu rule cho tới khi kích hoạt version khác.')) return; await api.licRuleDeactivate(id); await licLoad(true); renderLicBody(); }
     else if (act === 'rule-verify') {
-      const note = prompt('Ghi chú xác minh (tài liệu đã đối chiếu, ngày, người):', `Đối chiếu tài liệu nguồn ngày ${new Date().toLocaleDateString('vi-VN')}`);
+      const note = await uiPrompt('Ghi chú xác minh (tài liệu đã đối chiếu, ngày, người):', `Đối chiếu tài liệu nguồn ngày ${new Date().toLocaleDateString('vi-VN')}`, { okLabel: 'Xác minh' });
       if (note === null) return;
       await api.licRuleVerify(id, note); await licLoad(true); renderLicBody(); licSetStatus('Đã ghi nhận xác minh rule.');
     }

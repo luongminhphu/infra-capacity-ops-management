@@ -123,21 +123,14 @@ async function pkWithReauth(fn, hasPasskeys) {
 
 /* ---------- Passkey của tôi (every local user) ---------- */
 async function pkMyDialog() {
-  let dlg = $('#pkMyDlg');
-  if (!dlg) {
-    dlg = document.createElement('dialog');
-    dlg.id = 'pkMyDlg';
-    dlg.className = 'src-dialog';
-    dlg.setAttribute('aria-labelledby', 'pkMyTitle');
-    document.body.appendChild(dlg);
-  }
   let d;
   try { d = await apiRequest('/auth/passkeys'); } catch (err) { uiConfirm(err.message, { okLabel: 'Đóng', danger: false }); return; }
   const rows = d.items.map(p => `<tr><td><b>${esc(p.name)}</b>${p.synced ? ' <span class="pill-mini">Đồng bộ</span>' : ''}</td>
       <td>${esc(spTimeSafe(p.createdAt))}</td><td>${esc(p.lastUsedAt ? spTimeSafe(p.lastUsedAt) : '—')}</td>
       <td><button class="btn btn-ghost btn-sm btn-danger" type="button" data-pk-del="${esc(p.id)}" aria-label="Xoá ${esc(p.name)}"><i data-lucide="trash-2"></i></button></td></tr>`).join('');
-  dlg.innerHTML = `<div class="src-dialog-head"><h3 id="pkMyTitle">Passkey của tôi</h3>
-      <button class="btn btn-ghost btn-sm" type="button" data-pk-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
+  const ui = uiDialog('pkMyDlg', { title: 'Passkey của tôi' });
+  const dlg = ui.el;
+  ui.body.innerHTML = `
     ${!d.local ? '<p class="muted-sub">Tài khoản Microsoft: quản lý passkey / phương thức đăng nhập ở trang bảo mật của Microsoft (mysignins.microsoft.com).</p>'
       : !d.enabled ? '<p class="muted-sub">Passkey cho tài khoản cục bộ đang tắt.</p>' : `
     <p class="muted-sub">Đăng nhập bằng Face ID / Touch ID thay cho mật khẩu. Nên có ít nhất 2 passkey (vd iPhone và Mac) phòng khi mất máy.
@@ -149,7 +142,6 @@ async function pkMyDialog() {
       <button class="btn btn-primary btn-sm" type="button" id="pkAdd"><i data-lucide="fingerprint"></i>Thêm passkey trên thiết bị này</button></div>`}
     <p class="criteria-status" id="pkMsg" role="status"></p>`;
   refreshIcons();
-  dlg.querySelector('[data-pk-close]').onclick = () => dlg.close();
   const add = $('#pkAdd', dlg);
   if (add) add.onclick = async () => {
     add.disabled = true;
@@ -165,7 +157,7 @@ async function pkMyDialog() {
     try { await pkWithReauth(() => apiRequest(`/auth/passkeys/${encodeURIComponent(b.dataset.pkDel)}`, { method: 'DELETE' }), true); pkMyDialog(); }
     catch (err) { uiSetStatus('#pkMsg', err.message, 'error'); }
   }; });
-  if (!dlg.open) dlg.showModal();
+  ui.open();
 }
 
 /* ---------- Cài đặt → Đăng nhập & bảo mật (admin) ---------- */

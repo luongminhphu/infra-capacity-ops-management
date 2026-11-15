@@ -13,7 +13,7 @@ async function aiStatus(force) {
   return aiStatusCache;
 }
 
-const aiUsd = (v) => `${Number(v || 0).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+const aiUsd = (v) => uiMoney(Number(v || 0), 'USD', 2);
 const AI_RUN = { ok: ['ok', 'Đã gọi'], cached: ['na', 'Dùng lại'], blocked: ['warn', 'Bị chặn'], error: ['bad', 'Lỗi'] };
 
 let aiSettingsAt = 0;
@@ -99,7 +99,7 @@ async function homeAiBrief(btn) {
     out.innerHTML = `<div class="home-ai">
       <div class="home-brief-head"><span class="eyebrow">Bản tin AI${s.cached ? ' · dùng lại' : ''}</span><span class="muted-sub sr-inline">AI soạn từ hộp việc của bạn — đối chiếu trước khi quyết định</span></div>
       <p class="home-brief-text">${esc(s.headline)}</p>
-      ${s.points.length ? `<ul class="home-list">${s.points.map(p => `<li class="home-item"><div class="home-item-main">${uiPill(({ crit: 'crit', bad: 'bad', warn: 'warn', ok: 'ok', info: 'na' })[p.level] || 'na', ({ crit: 'Vượt ngưỡng', bad: 'Cảnh báo', warn: 'Theo dõi', ok: 'Ổn', info: 'Thông tin' })[p.level] || '')} ${esc(p.text)}</div></li>`).join('')}</ul>` : ''}
+      ${s.points.length ? `<ul class="home-list">${s.points.map(p => `<li class="home-item"><div class="home-item-main">${uiLevelPill(p.level)} ${esc(p.text)}</div></li>`).join('')}</ul>` : ''}
       ${s.decisions.length ? `<div class="sp-h">Việc nên làm</div><ol class="home-ai-dec">${s.decisions.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}</div>`;
   } catch (err) { out.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; }
   finally { btn.disabled = false; }

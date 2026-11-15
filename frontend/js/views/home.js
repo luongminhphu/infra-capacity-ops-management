@@ -108,7 +108,7 @@ function homeBind() {
       try {
         await apiRequest('/inbox/ack', { method: 'POST', body: JSON.stringify({ key: b.dataset.key, action: b.dataset.homeAck, days: 7 }) });
         await renderHomeView();
-      } catch (err) { alert(err.message); b.disabled = false; }
+      } catch (err) { uiAlert(err.message); b.disabled = false; }
     }
   });
 }
@@ -230,7 +230,7 @@ const planState = { result: null };
 async function planOpenCapex(c) {
   if (!c) return;
   let meta;
-  try { meta = await spLoadMeta(); meta = spState.meta; } catch (err) { alert(err.message); return; }
+  try { meta = await spLoadMeta(); meta = spState.meta; } catch (err) { uiAlert(err.message); return; }
   const year = Number((/(\d{4})/.exec(c.orderByLabel || '') || [])[1]) || meta.currentFiscalYear;
   const cats = meta.categories.filter(x => x.active);
   const body = `<form id="pcForm" class="sp-form" novalidate><div class="src-grid">

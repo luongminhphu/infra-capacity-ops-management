@@ -172,8 +172,8 @@ function srRender() {
 function srMsg(text, ok) {
   const el = $('#srMsg');
   if (!el) return;
-  el.textContent = text || '';
-  el.className = 'criteria-status' + (text ? (ok ? ' ok' : ' error') : '');
+  el.classList.add('criteria-status');
+  uiSetStatus(el, text, text ? (ok ? 'ok' : 'error') : '');
 }
 
 /* ---------- Export (also used by the report centre) ---------- */
@@ -181,22 +181,11 @@ async function spendExport(kind, btn) {
   const filters = (appState.view === 'spend' && spState.sub === 'overview' && $('#spendMount [data-sr="kind"]')) ? srReadFilters() : {};
   if (btn) btn.disabled = true;
   try {
-    const res = await fetch(`/api/spend/reports/budget.${kind}`, { method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(kind === 'pdf' && typeof reportAiOn === 'function' && reportAiOn() ? { ...filters, ai: true } : filters) });
-    if (!res.ok) {
-      let msg = `Lỗi xuất báo cáo (${res.status})`;
-      try { msg = (await res.json()).detail || msg; } catch (err) { /* not JSON */ }
-      throw new Error(msg);
-    }
-    const blob = await res.blob();
-    const name = (/filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '') || [])[1] || `ke-hoach-ngan-sach.${kind}`;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    await uiDownload(`/api/spend/reports/budget.${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(kind === 'pdf' && typeof reportAiOn === 'function' && reportAiOn() ? { ...filters, ai: true } : filters) },
+      `ke-hoach-ngan-sach.${kind}`);
   } catch (err) {
-    if ($('#srMsg')) srMsg(err.message); else alert(err.message);
+    if ($('#srMsg')) srMsg(err.message); else uiAlert(err.message);
   } finally { if (btn) btn.disabled = false; }
 }
 document.addEventListener('click', (e) => {

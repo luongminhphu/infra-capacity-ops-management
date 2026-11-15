@@ -8,11 +8,7 @@
 const bomState = { data: null, project: { name: '', customer: '', preparedBy: '', currency: 'USD', vatPct: '', note: '', hideEmpty: true }, busy: false };
 const BOM_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
-function bomMoney(v, cur) {
-  if (v === null || v === undefined || v === '') return '—';
-  const n = Number(v);
-  return `${n.toLocaleString('vi-VN', { minimumFractionDigits: cur === 'USD' ? 2 : 0, maximumFractionDigits: cur === 'USD' ? 2 : 0 })} ${cur === 'USD' ? 'USD' : '₫'}`;
-}
+function bomMoney(v, cur) { return uiMoney(v, cur === 'USD' ? 'USD' : 'VND'); }
 
 function bomStatus(text, tone) { uiSetStatus('#bomMsg', text, tone || 'ok'); }
 
@@ -137,7 +133,7 @@ function bomBind() {
     const vat = parseFloat(bomState.project.vatPct);
     b.disabled = true;
     try {
-      await api._downloadBlob(`${API_BASE}/bom/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      await uiDownload(`${API_BASE}/bom/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project: { ...bomState.project, vatPct: isFinite(vat) && vat > 0 ? vat : null }, configs: d.configs }) }, 'BOM.xlsx');
       bomStatus('Đã xuất file Excel.');
     } catch (err) { bomStatus(err.message, 'error'); }
