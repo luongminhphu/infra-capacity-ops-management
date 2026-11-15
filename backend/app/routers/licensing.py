@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import data_access, report_license
@@ -153,23 +154,39 @@ def list_overrides(db: Session = Depends(get_db), user: User = Depends(get_curre
 def upsert_override(payload: OverrideIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     if payload.category not in os_classify.CATEGORIES:
         raise HTTPException(400, f"category phải thuộc {os_classify.CATEGORIES}")
-    q = db.query(VmOsOverride).filter(VmOsOverride.vcenter_key == payload.vcenterKey)
-    if payload.instanceUuid:
-        row = q.filter(VmOsOverride.instance_uuid == payload.instanceUuid).first()
+    # Select-then-insert can race (double click, two users); the partial unique indexes created in
+    # ensure_schema reject the second INSERT, and the retry then updates the row the winner wrote.
+    for attempt in range(2):
+        row = _same_override(db, payload.vcenterKey, payload.instanceUuid, payload.vm).first()
+        if not row:
+            row = VmOsOverride(vcenter_key=payload.vcenterKey, instance_uuid=payload.instanceUuid, vm=payload.vm)
+            db.add(row)
+        row.vm = payload.vm
+        row.category = payload.category
+        row.os_version = payload.osVersion
+        row.os_edition = payload.osEdition
+        row.note = payload.note
+        row.updated_by = user.username
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            if attempt:
+                raise HTTPException(409, "Override vừa được người khác lưu — tải lại rồi thử lại.")
+            continue
+        db.refresh(row)
+        return _override_dict(row)
+
+
+def _same_override(db: Session, vcenter_key: Optional[str], instance_uuid: Optional[str], vm: str):
+    """Rows for one VM (by uuid when known, else by name), newest first — a database created before
+    the unique indexes may still hold duplicates; the newest one is the effective override."""
+    q = db.query(VmOsOverride).filter(VmOsOverride.vcenter_key == vcenter_key)
+    if instance_uuid:
+        q = q.filter(VmOsOverride.instance_uuid == instance_uuid)
     else:
-        row = q.filter(VmOsOverride.instance_uuid.is_(None), VmOsOverride.vm == payload.vm).first()
-    if not row:
-        row = VmOsOverride(vcenter_key=payload.vcenterKey, instance_uuid=payload.instanceUuid, vm=payload.vm)
-        db.add(row)
-    row.vm = payload.vm
-    row.category = payload.category
-    row.os_version = payload.osVersion
-    row.os_edition = payload.osEdition
-    row.note = payload.note
-    row.updated_by = user.username
-    db.commit()
-    db.refresh(row)
-    return _override_dict(row)
+        q = q.filter(VmOsOverride.instance_uuid.is_(None), VmOsOverride.vm == vm)
+    return q.order_by(VmOsOverride.updated_at.desc(), VmOsOverride.id.desc())
 
 
 @router.delete("/overrides/{override_id}")
@@ -177,7 +194,9 @@ def delete_override(override_id: int, db: Session = Depends(get_db), user: User 
     row = db.query(VmOsOverride).filter(VmOsOverride.id == override_id).first()
     if not row:
         raise HTTPException(404, "Không tìm thấy override")
-    db.delete(row)
+    # Remove older duplicates too, otherwise one of them would silently become effective.
+    for r in _same_override(db, row.vcenter_key, row.instance_uuid, row.vm).all():
+        db.delete(r)
     db.commit()
     return {"ok": True}
 

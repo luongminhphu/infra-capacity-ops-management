@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
-from .. import capacity
+from .. import capacity, data_access
 from ..config import Settings, VCenterConfig, get_settings
 from ..database import SessionLocal
 from ..models import ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, VmSnapshot
@@ -29,15 +29,6 @@ logger = logging.getLogger("vco.scheduler")
 
 IDLE_CPU_PCT = 5.0
 PREVIOUS_RUNS = 5        # look for a VM's previous snapshot in this many recent successful runs
-
-
-def _policy_from_settings(s: Settings) -> capacity.Policy:
-    return capacity.Policy(
-        cpu_overcommit_max=s.cpu_overcommit_max,
-        ram_overcommit_max=s.ram_overcommit_max,
-        ht_factor=s.ht_factor,
-        idle_days=s.idle_days,
-    )
 
 
 def _enrich_activity(db: Session, vcenter_key: str, vm_rows: List[Dict[str, Any]],
@@ -135,7 +126,9 @@ def sync_vcenter(db: Session, cfg: VCenterConfig, settings: Optional[Settings] =
             host_rows, vm_rows = vcenter_client.collect_inventory(cfg)
         now = dt.datetime.utcnow()
         _enrich_activity(db, cfg.key, vm_rows, now)
-        policy = _policy_from_settings(settings)
+        # Same policy as the live dashboard (env defaults + admin overrides in app_settings),
+        # so stored aggregates / findings match what users saw when the snapshot was taken.
+        policy = data_access.get_effective_policy(db, settings)
         common = {"run_id": run.id, "vcenter_key": cfg.key, "captured_at": now}
 
         _bulk(db, HostSnapshot, [{
