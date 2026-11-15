@@ -42,7 +42,7 @@ def _pill(text: str, cls: str) -> str:
 def _table(head: List[str], rows: List[List[str]], num_cols=()) -> str:
     if not rows:
         return '<div class="small-note">Không có dòng nào theo bộ lọc.</div>'
-    ths = "".join(f'<th{" class=\"num\"" if i in num_cols else ""}>{h}</th>' for i, h in enumerate(head))
+    ths = "".join(f'<th{" class=\"num\"" if i in num_cols else ""}>{esc(h)}</th>' for i, h in enumerate(head))  # headers are text
     trs = "".join("<tr>" + "".join(f'<td{" class=\"num\"" if i in num_cols else ""}>{c}</td>' for i, c in enumerate(r)) + "</tr>"
                   for r in rows)
     return f"<table><thead><tr>{ths}</tr></thead><tbody>{trs}</tbody></table>"

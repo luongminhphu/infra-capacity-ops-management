@@ -12,6 +12,7 @@ from app.security import hash_password
 from app.spend import files
 from app.spend.models import (
     EvaluationCriterion, EvaluationScore, Quotation, QuotationFinding, QuotationLine, QuoteRequest,
+    RenovationCost, RenovationCostGroup, RenovationProject,
     CapexItem, CapexProject, Contract, ContractVersion, Proposal, ProposalContract, ProposalOpex, ProposalRecipient,
     ProposalTemplate, SpendAiConfig, SpendSavedFilter, ContractPayment, PaymentDocument,
     OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendNotifyChannel,
@@ -24,7 +25,7 @@ PW = "User12345!"
 
 def _wipe():
     db = SessionLocal()
-    for model in (EvaluationScore, EvaluationCriterion, QuotationFinding, QuotationLine, Quotation, QuoteRequest, PaymentDocument, ContractPayment, ProposalContract, ProposalOpex, Proposal, ProposalTemplate, ProposalRecipient, SpendAiConfig,
+    for model in (EvaluationScore, EvaluationCriterion, QuotationFinding, QuotationLine, Quotation, QuoteRequest, RenovationCost, RenovationProject, RenovationCostGroup, PaymentDocument, ContractPayment, ProposalContract, ProposalOpex, Proposal, ProposalTemplate, ProposalRecipient, SpendAiConfig,
                   ContractVersion, Contract, SpendReminderLog, OpexAttachment, OpexAsset, SpendFile, SpendNotifyChannel, SpendSmtpConfig, SpendSavedFilter):
         db.query(model).delete()
     db.query(OpexItem).update({OpexItem.renewed_from_id: None})

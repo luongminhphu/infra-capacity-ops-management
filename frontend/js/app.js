@@ -79,6 +79,8 @@ const NAV_GROUPS = [
       desc: 'Hồ sơ nhà cung cấp: tên viết tắt dùng thống nhất trong tài liệu, tên gọi khác, liên hệ, lịch sử báo giá / hợp đồng / chi phí.', scope: [] },
     { id: 'spend-quotes', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'quotes', icon: 'scale', label: 'So sánh báo giá', title: 'So sánh báo giá',
       desc: 'Gói nhiều báo giá: đọc file Excel / Word / PDF scan, kiểm tra công thức tiền, so sánh từng hạng mục, phiếu đánh giá NCC, chọn NCC.', scope: [] },
+    { id: 'spend-renovations', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'renovations', icon: 'building', label: 'Cải tạo văn phòng', title: 'Cải tạo văn phòng — chi phí IT',
+      desc: 'Dự án cải tạo theo tầng: quy mô, cấu hình, 3 khối Cabling / Network / VC; so sánh với các tầng đã làm theo chi phí / node và / phòng họp.', scope: [] },
     { id: 'spend-proposals', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'proposals', icon: 'file-text', label: 'Tờ trình', title: 'Tờ trình',
       desc: 'Soạn tờ trình Mẫu A (trình TGĐ) / Mẫu B (trình Ban Mua sắm) từ mẫu .docx của công ty, AI viết nội dung theo dữ liệu Opex / Capex.', scope: [] },
   ] },

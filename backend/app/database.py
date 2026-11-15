@@ -53,6 +53,8 @@ def ensure_schema() -> None:
             ("website", "VARCHAR(255)"), ("tags", "VARCHAR(500)"), ("notes", "TEXT"),
             ("status", "VARCHAR(12) DEFAULT 'active'"), ("status_reason", "VARCHAR(500)"),
         ],
+        "quote_requests": [("renovation_project_id", "INTEGER REFERENCES renovation_projects(id)")],
+        "quotation_lines": [("cost_group_id", "INTEGER REFERENCES renovation_cost_groups(id) ON DELETE SET NULL")],
         "users": [
             ("auth_source", "VARCHAR(16) NOT NULL DEFAULT 'local'"), ("external_id", "VARCHAR(64)"),
             ("email", "VARCHAR(255)"), ("last_login_at", "TIMESTAMP"),
@@ -60,7 +62,7 @@ def ensure_schema() -> None:
             ("spend_role", "VARCHAR(16) NOT NULL DEFAULT 'none'"), ("spend_role_source", "VARCHAR(8)"),
         ],
     }
-    indexed = {"instance_uuid", "external_id"}
+    indexed = {"instance_uuid", "external_id", "renovation_project_id"}
     insp = inspect(engine)
     with engine.begin() as conn:
         for table, cols in additive.items():

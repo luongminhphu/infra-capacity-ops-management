@@ -616,6 +616,42 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   - **Chọn NCC** (quyền Duyệt): chỉ báo giá đã kiểm tra; ít hơn số báo giá tối thiểu thì phải ghi lý do; kết luận mặc
     định “Đề xuất chọn <tên viết tắt>”. Mở lại được để sửa. Mọi thao tác ghi nhật ký kiểm toán.
 
+**V2 — Cải tạo văn phòng, phần IT (đã có)** (menu *Cải tạo văn phòng*)
+
+- **Dự án** `CTVP-<năm>-<số>`, một tầng một năm (FL6 2026…).
+  - Quy mô: số node mạng, nhân sự (NS), phòng hub, phòng họp, phòng họp có VC, access point, m².
+  - Nhãn cấu hình: 10G, Wifi7…
+  - Liên kết Capex. Gói báo giá (V1) gắn được với dự án theo khối.
+- **3 khối, mỗi khối có nhóm chi phí chuẩn** (khởi tạo theo file so sánh đang dùng; admin sửa ở nút *Nhóm chi phí*):
+  - Cabling gồm Hub: vật tư cáp, cáp quang, ống PVC, rack, access control, camera, sàn nâng, UPS, điều hoà, nhân công,
+    điện cho VC, di dời máy tính, quản lý dự án, phát sinh.
+  - Network: AP, Switch (gồm L3 / L2 / license), SFP, triển khai.
+  - Video Conference: phòng họp có VC, phòng chỉ trình chiếu, thiết bị chung.
+  - Tên gọi khác của từng nhóm dùng để ghép dòng báo giá vào nhóm.
+- **Số liệu theo nhóm**: *Dự toán*, *Báo giá trúng*, *Thực chi* (thực chi cần quyền Duyệt).
+  - *Lấy báo giá trúng từ NCC được chọn*: cộng các dòng của báo giá được chọn theo nhóm. Dòng chưa ghép được phải
+    chọn nhóm (hệ thống nhớ lựa chọn).
+  - **Chốt thực chi** (Duyệt): nhóm chưa có thực chi lấy theo báo giá trúng. Dự án đã chốt trở thành lịch sử cho
+    các tầng sau.
+- **So sánh lịch sử**:
+  - Nguồn số liệu: lịch sử dùng **thực chi** (không có thì dùng báo giá trúng, không bao giờ dùng dự toán).
+  - Chỉ số chuẩn hoá giống file đang dùng: `ROUNDUP(tổng / số node, 0)` cho Facility và Network,
+    `ROUNDUP(tổng / số phòng họp VC, 0)` cho VC.
+  - Cảnh báo khi lệch quá **±15%** so với trung vị các tầng **cùng cấu hình**. Khác cấu hình thì ghi rõ “khác cấu hình
+    — không kết luận đắt / rẻ”.
+  - Thiếu số liệu thì ghi “không có số liệu”, không ghi 0 và không chia.
+  - Chọn được tầng nào đưa vào so sánh.
+- **Nhập lịch sử** (admin) từ file so sánh bố cục *Summarize*:
+  - Đọc các bảng “SO SÁNH CHI PHÍ …”, các cột tầng, quy mô trong tiêu đề cột (“(62 nodes) - 24 NS”, “(10G & Wifi7)”),
+    số phòng VC.
+  - Phát hiện lệch dự toán so với bảng so sánh (vd ô dự toán trống ở RACK CABINET / PHÁT SINH), tiêu đề khối chép
+    nhầm, khối không có số liệu.
+  - Xem trước, nhập năm và loại số liệu cho từng tầng, rồi mới lưu. Nhập lại cùng tầng / năm thì cập nhật.
+- **Xuất**:
+  - Excel theo bố cục Summarize, có công thức `SUM` / `ROUNDUP` và vendor theo tên viết tắt; kèm sheet Chỉ số và
+    sheet Cảnh báo.
+  - PDF tóm tắt: tổng kết chênh lệch, báo giá theo khối, so sánh chỉ số, chi tiết theo nhóm.
+
 ## Kiến trúc
 
 ```

@@ -47,7 +47,7 @@ DEFAULT_PAYMENT_DOCS = [
 
 
 def ensure_defaults(db: Session) -> None:
-    """Seed the category list and the payment document checklist once (empty tables only —
+    """Seed the category list, the payment document checklist and the renovation cost groups once (empty tables only —
     admins edit them afterwards)."""
     from .models import PaymentDocDefault
     if db.query(SpendCategory.id).first() is None:
@@ -57,6 +57,13 @@ def ensure_defaults(db: Session) -> None:
     if db.query(PaymentDocDefault.id).first() is None:
         for i, (name, required) in enumerate(DEFAULT_PAYMENT_DOCS):
             db.add(PaymentDocDefault(name=name, required=required, sort_order=i))
+        db.commit()
+    from .models import RenovationCostGroup
+    from .renovation import DEFAULT_GROUPS
+    if db.query(RenovationCostGroup.id).first() is None:
+        for ws, groups in DEFAULT_GROUPS.items():
+            for i, (name, aliases) in enumerate(groups):
+                db.add(RenovationCostGroup(workstream=ws, name=name, aliases="\n".join(aliases), seq=i))
         db.commit()
 
 
