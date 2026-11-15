@@ -104,6 +104,10 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 - `pdf-report` — quy ước báo cáo PDF A4 bằng WeasyPrint.
 - `spend-module` — module Chi phí & Hợp đồng: tiền VND số nguyên, năm tài chính, phân quyền 4 mức, trạng thái suy ra,
   nhắc hạn idempotent, upload an toàn, khung danh sách → chi tiết (`spPaneOrDialog`).
+- `ui-ux-pro-max` — tra cứu style / bảng màu / font / UX guideline (bên thứ ba, `nextlevelbuilder/ui-ux-pro-max-skill`,
+  cài bằng `npx skills add`; mã nằm ở `.agents/skills/`, `.claude/skills/ui-ux-pro-max` là symlink, phiên bản ghim trong
+  `skills-lock.json`). Chạy `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<từ khoá>" --design-system`.
+  Gợi ý của skill chỉ là tham khảo: quy tắc của `design-system/ico/MASTER.md` luôn được ưu tiên.
 
 Quét bảo mật: chạy `/security-review` (thay đổi đang chờ) hoặc `/claude-security`
 (quét sâu cả repo) trong Claude Code trước khi tạo PR.

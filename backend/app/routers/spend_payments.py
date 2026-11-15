@@ -114,8 +114,8 @@ def _out(db: Session, c: Contract) -> Dict[str, Any]:
     }
 
 
-def _touch(p: ContractPayment, user: User) -> None:
-    p.row_version += 1
+def _touch(db: Session, p: ContractPayment, user: User, expected: Any = None) -> None:
+    service.bump_version(db, p, expected)
     p.updated_at, p.updated_by = dt.datetime.utcnow(), user.username
 
 
@@ -188,11 +188,9 @@ def update_payment(code: str, payment_id: int, request: Request, data: Dict[str,
     p = _payment(db, c, payment_id)
     if p.status != "pending":
         raise HTTPException(409, "Chỉ sửa được đợt đang chờ hồ sơ — mở lại đợt trước (quyền Duyệt).")
-    if int(data.get("rowVersion") or 0) != p.row_version:
-        raise HTTPException(409, "Đợt này vừa được người khác sửa — tải lại.")
+    _touch(db, p, user, data.get("rowVersion") or 0)
     before = _snapshot(p)
     _apply(db, c, p, data)
-    _touch(p, user)
     service.audit(db, user, request, "spend.payment.update", code=c.code, seq=p.seq, changes=service.diff(before, _snapshot(p)))
     db.commit()
     return _out(db, c)
@@ -357,7 +355,7 @@ def submit_payment(code: str, payment_id: int, request: Request, user: User = De
     if missing:
         raise HTTPException(409, "Còn thiếu hồ sơ bắt buộc: " + "; ".join(missing[:10]))
     p.status, p.submitted_at, p.submitted_by = "submitted", dt.datetime.utcnow(), user.username
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, "spend.payment.submit", code=c.code, seq=p.seq)
     db.commit()
     return _out(db, c)
@@ -371,7 +369,7 @@ def reopen_payment(code: str, payment_id: int, request: Request, user: User = De
     if p.status != "submitted":
         raise HTTPException(409, "Chỉ mở lại được đợt đã nộp hồ sơ, chưa thanh toán.")
     p.status, p.submitted_at, p.submitted_by = "pending", None, None
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, "spend.payment.reopen", code=c.code, seq=p.seq)
     db.commit()
     return _out(db, c)
@@ -388,7 +386,7 @@ def mark_paid(code: str, payment_id: int, request: Request, data: Dict[str, Any]
     p.paid_amount = service._money(data["paidAmount"], "Số tiền đã trả") if data.get("paidAmount") not in (None, "") else p.amount
     p.payment_ref = service._text(data.get("paymentRef"), "số chứng từ", 64)
     p.status, p.paid_by = "paid", user.username
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, "spend.payment.paid", code=c.code, seq=p.seq, paidAt=p.paid_at, paidAmount=p.paid_amount,
                   paymentRef=p.payment_ref)
     db.commit()
@@ -404,7 +402,7 @@ def undo_paid(code: str, payment_id: int, request: Request, user: User = Depends
         raise HTTPException(409, "Đợt chưa được ghi nhận thanh toán.")
     before = _snapshot(p)
     p.status, p.paid_at, p.paid_by, p.paid_amount, p.payment_ref = "submitted", None, None, None, None
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, "spend.payment.unpay", code=c.code, seq=p.seq, before=before)
     db.commit()
     return _out(db, c)

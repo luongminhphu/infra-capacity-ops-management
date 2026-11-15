@@ -1,5 +1,6 @@
 """Host sizing API: calculate, import the Dev team's VM list, download a
 template, and export the sizing result to Excel."""
+import logging
 import datetime as dt
 import io
 import unicodedata
@@ -16,6 +17,7 @@ from ..models import ReportLogo, User
 from ..security import get_current_user
 
 from ..features import require_feature
+logger = logging.getLogger("vco.routers.sizing")
 router = APIRouter(prefix="/api/sizing", tags=["sizing"], dependencies=[Depends(require_feature("sizing"))])
 
 MAX_VMS = 5000
@@ -225,8 +227,9 @@ def sizing_pdf(payload: SizingPayload, user: User = Depends(get_current_user), d
                                                    customer_contact=payload.customerContact, input_source=payload.inputSource,
                                                    input_date=payload.inputDate, out_of_scope=[x[:200] for x in (payload.outOfScope or [])],
                                                    report_options=payload.reportOptions.model_dump() if payload.reportOptions else None)
-    except Exception as exc:  # pragma: no cover - surfaced to the UI
-        raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
+    except Exception as exc:  # noqa: BLE001 — details go to the log, not to the client
+        logger.exception("Sizing PDF render failed")
+        raise HTTPException(status_code=500, detail="Không thể tạo PDF. Vui lòng thử lại hoặc báo quản trị viên kiểm tra log.") from exc
     label = _ascii_slug(params.environment, fallback="")
     kind = ("tan_dung_hien_huu" if payload.mode == "reuse" else "trang_bi_moi") + ("_rut_gon" if payload.detail == "brief" else "")
     filename = f"ICO_De_xuat_cau_hinh_may_chu_{(label + '_') if label else ''}{kind}_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"

@@ -456,8 +456,9 @@ vCenter / cluster hiện có. Gồm 5 phần:
 
 API: `/api/licensing/clusters`, `/inventory`, `/overrides`, `/rules` (+`/versions`, `/activate`, `/verify`),
 `/entitlements`, `/assess`, `/assessments` (+`/{id}/recompute`), `/whatif`, `/report/pdf`
-(`?clusters=vc::cluster,...` hoặc `?snapshot=<id>`). Tất cả yêu cầu đăng nhập
-(ứng dụng hiện có một vai trò; chưa có phân quyền chi tiết theo chức năng).
+(`?clusters=vc::cluster,...` hoặc `?snapshot=<id>`). Tất cả yêu cầu đăng nhập. Tạo version / kích hoạt /
+tắt rule và thêm / sửa / xoá entitlement chỉ dành cho **quản trị viên**; link nguồn của rule phải là
+`http://` hoặc `https://`.
 
 ### Inventory — lọc VM theo cluster & xuất Excel
 
@@ -931,12 +932,19 @@ sửa ConfigMap / Secret hay redeploy:
   đăng xuất — chỉ đọc.
 - Mật khẩu / API key **chỉ ghi**: lưu mã hoá (Fernet) bằng `SECRETS_KEY`, không bao giờ trả về trình
   duyệt; để trống khi sửa = giữ nguyên. Mọi thay đổi được ghi nhật ký (không kèm mật khẩu).
+  **Kiểm tra kết nối** chỉ dùng lại mật khẩu đã lưu khi host / port / domain giữ nguyên; đổi một trong
+  các trường này thì phải nhập lại mật khẩu / API key.
 - Thay đổi có hiệu lực ở lần đồng bộ kế tiếp (lịch đồng bộ đọc lại danh sách nguồn mỗi chu kỳ). Tắt hoặc
   xoá một nguồn chỉ dừng đồng bộ; dữ liệu lịch sử vẫn giữ.
 
 **`SECRETS_KEY`**: thêm vào Secret `ico-secrets` (`openssl rand -hex 32`) trước khi nhập mật khẩu. Khi chưa
 đặt, app dùng khoá suy ra từ `JWT_SECRET` và hiện cảnh báo; đổi khoá nào thì các mật khẩu đã lưu phải nhập
 lại (trang Cài đặt báo "không giải mã được").
+
+**`JWT_SECRET`** bắt buộc là chuỗi ngẫu nhiên dài (`openssl rand -hex 32`): app từ chối khởi động khi giá
+trị trống, ngắn hơn 16 ký tự hoặc trùng giá trị mẫu trong `.env.example` / `02-secret.example.yaml`.
+**`CORS_ORIGINS`** mặc định để trống (frontend cùng origin); nếu đặt `*` thì cookie phiên không bao giờ
+được gửi kèm request khác origin.
 
 **Cấu hình bằng biến môi trường** (`VCENTER_i_*`, `NETBACKUP_i_*`) vẫn hoạt động như cũ và hiện trong
 bảng với nhãn "Biến môi trường". Nút **Chuyển cấu hình biến môi trường vào giao diện** sao chép chúng (kèm
@@ -1242,12 +1250,43 @@ cho mỗi loại đối tượng thay vì một lời gọi cho từng thuộc t
 vCenter từ chối); thời gian idle / tắt máy của VM tính từ snapshot trước trong một truy vấn; snapshot ghi
 bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job không đổi không bị ghi lại.
 
+**Độ tin cậy đồng bộ**:
+- Mỗi lời gọi tới vCenter (kể cả bước dò phiên bản API trước khi đăng nhập) chờ tối đa
+  `VCENTER_TIMEOUT_SECONDS` giây (mặc định 120; riêng từng nguồn: `VCENTER_i_TIMEOUT`). Quá hạn →
+  lỗi "vCenter '…' không phản hồi trong N giây". Lỗi mạng / timeout không còn chuyển sang cách đọc
+  từng object (chỉ chuyển khi vCenter từ chối yêu cầu đọc theo lô).
+- Mỗi nguồn có hạn tổng `SYNC_SOURCE_DEADLINE_SECONDS` (mặc định 1800) trong một lượt poll / "Sync all":
+  quá hạn thì nguồn đó báo lỗi, các nguồn khác và cảnh báo Discord 90 % vẫn chạy.
+- Một nguồn chỉ được đồng bộ một luồng tại một thời điểm (dùng chung giữa lịch poll và nút "Đồng bộ
+  ngay"). Bấm khi nguồn đang đồng bộ → HTTP 409 "Đang đồng bộ nguồn này, thử lại sau."; lịch poll bỏ
+  qua nguồn đó ở lượt này. Khoá nằm trong tiến trình — đúng khi chạy 1 replica, `strategy: Recreate`.
+- Lần đồng bộ NetBackup chạm giới hạn 300 trang job (30 000 job) ghi cảnh báo vào lượt đồng bộ
+  (hiện ở cột cảnh báo của máy chủ backup) và log WARNING.
+- Cảnh báo Discord: nếu module capacity / backup lỗi khi tính, cảnh báo của module đó giữ nguyên (không
+  gửi "Đã hết" sai). Trạng thái gửi theo từng kênh: kênh lỗi sẽ nhận lại ở chu kỳ sau.
+- Kiểm tra sức khoẻ: `/api/health` (liveness, không I/O) và `/api/health/ready` (readiness: DB trả lời
+  `SELECT 1` và vòng poll còn nhịp — trễ quá 3 × chu kỳ + 2 × hạn tổng một nguồn + 2 phút thì 503). k8s dùng
+  `/api/health/ready` cho readinessProbe.
+
 - Mỗi lần đồng bộ (thủ công qua "Đồng bộ ngay"/"Sync all", hoặc tự động theo
   `POLL_INTERVAL_MINUTES`, mặc định 60 phút) tạo một `SnapshotRun` mới trong Postgres — đây là
   nguồn dữ liệu cho biểu đồ xu hướng (Executive View), panel "Biến động tài nguyên theo thời
   gian" (3/6/12 tháng) và dự báo "còn bao lâu thì hết công suất".
 - Import CSV/JSON thủ công cũng được lưu thành `SnapshotRun` riêng (nguồn `import`) nên vẫn góp
   phần vào lịch sử xu hướng.
+- Mỗi snapshot (poll live, import, `seed_history`) tính tổng hợp cluster và finding bằng **cùng bộ ngưỡng
+  với dashboard**: biến môi trường cộng giá trị admin đã lưu ở Cài đặt (`ht_factor`, overcommit tối đa,
+  số ngày idle, tính storage). Đổi ngưỡng chỉ ảnh hưởng snapshot **từ lần poll sau**, lịch sử cũ giữ
+  nguyên số đã chốt. Bản trước 15/11/2026 bỏ qua giá trị đã lưu khi poll, nên nếu đã đổi `ht_factor`
+  thì có thể thấy bước nhảy trên biểu đồ Xu hướng tại mốc nâng cấp.
+- Biểu đồ xu hướng và dự báo "còn bao lâu thì hết công suất" (`/api/dashboard/trend`) lấy **một snapshot mỗi
+  ngày cho mỗi cluster** (lần poll thành công cuối ngày), giống trang Xu hướng & biến động. Bản trước 16/11/2026
+  cộng mọi lần poll trong ngày (cả đồng bộ tay, import, run lỗi), nên tổng bị phóng to theo số lần poll và dự báo lệch.
+- **Giữ lịch sử 36 tháng** (`SNAPSHOT_RETENTION_MONTHS`, mặc định 36; `0` = giữ hết): mỗi ngày một lần,
+  sau lượt poll, app xoá các `SnapshotRun` (kèm host, VM, tổng hợp cluster, finding) bắt đầu trước mốc
+  36 tháng. Lượt thành công mới nhất của mỗi vCenter (và của import) luôn được giữ, kể cả khi đã cũ.
+  Xoá theo lô 20 run, mỗi lô một transaction, nên lần dọn đầu trên DB lớn không khoá bảng lâu. Số dòng
+  đã xoá ghi trong log `vco.retention`. Báo cáo xu hướng dài hơn 36 tháng sẽ không còn dữ liệu cũ.
 - `lastActivityDays`/`powerOffDays` của VM được tính dựa trên **lịch sử polling của chính ứng
   dụng** (vCenter API không trả trực tiếp "đã tắt bao lâu") — nghĩa là ngay sau khi triển khai lần
   đầu, các chỉ số này sẽ cần vài chu kỳ polling để chính xác dần theo thời gian thực tế.
@@ -1410,6 +1449,12 @@ thay cho biểu tượng mặc định. Tách biệt với logo trang bìa báo 
 bị từ chối vì logo hiển thị cho cả người chưa đăng nhập.
 
 Chỉ **quản trị viên** được thay đổi hai mục này (xem "Quản trị viên" bên dưới).
+
+**Cấu hình dùng chung chỉ quản trị viên được sửa**: ngưỡng đánh giá capacity (overcommit, HT, VM idle,
+bật / tắt Storage), logo báo cáo PDF, phạm vi / lịch thủ công / ngưỡng giám sát backup, rule license và
+entitlement. Người dùng khác vẫn xem được, vẫn bấm **Đồng bộ**, và vẫn thử ngưỡng trên màn hình của mình
+(không lưu). Báo cáo PDF chỉ nhúng ảnh dạng `data:`; liên kết `http(s)://` / `file://` trong logo SVG bị
+bỏ qua khi render.
 
 ## AI / MCP server — AI phân tích log & hiệu suất của app (chỉ đọc)
 

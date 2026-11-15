@@ -15,7 +15,8 @@ const appState = {
   vmTableSearch: '',
   vmStatusFilter: 'all',
   vmClusterFilter: 'all',
-  policy: { idleDays: 30, cpuWarn: 50, cpuHigh: 80, ramWarn: 50, ramHigh: 80, dsWarn: 70, dsHigh: 85, dsCrit: 95, cpuOvercommitMax: 6, ramOvercommitMax: 1.0, htFactor: 2, includeStorage: false },
+  policy: { idleDays: 30, cpuWarn: 50, cpuHigh: 80, ramWarn: 50, ramHigh: 80, dsWarn: 80, dsHigh: 90, dsCrit: 95,   // datastore = capacity.build_datastore_rows (80 / 90)
+  cpuOvercommitMax: 6, ramOvercommitMax: 1.0, htFactor: 2, includeStorage: false },
   charts: {},
   simHistory: [],
   whatif: { cluster: null, tab: 'addHost', drafts: {} },
