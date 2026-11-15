@@ -85,6 +85,8 @@ const NAV_GROUPS = [
       desc: 'Hợp đồng gắn Opex / Capex, version theo từng bên chỉnh sửa, so sánh, chốt Final, bản ký và lịch xoá version cũ.', scope: [] },
     { id: 'spend-vendors', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'vendors', icon: 'building-2', label: 'Nhà cung cấp', title: 'Nhà cung cấp',
       desc: 'Hồ sơ nhà cung cấp: tên viết tắt dùng thống nhất trong tài liệu, tên gọi khác, liên hệ, lịch sử báo giá / hợp đồng / chi phí.', scope: [] },
+    { id: 'bom', feature: 'bom', view: 'bom', icon: 'list-tree', label: 'Chuẩn hoá BOM', title: 'Chuẩn hoá BOM',
+      desc: 'Tải BOM thô (Dell Solutions Configurator, Cisco CCW, HPE, Excel thường) → xuất Excel chuyên nghiệp theo đầu mục, có tóm tắt cấu hình và giá.', scope: [] },
     { id: 'spend-quotes', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'quotes', icon: 'scale', label: 'So sánh báo giá', title: 'So sánh báo giá',
       desc: 'Gói nhiều báo giá: đọc file Excel / Word / PDF scan, kiểm tra công thức tiền, so sánh từng hạng mục, phiếu đánh giá NCC, chọn NCC.', scope: [] },
     { id: 'spend-renovations', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'renovations', icon: 'building', label: 'Cải tạo văn phòng', title: 'Cải tạo văn phòng — chi phí IT',
@@ -140,6 +142,7 @@ const MENU = [
       ['spend-overview', '', 'Tổng quan ngân sách'], ['spend-opex', 'opex', 'Opex'], ['spend-capex', 'capex', 'Capex']] },
     { key: 'procure', label: 'Mua sắm', icon: 'shopping-cart', tabs: [
       ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
+    { key: 'bom', label: 'Chuẩn hoá BOM', icon: 'list-tree', tabs: [['bom', '', 'Chuẩn hoá BOM']] },
     { key: 'contracts', label: 'Hợp đồng & thanh toán', icon: 'scroll-text', tabs: [['spend-contracts', '', 'Hợp đồng'], ['spend-payments', 'payments', 'Đợt thanh toán']] },
     { key: 'docs', label: 'Tài liệu', icon: 'file-text', tabs: [['spend-proposals', '', 'Tờ trình'], ['reports', 'reports', 'Báo cáo'], ['report-archive', 'archive', 'Kho báo cáo']] },
   ] },

@@ -26,6 +26,7 @@ Menu chia theo **công việc**, không theo nguồn dữ liệu: **Vận hành*
 | | **License** | Đánh giá & quyền sử dụng · Snapshot |
 | | **Ngân sách & chi phí** | Tổng quan ngân sách · Opex · Capex |
 | | **Mua sắm** | Nhà cung cấp · So sánh báo giá · Cải tạo văn phòng |
+| | **Chuẩn hoá BOM** | Tải BOM thô → Excel chuyên nghiệp theo đầu mục |
 | | **Hợp đồng & thanh toán** | Hợp đồng · Đợt thanh toán |
 | | **Tài liệu** | Tờ trình · Báo cáo (Trung tâm báo cáo) |
 | Hệ thống | **Cài đặt** | Tiêu chí & ngưỡng · Nguồn dữ liệu · Backup (nguồn & ngưỡng) · Tính năng · Chi phí & nhắc hạn · AI & MCP · Thương hiệu |
@@ -127,6 +128,23 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
 - **Tài liệu → Kho báo cáo**: tick *Lưu vào kho* ở Trung tâm báo cáo, mỗi PDF xuất ra (Capacity, Backup, License, Sizing,
   Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Mỗi người giữ tối đa 100 bản (bản cũ nhất của chính
   người đó bị thay), 400 ngày, 25 MB mỗi bản; cùng nội dung không lưu hai lần. Chỉ các route báo cáo trong danh sách được lưu. Báo cáo chi phí chỉ người có vai trò Chi phí xem được; người lưu hoặc admin xoá được.
+
+**Chuẩn hoá BOM (Quản lý thông tin)** — tải file Excel BOM thô, xuất một file Excel trình bày chuẩn, giống nhau cho mọi hãng:
+- Nhận ra **Dell Solutions Configurator** (dòng sản phẩm + option, giá option tính cho 1 máy), **Cisco CCW estimate**
+  (danh sách phẳng — thiết bị chính bắt đầu cấu hình mới — hoặc có số dòng 1.0 / 1.1; giá net, thời hạn dịch vụ),
+  **HPE Aruba IRIS** (Line# 1.0 / 1.1, dòng "INCLUDED" giá incl. được ẩn), HPE One Config và bảng kê thông thường.
+  Số lượng linh kiện của Cisco / HPE là tổng cho mọi thiết bị; hộp thông số quy về 1 thiết bị. Thiết bị giống hệt nhau
+  ở nhiều dòng được gộp (cộng số lượng); cùng model khác option được đánh số "(cấu hình 1)", "(cấu hình 2)".
+- Gom theo đầu mục: Máy chủ, Thiết bị mạng, Tường lửa, Lưu trữ, SAN Switch, Cân bằng tải, Sao lưu, Phụ kiện (module quang,
+  cáp), Phần mềm & License, Dịch vụ.
+  Sửa được tên, đầu mục, số lượng và từng thông số trước khi xuất.
+- Mỗi cấu hình có **hộp thông số cho 1 thiết bị**: máy chủ (model, CPU, RAM tổng, ổ đĩa, cổng mạng, cổng HBA, module quang,
+  nguồn, bảo hành); switch (cổng, tốc độ, module quang, license Basic / Advanced / DNA…); firewall (throughput, cổng,
+  subscription, HA); storage (bộ điều khiển, ổ đĩa, dung lượng thô, cổng host); SAN switch; load balancer — kèm **giá 1 thiết bị,
+  thành tiền theo số lượng và giá niêm yết trên file gốc** để đối chiếu.
+- File xuất: sheet **BOM** (mục La Mã, bảng hàng có công thức Thành tiền, cộng từng cấu hình / đầu mục, tổng, VAT tuỳ chọn),
+  **Tổng hợp** (theo đầu mục và cấu hình, tỷ trọng) và **Dữ liệu gốc**. Dòng "No …" / "NONE" / Factory Integrated giá 0 được ẩn.
+- Không lưu file trên máy chủ. Tính năng bật / tắt ở Cài đặt → Tính năng (`bom`).
 
 Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác
