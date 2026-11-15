@@ -4,7 +4,7 @@
    Comparison and attribution are computed by the backend (spend/contracts.py).
    ========================================================= */
 
-const ctState = { list: null, filter: { status: '', q: '' }, bound: false, error: null };
+const ctState = { list: null, filter: { status: '', q: '' }, bound: false, error: null, selected: null };
 const CT_STATUS = { draft: ['na', 'Nháp'], negotiating: ['warn', 'Đang đàm phán'], final: ['ok', 'Đã chốt (Final)'], signed: ['ok', 'Đã ký'] };
 const CT_PARTY = { legal: 'Legal (nội bộ)', finance: 'Finance (nội bộ)', partner: 'Đối tác' };
 
@@ -17,8 +17,8 @@ async function ctLoad() {
 
 async function renderContractsPage() {
   await ctLoad();
-  ctRender();
   ctBind();
+  await ctShow();
 }
 
 function ctPurgeText(c) {
@@ -28,33 +28,57 @@ function ctPurgeText(c) {
   return '';
 }
 
+const CT_VIEWS = [['', 'Tất cả'], ['draft', 'Nháp'], ['negotiating', 'Đang đàm phán'], ['final', 'Đã chốt'], ['signed', 'Đã ký']];
+
+/* Hợp đồng as list → detail (pages/danh-sach.md): views by status, grouped draft → negotiating → final → signed;
+   the detail (versions, payments, compare, finalize) opens beside the list on wide screens, in the dialog otherwise. */
 function ctRender() {
   const f = ctState.filter, list = ctState.list || [];
-  const rows = list.map(c => `<tr data-ct-code="${esc(c.code)}" class="sp-row" tabindex="0">
-      <td><b>${esc(c.code)}</b></td>
-      <td class="wrap">${esc(c.title)}<span class="muted-sub">${c.linkKind === 'opex' ? 'Opex' : 'Capex'} ${esc(c.linkCode || '')} · ${esc(c.linkTitle || '')}</span></td>
-      <td class="wrap">${esc(c.vendorName || '—')}</td>
-      <td>${spPill(...(CT_STATUS[c.status] || ['na', c.statusLabel]))}</td>
-      <td>${c.currentVersion ? `v${esc(c.currentVersion)}` : '—'}${c.finalVersion ? `<span class="muted-sub">Final: v${esc(c.finalVersion)}</span>` : ''}</td>
-      <td class="wrap"><span class="muted-sub bk-wrap">${esc(ctPurgeText(c))}</span></td>
-      <td>${esc(spTime(c.updatedAt))}<span class="muted-sub">${esc(c.updatedBy || '')}</span></td></tr>`).join('');
+  const row = (c) => `<li class="sp-li" role="option" id="ct-opt-${esc(c.code)}" data-ct-code="${esc(c.code)}" aria-selected="${c.code === ctState.selected}">
+      <span class="hm-lv lv-${esc((CT_STATUS[c.status] || ['na'])[0])}" aria-hidden="true"></span>
+      <span class="sp-li-t">${esc(c.title)}</span>
+      <span class="sp-li-r"><b>${c.currentVersion ? `v${esc(c.currentVersion)}` : 'chưa có bản'}</b>${esc(spTime(c.updatedAt))}</span>
+      <span class="sp-li-m">${esc(c.code)} · ${esc(c.vendorName || 'chưa có NCC')} · ${c.linkKind === 'opex' ? 'Opex' : 'Capex'} ${esc(c.linkCode || '')}${ctPurgeText(c) ? ` · ${esc(ctPurgeText(c))}` : ''}</span>
+      <span class="sr-only">${esc((CT_STATUS[c.status] || ['', c.statusLabel])[1])}</span></li>`;
+  const groups = Object.keys(CT_STATUS).map(k => {
+    const g = list.filter(c => c.status === k);
+    return g.length ? `<li class="hm-group" role="presentation"><span>${esc(CT_STATUS[k][1])}</span><span>${g.length}</span></li>${g.map(row).join('')}` : '';
+  }).join('');
+  const cnt = (k) => list.filter(c => c.status === k).length;
   $('#spendMount').innerHTML = `
-    <section class="table-card">
-      <div class="panel-head">
-        <div><div class="panel-title">Hợp đồng</div><p class="panel-sub">Mỗi hợp đồng gắn với một khoản Opex hoặc một dự án Capex. Mỗi lần upload tạo một version mới, không sửa được; chỉ một nhánh version.</p></div>
-        <div class="panel-toolbar">${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-ct-new><i data-lucide="plus"></i>Thêm hợp đồng</button>' : ''}</div>
+    <div class="kpi-strip-wrap">${uiKpiStrip([
+      { label: 'Đang đàm phán', value: String(cnt('negotiating')), sub: 'Còn nhận version mới' },
+      { label: 'Nháp', value: String(cnt('draft')), sub: 'Chưa chuyển sang đàm phán' },
+      { label: 'Đã chốt, chờ ký', value: String(cnt('final')), sub: 'Cần upload bản ký (scan PDF)' },
+      { label: 'Đã ký', value: String(cnt('signed')), sub: f.status || f.q ? 'Theo bộ lọc hiện tại' : 'Tất cả hợp đồng' },
+    ])}</div>
+    <section class="hm-split panel sp-split" aria-label="Danh sách hợp đồng">
+      <div class="hm-list">
+        <div class="hm-toolbar">
+          <div class="hm-views" role="group" aria-label="Chế độ xem">${CT_VIEWS.map(([v, t]) => `<button class="hm-view" type="button" data-ct-view="${v}" aria-pressed="${f.status === v}">${esc(t)}</button>`).join('')}</div>
+          ${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-ct-new><i data-lucide="plus"></i>Thêm hợp đồng</button>' : ''}
+        </div>
+        <div class="sp-search-row">
+          <label class="sr-only" for="ctQ">Tìm hợp đồng</label>
+          <input id="ctQ" type="search" data-ct-filter="q" value="${esc(f.q)}" placeholder="Mã hoặc tên hợp đồng">
+        </div>
+        ${ctState.error ? `<p class="criteria-status error">${esc(ctState.error)}</p>` : ''}
+        ${groups ? `<ul class="hm-rows" id="ctList" role="listbox" tabindex="0" aria-label="Hợp đồng, nhóm theo trạng thái">${groups}</ul>`
+          : uiEmpty(spCan('editor') ? 'Chưa có hợp đồng khớp bộ lọc. Bấm “Thêm hợp đồng”, hoặc tạo từ một khoản Opex.' : 'Chưa có hợp đồng khớp bộ lọc.')}
+        <div class="hm-hint"><span>${list.length} hợp đồng</span><span><kbd>J</kbd> <kbd>K</kbd> chuyển</span>
+          <span>Mỗi lần upload tạo một version mới, không sửa được.</span></div>
       </div>
-      <div class="sp-filters">
-        <label class="field"><span>Trạng thái</span><select data-ct-filter="status">${spOpt('', 'Tất cả', f.status)}${Object.entries(CT_STATUS).map(([k, [, t]]) => spOpt(k, t, f.status)).join('')}</select></label>
-        <label class="field sp-search"><span>Tìm</span><input type="text" data-ct-filter="q" value="${esc(f.q)}" placeholder="Mã hoặc tên hợp đồng"></label>
-      </div>
-      ${ctState.error ? `<p class="criteria-status error">${esc(ctState.error)}</p>` : ''}
-      <div class="table-scroll"><table class="data-table sp-table">
-        <thead><tr><th>Mã</th><th>Hợp đồng</th><th>Nhà cung cấp</th><th>Trạng thái</th><th>Version</th><th>Lưu trữ</th><th>Cập nhật</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7" class="empty-note">${spCan('editor') ? 'Chưa có hợp đồng — bấm “Thêm hợp đồng”.' : 'Chưa có hợp đồng.'}</td></tr>`}</tbody>
-      </table></div>
+      <div class="hm-detail sp-detail" id="ctDetail" aria-live="polite" aria-labelledby="spPaneTitle">${list.length ? uiNote('Đang mở…') : uiEmpty('Chọn một hợp đồng ở danh sách bên trái.')}</div>
     </section>`;
   refreshIcons();
+}
+
+/* Render the list and open the selected (or first) contract in the pane. */
+async function ctShow() {
+  ctRender();
+  const list = ctState.list || [];
+  if (!list.length || !matchMedia('(min-width: 1024px)').matches) return;
+  await ctOpenDetail(list.some(c => c.code === ctState.selected) ? ctState.selected : list[0].code);
 }
 
 let ctSearchTimer = null;
@@ -65,30 +89,34 @@ function ctBind() {
   mount.addEventListener('change', async (e) => {
     const el = e.target.closest('[data-ct-filter]');
     if (!el || el.dataset.ctFilter === 'q') return;
-    ctState.filter[el.dataset.ctFilter] = el.value; await ctLoad(); ctRender();
+    ctState.filter[el.dataset.ctFilter] = el.value; await ctLoad(); await ctShow();
   });
   mount.addEventListener('input', (e) => {
     const el = e.target.closest('[data-ct-filter="q"]');
     if (!el) return;
     clearTimeout(ctSearchTimer);
     ctSearchTimer = setTimeout(async () => {
-      ctState.filter.q = el.value.trim(); await ctLoad(); ctRender();
+      ctState.filter.q = el.value.trim(); await ctLoad(); await ctShow();
       const box = $('[data-ct-filter="q"]'); if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
     }, 350);
   });
-  mount.addEventListener('click', (e) => {
+  mount.addEventListener('click', async (e) => {
+    if (spState.sub !== 'contracts') return;
+    const view = e.target.closest('[data-ct-view]');
+    if (view) { ctState.filter.status = view.dataset.ctView; await ctLoad(); return ctShow(); }
     const row = e.target.closest('[data-ct-code]');
     if (row) return ctOpenDetail(row.dataset.ctCode);
     if (e.target.closest('[data-ct-new]')) return ctOpenCreate();
   });
   mount.addEventListener('keydown', (e) => {
-    const row = e.target.closest('[data-ct-code]');
-    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ctOpenDetail(row.dataset.ctCode); }
+    if (spState.sub !== 'contracts' || !e.target.closest('#ctList')) return;
+    spListKeys(e, 'ctCode', ctState.selected, (code, focus) => ctOpenDetail(code, focus));
   });
 }
 
 async function ctRefresh() {
   if (appState.view === 'spend' && spState.sub === 'contracts') { await ctLoad(); ctRender(); }
+  else if (appState.view === 'spend' && spState.sub === 'payments' && typeof renderPaymentsPage === 'function') await renderPaymentsPage(true);
 }
 
 /* ---------- Create ---------- */
@@ -115,13 +143,13 @@ async function ctOpenCreate(prefill) {
     const fd = Object.fromEntries(new FormData($('#ctForm')).entries());
     const payload = { title: fd.title, note: fd.note, vendorName: fd.vendorName || undefined };
     payload[fd.kind === 'capex' ? 'capexCode' : 'opexCode'] = fd.code.trim();
-    try { const c = await apiRequest('/spend/contracts', { method: 'POST', body: JSON.stringify(payload) }); await ctRefresh(); ctOpenDetail(c.code); }
+    try { const c = await apiRequest('/spend/contracts', { method: 'POST', body: JSON.stringify(payload) }); $('#spDialog').close(); ctState.selected = c.code; await ctRefresh(); ctOpenDetail(c.code); }
     catch (err) { spMsg(err.message); }
   });
 }
 
 /* ---------- Detail ---------- */
-async function ctOpenDetail(code) {
+async function ctOpenDetail(code, focus) {
   let c;
   try { await spLoadMeta(); c = await apiRequest(`/spend/contracts/${encodeURIComponent(code)}`); }
   catch (err) { uiAlert(err.message); return; }
@@ -190,11 +218,13 @@ async function ctOpenDetail(code) {
     '<span class="src-spacer"></span>',
     c.status === 'draft' && spCan('editor') && c.currentVersion ? btn('id="ctNegotiate"', 'Chuyển sang đàm phán') : '',
   ].join('');
-  spDialog(`${esc(c.code)} — ${esc(c.title)}`, body, actions);
+  ctState.selected = c.code;
+  const host = spPaneOrDialog('#ctDetail', esc(c.title), c.code, body, actions);
+  spListSelect('#ctList', 'ctCode', c.code, focus);
   if (typeof payRender === 'function') payRender(c.code);
   const reopen = async () => { await ctRefresh(); await ctOpenDetail(c.code); };
   const post = (path, payload) => apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}/${path}`, { method: 'POST', body: JSON.stringify(payload || {}) });
-  $('#spDialogBody').onclick = (e) => {
+  host.onclick = (e) => {
     const go = e.target.closest('[data-sp-goto]');
     if (go) return spOpenDetail(go.dataset.spGoto);
     const cpx = e.target.closest('[data-cpx-goto]');
@@ -209,7 +239,7 @@ async function ctOpenDetail(code) {
     try { await apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}/versions`, { method: 'POST', body: fd }); await reopen(); spMsg('Đã upload version mới.', true); }
     catch (err) { spMsg(err.message); }
   });
-  if (typeof aiGate === 'function') aiGate($('#spDialog'));
+  if (typeof aiGate === 'function') aiGate(host);
   spOnce('#ctCompare', async () => {
     try {
       const d = await apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}/diff?from=${encodeURIComponent($('#ctFrom').value)}&to=${encodeURIComponent($('#ctTo').value)}`);
@@ -225,7 +255,12 @@ async function ctOpenDetail(code) {
   spOnce('#ctPurgeResume', async () => { try { await post('purge/resume'); await reopen(); } catch (err) { spMsg(err.message); } });
   spOnce('#ctDelete', async () => {
     if (!await uiConfirm(`Xoá vĩnh viễn ${c.code} và toàn bộ file version? Thao tác được ghi nhật ký.`)) return;
-    try { await apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}`, { method: 'DELETE' }); $('#spDialog').close(); ctRefresh(); }
+    try {
+      await apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}`, { method: 'DELETE' });
+      if ($('#spDialog').open) $('#spDialog').close();
+      ctState.selected = null;
+      if (appState.view === 'spend' && spState.sub === 'contracts') { await ctLoad(); await ctShow(); } else await ctRefresh();
+    }
     catch (err) { spMsg(err.message); }
   });
   const signed = $('#ctSigned');
