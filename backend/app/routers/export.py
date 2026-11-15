@@ -10,12 +10,23 @@ from sqlalchemy.orm import Session
 from .. import capacity, data_access
 from ..config import get_settings
 from ..database import get_db
+from ..excel_style import csv_safe, guard_formula
 from ..models import User
 from ..security import get_current_user
 
 from ..scope import scope_keys as _scope_keys
 
 router = APIRouter(prefix="/api/export", tags=["export"])
+
+
+class _SafeCsvWriter:
+    """csv.writer whose text cells cannot start a formula (VM / host names come from vCenter)."""
+
+    def __init__(self, buf):
+        self._w = csv.writer(buf)
+
+    def writerow(self, row):
+        self._w.writerow([csv_safe(v) for v in row])
 
 
 
@@ -35,7 +46,7 @@ def export_csv(
     if type == "hosts":
         rows = capacity.build_host_rows(host_rows, vm_rows, policy)
         fields = ["cluster", "host", "cores", "ramGB", "vcpuUsed", "ramUsedGB", "cpuPct", "ramPct", "overall"]
-        writer = csv.writer(buf)
+        writer = _SafeCsvWriter(buf)
         writer.writerow(fields)
         for r in rows:
             writer.writerow([r.get("cluster"), r.get("host"), r.get("cores"), r.get("ramGB"),
@@ -43,14 +54,14 @@ def export_csv(
                               r.get("overall", {}).get("text")])
     elif type == "vms":
         fields = ["cluster", "host", "vm", "powerState", "vcpu", "ramGB", "diskProvGB", "diskUsedGB", "datastore"]
-        writer = csv.writer(buf)
+        writer = _SafeCsvWriter(buf)
         writer.writerow(fields)
         for v in vm_rows:
             writer.writerow([v.get(f) for f in fields])
     else:
         findings = capacity.build_compliance_findings(host_rows, vm_rows, policy)
         fields = ["severity", "type", "typeLabel", "entity", "cluster", "metric", "recommendation"]
-        writer = csv.writer(buf)
+        writer = _SafeCsvWriter(buf)
         writer.writerow(fields)
         for f in findings:
             writer.writerow([f.get(k) for k in fields])
@@ -123,6 +134,7 @@ def export_xlsx(payload: XlsxPayload, user: User = Depends(get_current_user)):
         ws = wb.create_sheet(_safe_sheet_name(sheet.name))
         ws.append([c.label for c in sheet.columns])
         for cell in ws[1]:
+            guard_formula(cell)
             cell.font = head_font
             cell.fill = head_fill
             cell.alignment = Alignment(vertical="center", wrap_text=True)
@@ -134,6 +146,8 @@ def export_xlsx(payload: XlsxPayload, user: User = Depends(get_current_user)):
                     v = None  # NaN / Infinity → empty cell
                 values.append(v)
             ws.append(values)
+            for cell in ws[ws.max_row]:
+                guard_formula(cell)  # every value comes from the browser: never a formula
         widths = []
         for idx, c in enumerate(sheet.columns, 1):
             fmt = number_formats.get(c.fmt or "")

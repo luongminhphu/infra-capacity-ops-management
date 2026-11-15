@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from .config import NetBackupConfig, Settings, VCenterConfig
+from .config import NetBackupConfig, Settings, VCenterConfig, _positive_int
 from .models import DataSource
 from . import secrets_box
 
@@ -63,7 +63,8 @@ def to_config(row: DataSource):
     if row.kind == "vcenter":
         return VCenterConfig(key=row.key, name=row.name, host=row.host, port=row.port, username=row.username or "",
                              password=_secret(row, "password_enc"), verify_ssl=bool(row.verify_ssl), demo=bool(row.demo),
-                             ca_pem=row.ca_pem or "", origin="ui")
+                             ca_pem=row.ca_pem or "", origin="ui",
+                             timeout=_positive_int(_opts(row).get("timeout")))
     o = _opts(row)
     return NetBackupConfig(key=row.key, name=row.name, host=row.host, port=row.port,
                            api_key=_secret(row, "api_key_enc"), username=row.username or "",
