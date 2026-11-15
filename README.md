@@ -21,7 +21,7 @@ mà trang đó dùng (vCenter / cluster / host).
 | Quy hoạch | **What-if capacity**, **Sizing máy chủ**, **Quy hoạch tài nguyên** | What-if simulation; sizing host vật lý; form giả định + PDF quy hoạch (trước là dropdown trong header). |
 | License | **Đánh giá license**, **What-if license**, **Snapshot license** | Ba tab còn lại của License & Inventory cũ, kèm thanh chọn phạm vi cluster cho đợt mua. |
 | Backup | **Tổng quan backup**, **Client & RPO**, **Job backup**, **Độ phủ VM**, **Storage & policy**, **Nguồn & ngưỡng** | Giám sát Veritas NetBackup qua REST API chỉ đọc — xem mục *Backup* bên dưới. |
-| Chi phí & Hợp đồng | **Opex** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
+| Chi phí & Hợp đồng | **Opex**, **Capex** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
 | Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi báo cáo xuất tập trung, nhóm theo chức năng (lọc nhanh bằng chip): **Capacity & vận hành** (PDF Vận hành / Kỹ thuật, Excel host & VM, CSV tổng hợp), **Quy hoạch & Sizing** (PDF quy hoạch, Sizing PDF đầy đủ / rút gọn / Excel, mẫu nhập liệu), **License & Inventory** (PDF tổng quan — hiện tại hoặc từ snapshot, Excel đánh giá / ESXi / hệ điều hành), **Backup** (PDF hiện trạng — có / không phụ lục, Excel thống kê; chọn server và kỳ). Mỗi báo cáo có “Tuỳ chọn” riêng (Storage, cửa sổ xu hướng, giả định quy hoạch, hướng đề xuất sizing…) được ghi nhớ; “Chọn nhiều” để xuất nhiều báo cáo một lần. Khung bên phải: phạm vi cluster / host, loại finding, logo. Nút xuất ở từng trang vẫn giữ. |
 | | **Cài đặt** | Tiêu chí đánh giá (Storage), ngưỡng (idle, overcommit, HT) có nút **Lưu ngưỡng** lên server, trạng thái vCenter, import CSV/JSON, sample data, reset. |
 
@@ -514,7 +514,24 @@ nhập sau). Tài khoản cục bộ do admin gán ở Cài đặt → Chi phí 
 **Lưu file**: volume `/data/files` — PVC `ico-files` (`k8s/05-files-pvc.yaml`, Longhorn 10Gi, nhớ đưa vào kế
 hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dưới tên ngẫu nhiên; tên gốc chỉ là metadata.
 
-**Các giai đoạn sau**: GĐ2 Capex và tự sinh Opex dự kiến năm sau · GĐ3 báo cáo ngân sách PDF / Excel ·
+**Giai đoạn 2 — Capex và tự sinh Opex dự kiến (đã có)**
+
+- **Dự án Capex** mã `CPX-<năm tài chính>-<số>`, gồm nhiều hạng mục (phần cứng, license, dịch vụ triển khai…).
+  Mỗi hạng mục có số tiền, số năm bảo hành / license / support đi kèm, ngày bắt đầu (trống = ngày go-live
+  của dự án), % gia hạn (trống = % của loại chi phí, cấu hình ở Cài đặt) hoặc số tiền gia hạn nhập tay.
+- **Trạng thái**: Nháp → Đã duyệt → Đang triển khai → Đã đóng. Duyệt / trả về nháp / mở lại cần quyền Duyệt.
+  Dự án **nháp chỉ xem trước** Opex, không đưa vào ngân sách; Opex dự kiến được sinh khi dự án được duyệt.
+- **Quy tắc sinh Opex**: thời hạn đi kèm N năm hết vào ngày cuối kỳ, kỳ gia hạn (1 năm) **bắt đầu ngày hôm
+  sau** và thuộc năm tài chính của ngày đó. Ví dụ go-live 15/06/2026: bảo hành 1 năm → gia hạn 15/06/2027
+  (NTC 2027); 3 năm → 15/06/2029 (NTC 2029, năm thứ 4). Mua ngày 29/02/2028, 1 năm → hết 28/02/2029,
+  gia hạn từ 01/03/2029. Số tiền = % gia hạn × giá trị trước VAT, làm tròn đến đồng (ví dụ 15% của
+  1.234.567.891 đ = 185.185.184 đ).
+- Opex sinh ra có trạng thái **Dự kiến**, liên kết ngược về dự án. Sửa Capex chỉ cập nhật các khoản còn
+  “Theo Capex” (chưa xác nhận, chưa sửa tay); khoản đã xác nhận hoặc sửa tay **không bị ghi đè** và hiện
+  “Lệch kế hoạch” khi kế hoạch đổi. Xoá hạng mục thì xoá khoản còn “Theo Capex”, giữ khoản đã xác nhận.
+  Người có quyền Duyệt xác nhận hàng loạt ở chi tiết dự án. Nút **Xem trước Opex** trong form không lưu gì.
+
+**Các giai đoạn sau**: GĐ3 báo cáo ngân sách PDF / Excel ·
 GĐ4 hợp đồng có version, so sánh, tự xoá version cũ sau khi chốt · GĐ5 AI soạn tờ trình từ mẫu .docx tải lên.
 
 ## Kiến trúc

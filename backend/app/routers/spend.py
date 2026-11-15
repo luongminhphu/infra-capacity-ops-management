@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..features import require_feature
 from ..models import AuditLog, HostSnapshot, SnapshotRun, User
-from ..spend import fiscal, files, service, settings as spend_settings
+from ..spend import capex, fiscal, files, service, settings as spend_settings
 from ..spend.models import (
-    CATEGORY_GROUPS, OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendReminderLog, SpendVendor,
+    CATEGORY_GROUPS, CapexProject, OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendReminderLog, SpendVendor,
 )
 from ..spend.roles import LABELS, effective_role, require_spend
 from ..timeutil import to_iso_utc
@@ -50,6 +50,9 @@ def _detail(db: Session, item: OpexItem) -> Dict[str, Any]:
     codes_by_id = dict(db.query(OpexItem.id, OpexItem.code).filter(OpexItem.id.in_(linked_ids)).all()) if linked_ids else {}
     succ = db.query(OpexItem.code).filter(OpexItem.renewed_from_id == item.id).scalar()
     out = service.serialize(item, lk, fiscal.today_vn(), cfg, codes_by_id, succ)
+    out["capexProjectCode"] = (db.query(CapexProject.code).filter(CapexProject.id == item.capex_project_id).scalar()
+                               if item.capex_project_id else None)
+    out["managedByCapex"] = capex.is_managed(item)
     out["assets"] = [{"id": a.id, "serial": a.serial, "description": a.description, "vcenterKey": a.vcenter_key,
                       "hostName": a.host_name} for a in db.query(OpexAsset).filter_by(opex_id=item.id).order_by(OpexAsset.id)]
     out["attachments"] = service.attachments(db, item)
@@ -210,6 +213,7 @@ def put_module_settings(request: Request, data: Dict[str, Any] = Body(...), user
 @router.get("/opex")
 def list_opex(fy: Optional[int] = None, status: Optional[str] = None, category: Optional[int] = None,
               vendor: Optional[int] = None, costCenter: Optional[int] = None, q: Optional[str] = None,
+              origin: Optional[str] = None, capexProject: Optional[str] = None,
               expiringWithin: Optional[int] = Query(default=None, ge=0, le=3650),
               page: int = Query(default=1, ge=1), size: int = Query(default=50, ge=1, le=PAGE_MAX),
               user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
@@ -224,6 +228,10 @@ def list_opex(fy: Optional[int] = None, status: Optional[str] = None, category: 
         qry = qry.filter(OpexItem.vendor_id == vendor)
     if costCenter:
         qry = qry.filter(OpexItem.cost_center_id == costCenter)
+    if origin in ("manual", "capex", "renewal"):
+        qry = qry.filter(OpexItem.origin == origin)
+    if capexProject:
+        qry = qry.filter(OpexItem.capex_project_id.in_(db.query(CapexProject.id).filter(CapexProject.code == capexProject)))
     horizon = today + dt.timedelta(days=max(cfg.reminder_days))
     if status in ("planned", "active", "renewed", "stopped"):
         qry = qry.filter(OpexItem.status == status)
@@ -252,8 +260,14 @@ def list_opex(fy: Optional[int] = None, status: Optional[str] = None, category: 
     successors = dict(db.query(OpexItem.renewed_from_id, OpexItem.code).filter(OpexItem.renewed_from_id.in_(ids)).all()) if ids else {}
     pred_ids = [r.renewed_from_id for r in rows if r.renewed_from_id]
     preds = dict(db.query(OpexItem.id, OpexItem.code).filter(OpexItem.id.in_(pred_ids)).all()) if pred_ids else {}
-    return {"total": total, "page": page, "size": size, "sumNet": int(net), "sumGross": int(gross),
-            "items": [service.serialize(r, lk, today, cfg, preds, successors.get(r.id)) for r in rows]}
+    cpx_ids = {r.capex_project_id for r in rows if r.capex_project_id}
+    cpx = dict(db.query(CapexProject.id, CapexProject.code).filter(CapexProject.id.in_(cpx_ids)).all()) if cpx_ids else {}
+    items = []
+    for r in rows:
+        s = service.serialize(r, lk, today, cfg, preds, successors.get(r.id))
+        s["capexProjectCode"] = cpx.get(r.capex_project_id)
+        items.append(s)
+    return {"total": total, "page": page, "size": size, "sumNet": int(net), "sumGross": int(gross), "items": items}
 
 
 @router.post("/opex")

@@ -35,6 +35,15 @@ def test_add_years_leap_day(start, years, expected):
     assert add_years(start, years) == expected
 
 
+@pytest.mark.parametrize("start,years,expected", [
+    (D(2026, 1, 1), 1, D(2026, 12, 31)), (D(2026, 6, 15), 3, D(2029, 6, 14)),
+    (D(2028, 2, 29), 1, D(2029, 2, 28)), (D(2028, 2, 29), 4, D(2032, 2, 28)), (D(2032, 2, 29), 1, D(2033, 2, 28)),
+])
+def test_term_end(start, years, expected):
+    from app.spend.fiscal import term_end
+    assert term_end(start, years) == expected
+
+
 def test_today_is_vietnam_calendar_day():
     # 18:30 UTC on 31/12 is already 01/01 01:30 in Vietnam (UTC+7).
     assert today_vn(dt.datetime(2026, 12, 31, 18, 30)) == D(2027, 1, 1)

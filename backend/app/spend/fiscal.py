@@ -30,6 +30,18 @@ def add_years(d: dt.date, years: int) -> dt.date:
     return d.replace(year=y)
 
 
+def term_end(start: dt.date, years: int) -> dt.date:
+    """Last day of a term of `years` years starting on `start` (inclusive). A term starting on
+    29/02 runs until 28/02 when the anniversary year is not a leap year (the anniversary is
+    then 01/03): 29/02/2028 + 1 year -> 28/02/2029; 29/02/2028 + 4 years -> 28/02/2032."""
+    y = start.year + years
+    if start.month == 2 and start.day == 29 and not calendar.isleap(y):
+        anniversary = dt.date(y, 3, 1)
+    else:
+        anniversary = start.replace(year=y)
+    return anniversary - dt.timedelta(days=1)
+
+
 def today_vn(now_utc: dt.datetime = None) -> dt.date:
     """Business "today" is the Vietnam calendar day (the server clock runs in UTC)."""
     now_utc = now_utc or dt.datetime.utcnow()
