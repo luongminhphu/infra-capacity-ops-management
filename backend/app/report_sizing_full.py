@@ -15,6 +15,7 @@ capacity bar is an HTML table (WeasyPrint lays tables out more predictably than 
 """
 import math
 import re
+from .pdf_kit import status_pill as _status_mark  # one status mark for every report (MASTER.md §3)
 from typing import Any, Dict, List, Optional
 
 from . import platforms, sizing
@@ -67,8 +68,7 @@ def ratio(v: Optional[float], d: int = 2) -> str:
 
 
 def _pill(text: str, cls: str) -> str:
-    fg, bg = STATUS_COLOR.get(cls, STATUS_COLOR["na"])
-    return f'<span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;">{esc(text)}</span>'
+    return _status_mark({"text": text, "cls": cls})
 
 
 SEV_PILL = {"critical": ("crit", "Nghiêm trọng"), "warning": ("warn", "Cảnh báo"), "info": ("na", "Lưu ý"), "ok": ("ok", "Đạt")}
@@ -128,7 +128,7 @@ def _brief_head(result, best, params, doc: Dict[str, str], logo_html: str) -> st
   <div class="eyebrow" style="margin-top:10px;">Báo cáo tư vấn rút gọn · Hạ tầng ảo hoá{(" " + esc(pf_label)) if pf_label else ""}</div>
   <div class="bh-title">Đề xuất cấu hình máy chủ</div>
   <div class="cv-project" style="margin-bottom:6px;">{esc(" – ".join(x for x in (env, doc.get("customer") or "") if x))}</div>
-  <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{txt}</span>
+  {_status_mark({"text": txt, "cls": cls})}
   <table class="bh-meta"><tr>{cells}</tr></table>
 </div>"""
 
@@ -198,7 +198,7 @@ def _cover(result, best, params, doc: Dict[str, str], logo_html: str, toc: List[
     <div class="cv-title">Đề xuất cấu hình máy chủ</div>
     <div class="cv-project">{esc(" – ".join(x for x in (env, customer) if x))}</div>
     <div class="cv-sub">{esc(vn(result['recommendation']['headline'])) if best else 'Chưa có VM trong danh sách yêu cầu.'}</div>
-    <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{txt}</span>
+    {_status_mark({"text": txt, "cls": cls})}
   </div>
   <table class="cv-grid"><tr>
     <td style="width:48%;"><div class="cv-h">Thông tin tài liệu</div><table class="cv-meta">{meta_html}</table></td>
@@ -993,7 +993,7 @@ table.stackbar td.seg {{ padding:0; height:18px; overflow:hidden; white-space:no
 .bh-title {{ font-size:22px; font-weight:800; color:{c['primary_dark']}; line-height:1.2; margin:2px 0 2px; }}
 table.bh-meta {{ margin-top:8px; border-collapse:collapse; border:1px solid {c['border']}; }}
 table.bh-meta td {{ width:33.3%; border:1px solid {c['divider']}; padding:4px 7px; vertical-align:top; background:{c['surface']}; }}
-.bh-k {{ font-size:7.4px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:{c['muted']}; }}
+.bh-k {{ font-size:7.4px; font-weight:700;   color:{c['muted']}; }}
 .bh-v {{ font-size:9px; font-weight:700; color:{c['ink']}; }}
 .bom-summary ul {{ font-size:9px; }}
 .cover-page {{ page:cover; position:relative; height:262mm; page-break-after:always; }}
@@ -1006,7 +1006,7 @@ table.bh-meta td {{ width:33.3%; border:1px solid {c['divider']}; padding:4px 7p
 .cv-sub {{ font-size:10.5px; color:{c['muted']}; line-height:1.5; margin-bottom:8px; }}
 table.cv-grid {{ margin-top:16mm; }}
 table.cv-grid > tbody > tr > td, table.cv-grid > tr > td {{ border:none; padding:0; vertical-align:top; }}
-.cv-h {{ font-size:8.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:{c['accent']}; margin-bottom:4px; }}
+.cv-h {{ font-size:8.5px; font-weight:700;   color:{c['accent']}; margin-bottom:4px; }}
 .cv-meta td {{ border-bottom:1px solid {c['divider']}; padding:3px 4px; font-size:9px; }}
 .cv-meta td:first-child {{ color:{c['muted']}; width:42%; }}
 ol.toc {{ margin:0; padding-left:0; list-style:none; font-size:9.4px; line-height:1.8; }}
@@ -1017,7 +1017,7 @@ ol.toc a::after {{ content: leader('.') target-counter(attr(href), page); color:
 .cv-hist th, .cv-hist td {{ font-size:8.4px; padding:3px 5px; }}
 table.cv-sign {{ border-collapse:collapse; }}
 table.cv-sign td {{ width:33.3%; border:1px solid {c['border']}; padding:5px 7px; vertical-align:top; }}
-.sign-role {{ font-size:8px; font-weight:700; color:{c['muted']}; text-transform:uppercase; letter-spacing:.06em; }}
+.sign-role {{ font-size:8px; font-weight:700; color:{c['muted']};   }}
 .sign-space {{ height:42px; }}
 .sign-name {{ font-size:9px; font-weight:700; border-top:1px dashed {c['border']}; padding-top:3px; min-height:14px; }}
 """

@@ -7,6 +7,7 @@ spend.report.build_budget_report — the same dict the web dashboard and the Exc
   Tổng kết → 1 So sánh năm nay / năm sau → 2 Theo loại chi phí → 3 Hết hạn theo quý →
   4 Opex phát sinh từ Capex → 5 Nhà cung cấp lớn nhất
 """
+from .pdf_kit import status_pill as _status_mark  # one status mark for every report (MASTER.md §3)
 from typing import Any, Dict, List, Optional
 
 from .pdf_kit import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, bar_cell, esc,
@@ -34,9 +35,7 @@ def money_short(v: Optional[int]) -> str:
 
 
 def _pill(text: str, cls: str) -> str:
-    fg, bg = STATUS_COLOR.get(cls, STATUS_COLOR["na"])
-    return (f'<span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55">'
-            f'{esc(text)}</span>')
+    return _status_mark({"text": text, "cls": cls})
 
 
 def _table(head: List[str], rows: List[List[str]], num_cols=()) -> str:

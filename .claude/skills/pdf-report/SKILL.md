@@ -40,6 +40,11 @@ ngắn, nêu thẳng vấn đề → quyết định đề nghị → thời đi
   DejaVu Sans Mono. Thêm font mới → thêm gói vào `backend/Dockerfile`.
 - Biểu đồ: tối đa 3 series màu + xám, không dùng màu trạng thái cho series (trừ khi dữ liệu là trạng thái), một trục Y.
 - Gauge: CPU/RAM vùng 0–80 ok, 80–100 warn; Storage 0–80 / 80–90 / 90–100.
+- Trạng thái trong PDF **chỉ** qua `status_pill()` (hoặc `pdf_kit.status_pill`) — không tự dựng `<span class="pill" style=…>`.
+  Thông tin không phải trạng thái (edition, power state, HA/DRS) dùng nhãn trung tính viền mảnh.
+- Khối “Tổng kết” (`.exec-brief`) là khối kết luận như web: nền trắng, vạch trái 4 px theo trạng thái, câu kết luận 15 px.
+- So sánh % ngưỡng theo cluster dùng `cluster_bullets_html()` / `svg_bullet()` (vạch 80 % / 100 %), không dùng cột nhóm.
+- Không viết hoa toàn bộ nhãn (`text-transform:uppercase`); Excel cũng vậy (`excel_style`).
 
 ## Quy ước nội dung
 

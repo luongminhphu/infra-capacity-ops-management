@@ -150,7 +150,7 @@ def _section(ws, row: int, text: str, ncols: int, col: int = 1) -> int:
     start = get_column_letter(col)
     ws.merge_cells(f"{start}{row}:{end}{row}")
     c = ws[f"{start}{row}"]
-    c.value = text.upper()
+    c.value = text   # sentence case (MASTER.md §4); the band color marks the section
     c.font = _font(10, True, NAVY)
     c.alignment = Alignment(vertical="center")
     for i in range(col, col + ncols):
@@ -209,7 +209,7 @@ def _print_setup(ws, landscape: bool = True) -> None:
 
 def _tile(ws, row: int, col: int, span: int, label: str, value: str, sub: str, accent: str = BLUE) -> None:
     a, b = get_column_letter(col), get_column_letter(col + span - 1)
-    for r, (text, font, h) in enumerate([(label.upper(), _font(8.5, True, MUTED), 16),
+    for r, (text, font, h) in enumerate([(label, _font(9, True, MUTED), 16),
                                          (value, _font(18, True, INK), 30),
                                          (sub, _font(8.5, False, MUTED), 28)]):
         rr = row + r

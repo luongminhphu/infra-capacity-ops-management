@@ -34,10 +34,9 @@ def _t(v: Any, fmt: str = "%H:%M %d/%m") -> str:
 
 
 def _pill(text: str, cls: str) -> str:
-    fg, bg = {"ok": ("ok", "ok_bg"), "warn": ("warn", "warn_bg"), "crit": ("crit", "crit_bg"),
-              "na": ("na", "na_bg")}.get(cls, ("na", "na_bg"))
-    return (f'<span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}33">'
-            f'{esc(text)}</span>')
+    """Same status mark as every report and the web (glyph + ink label; crit = solid block)."""
+    from .report_pdf import status_pill
+    return status_pill({"text": text, "cls": cls})
 
 
 def _hours(h: Optional[float]) -> str:
@@ -383,7 +382,7 @@ def _css() -> str:
 .chart-row {{ display:flex; gap:12px; align-items:flex-start; }}
 .num-table td:not(:first-child), .num-table th:not(:first-child) {{ text-align:right; }}
 .rec-cell {{ background:{COLORS['surface']}; border:1px solid {COLORS['divider']}; border-radius:5px; padding:5px 7px; }}
-.rec-label {{ font-size:7.4px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:{COLORS['muted']}; margin-bottom:2px; }}
+.rec-label {{ font-size:7.4px; font-weight:700;   color:{COLORS['muted']}; margin-bottom:2px; }}
 .decision-action {{ color:{COLORS['muted']}; font-size:7.8px; margin-top:1px; line-height:1.4; }}
 .appendix-table th, .appendix-table td {{ font-size:7.6px; padding:3px 5px; }}
 .appendix-table td {{ word-break:break-word; }}
