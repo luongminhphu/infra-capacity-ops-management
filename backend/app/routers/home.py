@@ -143,10 +143,17 @@ def _assignments(db: Session, keys: List[str]) -> Dict[str, Dict[str, Any]]:
 
 
 @router.get("/inbox/assignees")
-def inbox_assignees(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """People an item can be given to (name only — no email, role or login details)."""
-    rows = db.query(User.username, User.display_name).order_by(User.display_name, User.username).limit(500).all()
-    return [{"username": u, "displayName": d or u} for u, d in rows]
+def inbox_assignees(key: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """People one item can be given to: only when the caller sees the item, and only people who see it too
+    (name only — no email, role or login details). Not a user directory."""
+    items, _ = inbox.collect(db)
+    it = next((x for x in items if x["key"] == key[:255]), None) if key else None
+    features = get_features(db)
+    if it is None or not inbox.visible(it, user, features):
+        raise HTTPException(404, "Không tìm thấy việc này, có thể nó đã được xử lý. Tải lại hộp việc.")
+    users = db.query(User).order_by(User.display_name, User.username).limit(500).all()
+    return [{"username": u.username, "displayName": u.display_name or u.username} for u in users
+            if inbox.visible(it, u, features)]
 
 
 @router.post("/inbox/assign")

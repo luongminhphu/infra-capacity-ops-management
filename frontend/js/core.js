@@ -27,7 +27,7 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 const deepClone = (o) => JSON.parse(JSON.stringify(o));
 const cleanNum = (v) => { const n = parseFloat(String(v ?? '').replace(/,/g, '').trim()); return isFinite(n) ? n : 0; };
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));   // ' too: safe in single-quoted attributes
 const fmtPct = (v) => isFinite(v) ? v.toFixed(1) + '%' : 'NA';
 const fmtNum = (v, d = 1) => isFinite(v) ? Number(v).toFixed(d) : '0.0';
 const fmtInt = (v) => isFinite(v) ? Math.round(v).toLocaleString('en-US') : '0';

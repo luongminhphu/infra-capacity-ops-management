@@ -42,7 +42,7 @@ function entityHostHtml(d) {
       <td class="num">${enVal(v.vcpu)}</td><td class="num">${enVal(v.ramGB)}</td><td>${enVal(v.ip)}</td></tr>`).join('');
   const dev = d.devices === null ? '' : `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Bảo hành / hợp đồng (Opex)</div>
       ${d.devices.length ? `<ul class="home-list">${d.devices.map(x => `<li class="home-item"><div class="home-item-main">
-        <a class="home-item-title" href="${esc(homeLink('spend-opex', `code=${x.code}`))}">${esc(x.code)} — ${esc(x.title)}</a>
+        <a class="home-item-title" href="${esc(homeLink('spend-opex', `code=${encodeURIComponent(x.code)}`))}">${esc(x.code)} — ${esc(x.title)}</a>
         <p class="home-item-detail">Serial ${esc(x.serial)} · hết hạn ${esc(spDateSafe(x.endDate))} · ${esc(x.statusLabel)}</p></div></li>`).join('')}</ul>`
         : '<p class="muted-sub">Chưa có khoản Opex nào khai báo thiết bị này (Opex → Thiết bị liên quan → tên host).</p>'}</section>`;
   return `
