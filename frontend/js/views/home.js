@@ -5,9 +5,13 @@
    Items come from /api/inbox (filtered by role server-side).
    ========================================================= */
 
-const homeState = { show: 'open', level: '', source: '', data: null, brief: null, bound: false, prefsLoaded: false };
+const homeState = { show: 'open', view: 'open', level: '', source: '', data: null, brief: null, bound: false, prefsLoaded: false,
+  selected: '', assignees: null };
 const agState = { days: 120, kind: '', data: null, bound: false };
 const HOME_LEVEL_TONE = { crit: 'crit', bad: 'bad', warn: 'warn', task: 'na', info: 'na' };
+const HOME_LEVEL_TEXT = { crit: 'VƯỢT NGƯỠNG', bad: 'CẢNH BÁO', warn: 'THEO DÕI', task: 'Chờ xử lý', info: 'Thông tin' };
+const HOME_GROUPS = [['crit', 'Vượt ngưỡng'], ['bad', 'Cảnh báo'], ['warn', 'Theo dõi'], ['task', 'Chờ xử lý'], ['info', 'Thông tin']];
+const HOME_VIEWS = [['open', 'Cần xử lý'], ['mine', 'Giao cho tôi'], ['unassigned', 'Chưa giao'], ['done', 'Đã xong']];
 const HOME_SOURCE_PAGE = { capacity: 'dashboard', backup: 'bk-overview', license: 'lic-assess', spend: 'spend-overview' };
 const AG_KIND = { opex: 'Opex hết hạn', payment: 'Đợt thanh toán', license: 'License hết hạn', quote: 'Báo giá hết hiệu lực' };
 
@@ -41,50 +45,185 @@ async function renderHomeView(fresh) {
   homeBind();
   await homeLoadPrefs();
   if (!homeState.data) mount.innerHTML = uiNote('Đang tải…');
+  homeState.show = homeState.view === 'done' ? 'done' : 'open';
   const [inbox, brief, ai] = await Promise.allSettled([apiRequest(`/inbox?show=${homeState.show}${fresh ? '&fresh=true' : ''}`), apiRequest('/reports/brief'),
     typeof aiStatus === 'function' ? aiStatus() : Promise.resolve({ tasks: {} })]);
   homeState.aiOn = ai.status === 'fulfilled' && !!(ai.value.tasks || {}).home_brief;
   homeState.data = inbox.status === 'fulfilled' ? inbox.value : { items: [], counts: {}, sources: {}, unavailable: [], error: inbox.reason.message };
   homeState.brief = brief.status === 'fulfilled' ? brief.value : null;
+  if (homeState.show === 'open') homeNavBadges(homeState.data);
   homeRender();
+}
+
+/* Titles from the modules end with " — <object>" even when the object is already named ("47 VM … — 47 VM"):
+   show the object once. Display only; the item key and the source text are unchanged. */
+function homeCleanTitle(t) {
+  const i = String(t || '').lastIndexOf(' — ');
+  if (i < 0) return t;
+  const head = t.slice(0, i), tail = t.slice(i + 3).trim();
+  return tail && head.toLowerCase().includes(tail.toLowerCase()) ? head : t;
+}
+
+/* "context → action" (rule text of the modules) → { context, action }. */
+function homeSplitDetail(d) {
+  const i = String(d || '').indexOf('→');
+  return i < 0 ? { context: d || '', action: '' } : { context: d.slice(0, i).trim(), action: d.slice(i + 1).trim() };
+}
+
+function homeVisibleItems() {
+  const d = homeState.data, me = currentUser ? currentUser.username : '';
+  return d.items.filter(i => (!homeState.level || i.level === homeState.level) && (!homeState.source || i.source === homeState.source)
+    && (homeState.view !== 'mine' || (i.assignee && i.assignee.username === me))
+    && (homeState.view !== 'unassigned' || !i.assignee));
+}
+
+/* One sentence for the verdict block, from the counts (rules, not AI). */
+function homeVerdict(d) {
+  const open = d.items.filter(i => !i.ack);
+  const worst = HOME_GROUPS.map(g => g[0]).find(l => open.some(i => i.level === l));
+  if (!worst) return { tone: 'ok', label: 'AN TOÀN', text: 'Không có việc cần xử lý.' };
+  const by = {};
+  open.filter(i => i.level === worst).forEach(i => { by[i.sourceLabel] = (by[i.sourceLabel] || 0) + 1; });
+  const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
+  const n = open.filter(i => i.level === worst).length;
+  const rest = open.length - n;
+  const what = { crit: 'việc vượt ngưỡng', bad: 'việc cảnh báo', warn: 'việc cần theo dõi', task: 'việc chờ bạn xử lý', info: 'thông tin mới' }[worst];
+  return { tone: HOME_LEVEL_TONE[worst], label: HOME_LEVEL_TEXT[worst],
+    text: `${n} ${what}${top && Object.keys(by).length > 1 ? `, nhiều nhất ở ${top[0]}` : top ? ` ở ${top[0]}` : ''}${rest ? `; thêm ${rest} việc mức thấp hơn.` : '.'}` };
 }
 
 function homeRender() {
   const d = homeState.data, b = homeState.brief;
-  const items = d.items.filter(i => (!homeState.level || i.level === homeState.level) && (!homeState.source || i.source === homeState.source));
-  const cards = Object.entries(d.sources).map(([key, s]) => `<button class="home-card${homeState.source === key ? ' active' : ''}" type="button" data-home-source="${esc(key)}">
-      <span class="home-card-label">${esc(s.label)}</span>
-      <span class="home-card-state">${s.worst ? uiPill(HOME_LEVEL_TONE[s.worst], ({ crit: 'VƯỢT NGƯỠNG', bad: 'CẢNH BÁO', warn: 'THEO DÕI', task: 'Có việc chờ', info: 'Thông tin' })[s.worst]) : uiPill('ok', 'AN TOÀN')}</span>
-      <span class="home-card-sub">${s.count ? `${esc(s.count)} mục cần xem` : 'Không có việc'}</span></button>`).join('');
-  const brief = b && b.available ? `<div class="home-brief">
-      <div class="home-brief-head">${b.overall ? uiPill(b.overall.cls, b.overall.text) : ''}<span class="eyebrow">Bản tin capacity</span></div>
-      <p class="home-brief-text">${esc(b.headline || '')}</p>
-      <button class="btn btn-ghost btn-sm" type="button" data-nav-link="executive">Xem tổng quan điều hành</button></div>` : '';
-  const levels = [['', 'Tất cả'], ['crit', 'Vượt ngưỡng'], ['bad', 'Cảnh báo'], ['warn', 'Theo dõi'], ['task', 'Chờ xử lý']];
-  const rows = items.map(i => `<li class="home-item lvl-${esc(i.level)}">
-      <div class="home-item-main">${uiPill(HOME_LEVEL_TONE[i.level], i.levelLabel)} <span class="muted-sub sr-inline">${esc(i.sourceLabel)}</span>
-        <a class="home-item-title" href="${esc(homeLink(i.page, i.query))}">${esc(i.title)}</a>
-        ${i.detail ? `<p class="home-item-detail">${esc(i.detail)}</p>` : ''}</div>
-      <div class="home-item-actions">${i.due ? `<span class="muted-sub sr-inline">${esc(spDateSafe(i.due))}</span>` : ''}
-        ${i.ack ? `<span class="muted-sub sr-inline">${i.ack.state === 'done' ? 'Đã xong' : `Ẩn tới ${esc(spDateSafe(i.ack.until))}`}</span>
-          <button class="btn btn-ghost btn-sm" type="button" data-home-ack="undo" data-key="${esc(i.key)}">Hiện lại</button>`
-        : `<button class="btn btn-ghost btn-sm" type="button" data-home-ack="done" data-key="${esc(i.key)}" title="Đánh dấu đã xử lý">Xong</button>
-          <button class="btn btn-ghost btn-sm" type="button" data-home-ack="snooze" data-key="${esc(i.key)}" title="Ẩn 7 ngày">Ẩn 7 ngày</button>`}</div></li>`).join('');
+  const items = homeVisibleItems();
+  if (!items.some(i => i.key === homeState.selected)) homeState.selected = items.length ? items[0].key : '';
+  const v = homeVerdict(d);
+  const mine = currentUser ? d.items.filter(i => !i.ack && i.assignee && i.assignee.username === currentUser.username).length : 0;
+  const unassigned = d.items.filter(i => !i.ack && !i.assignee).length;
+  const domains = Object.entries(d.sources).map(([key, s]) => `<button class="hm-domain${homeState.source === key ? ' active' : ''}" type="button" data-home-source="${esc(key)}" aria-pressed="${homeState.source === key}">
+      <span class="hm-domain-name">${esc(s.label)}</span>${s.worst ? uiPill(HOME_LEVEL_TONE[s.worst], HOME_LEVEL_TEXT[s.worst]) : uiPill('ok', 'AN TOÀN')}
+      <span class="hm-domain-n">${s.count ? `${esc(s.count)} việc` : 'Không có việc'}</span></button>`).join('');
+  const groups = HOME_GROUPS.map(([lvl, label]) => {
+    const g = items.filter(i => i.level === lvl);
+    if (!g.length) return '';
+    return `<li class="hm-group" role="presentation"><span>${esc(label)}</span><span>${g.length}</span></li>` + g.map(i => {
+      const sd = homeSplitDetail(i.detail);
+      return `<li class="hm-row${i.ack ? ' is-done' : ''}" role="option" id="hm-${esc(btoa(unescape(encodeURIComponent(i.key))).replace(/[^a-zA-Z0-9]/g, ''))}" data-key="${esc(i.key)}" aria-selected="${i.key === homeState.selected}">
+        <span class="hm-lv lv-${esc(HOME_LEVEL_TONE[i.level])}" aria-hidden="true"></span>
+        <span class="hm-t">${esc(homeCleanTitle(i.title))}</span>
+        <span class="hm-r">${i.assignee ? `<b>${esc(i.assignee.displayName)}</b>` : '<b class="hm-none">Chưa giao</b>'}${esc(i.sourceLabel)}</span>
+        <span class="hm-m">${esc(i.due ? `Hạn ${spDateSafe(i.due)} · ` : '')}${esc(sd.context)}</span>
+        <span class="sr-only">Mức ${esc(i.levelLabel)}</span></li>`;
+    }).join('');
+  }).join('');
+  const views = HOME_VIEWS.map(([k, t]) => `<button class="hm-view" type="button" data-home-view="${k}" aria-pressed="${homeState.view === k}">${esc(t)}${
+    k === 'open' ? ` <span class="n">${esc(d.items.filter(i => !i.ack).length)}</span>` : k === 'mine' ? ` <span class="n">${esc(mine)}</span>` : k === 'unassigned' ? ` <span class="n">${esc(unassigned)}</span>` : ''}</button>`).join('');
   $('#homeMount').innerHTML = `
-    ${brief}
+    <section class="hm-verdict tone-rule-${esc(v.tone)}" aria-labelledby="hmVerdict">
+      <div class="hm-verdict-meta">${uiPill(v.tone, v.label)}<span>Mức cao nhất trong việc của bạn</span>
+        ${homeState.aiOn ? '<button class="btn btn-ghost btn-sm" type="button" data-home-ai><i data-lucide="sparkles"></i>AI tóm tắt hôm nay</button>' : ''}</div>
+      <h2 id="hmVerdict">${esc(v.text)}</h2>
+      ${b && b.available ? `<p class="hm-lead">${b.overall ? `Capacity ${esc(String(b.overall.text || '').toLowerCase())}: ` : ''}${esc(b.headline || '')} <button class="link-btn" type="button" data-nav-link="executive">Xem điều hành</button></p>` : ''}
+    </section>
     <div id="homeAiBrief"></div>
-    <div class="home-cards">${cards}</div>
-    <section class="panel">
-      <div class="panel-head"><div><div class="panel-title">Hôm nay cần làm</div>
-        <p class="panel-sub">Gom từ mọi module theo quyền của bạn: cảnh báo capacity / backup, license và Opex sắp hết hạn, đợt thanh toán đến hạn, báo giá chờ kiểm tra / chọn, tờ trình chờ duyệt.</p></div>
-        <div class="panel-toolbar">${homeState.aiOn ? '<button class="btn btn-secondary btn-sm" type="button" data-home-ai><i data-lucide="sparkles"></i>AI tóm tắt hôm nay</button>' : ''}<button class="btn btn-ghost btn-sm" type="button" data-home-refresh title="Đọc lại từ mọi module"><i data-lucide="refresh-cw"></i>Làm mới</button><div class="view-toggle" role="tablist">${[['open', 'Cần xử lý'], ['done', 'Đã xong / đã ẩn']].map(([k, t]) => `<button type="button" class="${homeState.show === k ? 'active' : ''}" data-home-show="${k}">${t}</button>`).join('')}</div></div></div>
-      <div class="sp-inline home-filters">${levels.map(([k, t]) => `<button class="btn btn-ghost btn-sm${homeState.level === k ? ' active' : ''}" type="button" data-home-level="${k}">${esc(t)}${k && d.counts[k] ? ` (${esc(d.counts[k])})` : ''}</button>`).join('')}
-        ${homeState.source ? `<button class="btn btn-ghost btn-sm" type="button" data-home-source="">Bỏ lọc ${esc((d.sources[homeState.source] || {}).label || '')} ✕</button>` : ''}</div>
-      ${d.error ? `<p class="criteria-status error">${esc(d.error)}</p>` : ''}
-      ${d.unavailable.length ? `<p class="criteria-status">Tạm thời không đọc được: ${esc(d.unavailable.join(', '))}.</p>` : ''}
-      ${rows ? `<ul class="home-list">${rows}</ul>` : uiEmpty(homeState.show === 'open' ? 'Không có việc cần xử lý theo bộ lọc này.' : 'Chưa có mục nào được đánh dấu.')}
+    <div class="hm-domains" role="group" aria-label="Lọc theo miền">${domains}</div>
+    ${d.error ? `<p class="criteria-status error">${esc(d.error)}</p>` : ''}
+    ${d.unavailable.length ? `<p class="criteria-status">Tạm thời không đọc được: ${esc(d.unavailable.join(', '))}.</p>` : ''}
+    <section class="hm-split panel" aria-label="Hộp việc">
+      <div class="hm-list">
+        <div class="hm-toolbar"><div class="hm-views" role="group" aria-label="Chế độ xem">${views}</div>
+          <button class="btn btn-ghost btn-sm" type="button" data-home-refresh title="Đọc lại từ mọi module"><i data-lucide="refresh-cw"></i><span class="sr-only">Làm mới</span></button></div>
+        ${homeState.level || homeState.source ? `<div class="hm-filters">${homeState.level ? `<button class="chip-x" type="button" data-home-level="">Mức: ${esc(HOME_LEVEL_TEXT[homeState.level])} ✕</button>` : ''}${homeState.source ? `<button class="chip-x" type="button" data-home-source="">${esc((d.sources[homeState.source] || {}).label || '')} ✕</button>` : ''}</div>` : ''}
+        ${groups ? `<ul class="hm-rows" role="listbox" tabindex="0" aria-label="Việc, sắp theo mức" aria-activedescendant="">${groups}</ul>`
+          : uiEmpty(homeState.view === 'done' ? 'Chưa có việc nào được đánh dấu xong hay tạm ẩn.' : homeState.view === 'mine' ? 'Chưa có việc nào giao cho bạn.' : 'Không có việc cần xử lý theo bộ lọc này.')}
+        <p class="hm-hint"><span><kbd>J</kbd> <kbd>K</kbd> chuyển việc</span><span><kbd>E</kbd> xong</span><span><kbd>H</kbd> ẩn 7 ngày</span><span><kbd>Ctrl K</kbd> tìm</span></p>
+      </div>
+      <div class="hm-detail" id="homeDetail" aria-live="polite"></div>
     </section>`;
+  homeRenderDetail();
+  const lb = $('#homeMount .hm-rows'), sel = lb && lb.querySelector('[aria-selected="true"]');
+  if (lb && sel) lb.setAttribute('aria-activedescendant', sel.id);
   refreshIcons();
+}
+
+function homeRenderDetail() {
+  const box = $('#homeDetail');
+  if (!box) return;
+  const i = homeState.data.items.find(x => x.key === homeState.selected);
+  if (!i) { box.innerHTML = uiEmpty('Chọn một việc ở danh sách bên trái.'); return; }
+  const sd = homeSplitDetail(i.detail);
+  const people = homeState.assignees;
+  const assignSel = people ? `<label class="field hm-assign"><span>Ai xử lý</span><select data-home-assign>
+      <option value="">— Chưa giao —</option>${people.map(p => `<option value="${esc(p.username)}"${i.assignee && i.assignee.username === p.username ? ' selected' : ''}>${esc(p.displayName)}</option>`).join('')}</select></label>`
+    : `<button class="btn btn-secondary btn-sm" type="button" data-home-load-people><i data-lucide="user-plus"></i>${i.assignee ? 'Đổi người xử lý' : 'Giao việc'}</button>`;
+  box.innerHTML = `
+    <div class="hm-d-top">${uiPill(HOME_LEVEL_TONE[i.level], i.levelLabel)}<h3>${esc(homeCleanTitle(i.title))}</h3></div>
+    <div class="hm-d-meta"><span>${esc(i.sourceLabel)}</span>${i.due ? `<span>Hạn ${esc(spDateSafe(i.due))}</span>` : ''}
+      ${i.assignee ? `<span>Ai xử lý: <b>${esc(i.assignee.displayName)}</b> (giao bởi ${esc(i.assignee.assignedBy)})</span>` : '<span>Chưa giao cho ai</span>'}
+      ${i.ack ? `<span>${i.ack.state === 'done' ? 'Đã đánh dấu xong' : `Đang ẩn tới ${esc(spDateSafe(i.ack.until))}`}</span>` : ''}</div>
+    <div class="hm-d-actions">
+      ${i.ack ? `<button class="btn btn-secondary btn-sm" type="button" data-home-ack="undo" data-key="${esc(i.key)}">Hiện lại</button>`
+        : `<button class="btn btn-primary btn-sm" type="button" data-home-ack="done" data-key="${esc(i.key)}"><i data-lucide="check"></i>Đánh dấu xong <kbd>E</kbd></button>
+           <button class="btn btn-secondary btn-sm" type="button" data-home-ack="snooze" data-key="${esc(i.key)}"><i data-lucide="clock"></i>Ẩn 7 ngày <kbd>H</kbd></button>`}
+      ${i.page ? `<a class="btn btn-ghost btn-sm" href="${esc(homeLink(i.page, i.query))}"><i data-lucide="external-link"></i>Mở trang ${esc(i.sourceLabel)}</a>` : ''}
+      ${assignSel}
+    </div>
+    ${sd.action ? `<div class="hm-d-sec"><h4>Nên làm gì</h4><p>${esc(sd.action)}</p></div>` : ''}
+    ${sd.context ? `<div class="hm-d-sec"><h4>${sd.action ? 'Chi tiết' : 'Nội dung'}</h4><p>${esc(sd.context)}</p></div>` : ''}
+    <p class="muted-sub" id="homeAssignMsg" role="status"></p>`;
+  refreshIcons();
+}
+
+function homeSelect(key, focusList) {
+  homeState.selected = key;
+  const lb = $('#homeMount .hm-rows');
+  if (!lb) return;
+  let selEl = null;
+  lb.querySelectorAll('[role="option"]').forEach(o => { const on = o.dataset.key === key; o.setAttribute('aria-selected', String(on)); if (on) selEl = o; });
+  if (selEl) { lb.setAttribute('aria-activedescendant', selEl.id); selEl.scrollIntoView({ block: 'nearest' }); }
+  const swap = () => homeRenderDetail();
+  if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(swap); else swap();
+  if (focusList) lb.focus();
+  else if (matchMedia('(max-width:1023px)').matches) { const d = $('#homeDetail'); if (d) d.scrollIntoView({ block: 'start' }); }
+}
+
+async function homeAck(key, action) {
+  await apiRequest('/inbox/ack', { method: 'POST', body: JSON.stringify({ key, action, days: 7 }) });
+  const items = homeVisibleItems(), idx = items.findIndex(i => i.key === key);
+  const next = items[idx + 1] || items[idx - 1];
+  homeState.selected = next ? next.key : '';
+  await renderHomeView();
+}
+
+/* Sidebar counts: open items per menu entry (worst level drives the badge tone). */
+function homeNavBadges(d) {
+  if (!d || !Array.isArray(d.items) || typeof PAGE_ROUTE === 'undefined') return;
+  const per = {};
+  const bump = (entry, lvl) => {
+    const p = per[entry] || (per[entry] = { n: 0, hot: false });
+    p.n += 1; if (lvl === 'crit' || lvl === 'bad') p.hot = true;
+  };
+  d.items.filter(i => !i.ack).forEach(i => {
+    const route = PAGE_ROUTE[i.page] || PAGE_ROUTE[HOME_SOURCE_PAGE[i.source]];
+    if (route && route.entry) bump(route.entry.key, i.level);
+    if (i.level === 'crit' || i.level === 'bad' || i.level === 'task') bump('home', i.level);
+  });
+  $$('#mainNav .nav-item').forEach(b => {
+    let c = b.querySelector('.nav-count');
+    const p = per[b.dataset.entry];
+    if (!p) { if (c) c.remove(); return; }
+    if (!c) { c = document.createElement('span'); c.className = 'nav-count'; b.appendChild(c); }
+    c.textContent = p.n > 99 ? '99+' : String(p.n);
+    c.classList.toggle('hot', p.hot);
+    c.setAttribute('aria-label', `${p.n} việc${p.hot ? ', có cảnh báo' : ''}`);
+  });
+}
+
+/* Badges without opening the home page: once after sign-in, then every 5 minutes (server caches 60 s). */
+let homeBadgeTimer = null;
+function homeRefreshBadges() {
+  const run = () => apiRequest('/inbox?show=open').then(homeNavBadges).catch(() => { /* badges are optional */ });
+  run();
+  if (!homeBadgeTimer) homeBadgeTimer = setInterval(run, 5 * 60 * 1000);
 }
 
 const spDateSafe = (iso) => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—';
@@ -92,23 +231,58 @@ const spDateSafe = (iso) => iso ? String(iso).slice(0, 10).split('-').reverse().
 function homeBind() {
   if (homeState.bound) return;
   homeState.bound = true;
-  $('#homeMount').addEventListener('click', async (e) => {
+  const mount = $('#homeMount');
+  mount.addEventListener('click', async (e) => {
     const t = (s) => e.target.closest(s);
     let b;
     if (t('[data-home-refresh]')) return renderHomeView(true);
     if ((b = t('[data-home-ai]'))) return homeAiBrief(b);
-    if ((b = t('[data-home-show]'))) { homeState.show = b.dataset.homeShow; return renderHomeView(); }
+    if ((b = t('[data-home-view]'))) {
+      const was = homeState.view; homeState.view = b.dataset.homeView;
+      return (was === 'done') !== (homeState.view === 'done') ? renderHomeView() : homeRender();
+    }
     if ((b = t('[data-home-level]'))) { homeState.level = b.dataset.homeLevel; homeSavePrefs(); return homeRender(); }
     if ((b = t('[data-home-source]'))) {
       const s = b.dataset.homeSource;
       homeState.source = homeState.source === s ? '' : s; homeSavePrefs(); return homeRender();
     }
+    if ((b = t('.hm-row'))) return homeSelect(b.dataset.key);
+    if (t('[data-home-load-people]')) {
+      try { homeState.assignees = await apiRequest('/inbox/assignees'); homeRenderDetail(); const s = $('[data-home-assign]'); if (s) s.focus(); }
+      catch (err) { uiAlert(err.message); }
+      return;
+    }
     if ((b = t('[data-home-ack]'))) {
       b.disabled = true;
-      try {
-        await apiRequest('/inbox/ack', { method: 'POST', body: JSON.stringify({ key: b.dataset.key, action: b.dataset.homeAck, days: 7 }) });
-        await renderHomeView();
-      } catch (err) { uiAlert(err.message); b.disabled = false; }
+      try { await homeAck(b.dataset.key, b.dataset.homeAck); }
+      catch (err) { uiAlert(err.message); b.disabled = false; }
+    }
+  });
+  mount.addEventListener('change', async (e) => {
+    const s = e.target.closest('[data-home-assign]');
+    if (!s) return;
+    const key = homeState.selected;
+    s.disabled = true;
+    try {
+      const r = await apiRequest('/inbox/assign', { method: 'POST', body: JSON.stringify({ key, assignee: s.value || null }) });
+      const it = homeState.data.items.find(x => x.key === key);
+      if (it) it.assignee = r.assignee;
+      homeRender();
+      uiSetStatus('#homeAssignMsg', r.assignee ? `Đã giao cho ${r.assignee.displayName}.` : 'Đã bỏ giao.', 'ok');
+    } catch (err) { uiSetStatus('#homeAssignMsg', err.message, 'error'); s.disabled = false; }
+  });
+  mount.addEventListener('keydown', async (e) => {
+    const lb = e.target.closest('.hm-rows');
+    if (!lb || e.ctrlKey || e.metaKey || e.altKey) return;
+    const keys = [...lb.querySelectorAll('[role="option"]')].map(o => o.dataset.key);
+    const i = keys.indexOf(homeState.selected), k = e.key.toLowerCase();
+    if (k === 'arrowdown' || k === 'j') { e.preventDefault(); if (keys.length) homeSelect(keys[Math.min(i + 1, keys.length - 1)], true); }
+    else if (k === 'arrowup' || k === 'k') { e.preventDefault(); if (keys.length) homeSelect(keys[Math.max(i - 1, 0)], true); }
+    else if (k === 'enter') { const it = homeState.data.items.find(x => x.key === homeState.selected); if (it && it.page) location.hash = homeLink(it.page, it.query); }
+    else if ((k === 'e' || k === 'h') && homeState.selected && homeState.view !== 'done') {
+      e.preventDefault();
+      try { await homeAck(homeState.selected, k === 'e' ? 'done' : 'snooze'); const l = $('#homeMount .hm-rows'); if (l) l.focus(); }
+      catch (err) { uiAlert(err.message); }
     }
   });
 }
