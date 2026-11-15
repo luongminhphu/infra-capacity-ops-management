@@ -1336,3 +1336,37 @@ details.lic-scope[open]>summary::after{transform:rotate(-135deg);}
 .lic-scope-bar{display:block;}
 .kpi-strip{grid-template-columns:repeat(auto-fit,minmax(176px,1fr));}
 .kpi-st{margin-top:2px;}
+
+/* ── Chi phí: Opex list → detail (pages/danh-sach.md) ─ */
+.sp-split.panel{grid-template-columns:minmax(360px,42%) minmax(0,1fr);min-height:560px;}
+.sp-li{position:relative;display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:2px var(--space-3);align-items:start;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--border-subtle);cursor:pointer;}
+.sp-li:hover{background:var(--overlay-hover);}
+.sp-li[aria-selected="true"]{background:var(--blue-a12);}
+.sp-li[aria-selected="true"]::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--brand);}
+.sp-li-t{font-weight:var(--fw-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sp-li-m{grid-column:2;color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sp-li-r{grid-row:span 2;text-align:right;color:var(--text-secondary);font-size:var(--fs-caption);white-space:nowrap;}
+.sp-li-r b{display:block;color:var(--text-primary);font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);}
+.hm-group .num{font-variant-numeric:var(--numeric-features);}
+.sp-search-row{display:flex;gap:var(--space-2);align-items:flex-start;flex-wrap:wrap;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border);}
+.sp-search-row input[type="search"]{flex:1 1 200px;height:var(--control-h-md);padding:0 var(--space-3);border:1px solid var(--field-border);border-radius:var(--radius-sm);background:var(--field-bg);color:var(--field-fg);}
+details.sp-more{flex:0 0 auto;}
+details.sp-more[open]{flex-basis:100%;order:3;}
+details.sp-more>summary{display:inline-flex;align-items:center;gap:6px;height:var(--control-h-md);padding:0 var(--space-3);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;list-style:none;font-weight:var(--fw-medium);}
+details.sp-more>summary::-webkit-details-marker{display:none;}
+details.sp-more>summary .n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--radius-pill);background:var(--brand);color:#fff;font-size:var(--fs-caption);line-height:18px;text-align:center;}
+.sp-filters-pop{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-top:var(--space-2);}
+.sp-pager{align-items:center;}
+.sp-pager .btn{height:28px;}
+.sp-detail{padding:var(--space-5) var(--space-5);}
+.sp-pane-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2) var(--space-3);margin-bottom:var(--space-3);}
+.sp-pane-head h3{font-size:var(--fs-body-lg);line-height:var(--lh-body-lg);font-weight:var(--fw-semibold);letter-spacing:-.01em;text-wrap:balance;}
+.sp-pane-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-3) 0;border-block:1px solid var(--border);margin-bottom:var(--space-3);flex-direction:row-reverse;justify-content:flex-end;}
+@media (max-width:1023px){ .sp-split.panel{grid-template-columns:1fr;} .sp-split .sp-detail{display:none;} }
+/* Destructive text on secondary buttons: sr80 on dark (≈5:1), sr40 on light (≈5:1); #FF0011 on grey failed AA */
+.btn-danger{color:var(--sr80);}
+[data-theme="light"] .btn-danger{color:var(--sr40);}
+/* KPI numbers never break mid-number; narrow cells use a smaller size instead */
+.kpi-cell{container-type:inline-size;}
+.kpi-v{overflow-wrap:normal;white-space:nowrap;}
+@container (width < 230px){ .kpi-v{font-size:var(--fs-body);} }

@@ -8,7 +8,7 @@
 const spState = {
   sub: 'opex', meta: null, list: null, counts: null, loading: false, error: null, bound: false,
   filter: { fy: '', status: 'open', category: '', vendor: '', costCenter: '', q: '', page: 1 },
-  hosts: null, current: null, settings: {},
+  hosts: null, current: null, settings: {}, selected: '',
 };
 // Deep links: #/budget/opex?code=OPX-2026-0001 (reminder e-mails, inbox, search), ?vendor=<id>.
 // The code prefix decides which detail opens; kept before the router rewrites the hash.
@@ -114,57 +114,75 @@ async function spRenderSpendSub() {
 
 }
 
+/* Opex list → detail (design-system/ico/pages/danh-sach.md). The pane exists only here and on wide screens;
+   spOpenDetail falls back to the dialog everywhere else (Capex, deep links on phones). */
+function spDetailPane() {
+  const pane = $('#spDetail');
+  return pane && matchMedia('(min-width: 1024px)').matches ? pane : null;
+}
+
+const SP_VIEWS = [['open', 'Cần theo dõi'], ['expiring', 'Sắp hết hạn'], ['overdue', 'Quá hạn'], ['all', 'Tất cả']];
+
+/* Time buckets of the page's items (server order: by end date). Money per bucket = sum of the rows shown. */
+function spBuckets(items) {
+  const order = [['overdue', 'Quá hạn'], ['d30', 'Trong 30 ngày'], ['d90', '31–90 ngày'], ['later', 'Sau 90 ngày'], ['other', 'Dự kiến / đã gia hạn / ngừng']];
+  const key = (it) => it.status !== 'active' ? 'other' : it.daysLeft < 0 ? 'overdue' : it.daysLeft <= 30 ? 'd30' : it.daysLeft <= 90 ? 'd90' : 'later';
+  return order.map(([k, label]) => { const g = items.filter(it => key(it) === k); return { k, label, items: g, sum: g.reduce((t, it) => t + (Number(it.amountGross) || 0), 0) }; })
+    .filter(g => g.items.length);
+}
+
 function spRenderPage() {
   const m = spState.meta, f = spState.filter, l = spState.list || { items: [], total: 0, sumGross: 0 }, c = spState.counts || {};
   const maxDays = Math.max(...m.settings.reminderDays);
-  const rows = l.items.map(it => `
-    <tr data-sp-code="${esc(it.code)}" tabindex="0" class="sp-row">
-      <td><b>${esc(it.code)}</b><span class="muted-sub">FY ${esc(it.fiscalYear)} · ${esc(it.originLabel || '')}</span></td>
-      <td class="wrap">${esc(it.title)}<span class="muted-sub">${esc(it.categoryName || '')}</span></td>
-      <td class="wrap">${esc(it.vendorName || '—')}</td>
-      <td>${spDate(it.startDate)} – ${spDate(it.endDate)}<span class="muted-sub">${esc(it.billingCycleLabel || '')}</span></td>
-      <td>${spDaysCell(it)}</td>
-      <td class="num">${spMoney(it.amountGross)}</td>
-      <td class="wrap">${esc(it.ownerName)}</td>
-      <td>${spPill(it.tone, it.displayLabel)}</td>
-    </tr>`).join('');
   const pages = Math.max(1, Math.ceil(l.total / 50));
+  const row = (it) => `<li class="sp-li" role="option" id="sp-opt-${esc(it.code)}" data-sp-code="${esc(it.code)}" aria-selected="${it.code === spState.selected}">
+      <span class="hm-lv lv-${esc(it.tone)}" aria-hidden="true"></span>
+      <span class="sp-li-t">${esc(it.title)}</span>
+      <span class="sp-li-r"><b class="num">${spMoney(it.amountGross)}</b>${it.status === 'active' ? esc(it.daysLeft < 0 ? `quá ${-it.daysLeft} ngày` : it.daysLeft === 0 ? 'hết hạn hôm nay' : `còn ${it.daysLeft} ngày`) : esc(it.displayLabel)}</span>
+      <span class="sp-li-m">${esc(it.code)} · ${esc(it.vendorName || 'chưa có NCC')} · ${spDate(it.endDate)}${it.ownerName ? ` · ${esc(it.ownerName)}` : ''}</span>
+      <span class="sr-only">${esc(it.displayLabel)}</span></li>`;
+  const groups = spBuckets(l.items).map(g => `<li class="hm-group" role="presentation"><span>${esc(g.label)}</span><span class="num">${spMoney(g.sum)}</span></li>${g.items.map(row).join('')}`).join('');
+  const extraFilters = [f.fy, f.category, f.vendor, f.costCenter].filter(v => v !== '' && v !== null).length + (SP_VIEWS.some(([v]) => v === f.status) ? 0 : 1);
   $('#spendMount').innerHTML = `
-    <section class="kpi-grid">
-      <div class="kpi-card"><div class="label">Tổng giá trị (sau VAT)</div><div class="value">${spMoney(l.sumGross)}</div><div class="sub">${l.total} khoản theo bộ lọc · trước VAT ${spMoney(l.sumNet)}</div></div>
-      <div class="kpi-card"><div class="label">Sắp hết hạn</div><div class="value ${c.expiring ? 'tone-warn' : 'tone-ok'}">${c.expiring ?? '—'}</div><div class="sub">Đang hiệu lực, hết hạn trong ${maxDays} ngày</div></div>
-      <div class="kpi-card"><div class="label">Quá hạn chưa xử lý</div><div class="value ${c.overdue ? 'tone-crit' : 'tone-ok'}">${c.overdue ?? '—'}</div><div class="sub">Đã qua ngày kết thúc nhưng chưa gia hạn / ngừng</div></div>
-      <div class="kpi-card"><div class="label">Năm tài chính hiện tại</div><div class="value">${esc(m.currentFiscalYear)}</div><div class="sub">Bắt đầu tháng ${esc(m.settings.fiscalStartMonth)} · vai trò của bạn: ${esc(m.roleLabel)}</div></div>
-    </section>
-    <section class="table-card">
-      <div class="panel-head">
-        <div><div class="panel-title">Danh sách Opex</div><p class="panel-sub">Bấm một dòng để xem chi tiết, gia hạn hoặc ngừng. Sắp xếp theo ngày hết hạn.</p></div>
-        <div class="panel-toolbar">
-          ${spCan('editor') ? '<button class="btn btn-secondary btn-sm" type="button" data-sp-import="opex" title="Đổ dữ liệu từ file Excel đang quản lý"><i data-lucide="upload"></i>Nhập Excel</button><button class="btn btn-primary btn-sm" type="button" data-sp-new><i data-lucide="plus"></i>Thêm khoản</button>' : ''}
+    <div class="kpi-strip-wrap">${uiKpiStrip([
+      { label: 'Tổng giá trị sau VAT', valueHtml: spMoney(l.sumGross), sub: `${l.total} khoản theo bộ lọc · trước VAT ${spMoney(l.sumNet)}` },
+      { label: 'Sắp hết hạn', valueHtml: `<span class="${c.expiring ? 'tone-warn' : ''}">${esc(c.expiring ?? '—')}</span>`, sub: `Đang hiệu lực, hết hạn trong ${maxDays} ngày` },
+      { label: 'Quá hạn chưa xử lý', valueHtml: `<span class="${c.overdue ? 'tone-crit' : ''}">${esc(c.overdue ?? '—')}</span>`, sub: 'Đã qua ngày kết thúc nhưng chưa gia hạn / ngừng' },
+      { label: 'Năm tài chính hiện tại', value: String(m.currentFiscalYear), sub: `Bắt đầu tháng ${m.settings.fiscalStartMonth} · vai trò của bạn: ${m.roleLabel}` },
+    ])}</div>
+    <section class="hm-split panel sp-split" aria-label="Danh sách Opex">
+      <div class="hm-list">
+        <div class="hm-toolbar">
+          <div class="hm-views" role="group" aria-label="Chế độ xem">${SP_VIEWS.map(([v, t]) => `<button class="hm-view" type="button" data-sp-view="${v}" aria-pressed="${f.status === v}">${esc(t)}${v === 'expiring' && c.expiring ? ` <span class="n">${esc(c.expiring)}</span>` : v === 'overdue' && c.overdue ? ` <span class="n">${esc(c.overdue)}</span>` : ''}</button>`).join('')}</div>
+          ${spCan('editor') ? '<button class="btn btn-secondary btn-sm" type="button" data-sp-import="opex" title="Đổ dữ liệu từ file Excel đang quản lý"><i data-lucide="upload"></i><span class="sr-only">Nhập Excel</span></button><button class="btn btn-primary btn-sm" type="button" data-sp-new><i data-lucide="plus"></i>Thêm khoản</button>' : ''}
         </div>
+        <div class="sp-search-row">
+          <label class="sr-only" for="spQ">Tìm Opex</label>
+          <input id="spQ" type="search" data-sp-filter="q" value="${esc(f.q)}" placeholder="Mã, dịch vụ, NCC, HĐ / PO, serial…">
+          <details class="sp-more"${extraFilters ? ' open' : ''}><summary>Lọc${extraFilters ? ` <span class="n">${extraFilters}</span>` : ''}</summary>
+            <div class="sp-filters sp-filters-pop">
+              <label class="field"><span>Năm tài chính</span><select data-sp-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `FY ${y}`, f.fy)).join('')}</select></label>
+              <label class="field"><span>Trạng thái</span><select data-sp-filter="status">${SP_STATUS_FILTER.map(([v, t]) => spOpt(v, t, f.status)).join('')}</select></label>
+              <label class="field"><span>Loại chi phí</span><select data-sp-filter="category">${spOpt('', 'Tất cả', f.category)}${m.categories.map(x => spOpt(x.id, x.name, f.category)).join('')}</select></label>
+              <label class="field"><span>Nhà cung cấp</span><select data-sp-filter="vendor">${spOpt('', 'Tất cả', f.vendor)}${m.vendors.map(x => spOpt(x.id, x.name, f.vendor)).join('')}</select></label>
+              <label class="field"><span>Cost center</span><select data-sp-filter="costCenter">${spOpt('', 'Tất cả', f.costCenter)}${m.costCenters.map(x => spOpt(x.id, `${x.code} — ${x.name}`, f.costCenter)).join('')}</select></label>
+            </div></details>
+        </div>
+        ${spState.error ? `<p class="criteria-status error">${esc(spState.error)}</p>` : ''}
+        ${groups ? `<ul class="hm-rows" id="spList" role="listbox" tabindex="0" aria-label="Khoản Opex, sắp theo ngày hết hạn">${groups}</ul>`
+          : uiEmpty(spCan('editor') ? 'Chưa có khoản nào khớp bộ lọc. Bấm “Thêm khoản” để nhập, hoặc “Nhập Excel”.' : 'Chưa có khoản nào khớp bộ lọc.')}
+        <div class="hm-hint sp-pager"><span>${esc(l.total)} khoản · trang ${esc(f.page)}/${esc(pages)}</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-sp-page="${f.page - 1}" ${f.page <= 1 ? 'disabled' : ''}>Trước</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-sp-page="${f.page + 1}" ${f.page >= pages ? 'disabled' : ''}>Sau</button>
+          <span><kbd>J</kbd> <kbd>K</kbd> chuyển</span></div>
       </div>
-      <div class="sp-filters">
-        <label class="field"><span>Năm tài chính</span><select data-sp-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `FY ${y}`, f.fy)).join('')}</select></label>
-        <label class="field"><span>Trạng thái</span><select data-sp-filter="status">${SP_STATUS_FILTER.map(([v, t]) => spOpt(v, t, f.status)).join('')}</select></label>
-        <label class="field"><span>Loại chi phí</span><select data-sp-filter="category">${spOpt('', 'Tất cả', f.category)}${m.categories.map(x => spOpt(x.id, x.name, f.category)).join('')}</select></label>
-        <label class="field"><span>Nhà cung cấp</span><select data-sp-filter="vendor">${spOpt('', 'Tất cả', f.vendor)}${m.vendors.map(x => spOpt(x.id, x.name, f.vendor)).join('')}</select></label>
-        <label class="field"><span>Cost center</span><select data-sp-filter="costCenter">${spOpt('', 'Tất cả', f.costCenter)}${m.costCenters.map(x => spOpt(x.id, `${x.code} — ${x.name}`, f.costCenter)).join('')}</select></label>
-        <label class="field sp-search"><span>Tìm</span><input type="text" data-sp-filter="q" value="${esc(f.q)}" placeholder="Mã, dịch vụ, NCC, HĐ / PO, serial…"></label>
-      </div>
-      ${spState.error ? `<p class="criteria-status error">${esc(spState.error)}</p>` : ''}
-      <div class="table-scroll">
-        <table class="data-table sp-table">
-          <thead><tr><th>Mã</th><th>Dịch vụ</th><th>Nhà cung cấp</th><th>Hiệu lực</th><th>Còn lại</th><th class="num">Sau VAT</th><th>Phụ trách</th><th>Trạng thái</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="8" class="empty-note">${spCan('editor') ? 'Chưa có khoản nào khớp bộ lọc — bấm “Thêm khoản” để nhập.' : 'Chưa có khoản nào khớp bộ lọc.'}</td></tr>`}</tbody>
-        </table>
-      </div>
-      <div class="row-count sp-pager">
-        <span>${l.total} khoản · trang ${f.page}/${pages}</span>
-        <button class="btn btn-ghost btn-sm" type="button" data-sp-page="${f.page - 1}" ${f.page <= 1 ? 'disabled' : ''}>Trước</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-sp-page="${f.page + 1}" ${f.page >= pages ? 'disabled' : ''}>Sau</button>
-      </div>
+      <div class="hm-detail sp-detail" id="spDetail" aria-live="polite" aria-labelledby="spPaneTitle">${l.items.length ? uiNote('Đang mở…') : uiEmpty('Chọn một khoản ở danh sách bên trái.')}</div>
     </section>`;
   refreshIcons();
+  if (spDetailPane() && l.items.length) {
+    const code = l.items.some(it => it.code === spState.selected) ? spState.selected : l.items[0].code;
+    spOpenDetail(code);
+  }
 }
 
 let spSearchTimer = null;
@@ -190,6 +208,8 @@ function spBindPage() {
     }, 350);
   });
   mount.addEventListener('click', async (e) => {
+    const view = e.target.closest('[data-sp-view]');
+    if (view) { spState.filter.status = view.dataset.spView; spState.filter.page = 1; await spLoadList(); spRenderPage(); return; }
     const row = e.target.closest('[data-sp-code]');
     if (row) return spOpenDetail(row.dataset.spCode);
     if (e.target.closest('[data-sp-new]')) return spOpenForm(null);
@@ -197,8 +217,19 @@ function spBindPage() {
     if (pg && !pg.disabled) { spState.filter.page = Number(pg.dataset.spPage); await spLoadList(); spRenderPage(); }
   });
   mount.addEventListener('keydown', (e) => {
-    const row = e.target.closest('[data-sp-code]');
-    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); spOpenDetail(row.dataset.spCode); }
+    const lb = e.target.closest('#spList');
+    if (!lb || e.ctrlKey || e.metaKey || e.altKey) return;
+    const codes = [...lb.querySelectorAll('[role="option"]')].map(o => o.dataset.spCode);
+    const i = codes.indexOf(spState.selected), k = e.key.toLowerCase();
+    let next = null;
+    if (k === 'arrowdown' || k === 'j') next = codes[Math.min(i + 1, codes.length - 1)];
+    else if (k === 'arrowup' || k === 'k') next = codes[Math.max(i - 1, 0)];
+    else if (k === 'enter' || k === ' ') next = spState.selected || codes[0];
+    if (!next) return;
+    e.preventDefault();
+    const opt = lb.querySelector(`[data-sp-code="${CSS.escape(next)}"]`);
+    if (opt) { lb.setAttribute('aria-activedescendant', opt.id); opt.scrollIntoView({ block: 'nearest' }); }
+    spOpenDetail(next);
   });
 }
 
@@ -226,7 +257,8 @@ function spDialog(title, body, actions) {
   }
 }
 function spMsg(text, ok) {
-  const el = $('#spDialogMsg');
+  const dlg = $('#spDialog');
+  const el = (dlg && dlg.open && $('#spDialogMsg', dlg)) || $('#spDialogMsg');
   if (!el) return;
   el.classList.add('src-result');
   uiSetStatus(el, text, text ? (ok ? 'ok' : 'error') : '');
@@ -289,8 +321,25 @@ async function spOpenDetail(code) {
     spCan('editor') && editable ? btn('id="spEdit"', 'Sửa') : '',
     spCan('editor') && it.status === 'active' ? btn('id="spRenew"', 'Gia hạn', 'btn-primary') : '',
   ].join('');
-  spDialog(`${esc(it.code)} — ${esc(it.title)}`, body, actions);
-  const body$ = $('#spDialogBody');
+  const pane = spDetailPane();
+  if (pane) {
+    // pages/danh-sach.md: the object opens beside the list, actions first. Same content and ids as the dialog;
+    // the dialog's stale copy is cleared so the ids stay unique.
+    if (!$('#spDialog').open) $('#spDialogBody').innerHTML = '';
+    spState.selected = it.code;
+    $$('#spList [role="option"]').forEach(o => o.setAttribute('aria-selected', String(o.dataset.spCode === it.code)));
+    const render = () => {
+      pane.innerHTML = `<div class="sp-pane-head"><h3 id="spPaneTitle">${esc(it.title)}</h3><span class="muted-sub">${esc(it.code)}</span></div>
+        <div class="sp-pane-actions">${actions.replace('<span class="src-spacer"></span>', '')}</div>
+        <p class="src-result" id="spDialogMsg" role="status"></p>
+        <div class="sp-dialog-body">${body}</div>`;
+      refreshIcons();
+    };
+    if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) await document.startViewTransition(render).updateCallbackDone; else render();
+  } else {
+    spDialog(`${esc(it.code)} — ${esc(it.title)}`, body, actions);
+  }
+  const body$ = pane || $('#spDialogBody');
   body$.onclick = async (e) => {
     const go = e.target.closest('[data-sp-goto]');
     if (go) return spOpenDetail(go.dataset.spGoto);
