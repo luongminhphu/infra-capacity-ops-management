@@ -235,3 +235,44 @@ def test_upsert_jobs_only_touches_changed_rows():
         assert all(rows[i].updated_at == stamp[i] for i in (1, 2, 4, 5))   # unchanged jobs not rewritten
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# DAT-01: stored history uses the same effective policy as the live dashboard
+# ---------------------------------------------------------------------------
+def test_sync_uses_admin_saved_ht_factor_like_dashboard():
+    from app import capacity, data_access
+    from app.config import VCenterConfig
+    from app.models import AppSetting, ClusterAggregate
+
+    settings = get_settings()
+    assert settings.ht_factor == 2.0                       # env default
+    cfg = VCenterConfig("vc-policy-test", "VC policy", "", 443, "", "", False, demo=True)
+    db = SessionLocal()
+    try:
+        db.add(AppSetting(key="ht_factor", value="1.0"))   # admin override in Cài đặt
+        db.commit()
+        run = scheduler.sync_vcenter(db, cfg, settings)
+        stored = {a.cluster: a for a in db.query(ClusterAggregate).filter_by(run_id=run.id)}
+        assert stored
+
+        # What the dashboard computes from the same snapshot.
+        hosts, vms, _ = data_access.get_latest_combined(db, [cfg.key], include_import=False)
+        live = {c["name"]: c["model"] for c in
+                capacity.build_cluster_rows(hosts, vms, data_access.get_effective_policy(db, settings))}
+        assert set(live) == set(stored)
+        env_policy = capacity.Policy(cpu_overcommit_max=settings.cpu_overcommit_max,
+                                     ram_overcommit_max=settings.ram_overcommit_max, ht_factor=2.0, idle_days=settings.idle_days)
+        env = {c["name"]: c["model"] for c in capacity.build_cluster_rows(hosts, vms, env_policy)}
+        for name, agg in stored.items():
+            m = live[name]
+            assert agg.total_cores > 0
+            assert agg.total_logical_cores == agg.total_cores == m["totalLogicalCores"]   # HT 1.0, not 2.0
+            assert agg.cpu_pct == pytest.approx(m["cpuPct"])
+            # The env-only policy the scheduler used before doubles the threads, halves the CPU %.
+            assert env[name]["totalLogicalCores"] == 2 * agg.total_logical_cores
+            assert agg.cpu_pct == pytest.approx(2 * env[name]["cpuPct"])
+    finally:
+        db.query(AppSetting).filter_by(key="ht_factor").delete()
+        db.commit()
+        db.close()
