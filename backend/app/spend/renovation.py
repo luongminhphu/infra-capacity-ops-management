@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .quotes import norm_text, parse_number, to_int
+from ..shared.text import norm_text, parse_number, to_int
 
 WORKSTREAMS = ("cabling", "network", "vc")
 WS_LABELS = {"cabling": "IT Facility — Cabling (gồm Hub)", "network": "IT Network", "vc": "Video Conference"}
@@ -246,7 +246,7 @@ def _cells(ws_) -> List[List[Any]]:
 
 
 def read_summarize(data: bytes) -> SummarizeResult:
-    from ..platform import xlsx_io
+    from ..shared import xlsx_io
     try:
         wb = xlsx_io.open_workbook(data)
     except xlsx_io.XlsxError as exc:

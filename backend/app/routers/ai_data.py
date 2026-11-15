@@ -13,7 +13,7 @@ from ..database import get_db
 from ..features import ensure_feature
 from ..models import ImportMapping, User
 from ..security import get_current_user, is_admin, require_admin
-from ..spend import ai as transport
+from ..shared import ai_transport as transport
 
 router = APIRouter(prefix="/api", tags=["ai-data"])
 

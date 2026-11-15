@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .spend.quotes import norm_text, parse_number
+from .shared.text import norm_text, parse_number
 
 class BomError(ValueError):
     """A problem with the uploaded file; the message is written by us and safe to show."""
@@ -140,7 +140,7 @@ def _text(v: Any, n: int = 1000) -> str:
 
 def read_rows(data: bytes) -> List[Tuple[str, List[List[Any]]]]:
     """All sheets' rows (bounded, zip-bomb guarded): [(sheet, rows)]."""
-    from .platform import xlsx_io
+    from .shared import xlsx_io
     return xlsx_io.read_rows(data, max_sheets=10, max_rows=MAX_ROWS, max_cols=MAX_COLS)
 
 

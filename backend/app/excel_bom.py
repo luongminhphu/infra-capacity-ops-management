@@ -257,7 +257,7 @@ def _n(v: Any) -> Optional[float]:
         return None
     if isinstance(v, (int, float)):
         return v if abs(v) < 1e15 else None
-    from .spend.quotes import parse_number
+    from .shared.text import parse_number
     d = parse_number(v)
     return float(d) if d is not None else None
 

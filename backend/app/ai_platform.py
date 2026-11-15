@@ -98,7 +98,7 @@ def task_states(cfg) -> Dict[str, bool]:
 
 
 def enabled(cfg, task: Optional[str] = None) -> bool:
-    from .spend import ai as transport
+    from .shared import ai_transport as transport
     if not transport.enabled(cfg):
         return False
     return task is None or task_states(cfg).get(task, False)
@@ -248,7 +248,7 @@ def _hash(task: str, facts: Any, cfg=None) -> str:
     return hashlib.sha256((task + "|" + extra + "|" + json.dumps(facts, ensure_ascii=False, sort_keys=True, default=str)).encode()).hexdigest()
 
 
-def _record(db: Session, task: str, user: Optional[User], status: str, h: Optional[str], started: float,
+def record(db: Session, task: str, user: Optional[User], status: str, h: Optional[str], started: float,
             usage: Optional[Dict[str, Any]] = None, message: str = "") -> None:
     usage = usage or {"model": None, "in": 0, "out": 0}
     if status == "blocked" and db.query(AiRun.id).filter(
@@ -262,19 +262,22 @@ def _record(db: Session, task: str, user: Optional[User], status: str, h: Option
     db.commit()
 
 
+_record = record      # old private name
+
+
 def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], facts: Any = None,
         cache: bool = False, reserve: float = RESERVE_USD) -> Tuple[Any, bool]:
     """Policy → cache → call → accounting. `call()` performs the request (already masked) and
     returns the parsed result. Returns (result, from_cache). Raises AiBlocked or the transport's
     AiError (both have safe messages)."""
-    from .spend.ai import AiError
+    from .shared.ai_transport import AiError
     started = time.monotonic()
     try:
         with _budget_lock:                                 # check + reserve atomically (this process)
             cfg = check(db, task, user)
             _reserved["usd"] += reserve
     except AiBlocked as exc:
-        _record(db, task, user, "blocked", None, started, message=str(exc))
+        record(db, task, user, "blocked", None, started, message=str(exc))
         raise
     h = _hash(task, facts, cfg) if facts is not None else None
     try:
@@ -288,16 +291,16 @@ def _run_reserved(db, user, task, call, h, cache, started, AiError):
     if cache and h:
         row = db.get(AiCache, h)
         if row and row.created_at >= dt.datetime.utcnow() - dt.timedelta(hours=CACHE_HOURS):
-            _record(db, task, user, "cached", h, started)
+            record(db, task, user, "cached", h, started)
             return json.loads(row.output), True
     _take_usage()
     try:
         result = call()
     except Exception as exc:
         safe = str(exc) if isinstance(exc, (AiError, AiBlocked)) else f"Lỗi không mong đợi ({type(exc).__name__})."
-        _record(db, task, user, "error", h, started, _take_usage(), message=safe)
+        record(db, task, user, "error", h, started, _take_usage(), message=safe)
         raise
-    _record(db, task, user, "ok", h, started, _take_usage())
+    record(db, task, user, "ok", h, started, _take_usage())
     if cache and h:
         db.query(AiCache).filter(AiCache.created_at < dt.datetime.utcnow() - dt.timedelta(hours=CACHE_HOURS)).delete(synchronize_session=False)
         db.merge(AiCache(key=h, task=task, output=json.dumps(result, ensure_ascii=False), created_at=dt.datetime.utcnow()))
@@ -332,7 +335,7 @@ def alert_if_needed(db: Session, post=None) -> bool:
     try:
         from . import secrets_box
         from .spend.models import SpendNotifyChannel
-        from .spend.notify import NotifyError, _post_json, validate_discord_url
+        from .shared.webhook import WebhookError as NotifyError, post_json as _post_json, validate_discord_url
         post = post or _post_json
         text = (f"**ICO — chi phí AI tháng {now:%m/%Y}: {spent:.2f} USD** (ngưỡng cảnh báo {threshold} USD, "
                 f"hạn mức {cfg.budget_usd or 100} USD). Xem chi tiết ở Cài đặt → AI & MCP.")

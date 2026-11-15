@@ -264,7 +264,7 @@ def sizing_defaults(user: User = Depends(get_current_user)):
 def sizing_ai_narrative(payload: SizingPayload, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """A7 — AI explanation of the computed option, risks, questions for the customer."""
     from .. import ai_advanced, ai_platform
-    from ..spend import ai as transport
+    from ..shared import ai_transport as transport
     result = _build(payload)
     try:
         return ai_advanced.sizing_narrative(db, user, result)

@@ -61,11 +61,11 @@ def run_json(db: Session, user: Optional[User], task: str, system: str, facts: A
     import json
     import time
 
-    from .spend import ai as transport
+    from .shared import ai_transport as transport
     try:
         cfg = ai_platform.check(db, task, user)
     except ai_platform.AiBlocked as exc:
-        ai_platform._record(db, task, user, "blocked", None, time.monotonic(), message=str(exc))
+        ai_platform.record(db, task, user, "blocked", None, time.monotonic(), message=str(exc))
         raise
     masker = ai_platform.masker_for(db) if (cfg.mask_names is None or cfg.mask_names) else ai_platform.Masker([])
     masked = masker.mask(facts)

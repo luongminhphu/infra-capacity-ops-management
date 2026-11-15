@@ -11,7 +11,8 @@ from .. import ai_platform, ai_tasks, secrets_box
 from ..database import get_db
 from ..models import User
 from ..security import get_current_user, is_admin, require_admin
-from ..spend import ai as transport, service
+from ..shared import ai_transport as transport
+from ..spend import service
 from ..spend.models import SpendAiConfig
 
 router = APIRouter(prefix="/api", tags=["ai"])
@@ -114,7 +115,7 @@ def home_brief(user: User = Depends(get_current_user), db: Session = Depends(get
     try:
         ai_platform.check(db, "home_brief", user)          # before building facts / masker (cheap refusal)
     except ai_platform.AiBlocked as exc:
-        ai_platform._record(db, "home_brief", user, "blocked", None, time.monotonic(), message=str(exc))
+        ai_platform.record(db, "home_brief", user, "blocked", None, time.monotonic(), message=str(exc))
         raise HTTPException(409, str(exc)) from exc
     facts = ai_tasks.home_facts(db, user)
     try:

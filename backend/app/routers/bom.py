@@ -14,7 +14,7 @@ from .. import bom, excel_bom
 from ..features import require_feature
 from ..models import User
 from ..security import get_current_user
-from ..spend import files
+from ..shared import filetype as files
 
 router = APIRouter(prefix="/api/bom", tags=["bom"], dependencies=[Depends(require_feature("bom"))])
 MAX_UPLOAD = 15 * 1024 * 1024

@@ -315,7 +315,7 @@ def read_document_ai(code: str, payment_id: int, doc_id: int, request: Request,
     """A9 — AI reads the attached invoice PDF; the comparison with the payment (amount, vendor tax
     code, contract reference) is done here by code. Nothing is changed: the user ticks the document."""
     from .. import ai_advanced, ai_platform
-    from ..spend import ai as transport
+    from ..shared import ai_transport as transport
     c = _contract(db, code)
     p = _payment(db, c, payment_id)
     d = _doc(db, p, doc_id)

@@ -236,11 +236,11 @@ def invoice_checks(inv: Dict[str, Any], expected_amount: int, vendor_tax: Option
 
 def read_invoice(db: Session, user: Optional[User], pdf: bytes) -> Dict[str, Any]:
     """AI reads the PDF (cached by file hash). Returns the cleaned fields. Raises AiBlocked / AiError."""
-    from .spend import ai as transport
+    from .shared import ai_transport as transport
     try:
         cfg = ai_platform.check(db, "invoice_read", user)
     except ai_platform.AiBlocked as exc:
-        ai_platform._record(db, "invoice_read", user, "blocked", None, time.monotonic(), message=str(exc))
+        ai_platform.record(db, "invoice_read", user, "blocked", None, time.monotonic(), message=str(exc))
         raise
     if len(pdf) > MAX_PDF_BYTES:
         raise transport.AiError("File quá lớn để AI đọc (tối đa 20 MB).")

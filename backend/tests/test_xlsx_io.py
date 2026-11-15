@@ -6,7 +6,7 @@ import zipfile
 import pytest
 from openpyxl import Workbook
 
-from app.platform import xlsx_io
+from app.shared import xlsx_io
 
 from test_spend_opex import admin, app_  # noqa: F401  (fixtures)
 

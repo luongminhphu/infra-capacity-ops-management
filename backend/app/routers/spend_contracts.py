@@ -229,7 +229,7 @@ def diff_ai_summary(code: str, from_: int = Query(alias="from", ge=1), to: int =
                     user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
     """A8 — AI summary of the from→to changes (topic, risk for the buyer). Same access as the diff."""
     from .. import ai_advanced, ai_platform
-    from ..spend import ai as transport
+    from ..shared import ai_transport as transport
     diff = diff_versions(code, from_, to, user, db)
     try:
         return ai_advanced.contract_summary(db, user, diff)
