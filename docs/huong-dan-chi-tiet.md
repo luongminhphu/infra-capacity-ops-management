@@ -4,7 +4,8 @@
 
 Ứng dụng theo dõi capacity, compliance, mô phỏng what-if cho hạ tầng ảo hoá và **giám sát backup
 Veritas NetBackup**, hỗ trợ **truy vấn live tới 4 vCenter và 4 NetBackup primary server (tài khoản chỉ đọc)** song song với import CSV/JSON thủ công, lưu lịch sử theo thời
-gian bằng PostgreSQL, và giao diện **điều hướng theo luồng công việc** (sidebar trái, HSC design system).
+gian bằng PostgreSQL, và giao diện **điều hướng theo luồng công việc** (sidebar trái). App web dùng bảng màu
+“Phòng máy” + font Be Vietnam Pro; báo cáo PDF / Excel giữ HSC Design System (`design-system/ico/MASTER.md`).
 
 ### Cấu trúc giao diện (super app — `docs/design/super-app.md`)
 
@@ -33,6 +34,59 @@ Menu chia theo **công việc**, không theo nguồn dữ liệu: **Vận hành*
 | | **Tài liệu** | Tờ trình · Báo cáo (Trung tâm báo cáo) |
 | Hệ thống | **Cài đặt** | Tiêu chí & ngưỡng · Nguồn dữ liệu · Backup (nguồn & ngưỡng) · Tính năng · Chi phí & nhắc hạn · AI & MCP · Người dùng & quyền · Đăng nhập & bảo mật · Thương hiệu |
 
+### Cách đọc và thao tác trên giao diện
+
+Mọi trang theo cùng ba quy ước (chi tiết thiết kế: `design-system/ico/MASTER.md`, bối cảnh `docs/design/redesign/`).
+
+**1. Kết luận trước, bằng chứng sau.** Trang chủ và Điều hành mở bằng **khối kết luận**: vạch màu trạng thái, nhãn
+trạng thái, một câu kết luận và câu dẫn. Câu ở tab Điều hành trùng với hộp “Tổng kết — vấn đề & quyết định” của PDF Vận hành.
+Dưới đó là dải KPI có **bullet bar** (vạch mảnh 80 % = bắt đầu THEO DÕI, vạch đậm 100 % = ngưỡng).
+
+![Trang chủ — khối kết luận, tóm tắt 5 miền, hộp việc dạng danh sách → chi tiết](images/ui/trang-chu.png)
+
+![Điều hành (giao diện sáng) — kết luận, danh mục quyết định, dải KPI](images/ui/dieu-hanh.png)
+
+**2. Trạng thái đọc được không cần màu.** 4 mức luôn có **biểu tượng + nhãn chữ**:
+
+| Nhãn | Biểu tượng | Hình thức |
+|---|---|---|
+| AN TOÀN | vòng tròn có dấu ✓ | viền mảnh |
+| THEO DÕI | con mắt | nền hổ phách nhạt |
+| CẢNH BÁO | tam giác ! | nền cam nhạt + vạch trái |
+| VƯỢT NGƯỠNG | bát giác ✕ | **khối đỏ đặc**, chữ trắng |
+
+Ở danh sách, biểu tượng nằm đầu dòng. Trình đọc màn hình đọc kèm nhãn. Thẻ xám (vd “Đang bật”, “Từ policy”) là
+**loại / thuộc tính**, không phải trạng thái.
+
+**3. Danh sách → chi tiết, không rời trang.** Hộp việc, Compliance, Client & RPO, Opex, Hợp đồng, Đợt thanh toán dùng cùng
+một khung: danh sách bên trái (nhóm theo mức hoặc theo hạn, mỗi nhóm có tổng), chi tiết bên phải.
+- **Chế độ xem** (nút tròn trên đầu danh sách) thay cho ô chọn trạng thái, vd Opex: *Cần theo dõi · Sắp hết hạn · Quá hạn · Tất cả*.
+- **Bàn phím**: `J` / `K` (hoặc ↓ / ↑) chuyển dòng, `Enter` mở; Trang chủ có thêm `E` (Đánh dấu xong), `H` (Ẩn 7 ngày).
+  `Ctrl + K` tìm host / VM / mã ở mọi trang.
+- Màn hình **dưới 1024 px**: danh sách chiếm toàn màn; bấm một dòng thì chi tiết mở bên dưới (Compliance, Client & RPO,
+  Trang chủ) hoặc trong hộp thoại (Opex, Hợp đồng).
+
+![Compliance — phát hiện nhóm theo mức độ, chi tiết có “Nên làm gì” và mã đối soát](images/ui/compliance.png)
+
+![Opex — chế độ xem, nhóm theo mốc hết hạn kèm tổng tiền, chi tiết có hành động chính ở đầu](images/ui/opex.png)
+
+Các trang tổng quan khác:
+
+![Capacity — dải KPI có bullet bar, small multiples theo cluster](images/ui/capacity.png)
+
+![Backup — kết luận, dải KPI, biểu đồ số job và dung lượng tách riêng](images/ui/backup.png)
+
+![Client & RPO (giao diện sáng) — nhóm theo đánh giá, chi tiết có nút “Xem job của client”](images/ui/backup-client-rpo.png)
+
+![Hợp đồng (giao diện sáng) — chế độ xem theo trạng thái, chi tiết version / thanh toán bên phải](images/ui/hop-dong.png)
+
+![Đợt thanh toán — nhóm theo hạn kèm tổng tiền; chọn một đợt mở hợp đồng với đợt đó đã mở rộng](images/ui/dot-thanh-toan.png)
+
+**Sáng / tối và điện thoại.** Nút mặt trời / mặt trăng ở chân sidebar đổi giao diện (lưu theo máy). Dưới 1024 px sidebar thu
+thành ngăn kéo (nút ☰).
+
+<img src="images/ui/trang-chu-dien-thoai.png" alt="Trang chủ trên điện thoại (390 px)" width="260">
+
 **Trang chủ "Hôm nay cần làm"** (chung cho mọi người, lọc theo quyền):
 - **Bản tin capacity** và **thẻ trạng thái từng miền** (Capacity, Backup, License, Chi phí & hợp đồng).
 - **Hộp việc** gom từ mọi module:
@@ -42,7 +96,10 @@ Menu chia theo **công việc**, không theo nguồn dữ liệu: **Vận hành*
   - đợt thanh toán đến hạn;
   - báo giá chờ kiểm tra (Biên tập) / chờ chọn NCC (Duyệt);
   - tờ trình chờ duyệt (Duyệt).
-- Mỗi mục bấm vào là tới đúng trang (kể cả mở chi tiết khoản Opex). Đánh dấu **Xong** hoặc **Ẩn 7 ngày** theo từng người.
+- Mỗi mục mở chi tiết ngay bên phải: **Nên làm gì**, số liệu, nút **Mở trang nguồn** (tới đúng trang, kể cả mở chi tiết
+  khoản Opex). Đánh dấu **Xong** hoặc **Ẩn 7 ngày** theo từng người.
+- **Giao việc / Ai xử lý**: bấm **Giao việc** để giao mục cho một người (ghi nhật ký). Người được giao phải có quyền xem
+  module của mục đó. Chế độ xem: *Cần xử lý · Giao cho tôi · Chưa giao · Đã xong*.
   Mục xấu đi (lên mức cao hơn) sẽ hiện lại.
 - Bộ lọc được nhớ phía máy chủ (`/api/me/prefs`).
 
@@ -53,7 +110,9 @@ Trong 30 ngày / theo tháng*:
 - License hết hạn
 - Báo giá hết hiệu lực
 
-**Hợp đồng & thanh toán → Đợt thanh toán**: mọi đợt của mọi hợp đồng, kèm tình trạng hồ sơ và tổng chưa thanh toán.
+**Hợp đồng & thanh toán → Đợt thanh toán**: mọi đợt của mọi hợp đồng, nhóm theo hạn (Quá hạn · Trong 30 ngày · 31–90 ngày ·
+Sau 90 ngày · Chưa có hạn · Đã thanh toán) kèm tổng tiền từng nhóm, tình trạng hồ sơ và tổng chưa thanh toán. Chọn một đợt là mở
+hợp đồng của đợt đó ở bên phải để tick hồ sơ, nộp hồ sơ, ghi nhận thanh toán.
 **Mô phỏng & quy hoạch → Quy hoạch tài nguyên**: nút **Xem kết quả** hiện ngay trên màn hình đề xuất, bảng theo kịch bản
 và theo cluster (cùng engine với PDF).
 
@@ -152,10 +211,11 @@ Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc khô
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác
 nhận theo design system (thay `confirm()` của trình duyệt), trạng thái rỗng.
 
-Giao diện dùng HSC design system: dark theme mặc định (nền đen, bề mặt `#14171A`, brand `#2681FF`),
-light theme chuyển bằng nút ở chân sidebar; font Inter, số dùng tabular-nums, màu trạng thái
-AN TOÀN/THEO DÕI/CẢNH BÁO/VƯỢT NGƯỠNG nhất quán giữa web và PDF. Dưới 1024px sidebar thu thành
-ngăn kéo (drawer).
+Giao diện web dùng bảng màu “Phòng máy” (graphite ánh xanh, tín hiệu cyan; tối mặc định, sáng chuyển bằng nút ở chân
+sidebar), font Be Vietnam Pro và JetBrains Mono cho mã máy, tự host trong `frontend/vendor/`; số dùng tabular-nums.
+Báo cáo PDF / Excel giữ màu và font Inter của HSC Design System. Nhãn AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG
+và ngưỡng giống nhau giữa web, PDF, Excel. Dưới 1024px sidebar thu thành ngăn kéo (drawer). Xem mục
+“Cách đọc và thao tác trên giao diện” ở trên.
 
 ### Xuất báo cáo PDF (khổ A4)
 

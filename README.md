@@ -26,6 +26,16 @@ Menu chia hai miền, mỗi mục gồm các tab trong trang. Địa chỉ trang
 | | **Tài liệu** | Tờ trình theo mẫu .docx, Trung tâm báo cáo, Kho báo cáo |
 | Hệ thống | **Cài đặt** | Tiêu chí & ngưỡng, nguồn dữ liệu, tính năng bật / tắt, chi phí & nhắc hạn, AI & MCP, người dùng & quyền, đăng nhập & bảo mật, thương hiệu |
 
+Giao diện: **kết luận trước** (một câu + trạng thái), trạng thái 4 mức luôn có biểu tượng + nhãn, và khung **danh sách →
+chi tiết** (phím J / K / Enter). Sáng / tối, dùng được trên điện thoại. Cách đọc từng trang:
+[hướng dẫn chi tiết — Cách đọc và thao tác](docs/huong-dan-chi-tiet.md#cách-đọc-và-thao-tác-trên-giao-diện).
+
+| Trang chủ (tối) | Điều hành (sáng) |
+|---|---|
+| ![Trang chủ](docs/images/ui/trang-chu.png) | ![Điều hành](docs/images/ui/dieu-hanh.png) |
+| **Opex** | **Hợp đồng** |
+| ![Opex](docs/images/ui/opex.png) | ![Hợp đồng](docs/images/ui/hop-dong.png) |
+
 Tính năng dùng chung trên mọi trang:
 - Tìm kiếm **Ctrl + K** và thẻ Host / VM.
 - Cảnh báo Discord khi chạm mức 90%.
