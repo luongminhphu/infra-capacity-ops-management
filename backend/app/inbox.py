@@ -154,6 +154,10 @@ def spend_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
     for p in db.query(Proposal).filter(Proposal.status == "submitted").limit(MAX_PER_SOURCE):
         out.append(item("spend", "task", _key("tt", p.code), f"{p.code} — tờ trình chờ duyệt", p.subject,
                         page="spend-proposals", feature="spend", role="spend:approver"))
+    from .spend.models import BudgetPlan
+    for bp in db.query(BudgetPlan).filter(BudgetPlan.status == "submitted").limit(MAX_PER_SOURCE):
+        out.append(item("spend", "task", _key("kh", bp.id, bp.row_version), f"Kế hoạch ngân sách NTC {bp.fiscal_year} (v{bp.version}) chờ duyệt",
+                        bp.name, page="spend-plan", feature="spend", role="spend:approver"))
     return out
 
 

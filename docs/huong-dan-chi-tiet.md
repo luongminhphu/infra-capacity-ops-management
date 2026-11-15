@@ -674,6 +674,28 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   **Excel** đủ từng dòng: Tổng quan, Chi tiết, Hết hạn theo quý, Từ Capex, Nhà cung cấp, Bộ lọc. Ô chữ do người
   dùng nhập luôn ghi dạng văn bản (không thành công thức Excel).
 
+**Kế hoạch ngân sách năm sau (đã có)** — Ngân sách & chi phí → *Kế hoạch năm sau*. Thiết kế:
+[`docs/design/spend-budget-plan.md`](design/spend-budget-plan.md).
+
+- **Lập kế hoạch NTC sau** (Biên tập). Hệ thống tự gợi ý các dòng:
+  - *Gia hạn*: Opex có kỳ kế tiếp bắt đầu trong năm, tính theo số kỳ × (1 + % tăng giá mặc định, vd 5%);
+  - *Đã ghi nhận*: Opex đã thuộc năm sau, gồm cả Opex sinh từ Capex;
+  - *Dự án Capex*: dự án của năm sau.
+
+  Thêm **đề xuất mới** cho dịch vụ / dự án chưa có.
+- **Mỗi dòng** sửa được: % tăng giá riêng, số tiền nhập tay, ưu tiên (Bắt buộc / Nên có / Tuỳ chọn), nhà cung cấp, ngày
+  bắt đầu. Có thể bỏ một dòng khỏi kế hoạch, nhưng phải ghi lý do.
+- **Trần ngân sách**: dòng làm tổng vượt trần (xếp theo ưu tiên) được đánh dấu *Vượt trần*.
+- **Phân tích**: so với thực tế năm nay, theo loại chi phí, theo quý (dòng tiền).
+- **Làm mới gợi ý**: cập nhật theo dữ liệu mới nhất, không mất phần đã sửa. Nguồn đã đổi thì dòng được đánh dấu để
+  xem lại.
+- **Duyệt và áp dụng:**
+  - Gửi duyệt → Duyệt (quyền Duyệt). Người duyệt thấy việc này trong hộp việc.
+  - Sau khi duyệt, có thể *Tạo Opex / Capex từ đề xuất mới*: tạo Opex *Dự kiến* / Capex *Nháp*.
+  - Muốn đổi kế hoạch đã duyệt thì dùng *Sửa đổi* để tạo bản v2. Duyệt v2 thì v1 thành "Đã thay thế".
+- **Theo dõi thực hiện**: kế hoạch đã duyệt hiện số *Thực hiện / Chênh lệch* từng dòng, theo chuỗi gia hạn và mã đã
+  tạo, cùng danh sách **phát sinh ngoài kế hoạch**. Xuất Excel gồm 4 sheet.
+
 **Giai đoạn 4 — Hợp đồng và version (đã có)**
 
 - Hợp đồng mã `HD-<năm tài chính>-<số>` **bắt buộc gắn đúng một** khoản Opex hoặc một dự án Capex (ràng buộc trong DB);

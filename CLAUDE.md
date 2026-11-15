@@ -48,7 +48,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Schema DB | `models.py` + migration bổ sung trong `database.py::ensure_schema()` |
 | Auth | `security.py` (`get_current_user`, `require_admin`), `auth_entra.py` (SSO Entra ID OIDC), `passkeys.py` (WebAuthn cho tài khoản cục bộ, link mời), `routers/auth.py`, `routers/users_admin.py` (tài khoản, passkey, trạng thái App Proxy); `PUBLIC_URL` = URL ngoài (App Proxy); UI `frontend/js/views/passkey.js` |
 | MCP server (chỉ đọc) | `mcp_server.py`, `observability.py` |
-| Chi phí & Hợp đồng IT (`spend`) | `backend/app/spend/` (`models.py`, `service.py`, `fiscal.py`, `roles.py`, `files.py`, `notify.py`, `reminders.py`, `capex.py`, `report.py`, `contracts.py`, `proposal_doc.py`, `ai.py`, `quotes.py`, `renovation.py`), `routers/spend.py`, `spend_admin.py`, `spend_capex.py`, `spend_reports.py`, `spend_contracts.py`, `spend_payments.py`, `spend_proposals.py`, `spend_quotes.py`, `spend_renovations.py`, `report_spend.py`, `report_renovation.py` (PDF), `excel_spend.py`, `excel_quotes.py`, `excel_renovation.py`, `frontend/js/views/spend.js`, `spend_capex.js`, `spend_report.js`, `spend_contract.js`, `spend_payment.js`, `spend_proposal.js`, `spend_quote.js`, `spend_renovation.js`; thiết kế `docs/design/spend-module.md`, `spend-vendor-quotes.md` |
+| Chi phí & Hợp đồng IT (`spend`) | `backend/app/spend/` (`models.py`, `service.py`, `fiscal.py`, `roles.py`, `files.py`, `notify.py`, `reminders.py`, `capex.py`, `report.py`, `contracts.py`, `proposal_doc.py`, `ai.py`, `quotes.py`, `renovation.py`, `budget_plan.py` — kế hoạch năm sau), `routers/spend.py`, `spend_admin.py`, `spend_capex.py`, `spend_reports.py`, `spend_contracts.py`, `spend_payments.py`, `spend_proposals.py`, `spend_quotes.py`, `spend_renovations.py`, `spend_plans.py`, `report_spend.py`, `report_renovation.py` (PDF), `excel_spend.py`, `excel_quotes.py`, `excel_renovation.py`, `excel_budget_plan.py`, `frontend/js/views/spend.js`, `spend_capex.js`, `spend_report.js`, `spend_contract.js`, `spend_payment.js`, `spend_proposal.js`, `spend_quote.js`, `spend_renovation.js`, `spend_plan.js`; thiết kế `docs/design/spend-module.md`, `spend-vendor-quotes.md`, `spend-budget-plan.md` |
 | Chuẩn hoá BOM | `backend/app/bom.py` (đọc Dell configurator / Cisco CCW / HPE / thường, phân loại, tóm tắt), `excel_bom.py`, `routers/bom.py`, `frontend/js/views/bom.js` |
 | Trang chủ / hộp việc / lịch việc / cảnh báo Discord 90% | `backend/app/inbox.py` (nguồn việc từng module, cache 60 s), `ops_alerts.py`, `routers/home.py` (`/api/inbox`, `/api/agenda`, `/api/me/prefs`), `frontend/js/views/home.js` |
 | Tìm kiếm Ctrl + K / thẻ Host-VM | `backend/app/routers/entities.py` (`/api/search`, `/api/entities/host|vm`), `frontend/js/views/entity.js`, `ui.js` (`uiEntityLink`) |
@@ -89,7 +89,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 8. **Hiệu năng**: đọc vCenter theo lô bằng PropertyCollector; ghi snapshot bằng bulk INSERT;
    tránh truy vấn lịch sử theo từng VM trong vòng lặp (N+1).
 9. **Test**: thêm hoặc sửa logic tính toán (`capacity`, `planning`, `sizing`, `licensing`,
-   `backup/analysis`) thì phải có test trong `backend/tests/` với số liệu cụ thể. Chạy
+   `backup/analysis`, `spend/budget_plan`) thì phải có test trong `backend/tests/` với số liệu cụ thể. Chạy
    `python -m pytest tests -q` trước khi kết thúc.
 
 ## Skill của dự án (`.claude/skills/`)

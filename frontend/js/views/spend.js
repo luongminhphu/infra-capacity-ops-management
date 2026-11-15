@@ -100,6 +100,7 @@ async function spRenderSpendSub() {
     return;
   }
   if (spState.sub === 'capex' && typeof renderCapexPage === 'function') { await renderCapexPage(); return; }
+  if (spState.sub === 'plan' && typeof renderPlanPage === 'function') { await renderPlanPage(); return; }
   if (spState.sub === 'overview' && typeof renderSpendOverview === 'function') { await renderSpendOverview(); return; }
   if (spState.sub === 'contracts' && typeof renderContractsPage === 'function') { await renderContractsPage(); return; }
   if (spState.sub === 'proposals' && typeof renderProposalsPage === 'function') { await renderProposalsPage(); return; }

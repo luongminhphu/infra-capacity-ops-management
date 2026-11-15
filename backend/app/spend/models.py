@@ -764,3 +764,83 @@ class RenovationCost(Base):
     note = Column(String(500), nullable=True)
     updated_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(255), nullable=False)
+
+
+# ---------------------------------------------------------------- Kế hoạch ngân sách năm sau (docs/design/spend-budget-plan.md)
+PLAN_STATUSES = ("draft", "submitted", "approved", "superseded")
+PLAN_LINE_SOURCES = ("renewal", "committed", "capex", "new")
+PLAN_PRIORITIES = ("must", "should", "could")
+
+
+class BudgetPlan(_Audited, Base):
+    """The IT budget plan of one fiscal year, version by version (v1, v2 … after a revision).
+    At most one approved version per year: approving a new one supersedes the previous one."""
+    __tablename__ = "budget_plans"
+    __table_args__ = (
+        UniqueConstraint("fiscal_year", "version", name="uq_budget_plan_version"),
+        CheckConstraint(_in("status", PLAN_STATUSES), name="ck_budget_plan_status"),
+        CheckConstraint("fiscal_year BETWEEN 2000 AND 2100", name="ck_budget_plan_fy"),
+        CheckConstraint("uplift_pct >= 0 AND uplift_pct <= 100", name="ck_budget_plan_uplift"),
+        CheckConstraint("budget_cap IS NULL OR budget_cap >= 0", name="ck_budget_plan_cap"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    fiscal_year = Column(Integer, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    name = Column(String(255), nullable=False)
+    status = Column(String(12), nullable=False, default="draft")
+    uplift_pct = Column(Numeric(5, 2), nullable=False, default=5)      # default price increase of renewals
+    budget_cap = Column(BigInteger, nullable=True)                     # ceiling after VAT; None = no ceiling
+    notes = Column(Text, nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    submitted_by = Column(String(255), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    approved_by = Column(String(255), nullable=True)
+    revised_from_id = Column(Integer, ForeignKey("budget_plans.id", ondelete="SET NULL"), nullable=True)
+    row_version = Column(Integer, nullable=False, default=1)
+
+
+class BudgetPlanLine(Base):
+    """One line of a plan. `source` + `source_id` tie it to what suggested it (an Opex to renew, an
+    Opex already booked in the year, a Capex project of the year); `new` lines are typed by hand.
+    amount_mode 'auto' follows base × (1 + uplift); 'manual' keeps the amount typed by the user."""
+    __tablename__ = "budget_plan_lines"
+    __table_args__ = (
+        CheckConstraint(_in("source", PLAN_LINE_SOURCES), name="ck_bpl_source"),
+        CheckConstraint(_in("kind", ("opex", "capex")), name="ck_bpl_kind"),
+        CheckConstraint(_in("priority", PLAN_PRIORITIES), name="ck_bpl_priority"),
+        CheckConstraint("amount_mode IN ('auto', 'manual')", name="ck_bpl_amount_mode"),
+        CheckConstraint("amount_net >= 0 AND amount_gross >= amount_net AND base_net >= 0", name="ck_bpl_amount"),
+        CheckConstraint("vat_pct >= 0 AND vat_pct <= 100", name="ck_bpl_vat"),
+        CheckConstraint("uplift_pct IS NULL OR (uplift_pct >= 0 AND uplift_pct <= 100)", name="ck_bpl_uplift"),
+        CheckConstraint("terms >= 1 AND terms <= 366", name="ck_bpl_terms"),
+        UniqueConstraint("plan_id", "source", "source_id", name="uq_bpl_source"),
+        Index("ix_bpl_plan", "plan_id", "sort_order"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    plan_id = Column(Integer, ForeignKey("budget_plans.id", ondelete="CASCADE"), nullable=False)
+    source = Column(String(10), nullable=False)
+    source_id = Column(Integer, nullable=True)          # opex_items.id or capex_projects.id; NULL for new lines
+    source_code = Column(String(20), nullable=True)     # OPX-… / CPX-… shown to the user
+    kind = Column(String(5), nullable=False)
+    category_id = Column(Integer, ForeignKey("spend_categories.id", ondelete="RESTRICT"), nullable=False, index=True)
+    vendor_id = Column(Integer, ForeignKey("spend_vendors.id", ondelete="SET NULL"), nullable=True)
+    cost_center_id = Column(Integer, ForeignKey("spend_cost_centers.id", ondelete="SET NULL"), nullable=True)
+    title = Column(String(255), nullable=False)
+    start_date = Column(Date, nullable=True)            # first payment / start in the year -> quarter
+    terms = Column(Integer, nullable=False, default=1)  # renewals starting inside the year
+    base_net = Column(BigInteger, nullable=False, default=0)   # today's cost (before uplift), before VAT
+    uplift_pct = Column(Numeric(5, 2), nullable=True)   # None = the plan's default (renewals only)
+    amount_mode = Column(String(8), nullable=False, default="auto")
+    amount_net = Column(BigInteger, nullable=False, default=0)
+    vat_pct = Column(Numeric(5, 2), nullable=False, default=10)
+    amount_gross = Column(BigInteger, nullable=False, default=0)
+    priority = Column(String(8), nullable=False, default="must")
+    included = Column(Boolean, nullable=False, default=True)
+    note = Column(String(1000), nullable=True)          # justification, or why the line is left out
+    stale = Column(Boolean, nullable=False, default=False)     # its source no longer suggests it (after a refresh)
+    applied_code = Column(String(20), nullable=True)    # OPX / CPX created from a `new` line once the plan is approved
+    sort_order = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_by = Column(String(255), nullable=True)

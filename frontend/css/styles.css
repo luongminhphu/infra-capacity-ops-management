@@ -915,6 +915,9 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sr-year-bars{display:flex;height:18px;background:var(--neutral-a8);border-radius:var(--radius-xs);overflow:hidden;}
 .sr-seg{display:block;height:100%;}
 .sr-year-val{font-size:var(--fs-body-sm);text-align:right;font-variant-numeric:var(--numeric-features);}
+.bp-out td{color:var(--text-tertiary);}
+.bp-out td b{color:var(--text-secondary);}
+.rpt-chips{display:flex;flex-wrap:wrap;gap:var(--space-2);}
 .sr-bar{display:inline-block;width:80px;height:8px;background:var(--neutral-a8);border-radius:var(--radius-xs);overflow:hidden;vertical-align:middle;}
 .sr-bar > span{display:block;height:100%;background:var(--chart-optimized);}
 .data-table tr.sr-group td{background:var(--bg-heading);}
