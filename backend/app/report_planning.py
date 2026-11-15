@@ -3,6 +3,7 @@ nguyên"): same header/summary layout as the Operations and Technical
 reports, then current state + assumptions, demand projections vs capacity,
 node roadmap per cluster and per-cluster proposals. Reuses the shared
 formatting / chart helpers from report_pdf."""
+from .pdf_kit import status_pill as _status_mark  # one status mark for every report (MASTER.md §3)
 from typing import Any, Dict, List, Optional
 
 from . import planning
@@ -133,7 +134,7 @@ def _summary_box(plan: Dict[str, Any], rec: Dict[str, Any]) -> str:
     return f"""
     <div class="exec-brief {rec['statusCls']}">
       <div class="exec-brief-head">
-        <span class="pill" style="color:{COLORS[fg_key]};background:{COLORS[bg_key]};border-color:{COLORS[fg_key]}55;font-size:9px;">{esc(rec['statusLabel'])}</span>
+        {_status_mark({"text": rec['statusLabel'], "cls": rec['statusCls']})}
         <span class="exec-brief-title">Tổng kết đề xuất</span>
       </div>
       <div class="exec-brief-headline">{esc(rec['headline'])}</div>
@@ -154,7 +155,7 @@ def _current_state_table(plan: Dict[str, Any]) -> str:
                  f'<td>{fmt_int(m["usedVcpu"])} vCPU · {fmt_int(m["usedRamGB"])} GB</td>'
                  f'<td>{fmt_num(m["cpuOvercommit"], 2, "x")} → {fmt_pct(m["cpuPct"], 0)}</td>'
                  f'<td>{fmt_num(m["ramOvercommit"], 2, "x")} → {fmt_pct(m["ramPct"], 0)}</td>'
-                 f'<td><span class="pill" style="color:{COLORS[ha_cls]};background:{COLORS[STATUS_COLOR[ha_cls][1]]};border-color:{COLORS[ha_cls]}55;">{ha_txt}</span></td>'
+                 f'<td>{_status_mark({"text": ha_txt, "cls": ha_cls})}</td>'
                  f'<td>{status_pill(c["cpuStatus"] if c["cpuStatus"]["cls"] != "ok" else c["ramStatus"])}</td></tr>')
     return f"""<table>
       <thead><tr><th>Cluster</th><th>Host</th><th>VM bật/tổng</th><th>Năng lực vật lý</th><th>Đã cấp phát</th>

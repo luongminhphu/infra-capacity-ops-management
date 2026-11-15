@@ -4,6 +4,7 @@ same dict the License tab renders — and lays it out management-first:
 status + decisions requested, purchase scope, per-cluster overview, demand
 vs entitlement vs shortfall, then the basis (rules, formula, assumptions,
 data gaps). Target length 2–3 pages."""
+from .pdf_kit import status_pill as _status_mark  # one status mark for every report (MASTER.md §3)
 from typing import Any, Dict, List, Optional
 
 from .pdf_kit import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
@@ -32,8 +33,9 @@ def _rng(a, b) -> str:
 
 
 def _pill(text: str, cls: str) -> str:
-    fg, bg = STATUS_COLOR.get(cls, STATUS_COLOR["na"])
-    return f'<span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;">{esc(text)}</span>'
+    """Same status mark as every report and the web (glyph + ink label; crit = solid block)."""
+    from .report_pdf import status_pill
+    return status_pill({"text": text, "cls": cls})
 
 
 def _status_pill(status: str) -> str:
@@ -160,7 +162,7 @@ def _summary_box(res: Dict[str, Any]) -> str:
     return f"""
     <div class="exec-brief {status_cls}">
       <div class="exec-brief-head">
-        <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{esc(status_label.upper())}</span>
+        {_status_mark({"text": status_label.upper(), "cls": status_cls})}
         <span class="exec-brief-title">Tổng kết — kết luận &amp; quyết định đề nghị</span>
       </div>
       <div class="exec-brief-headline">{esc(headline)}</div>
@@ -197,7 +199,9 @@ def _cluster_table(res: Dict[str, Any]) -> str:
         if c.get("drs"):
             mob.append("DRS")
         rec = c.get("recommendedEdition")
-        rec_html = _pill(ED_TXT[rec], "crit" if rec == "datacenter" else "ok") if rec else '<span style="color:#597090;">—</span>'
+        # edition is a fact, not a status: neutral tag (a red "Datacenter" pill read as VƯỢT NGƯỠNG)
+        rec_html = (f'<span class="pill" style="color:{COLORS["ink"]};background:#FFFFFF;border-color:{COLORS["border"]}">'
+                    f'{esc(ED_TXT[rec])}</span>') if rec else '<span style="color:#597090;">—</span>'
         notes = []
         if c.get("hostsWithAssumedSockets"):
             notes.append(f"{c['hostsWithAssumedSockets']} host giả định socket")

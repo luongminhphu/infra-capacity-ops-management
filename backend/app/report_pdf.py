@@ -148,6 +148,35 @@ def status_pill(status: Optional[Dict[str, str]]) -> str:
             f'{glyph}{esc(status.get("text", "NA"))}</span>')
 
 
+def svg_bullet(pct: Optional[float], width: int = 92, height: int = 8) -> str:
+    """Bullet bar on a 0–120 % scale with notches at 80 % (THEO DÕI) and 100 % (limit) — same mark as
+    the web's uiBullet. Fill is the series color; the status is said by the pill next to it."""
+    w = 0.0 if not _finite(pct) else max(0.0, min(float(pct), 120.0)) / 120.0 * width
+    n80, n100 = width * 80 / 120, width * 100 / 120
+    return (f'<svg width="{width}" height="{height + 4}" viewBox="0 0 {width} {height + 4}" style="vertical-align:middle">'
+            f'<rect x="0" y="2" width="{width}" height="{height}" rx="1.5" fill="{COLORS["surface2"]}" stroke="{COLORS["border"]}" stroke-width=".6"/>'
+            f'<rect x="0" y="2" width="{w:.1f}" height="{height}" rx="1.5" fill="{COLORS["series1"]}"/>'
+            f'<rect x="{n80 - .6:.1f}" y="0" width="1.2" height="{height + 4}" fill="{COLORS["faint"]}"/>'
+            f'<rect x="{n100 - .8:.1f}" y="0" width="1.6" height="{height + 4}" fill="{COLORS["ink"]}"/></svg>')
+
+
+def cluster_bullets_html(clusters: List[Dict[str, Any]], include_storage: bool = False) -> str:
+    """Per-cluster CPU / RAM (/ Storage) bullets with the status pill — replaces a grouped bar chart."""
+    if not clusters:
+        return '<div class="small-note">Không có cluster nào trong phạm vi.</div>'
+    metrics = [("CPU", "cpuPct"), ("RAM", "ramPct")] + ([("Storage", "storagePct")] if include_storage else [])
+    rows = []
+    for c in clusters:
+        cells = "".join(f'<td style="white-space:nowrap">{svg_bullet(c["model"][k], width=58)} '
+                        f'<span class="num" style="display:inline-block;min-width:34px;text-align:right">{fmt_pct(c["model"][k]) if _finite(c["model"][k]) else "NA"}</span></td>'
+                        for _, k in metrics)
+        # status stays in the "Cluster cần quan tâm" table on the same page (this card is half a page wide)
+        rows.append(f'<tr><td class="cb-name"><b>{esc(c["name"])}</b></td>{cells}</tr>')
+    head = "".join(f"<th>{lbl}</th>" for lbl, _ in metrics)
+    return (f'<table class="cluster-bullets"><thead><tr><th>Cluster</th>{head}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table>')
+
+
 def bar_cell(pct: Optional[float], cls: str = "ok", width_px: int = 108, height_px: int = 15, max_scale: float = 100.0) -> str:
     """Progress-bar cell whose fill width is always a FAITHFUL proportion of
     `pct / max_scale` -- two different percentages never render as the same
@@ -784,7 +813,8 @@ def _vm_changes_appendix_html(vm_changes: Optional[Dict[str, Any]]) -> str:
 
     def _pill(r: Dict[str, Any]) -> str:
         if r.get("isPoweredOn"):
-            return f'<span class="pill" style="color:{COLORS["ok"]};border-color:{COLORS["ok"]};background:{COLORS["ok_bg"]};">Powered On</span>'
+            # power state is a fact, not a status: neutral tag (MASTER.md §3)
+            return f'<span class="pill" style="color:{COLORS["ink"]};border-color:{COLORS["border"]};background:#FFFFFF;">Powered On</span>'
         return f'<span class="pill" style="color:{COLORS["muted"]};border-color:{COLORS["border"]};background:{COLORS["surface2"]};">{esc(r.get("powerState") or "Powered Off")}</span>'
 
     def _grouped(items: List[Dict[str, Any]], cols: int, render_row) -> str:
@@ -952,8 +982,8 @@ def _base_css(report_title: str, generated_at: str) -> str:
 @page {{
   size: A4;
   margin: 16mm 14mm 18mm 14mm;
-  @top-left {{ content: "Infra Capacity Ops Management"; font-family:'Inter','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']}; letter-spacing:.04em; text-transform:uppercase; }}
-  @top-right {{ content: "{report_title}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']}; letter-spacing:.04em; text-transform:uppercase; }}
+  @top-left {{ content: "Infra Capacity Ops Management"; font-family:'Inter','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']};   }}
+  @top-right {{ content: "{report_title}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8.5px; color:{COLORS['faint']};   }}
   @bottom-left {{ content: "Tạo lúc {generated_at}"; font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{COLORS['faint']}; }}
   @bottom-right {{ content: "Trang " counter(page) " / " counter(pages); font-family:'Inter','Noto Sans',sans-serif; font-size:8px; color:{COLORS['faint']}; }}
 }}
@@ -962,7 +992,7 @@ body {{ font-family:'Inter','Noto Sans',sans-serif; color:{COLORS['ink']}; font-
 h1,h2,h3,h4 {{ font-family:'Inter','Noto Sans',sans-serif; font-weight:700; color:{COLORS['ink']}; margin:0; }}
 .cover-title {{ font-size:22px; font-weight:800; color:{COLORS['primary_dark']}; margin-bottom:2px; }}
 .cover-sub {{ font-size:12px; color:{COLORS['muted']}; margin-bottom:14px; }}
-.eyebrow {{ font-size:8.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:{COLORS['accent']}; margin-bottom:4px; }}
+.eyebrow {{ font-size:8.5px; font-weight:700;   color:{COLORS['accent']}; margin-bottom:4px; }}
 .meta-row {{ display:flex; gap:18px; font-size:9px; color:{COLORS['muted']}; margin-bottom:16px; flex-wrap:wrap; }}
 .meta-row b {{ color:{COLORS['ink']}; }}
 .section {{ margin-top:16px; break-inside:avoid; }}
@@ -970,13 +1000,13 @@ h1,h2,h3,h4 {{ font-family:'Inter','Noto Sans',sans-serif; font-weight:700; colo
 .section-sub {{ font-size:9px; color:{COLORS['muted']}; margin:-4px 0 8px 11px; }}
 .kpi-grid {{ display:flex; gap:8px; margin-bottom:4px; }}
 .kpi-card {{ flex:1; background:{COLORS['surface']}; border:1px solid {COLORS['border']}; border-radius:6px; padding:9px 11px; }}
-.kpi-label {{ font-size:8px; text-transform:uppercase; letter-spacing:.06em; color:{COLORS['muted']}; font-weight:700; margin-bottom:4px; }}
+.kpi-label {{ font-size:8px;   color:{COLORS['muted']}; font-weight:700; margin-bottom:4px; }}
 .kpi-value {{ font-size:16px; font-weight:800; color:{COLORS['ink']}; }}
 .kpi-sub {{ font-size:8.5px; color:{COLORS['muted']}; margin-top:3px; }}
 table {{ width:100%; border-collapse:collapse; font-size:9px; }}
 thead {{ display:table-header-group; }}
 tr {{ break-inside:avoid; }}
-th {{ text-align:left; background:{COLORS['surface2']}; color:{COLORS['muted']}; font-size:7.8px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; padding:5px 6px; border-bottom:1px solid {COLORS['border']}; }}
+th {{ text-align:left; background:{COLORS['surface2']}; color:{COLORS['muted']}; font-size:7.8px;   font-weight:700; padding:5px 6px; border-bottom:1px solid {COLORS['border']}; }}
 td {{ padding:4.5px 6px; border-bottom:1px solid {COLORS['divider']}; vertical-align:middle; }}
 tbody tr:nth-child(even) {{ background:#F7F8FA; }}
 .pill {{ display:inline-block; padding:1.5px 7px; border-radius:3px; font-size:8px; font-weight:700; border:1px solid; white-space:nowrap; }}
@@ -997,7 +1027,7 @@ tbody tr:nth-child(even) {{ background:#F7F8FA; }}
 .chart-card {{ flex:1; background:{COLORS['surface']}; border:1px solid {COLORS['border']}; border-radius:6px; padding:10px 12px; }}
 .chart-card-title {{ font-size:9.5px; font-weight:700; color:{COLORS['ink']}; margin-bottom:4px; }}
 .headroom-card {{ flex:1; background:{COLORS['surface']}; border:1px solid {COLORS['border']}; border-radius:6px; padding:9px 11px; }}
-.headroom-metric {{ font-size:8px; text-transform:uppercase; letter-spacing:.06em; color:{COLORS['muted']}; font-weight:700; margin-bottom:5px; }}
+.headroom-metric {{ font-size:8px;   color:{COLORS['muted']}; font-weight:700; margin-bottom:5px; }}
 .headroom-value {{ font-size:15px; font-weight:800; color:{COLORS['primary_dark']}; }}
 .headroom-value span {{ font-size:9px; font-weight:600; color:{COLORS['muted']}; }}
 .headroom-sub {{ font-size:8.3px; color:{COLORS['muted']}; margin-top:3px; }}
@@ -1010,16 +1040,21 @@ tbody tr:nth-child(even) {{ background:#F7F8FA; }}
 .assumption-note {{ background:{COLORS['surface2']}; border:1px dashed {COLORS['border']}; border-radius:5px; padding:6px 10px; font-size:8px; color:{COLORS['muted']}; margin-top:8px; }}
 .radar-legend-item {{ display:flex; align-items:center; gap:5px; font-size:8.3px; color:{COLORS['ink']}; margin-bottom:3px; }}
 .radar-swatch {{ width:9px; height:9px; border-radius:2px; display:inline-block; flex:none; }}
-.exec-brief {{ border:1px solid {COLORS['border']}; border-radius:8px; padding:11px 14px 10px; margin:2px 0 4px; background:{COLORS['surface']}; border-left:5px solid {COLORS['primary']}; }}
-.exec-brief.ok {{ background:#E4F4E7; border-left-color:{COLORS['ok']}; }}
-.exec-brief.warn {{ background:#FFF3B8; border-left-color:{COLORS['warn']}; }}
-.exec-brief.bad {{ background:#F6E6E7; border-left-color:{COLORS['bad']}; }}
-.exec-brief.crit {{ background:#F2E5E6; border-left-color:{COLORS['crit']}; }}
-.exec-brief-head {{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }}
-.exec-brief-title {{ font-size:8.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:{COLORS['muted']}; }}
-.exec-brief-headline {{ font-size:12.5px; font-weight:700; color:{COLORS['ink']}; line-height:1.4; margin-bottom:6px; }}
+.exec-brief {{ border:0; border-left:4px solid {COLORS['border']}; border-radius:0; padding:2px 0 2px 12px; margin:2px 0 8px; background:#FFFFFF; }}
+.exec-brief.ok {{ border-left-color:{COLORS['ok']}; }}
+.exec-brief.warn {{ border-left-color:{COLORS['warn']}; }}
+.exec-brief.bad {{ border-left-color:{COLORS['bad']}; }}
+.exec-brief.crit {{ border-left-color:{COLORS['crit_solid']}; }}
+.exec-brief.na {{ border-left-color:{COLORS['border']}; background:#FFFFFF; }}
+.exec-brief-head {{ display:flex; align-items:center; gap:8px; margin-bottom:4px; }}
+.exec-brief-title {{ font-size:8.5px; font-weight:500; color:{COLORS['muted']}; }}
+.exec-brief-headline {{ font-size:15px; font-weight:600; letter-spacing:-.01em; color:{COLORS['ink']}; line-height:1.3; margin-bottom:7px; }}
 .brief-list {{ margin:0 0 6px 0; padding-left:16px; font-size:9.6px; line-height:1.5; }}
 .brief-list li {{ margin-bottom:2px; }}
+.cluster-bullets {{ width:100%; border-collapse:collapse; font-size:8.6px; }}
+.cluster-bullets th {{ background:transparent; padding:2px 4px; font-size:7.6px; }}
+.cluster-bullets .cb-name {{ max-width:92px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8px; }}
+.cluster-bullets td {{ padding:3px 4px; border-bottom:1px solid {COLORS['divider']}; vertical-align:middle; }}
 .exec-brief-decision {{ font-size:9.6px; padding-top:6px; border-top:1px dashed {COLORS['border']}; color:{COLORS['ink']}; }}
 .exec-brief-decision b {{ color:{COLORS['primary_dark']}; }}
 .rec-card {{ border:1px solid {COLORS['border']}; border-left:4px solid {COLORS['primary']}; border-radius:0 7px 7px 0; padding:8px 11px 7px; margin-bottom:7px; background:{COLORS['surface']}; break-inside:avoid; }}
@@ -1032,7 +1067,7 @@ tbody tr:nth-child(even) {{ background:#F7F8FA; }}
 .rec-title {{ flex:1; font-size:10.6px; font-weight:700; color:{COLORS['ink']}; }}
 .rec-grid {{ display:flex; gap:10px; font-size:8.9px; line-height:1.45; color:{COLORS['ink']}; }}
 .rec-cell {{ flex:1; background:rgba(255,255,255,.7); border:1px solid {COLORS['divider']}; border-radius:5px; padding:5px 7px; }}
-.rec-label {{ font-size:7.4px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:{COLORS['muted']}; margin-bottom:2px; }}
+.rec-label {{ font-size:7.4px; font-weight:700;   color:{COLORS['muted']}; margin-bottom:2px; }}
 .rec-decision {{ margin-top:5px; font-size:9px; color:{COLORS['ink']}; }}
 .rec-decision b {{ color:{COLORS['primary_dark']}; }}
 .rec-refs {{ margin-top:4px; padding-top:4px; border-top:1px dashed {COLORS['divider']}; font-size:8px; color:{COLORS['muted']}; line-height:1.55; }}
@@ -1462,10 +1497,7 @@ def _ha_table_html(ha_rows: List[Dict[str, Any]]) -> str:
       <tr><td><b>{esc(r['cluster'])}</b></td><td colspan="3" class="small-note">Ch\u1ec9 c\u00f3 {fmt_int(r['hosts'])} host \u2014 kh\u00f4ng \u0111\u1ee7 \u0111\u1ec3 ki\u1ec3m tra d\u1ef1 ph\u00f2ng N+1.</td></tr>""")
             continue
         survives = r.get("survives")
-        pill = ('<span class="pill" style="color:%s;background:%s;border-color:%s33">%s</span>' % (
-            COLORS["ok"], COLORS["ok_bg"], COLORS["ok"], "\u0110\u00e1p \u1ee9ng") if survives else
-            '<span class="pill" style="color:%s;background:%s;border-color:%s33">%s</span>' % (
-            COLORS["crit"], COLORS["crit_bg"], COLORS["crit"], "Kh\u00f4ng \u0111\u00e1p \u1ee9ng"))
+        pill = status_pill({"text": "\u0110\u00e1p \u1ee9ng", "cls": "ok"} if survives else {"text": "Kh\u00f4ng \u0111\u00e1p \u1ee9ng", "cls": "crit"})
         rows.append(f"""
       <tr>
         <td><b>{esc(r['cluster'])}</b></td>
@@ -1545,8 +1577,8 @@ body.exec-compact .meta-row {{ margin-bottom:8px; }}
 body.exec-compact .section {{ margin-top:7px; }}
 body.exec-compact .section-title {{ font-size:11.5px; margin-bottom:4px; }}
 body.exec-compact .section-sub {{ font-size:8.2px; margin:-2px 0 5px 11px; }}
-body.exec-compact .exec-brief {{ padding:8px 12px 7px; }}
-body.exec-compact .exec-brief-headline {{ font-size:11.5px; margin-bottom:4px; }}
+body.exec-compact .exec-brief {{ padding:1px 0 1px 10px; }}
+body.exec-compact .exec-brief-headline {{ font-size:13px; margin-bottom:4px; }}
 body.exec-compact .brief-list {{ font-size:8.8px; margin-bottom:4px; }}
 body.exec-compact .exec-brief-decision {{ font-size:8.8px; }}
 body.exec-compact .gauge-row {{ margin-bottom:6px; }}
@@ -1577,7 +1609,7 @@ body.exec-compact .chart-card-title {{ font-size:8.4px; margin-bottom:2px; }}
 .rec-card.compact .rec-num {{ width:14px; height:14px; line-height:14px; font-size:7.8px; }}
 .rec-card.compact .rec-meta {{ display:flex; gap:4px; align-items:center; margin-bottom:4px; }}
 .rec-card.compact .rec-line {{ margin-bottom:2px; color:{COLORS['ink']}; }}
-.rec-card.compact .rec-line b {{ color:{COLORS['muted']}; font-size:7.2px; text-transform:uppercase; letter-spacing:.06em; margin-right:3px; }}
+.rec-card.compact .rec-line b {{ color:{COLORS['muted']}; font-size:7.2px;   margin-right:3px; }}
 .rec-card.compact .rec-decision {{ margin-top:3px; font-size:8.3px; }}
 .rec-card.compact .rec-refs {{ margin-top:3px; padding-top:3px; font-size:7.4px; line-height:1.5; }}
 .rec-card.compact .ref-code {{ font-size:7px; }}
@@ -1719,7 +1751,7 @@ def _exec_summary_html(brief: Dict[str, Any], extra_stats: Optional[List[Dict[st
     return f"""
     <div class="exec-brief {brief['health_cls']}">
       <div class="exec-brief-head">
-        <span class="pill" style="color:{COLORS[fg_key]};background:{COLORS[bg_key]};border-color:{COLORS[fg_key]}55;font-size:9px;">{esc(brief['health_word'])}</span>
+        {status_pill({"text": brief['health_word'], "cls": brief['health_cls']})}
         <span class="exec-brief-title">Tổng kết — vấn đề &amp; quyết định đề nghị</span>
       </div>
       <div class="exec-brief-headline">{esc(brief['headline'])}</div>
@@ -1868,10 +1900,10 @@ def _exec_visual_css() -> str:
     return f"""
 .stat-row {{ display:flex; gap:6px; margin:5px 0 6px; }}
 .stat-tile {{ flex:1; background:#ffffff; border:1px solid {COLORS['border']}; border-radius:6px; padding:5px 8px 4px; }}
-.stat-label {{ font-size:7px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{COLORS['muted']}; }}
+.stat-label {{ font-size:7px; font-weight:700;   color:{COLORS['muted']}; }}
 .stat-value {{ font-size:13.5px; font-weight:800; color:{COLORS['ink']}; line-height:1.25; margin-top:1px; }}
 .stat-sub {{ font-size:7.3px; color:{COLORS['muted']}; margin-top:1px; }}
-.exec-brief .stat-tile {{ background:rgba(255,255,255,.75); }}
+.exec-brief .stat-tile {{ background:{COLORS['surface']}; }}
 .decision-table td {{ vertical-align:top; }}
 .decision-table .rec-num {{ display:inline-block; width:14px; height:14px; line-height:14px; border-radius:50%; background:{COLORS['primary']}; color:#fff; font-size:7.6px; font-weight:700; text-align:center; }}
 .decision-table .decision-action {{ color:{COLORS['muted']}; font-size:7.8px; margin-top:1px; line-height:1.4; }}
@@ -1971,14 +2003,7 @@ def render_executive_html(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]]
     # Page-1 charts: months-to-threshold runway and per-cluster utilisation.
     runway_chart = svg_runway_chart(growth, model, include_storage, width=330)
     chart_clusters = top_risk_clusters[:6]
-    cluster_chart = svg_bar_chart(
-        [c["name"] for c in chart_clusters],
-        [{"name": "CPU", "color": COLORS["primary"],
-          "values": [c["model"]["cpuPct"] if _finite(c["model"]["cpuPct"]) else 0 for c in chart_clusters]},
-         {"name": "RAM", "color": COLORS["accent"],
-          "values": [c["model"]["ramPct"] if _finite(c["model"]["ramPct"]) else 0 for c in chart_clusters]}],
-        width=330, height=16 + (3 if include_storage else 2) * 47,
-        threshold=100, threshold_label="Ngưỡng", unit="%")
+    cluster_chart = cluster_bullets_html(chart_clusters, include_storage)
     avg = headroom["avg"]
     runway_note = (f"Giả định tăng đều theo quý, dùng để lập ngân sách. Còn nạp thêm ~{fmt_int(headroom['ram']['vmsFit']) if headroom['ram']['vmsFit'] is not None else '—'} VM theo RAM, "
                    f"~{fmt_int(headroom['cpu']['vmsFit']) if headroom['cpu']['vmsFit'] is not None else '—'} VM theo CPU (VM trung bình {fmt_num(avg['avgVcpu'],1)} vCPU · {fmt_num(avg['avgRamGB'],1)} GB).")
@@ -2033,7 +2058,7 @@ def render_executive_html(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]]
     <div class="section-title">Bao lâu nữa chạm ngưỡng · Cluster nào dùng nhiều nhất</div>
     <div class="chart-row" style="gap:8px;align-items:stretch;">
       <div class="chart-card soft" style="padding:5px 8px;"><div class="chart-card-title">Số tháng tới ngưỡng theo 3 kịch bản tăng trưởng</div>{runway_chart}<div class="small-note" style="margin-top:2px;">{runway_note}</div></div>
-      <div class="chart-card soft" style="padding:5px 8px;"><div class="chart-card-title">Mức dùng theo cluster (% ngưỡng)</div>{cluster_chart}<div class="legend" style="margin-top:2px;"><span><span class="dot" style="background:{COLORS['primary']}"></span>CPU</span><span><span class="dot" style="background:{COLORS['accent']}"></span>RAM</span></div><div class="small-note" style="margin-top:2px;">{ha_note}</div></div>
+      <div class="chart-card soft" style="padding:5px 8px;"><div class="chart-card-title">Mức dùng theo cluster (% ngưỡng)</div>{cluster_chart}<div class="small-note" style="margin-top:2px;">Vạch mảnh = 80 % (bắt đầu THEO DÕI), vạch đậm = 100 % (ngưỡng).</div><div class="small-note" style="margin-top:2px;">{ha_note}</div></div>
     </div>
   </div>
 

@@ -4,6 +4,7 @@ Both report variants are rendered by report_sizing_full.render_full_html:
 detail='full' → báo cáo tư vấn đầy đủ, detail='brief' → báo cáo tư vấn rút gọn (same page format,
 compact content). This module keeps the summary / decision boxes and the existing-cluster blocks
 used by that template."""
+from .pdf_kit import status_pill as _status_mark  # one status mark for every report (MASTER.md §3)
 from typing import Any, Dict, List, Optional
 
 from . import platforms
@@ -63,8 +64,7 @@ def _money(v: Optional[float], currency: str) -> str:
 
 
 def _pill(text: str, cls: str) -> str:
-    fg, bg = STATUS_COLOR.get(cls, STATUS_COLOR["na"])
-    return f'<span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;">{esc(text)}</span>'
+    return _status_mark({"text": text, "cls": cls})
 
 
 def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existing: List[Dict[str, Any]],
@@ -134,7 +134,7 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
     return f"""
     <div class="exec-brief {status_cls}">
       <div class="exec-brief-head">
-        <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{status_label}</span>
+        {_status_mark({"text": status_label, "cls": status_cls})}
         <span class="exec-brief-title">{'Giải pháp đề xuất &amp; hạng mục cần quyết định' if si else 'Tổng kết — đề xuất &amp; quyết định đề nghị'}</span>
       </div>
       <div class="exec-brief-headline">{esc(headline)}</div>
@@ -269,7 +269,7 @@ def _reuse_summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], e
     return f"""
     <div class="exec-brief {status_cls}">
       <div class="exec-brief-head">
-        <span class="pill" style="color:{COLORS[fg]};background:{COLORS[bg]};border-color:{COLORS[fg]}55;font-size:9px;">{status_label}</span>
+        {_status_mark({"text": status_label, "cls": status_cls})}
         <span class="exec-brief-title">{'Giải pháp đề xuất &amp; hạng mục cần quyết định' if si else 'Tổng kết — đề xuất &amp; quyết định đề nghị'}</span>
       </div>
       <div class="exec-brief-headline">{esc(headline)}</div>
