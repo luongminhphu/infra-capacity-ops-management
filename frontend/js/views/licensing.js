@@ -83,9 +83,13 @@ function renderLicScopeBar() {
     ? `Bộ lọc cluster toàn cục đang chọn <b>${esc(globalCl)}</b> — phạm vi license theo cluster đó. Đặt bộ lọc về "Tất cả cluster" để chọn nhiều cluster ở đây.`
     : (all ? `Đang tính cho toàn bộ ${list.length} cluster. Bấm vào cluster để giới hạn phạm vi mua license (ví dụ chỉ production trước).`
            : `Phạm vi mua đợt này: <b>${inScope}/${list.length} cluster</b> — ${list.length - inScope} cluster còn lại chưa tính license; báo cáo và snapshot ghi rõ phạm vi này.`);
-  bar.innerHTML = `<span class="lic-scope-label">Phạm vi cluster</span>
-    <button type="button" class="lic-chip${all && !globalCl ? ' on' : ''}${globalCl ? ' disabled' : ''}" data-lic-scope="__all__">Tất cả</button>${chips}
-    <span class="lic-scope-note${!all && !globalCl ? ' partial' : ''}">${note}</span>`;
+  // One line by default (the 6+ chips used to fill two rows above the result); <details> opens the picker.
+  const summary = globalCl ? esc(globalCl) : all ? `Tất cả ${list.length} cluster` : `${inScope} / ${list.length} cluster`;
+  const wasOpen = !!(bar.querySelector('details') || {}).open;
+  bar.innerHTML = `<details class="lic-scope"${wasOpen || (!all && !globalCl) ? ' open' : ''}>
+    <summary><span class="lic-scope-label">Phạm vi cluster</span><b>${summary}</b><span class="lic-scope-hint">Đổi</span></summary>
+    <div class="lic-scope-body"><button type="button" class="lic-chip${all && !globalCl ? ' on' : ''}${globalCl ? ' disabled' : ''}" data-lic-scope="__all__">Tất cả</button>${chips}
+    <p class="lic-scope-note${!all && !globalCl ? ' partial' : ''}">${note}</p></div></details>`;
 }
 
 function licSetStatus(msg, isError = false) { uiSetStatus('#licStatus', msg, isError ? 'error' : '', { hideWhenEmpty: true }); }
@@ -353,6 +357,17 @@ function renderLicOverrideEditor(vm) {
 /* =========================================================
    3. License assessment
    ========================================================= */
+function licVerdictText(a, ov) {
+  const vm = a.vmware, ws = a.windowsServer;
+  const gaps = [];
+  if (vm.shortfallCores > 0) gaps.push(`VMware thiếu ${licNum(vm.shortfallCores)} core`);
+  if (ws.standard.shortfallCores > 0) gaps.push(`Windows Server Standard thiếu ${licRange(ws.standard.shortfallCores, ws.standard.shortfallCoresMax)} core`);
+  if (a.overallStatus === 'no_entitlement') return 'Chưa nhập quyền sử dụng (entitlement), nên chưa kết luận được đủ hay thiếu license.';
+  if (a.overallStatus === 'insufficient_data') return 'Chưa đủ dữ liệu để kết luận; bổ sung hệ điều hành của VM chưa rõ hoặc entitlement.';
+  if (gaps.length) return `${ov.label}: ${gaps.join('; ')}.`;
+  return 'Đủ license cho phạm vi đang xem.';
+}
+
 function renderLicAssess() {
   const st = licState();
   const a = st.viewingSnapshot ? st.viewingSnapshot.result : st.assess;
@@ -361,7 +376,7 @@ function renderLicAssess() {
   const ruleWarn = [a.rules.windows_server, a.rules.vmware, a.rules.vmware_cpu_legacy].filter(Boolean).filter(r => r.status !== 'verified');
   const scp = a.scope || {};
   const scopeBanner = scp.partial ? `<div class="insight-box"><strong>Phạm vi mua đợt này:</strong> ${a.clusters.length} cluster (${esc(a.clusters.map(c => `${c.cluster} (${c.vcenterKey})`).join(', '))}). Chưa tính ${scp.excludedClusterKeys.length} cluster: ${esc(scp.excludedClusterKeys.map(licKeyLabel).join(', '))}.</div>` : '';
-  const ruleBanner = ruleWarn.length ? `<div class="insight-box lic-warn-box"><strong>Rule chưa xác minh:</strong> ${ruleWarn.map(r => `${esc(r.name)} v${r.version}`).join('; ')}. Kết quả chỉ mang tính tham khảo cho tới khi rule được đối chiếu với tài liệu nguồn và ghi nhận người/ngày xác minh (mục Rule licensing bên dưới).</div>` : '';
+  const ruleBanner = '' && ruleWarn.length ? `<div class="insight-box lic-warn-box"><strong>Rule chưa xác minh:</strong> ${ruleWarn.map(r => `${esc(r.name)} v${r.version}`).join('; ')}. Kết quả chỉ mang tính tham khảo cho tới khi rule được đối chiếu với tài liệu nguồn và ghi nhận người/ngày xác minh (mục Rule licensing bên dưới).</div>` : '';
 
   const wsCard = (opt, title) => {
     const c = opt.cost;
@@ -371,7 +386,7 @@ function renderLicAssess() {
         <tr><td>Nhu cầu core</td><td class="num"><b>${licRange(opt.demandCores, opt.demandCoresMax)}</b></td></tr>
         <tr><td>Pack 16 + pack 2</td><td class="num">${opt.packs.pack16 || 0} × 16 + ${opt.packs.pack2 || 0} × 2${opt.demandCoresMax !== opt.demandCores ? ` <span class="muted-sub">(tối đa ${opt.packsMax.pack16} × 16 + ${opt.packsMax.pack2} × 2)</span>` : ''}</td></tr>
         <tr><td>Chỉ pack 16 core</td><td class="num">${licRange(opt.packs.pack16Only, opt.packsMax.pack16Only)} pack</td></tr>
-        <tr><td>Entitlement hiện có</td><td class="num">${opt.entitlement.declaredNone && !(opt.entitledCores > 0) ? '<span class="pill crit">Chưa có (đã xác nhận)</span>' : `${licNum(opt.entitledCores)} core${opt.entitlement.hasSa ? ' <span class="pill ok">SA</span>' : ''}`}</td></tr>
+        <tr><td>Entitlement hiện có</td><td class="num">${opt.entitlement.declaredNone && !(opt.entitledCores > 0) ? '<span class="pill crit">Chưa có (đã xác nhận)</span>' : `${licNum(opt.entitledCores)} core${opt.entitlement.hasSa ? ' <span class="tag">SA</span>' : ''}`}</td></tr>
         <tr><td>Thiếu hụt</td><td class="num"><b class="${opt.shortfallCores > 0 ? 'lic-bad' : ''}">${licRange(opt.shortfallCores, opt.shortfallCoresMax)} core</b> → ${opt.shortfallPacks.pack16} × 16 + ${opt.shortfallPacks.pack2} × 2</td></tr>
         ${c ? `<tr><td>Đơn giá / core</td><td class="num">${licMoney(c.pricePerCore, c.currency)}</td></tr>
         <tr><td>Chi phí toàn bộ nhu cầu</td><td class="num">${licMoney(c.demandCost, c.currency)}${c.demandCostMax !== c.demandCost ? ` <span class="muted-sub">– ${licMoney(c.demandCostMax, c.currency)}</span>` : ''}</td></tr>
@@ -386,24 +401,31 @@ function renderLicAssess() {
   const clusterRows = a.clusters.map(c => `<tr>
     <td><b>${esc(c.cluster)}</b><div class="muted-sub">${esc(c.vcenterKey || 'import')}</div></td>
     <td class="num">${c.hostCount}</td><td class="num">${c.sockets}</td><td class="num">${licNum(c.physicalCores)}</td><td class="num">${licNum(c.wsLicensableCores)}</td>
-    <td>${c.ha ? '<span class="pill ok">HA</span>' : ''}${c.drs ? ' <span class="pill ok">DRS</span>' : ''}${!c.ha && !c.drs ? '<span class="pill na">—</span>' : ''}</td>
+    <td>${c.ha ? '<span class="tag">HA</span>' : ''}${c.drs ? ' <span class="tag">DRS</span>' : ''}${!c.ha && !c.drs ? '—' : ''}</td>
     <td class="num">${c.wsVms}${c.wsVmsLowConfidence ? ` <span class="pill warn" title="VM chỉ có bằng chứng cấu hình/tên">${c.wsVmsLowConfidence} ?</span>` : ''}</td>
     <td class="num">${c.unknownVms || 0}</td>
     <td class="num">${c.standard.sets !== null && c.standard.sets !== undefined ? `${c.standard.sets} bộ → ` : ''}<b>${licRange(c.standard.cores, c.standard.coresMax)}</b></td>
     <td class="num"><b>${licNum(c.datacenter.cores)}</b></td>
     <td class="num"><b>${licNum(c.vmwareCores)}</b>${legacy ? `<div class="muted-sub">${c.vmwareLegacyCpuLicenses} CPU lic.</div>` : ''}</td>
-    <td>${c.recommendedEdition ? `<span class="pill ${c.recommendedEdition === 'datacenter' ? 'crit' : 'ok'}">${c.recommendedEdition === 'datacenter' ? 'Datacenter' : 'Standard'}</span>` : '—'}</td>
+    <td>${c.recommendedEdition ? `<span class="tag">${c.recommendedEdition === 'datacenter' ? 'Datacenter' : 'Standard'}</span>` : '—'}</td>
   </tr>`).join('');
 
   const list = (arr) => arr && arr.length ? `<ul class="lic-list">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="muted-sub">—</div>';
 
-  return `${snapBanner}${scopeBanner}${ruleBanner}
-    <div class="kpi-grid lic-kpi-4">
-      <div class="kpi-card"><div class="label">Kết luận chung</div><div class="value">${licPill(a.overallStatus)}</div><div class="sub">${a.totals.hosts} host · ${licNum(a.totals.physicalCores)} physical core · ${a.totals.vms} VM · ${a.totals.windowsServerVms} Windows Server${a.totals.unknownVms ? ` · ${a.totals.unknownVms} chưa rõ` : ''}</div></div>
-      <div class="kpi-card"><div class="label">VMware per-core</div><div class="value">${licNum(vm.demandCores)} core</div><div class="sub">Có ${licNum(vm.entitledCores)} · thiếu <b>${licNum(vm.shortfallCores)}</b> ${licPill(vm.status)}</div></div>
-      <div class="kpi-card"><div class="label">Windows Server Standard</div><div class="value">${licRange(ws.standard.demandCores, ws.standard.demandCoresMax)} core</div><div class="sub">Có ${licNum(ws.standard.entitledCores)} · thiếu <b>${licRange(ws.standard.shortfallCores, ws.standard.shortfallCoresMax)}</b> ${licPill(ws.standard.status)}</div></div>
-      <div class="kpi-card"><div class="label">Windows Server Datacenter</div><div class="value">${licNum(ws.datacenter.demandCores)} core</div><div class="sub">Có ${licNum(ws.datacenter.entitledCores)} · thiếu <b>${licNum(ws.datacenter.shortfallCores)}</b> ${licPill(ws.datacenter.status)}</div></div>
-    </div>
+  const ov = LIC_STATUS[a.overallStatus] || { cls: 'na', label: a.overallStatus };
+  const pill = (stt) => { const m = LIC_STATUS[stt] || { cls: 'na', label: stt }; return { cls: m.cls, text: m.label }; };
+  return `${snapBanner}
+    <section class="verdict tone-rule-${esc(ov.cls)}" aria-label="Kết luận license">
+      <div class="verdict-meta">${licPill(a.overallStatus)}<span>${esc(a.totals.hosts)} host · ${licNum(a.totals.physicalCores)} core vật lý · ${esc(a.totals.vms)} VM · ${esc(a.totals.windowsServerVms)} Windows Server${a.totals.unknownVms ? ` · ${esc(a.totals.unknownVms)} chưa rõ HĐH` : ''}</span></div>
+      <h2>${esc(licVerdictText(a, ov))}</h2>
+    </section>
+    ${scopeBanner}
+    <div class="kpi-strip-wrap">${uiKpiStrip([
+      { label: 'VMware per-core', valueHtml: `${licNum(vm.demandCores)}<small>core</small>`, subHtml: `Có ${licNum(vm.entitledCores)} · thiếu <b>${licNum(vm.shortfallCores)}</b>`, status: pill(vm.status), pct: null },
+      { label: 'Windows Server Standard', valueHtml: `${licRange(ws.standard.demandCores, ws.standard.demandCoresMax)}<small>core</small>`, subHtml: `Có ${licNum(ws.standard.entitledCores)} · thiếu <b>${licRange(ws.standard.shortfallCores, ws.standard.shortfallCoresMax)}</b>`, status: pill(ws.standard.status), pct: null },
+      { label: 'Windows Server Datacenter', valueHtml: `${licNum(ws.datacenter.demandCores)}<small>core</small>`, subHtml: `Có ${licNum(ws.datacenter.entitledCores)} · thiếu <b>${licNum(ws.datacenter.shortfallCores)}</b>`, status: pill(ws.datacenter.status), pct: null },
+    ])}</div>
+    ${ruleWarn.length ? `<p class="note-line">${uiPill('warn', 'Rule chưa xác minh')} ${ruleWarn.map(r => `${esc(r.name)} v${esc(r.version)}`).join('; ')} — kết quả để tham khảo cho tới khi rule được đối chiếu tài liệu nguồn và ghi người / ngày xác minh (mục Rule licensing bên dưới).</p>` : ''}
 
     <section class="table-card">
       <div class="panel-head">
@@ -478,7 +500,7 @@ function renderLicEntitlements() {
       ${e.id ? '<button class="btn btn-secondary btn-sm" data-lic-action="ent-cancel" type="button">Huỷ</button>' : ''}
     </div></div>`;
   const rows = items.map(x => `<tr>
-    <td><b>${esc(x.label)}</b>${x.kind === 'none' ? ' <span class="pill crit">Chưa có</span>' : ''}${x.hasSa && x.kind !== 'none' ? ' <span class="pill ok">SA</span>' : ''}</td><td>${esc(metrics[x.metric] || x.metric)}</td><td class="num">${x.kind === 'none' ? '0' : licNum(x.quantity)}</td>
+    <td><b>${esc(x.label)}</b>${x.kind === 'none' ? ' <span class="pill crit">Chưa có</span>' : ''}${x.hasSa && x.kind !== 'none' ? ' <span class="tag">SA</span>' : ''}</td><td>${esc(metrics[x.metric] || x.metric)}</td><td class="num">${x.kind === 'none' ? '0' : licNum(x.quantity)}</td>
     <td class="num">${x.unitPrice != null ? licMoney(x.unitPrice, x.currency) : '—'}</td>
     <td>${esc(x.scopeVcenter || 'Tất cả')} / ${esc(x.scopeCluster || 'Tất cả')}</td><td>${x.validTo ? licDate(x.validTo).split(' ')[0] : '—'}</td><td class="lic-note">${esc(x.note || '')}</td>
     <td><button class="btn btn-secondary btn-sm" data-lic-action="ent-edit" data-id="${x.id}" type="button">Sửa</button> <button class="btn btn-secondary btn-sm btn-danger" data-lic-action="ent-delete" data-id="${x.id}" type="button">Xoá</button></td>

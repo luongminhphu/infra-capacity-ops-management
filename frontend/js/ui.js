@@ -321,8 +321,9 @@ function uiKpiStrip(items) {
   return `<div class="kpi-strip">${items.map(k => `<div class="kpi-cell${k.muted ? ' muted' : ''}">
       <div class="kpi-l">${esc(k.label)}</div>
       <div class="kpi-v">${k.valueHtml !== undefined ? k.valueHtml : esc(k.value)}${k.unit ? `<small>${esc(k.unit)}</small>` : ''}</div>
-      ${k.sub ? `<div class="kpi-s">${esc(k.sub)}</div>` : ''}
-      ${k.pct !== undefined && k.pct !== null ? `<div class="kpi-b">${uiBullet(k.pct, k.label)}${k.status ? uiPill(k.status.cls, k.status.text) : ''}</div>` : ''}
+      ${k.subHtml !== undefined ? `<div class="kpi-s">${k.subHtml}</div>` : k.sub ? `<div class="kpi-s">${esc(k.sub)}</div>` : ''}
+      ${k.pct !== undefined && k.pct !== null ? `<div class="kpi-b">${uiBullet(k.pct, k.label)}${k.status ? uiPill(k.status.cls, k.status.text) : ''}</div>`
+        : k.status ? `<div class="kpi-st">${uiPill(k.status.cls, k.status.text)}</div>` : ''}
     </div>`).join('')}</div>`;
 }
 
