@@ -534,6 +534,11 @@ class OpsAlertState(Base):
     last_sent_at = Column(DateTime, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     last_error = Column(String(500), nullable=True)
+    # Inbox provider of the alert ("capacity" / "backup"): a provider that failed keeps its alerts as they are.
+    source = Column(String(16), nullable=True)
+    # Comma-separated ids of the Discord channels that received the current state of the alert
+    # (active: the alert; inactive: the alert, still owed its "Đã hết"). A channel that failed is retried.
+    sent_channels = Column(Text, nullable=True)
 
 
 class AiRun(Base):

@@ -1,4 +1,5 @@
 """Backup monitoring API (Veritas NetBackup, read-only)."""
+import logging
 import datetime as dt
 from typing import Any, Dict, List, Optional
 
@@ -11,16 +12,18 @@ from .. import data_access
 from ..backup import analysis
 from ..backup.client import NetBackupError
 from ..backup.collector import sync_netbackup
+from ..collectors.locks import SourceBusy
 from ..collectors.scheduler import sync_backups
 from ..config import get_settings
 from ..database import get_db
 from ..backup import schedule as bschedule
 from ..models import AppSetting, BackupPolicySnapshot, BackupScheduleRule, BackupScopeRule, BackupSyncRun, ReportLogo, User
-from ..security import get_current_user
+from ..security import get_current_user, require_admin
 from ..timeutil import to_iso_utc
 
 from ..backup.service import _csv_days, _keys, _vms, build_summary, schedule_rules, scope_rules, thresholds  # noqa: F401,E402
 from ..features import require_feature
+logger = logging.getLogger("vco.routers.backup")
 router = APIRouter(prefix="/api/backup", tags=["backup"], dependencies=[Depends(require_feature("backup"))])
 
 
@@ -67,10 +70,13 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
     cfg = _cfg(key)
     try:
         run = sync_netbackup(db, cfg)
+    except SourceBusy as exc:            # the scheduler (or another click) is syncing it right now
+        raise HTTPException(409, str(exc)) from exc
     except NetBackupError as exc:
         raise HTTPException(502, str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(502, f"Đồng bộ backup thất bại: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — details go to the log, not to the client
+        logger.exception("NetBackup sync failed (server=%s)", key)
+        raise HTTPException(502, "Đồng bộ backup thất bại. Xem log máy chủ để biết chi tiết.") from exc
     return {"ok": True, "key": key, "jobs": run.jobs_fetched, "policies": run.policy_count, "pools": run.pool_count,
             "warning": run.error_message, "finishedAt": to_iso_utc(run.finished_at)}
 
@@ -160,7 +166,7 @@ def get_scope(db: Session = Depends(get_db), user: User = Depends(get_current_us
 
 
 @router.put("/scope")
-def put_scope(payload: ScopeIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def put_scope(payload: ScopeIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     clean, seen = [], set()
     for r in payload.rules:
         vc = (r.vcenterKey or "").strip()
@@ -249,7 +255,7 @@ def get_schedules(db: Session = Depends(get_db), user: User = Depends(get_curren
 
 
 @router.put("/schedules")
-def put_schedules(payload: SchedulesIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def put_schedules(payload: SchedulesIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     try:
         rules = [bschedule.validate_rule(r.model_dump()) for r in payload.rules]
     except ValueError as exc:
@@ -259,10 +265,13 @@ def put_schedules(payload: SchedulesIn, db: Session = Depends(get_db), user: Use
 
 
 @router.post("/schedules/import")
-async def import_schedules(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def import_schedules(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(require_admin)):
     """Load the schedule workbook (HSC-Backup-Management template). Systems already defined keep
-    their policy mapping; systems not in the file are kept unchanged."""
-    data = await file.read()
+    their policy mapping; systems not in the file are kept unchanged.
+
+    A plain `def` (FastAPI runs it in the threadpool): openpyxl parsing and the DB writes are
+    synchronous and used to block the event loop, /api/health included."""
+    data = file.file.read(5 * 1024 * 1024 + 1)
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(400, "File quá lớn (tối đa 5 MB)")
     try:
@@ -318,7 +327,7 @@ def get_thresholds(db: Session = Depends(get_db), user: User = Depends(get_curre
 
 
 @router.put("/thresholds")
-def put_thresholds(payload: ThresholdsIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def put_thresholds(payload: ThresholdsIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     for k, v in payload.model_dump(exclude_none=True).items():
         if isinstance(v, (int, float)) and v < 0:
             raise HTTPException(400, f"Giá trị {k} không hợp lệ")
