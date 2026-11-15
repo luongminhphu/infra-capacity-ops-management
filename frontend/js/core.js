@@ -1800,7 +1800,7 @@ function syncViewSections() {
   const map = {
     executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
     inventory:'#viewInventory', whatif:'#viewWhatif', sizing:'#viewSizing', planning:'#viewPlanning',
-    licensing:'#viewLicensing', backup:'#viewBackup', reports:'#viewReports', settings:'#viewSettings',
+    licensing:'#viewLicensing', backup:'#viewBackup', reports:'#viewReports', settings:'#viewSettings', spend:'#viewSpend',
   };
   const target = $(map[appState.view] || map.dashboard);
   if (target) target.classList.remove('hidden');
@@ -1824,6 +1824,7 @@ function renderActiveView() {
   else if (appState.view === 'licensing' && typeof renderLicensingView === 'function') renderLicensingView();
   else if (appState.view === 'backup' && typeof renderBackupView === 'function') renderBackupView();
   else if (appState.view === 'reports' && typeof renderReportsView === 'function') renderReportsView();
+  else if (appState.view === 'spend' && typeof renderSpendView === 'function') renderSpendView();
   // reports / planning / settings are static forms bound once in app.js.
 }
 

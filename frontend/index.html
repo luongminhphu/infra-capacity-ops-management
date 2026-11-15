@@ -820,6 +820,11 @@
         </div>
       </section>
 
+      <!-- ================= CHI PHÍ & HỢP ĐỒNG ================= -->
+      <section id="viewSpend" class="view-section hidden">
+        <div id="spendMount"></div>
+      </section>
+
       <!-- ================= CÀI ĐẶT ================= -->
       <section id="viewSettings" class="view-section hidden">
         <div class="settings-grid">
@@ -962,6 +967,14 @@
             </form>
           </dialog>
 
+          <section class="panel panel-wide hidden" id="spendSettingsPanel">
+            <div class="panel-head">
+              <div><div class="panel-title">Chi phí &amp; nhắc hạn</div>
+              <p class="panel-sub">Năm tài chính, mốc nhắc hạn, loại chi phí, kênh gửi nhắc (email / Discord) và vai trò người dùng của module Chi phí &amp; Hợp đồng IT.</p></div>
+            </div>
+            <div id="spendSettingsMount"></div>
+          </section>
+
           <section class="panel hidden" id="mcpPanel">
             <div class="panel-head">
               <div><div class="panel-title">AI / MCP server <span class="badge-admin">Admin</span></div>
@@ -995,6 +1008,11 @@
 
     </main>
 
+    <!-- Chi phí & Hợp đồng: shared dialog (outside the view sections so it opens from any page) -->
+    <dialog class="src-dialog sp-dialog" id="spDialog" aria-labelledby="spDialogTitle">
+      <div id="spDialogBody"></div>
+    </dialog>
+
     <div class="footer-note">Infra Capacity Ops Management — dữ liệu live từ vCenter và hệ thống backup qua tài khoản chỉ đọc + import thủ công, lưu lịch sử để phân tích xu hướng.</div>
   </div>
 </div>
@@ -1009,6 +1027,7 @@
 <script src="js/views/reports.js?v=__ASSET_V__"></script>
 <script src="js/views/admin.js?v=__ASSET_V__"></script>
 <script src="js/views/sources.js?v=__ASSET_V__"></script>
+<script src="js/views/spend.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

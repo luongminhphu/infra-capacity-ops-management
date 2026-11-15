@@ -116,6 +116,14 @@ class Settings(BaseSettings):
     obs_slow_request_ms: int = Field(default=1000)
     obs_slow_query_ms: int = Field(default=200)
 
+    # ---- Module Chi phí & Hợp đồng IT (spend) ----
+    spend_files_dir: str = Field(default="/data/files")     # volume (PVC ico-files / compose ico_files)
+    spend_max_upload_mb: int = Field(default=20)
+    # Entra app role values giving a spend role (checked at every Microsoft sign-in).
+    entra_spend_viewer_roles: str = Field(default="ICO.Spend.Viewer")
+    entra_spend_editor_roles: str = Field(default="ICO.Spend.Editor")
+    entra_spend_approver_roles: str = Field(default="ICO.Spend.Approver")
+
     def admin_user_list(self) -> List[str]:
         names = [u.strip().lower() for u in self.admin_users.split(",") if u.strip()]
         return names or [self.admin_username.strip().lower()]

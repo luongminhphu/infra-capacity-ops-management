@@ -13,6 +13,7 @@ FEATURES = {
     "sizing": {"label": "Sizing máy chủ", "desc": "Tính số host cần mua cho dự án mới."},
     "planning": {"label": "Quy hoạch tài nguyên", "desc": "Dự phóng tăng trưởng và thời điểm bổ sung node."},
     "whatif": {"label": "What-if capacity", "desc": "Mô phỏng thêm / nâng cấp host, thêm / resize VM."},
+    "spend": {"label": "Chi phí & Hợp đồng IT", "desc": "Opex, nhắc hạn gia hạn, Capex, hợp đồng và tờ trình."},
 }
 
 

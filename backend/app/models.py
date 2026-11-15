@@ -28,6 +28,10 @@ class User(Base):
     # Entra users: refreshed from the app roles in the ID token at every sign-in (ENTRA_ADMIN_ROLES).
     # Local users: decided by ADMIN_USERS instead, this column is ignored.
     is_admin = Column(Boolean, nullable=False, default=False)
+    # Module Chi phí & Hợp đồng: none | viewer | editor | approver (admins have every right).
+    # Source "entra" = granted by an app role (refreshed at each sign-in), "ui" = set by an admin.
+    spend_role = Column(String(16), nullable=False, default="none")
+    spend_role_source = Column(String(8), nullable=True)
 
 
 class ApiToken(Base):
@@ -476,3 +480,7 @@ class DataSource(Base):
     last_test_at = Column(DateTime, nullable=True)
     last_test_ok = Column(Boolean, nullable=True)
     last_test_message = Column(Text, nullable=True)
+
+
+# Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
+from .spend import models as _spend_models  # noqa: E402,F401

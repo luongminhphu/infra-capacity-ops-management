@@ -13,7 +13,8 @@ from .collectors.scheduler import scheduler_loop
 from .config import get_settings
 from .database import SessionLocal, engine, ensure_schema
 from . import mcp_server, observability
-from .routers import admin, appconfig, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, vcenters
+from .routers import admin, appconfig, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, vcenters
+from .spend import reminders as spend_reminders, service as spend_service
 from .security import ensure_bootstrap_admin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -33,12 +34,16 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         ensure_bootstrap_admin(db)
+        spend_service.ensure_defaults(db)
     finally:
         db.close()
 
     global _scheduler_task
+    reminder_task = None
     if settings.enable_scheduler:
         _scheduler_task = asyncio.create_task(scheduler_loop(settings))
+        # Daily expiry reminders of the Chi phí & Hợp đồng module (own loop: polling interval is unrelated).
+        reminder_task = asyncio.create_task(spend_reminders.reminder_loop())
         logger.info("Background vCenter/NetBackup poll scheduler started (interval=%s min)", settings.poll_interval_minutes)
     else:
         logger.info("Background scheduler disabled (ENABLE_SCHEDULER=false)")
@@ -48,6 +53,8 @@ async def lifespan(app: FastAPI):
     yield
 
     flush_task.cancel()
+    if reminder_task:
+        reminder_task.cancel()
     if _scheduler_task:
         _scheduler_task.cancel()
     observability.flush(force_all_buckets=True)
@@ -79,6 +86,8 @@ app.include_router(backup.router)
 app.include_router(admin.router)
 app.include_router(appconfig.router)
 app.include_router(sources_router.router)
+app.include_router(spend.router)
+app.include_router(spend_admin.router)
 app.include_router(mcp_server.router)
 # Outermost: measures every /api and /mcp request (route template, latency, DB time).
 app.add_middleware(observability.TimingMiddleware)

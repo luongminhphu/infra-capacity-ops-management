@@ -34,6 +34,13 @@ data:
   # ---- Quản trị viên & MCP server (AI đọc log / hiệu suất của app, chỉ đọc) ----
   ADMIN_USERS: "admin"                # tài khoản cục bộ là admin (phân cách dấu phẩy)
   ENTRA_ADMIN_ROLES: "ICO.Admin"      # app role Entra là admin (cập nhật mỗi lần đăng nhập)
+  # Module Chi phí & Hợp đồng IT: app role Entra -> vai trò Xem / Biên tập / Duyệt (cập nhật mỗi lần đăng nhập).
+  # Nếu ENTRA_ALLOWED_ROLES đang giới hạn người vào app, thêm cả các role này vào đó.
+  ENTRA_SPEND_VIEWER_ROLES: "ICO.Spend.Viewer"
+  ENTRA_SPEND_EDITOR_ROLES: "ICO.Spend.Editor"
+  ENTRA_SPEND_APPROVER_ROLES: "ICO.Spend.Approver"
+  SPEND_FILES_DIR: "/data/files"      # PVC ico-files (05-files-pvc.yaml)
+  SPEND_MAX_UPLOAD_MB: "20"
   MCP_ENABLED: "false"                # "true" để admin tạo token MCP trong Cài đặt → AI / MCP
   MCP_MASK_HOSTS: "true"              # che hostname / IP nội bộ trong log trả cho AI
   MCP_TOKEN_MAX_DAYS: "180"

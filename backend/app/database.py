@@ -51,6 +51,7 @@ def ensure_schema() -> None:
             ("auth_source", "VARCHAR(16) NOT NULL DEFAULT 'local'"), ("external_id", "VARCHAR(64)"),
             ("email", "VARCHAR(255)"), ("last_login_at", "TIMESTAMP"),
             ("is_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("spend_role", "VARCHAR(16) NOT NULL DEFAULT 'none'"), ("spend_role_source", "VARCHAR(8)"),
         ],
     }
     indexed = {"instance_uuid", "external_id"}
