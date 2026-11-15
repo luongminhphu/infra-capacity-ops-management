@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from .. import data_access
 from ..config import get_settings
+from ..collectors.locks import SourceBusy
 from ..collectors.scheduler import sync_vcenter, sync_vcenters, vcenter_result
 from ..database import get_db
 from ..models import SnapshotRun, User
@@ -47,6 +48,8 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
         raise HTTPException(status_code=404, detail="Không tìm thấy vCenter với key này")
     try:
         run = sync_vcenter(db, cfg, settings)
+    except SourceBusy as exc:            # the scheduler (or another click) is syncing it right now
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except VCenterConnectionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001

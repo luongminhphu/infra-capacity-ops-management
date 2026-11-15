@@ -1,3 +1,4 @@
+import logging
 import datetime as dt
 from typing import Optional
 
@@ -15,6 +16,7 @@ from ..security import get_current_user
 
 from ..scope import scope_keys as _scope_keys, scope_label as _scope_label, split_csv as _split_csv
 
+logger = logging.getLogger("vco.routers.reports")
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
@@ -114,8 +116,9 @@ def export_pdf(
                                                     history=history_data, vm_changes=vm_changes)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Tham số quy hoạch không hợp lệ: {exc}")
-    except Exception as exc:  # pragma: no cover - surfaced to the UI
-        raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
+    except Exception as exc:  # noqa: BLE001 — details go to the log, not to the client
+        logger.exception("PDF report render failed (view=%s)", view)
+        raise HTTPException(status_code=500, detail="Không thể tạo PDF. Vui lòng thử lại hoặc báo quản trị viên kiểm tra log.") from exc
 
     label = {"executive": "van_hanh", "technical": "ky_thuat", "planning": "quy_hoach"}[view]
     filename = f"ico_report_{label}_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
