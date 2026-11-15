@@ -7,7 +7,7 @@ environment variables / .env — never hardcoded and never committed to git.
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, List
+from typing import Literal, List, Optional
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -20,9 +20,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 
+def _positive_int(v) -> Optional[int]:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 class VCenterConfig:
     def __init__(self, key: str, name: str, host: str, port: int, username: str,
-                 password: str, verify_ssl: bool, demo: bool = False, ca_pem: str = "", origin: str = "env"):
+                 password: str, verify_ssl: bool, demo: bool = False, ca_pem: str = "", origin: str = "env",
+                 timeout: Optional[int] = None):
         self.key = key
         self.name = name
         self.host = host
@@ -33,6 +42,8 @@ class VCenterConfig:
         self.demo = demo
         self.ca_pem = ca_pem          # CA chain (PEM text) trusted for this vCenter, when verify_ssl is on
         self.origin = origin          # "env" (ConfigMap / .env) or "ui" (Settings → Nguồn dữ liệu)
+        # Seconds per SOAP call (connect / each PropertyCollector page). None → VCENTER_TIMEOUT_SECONDS.
+        self.timeout = timeout
 
 
 class NetBackupConfig:
@@ -62,6 +73,29 @@ class NetBackupConfig:
         self.origin = origin
 
 
+DEFAULT_JWT_SECRET = "change-me-in-.env-please"
+# Placeholder values shipped in .env.example / k8s/02-secret.example.yaml: never valid keys.
+PLACEHOLDER_SECRETS = frozenset({
+    DEFAULT_JWT_SECRET,
+    "change-me-to-a-long-random-string",
+    "change-me-to-another-long-random-string",
+})
+MIN_JWT_SECRET_LEN = 16
+
+
+def jwt_secret_problem(secret: Optional[str]) -> Optional[str]:
+    """Why JWT_SECRET is unsafe to start with (None = acceptable). Anyone knowing the key can
+    sign an admin session cookie and decrypt stored source passwords (secrets_box fallback)."""
+    value = (secret or "").strip()
+    if not value:
+        return "JWT_SECRET is empty"
+    if value in PLACEHOLDER_SECRETS:
+        return "JWT_SECRET is the default / example placeholder"
+    if len(value) < MIN_JWT_SECRET_LEN:
+        return f"JWT_SECRET is shorter than {MIN_JWT_SECRET_LEN} characters"
+    return None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -70,7 +104,7 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="postgresql+psycopg2://ico_app:devpassword@localhost:5432/infra_capacity_ops")
 
-    jwt_secret: str = Field(default="change-me-in-.env-please")
+    jwt_secret: str = Field(default=DEFAULT_JWT_SECRET)
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 12  # 12h session
 
@@ -172,6 +206,15 @@ class Settings(BaseSettings):
     # vCenters and backup servers polled at the same time (each in its own thread / DB session).
     sync_concurrency: int = Field(default=4)
     enable_scheduler: bool = Field(default=True)
+    # Socket timeout of every vCenter SOAP call (login, each PropertyCollector page). Per source:
+    # VCENTER_i_TIMEOUT. pyVmomi waits forever without it (one hung vCenter froze every poll).
+    vcenter_timeout_seconds: int = Field(default=120)
+    # Hard deadline of one source's sync inside a poll round / "sync all": past it the source is
+    # reported as failed and the round goes on (the worker thread ends when its socket times out).
+    sync_source_deadline_seconds: int = Field(default=1800)
+    # vCenter snapshot history (runs, hosts, VMs, cluster aggregates, findings) older than this
+    # many months is purged once a day; the latest successful run per vCenter is always kept. 0 = keep all.
+    snapshot_retention_months: int = Field(default=36)
 
     # Compliance / overcommit default thresholds (mirrors the original client-side policy)
     cpu_overcommit_max: float = 6.0
@@ -193,12 +236,13 @@ class Settings(BaseSettings):
     # Job rows older than this are purged after each sync (keeps the table bounded).
     backup_retention_days: int = Field(default=400)
 
-    cors_origins: str = Field(default="*")
+    # Empty = no cross-origin access: the frontend is served by this app on the same origin.
+    cors_origins: str = Field(default="")
 
     def cors_origin_list(self) -> List[str]:
-        if self.cors_origins == "*":
+        if (self.cors_origins or "").strip() == "*":
             return ["*"]
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return [o.strip() for o in (self.cors_origins or "").split(",") if o.strip()]
 
     # ---- Data sources ----
     # Sources come from VCENTER_i_* / NETBACKUP_i_* variables and from Settings → Nguồn dữ liệu
@@ -231,6 +275,7 @@ class Settings(BaseSettings):
                 password=os.environ.get(prefix + "PASSWORD", ""),
                 verify_ssl=os.environ.get(prefix + "VERIFY_SSL", "false").lower() in ("1", "true", "yes"),
                 demo=demo,
+                timeout=_positive_int(os.environ.get(prefix + "TIMEOUT")),
             ))
         return result
 

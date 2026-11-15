@@ -4,6 +4,7 @@ and by Hỏi ICO's read-only tools, always with the calling user's features and 
 One object, one page: a host or a VM gathers what every module knows about it
 (capacity, hardware / ESXi, guest OS, backup, compliance, Opex warranty devices).
 Every part is filtered by the caller's features and roles; reads only."""
+import datetime as dt
 import math
 import threading
 import time
@@ -41,6 +42,31 @@ def _cached(name: str, ttl: float, fn):
 
 def _latest(db: Session):
     return _cached("latest", CACHE_SECONDS, lambda: data_access.get_latest_combined(db, None)[:2])
+
+
+CLIENT_WINDOW_DAYS = 35      # covers monthly full backups
+CLIENT_CACHE_SECONDS = 60
+MAX_CLIENTS = 20000
+
+
+def _backup_clients(db: Session) -> List[str]:
+    """Distinct backup client names seen in the last CLIENT_WINDOW_DAYS, cached CLIENT_CACHE_SECONDS.
+
+    Ctrl + K searches on every keystroke; matching `lower(client_name) LIKE '%q%'` + DISTINCT on
+    backup_jobs scanned the whole table (400 days of jobs) each time (audit QRY-02). Instead one
+    query per minute reads the recent window through the start_time index, and keystrokes filter
+    this small in-memory list. A client with no job in the window is not an active client and is
+    still reachable from the Backup → Clients page. No pg_trgm index: it would be PostgreSQL-only."""
+    from ..models import BackupJob
+
+    def load() -> List[str]:
+        since = dt.datetime.utcnow() - dt.timedelta(days=CLIENT_WINDOW_DAYS)
+        rows = (db.query(BackupJob.client_name)
+                .filter(BackupJob.start_time >= since, BackupJob.client_name.isnot(None))
+                .distinct().limit(MAX_CLIENTS).all())
+        return sorted({c for (c,) in rows if c}, key=str.lower)
+
+    return _cached("backup_clients", CLIENT_CACHE_SECONDS, load)
 
 
 def _num(v):
@@ -82,13 +108,14 @@ def search(db: Session, user: User, q: str) -> Dict[str, Any]:
             if n >= PER_TYPE:
                 break
     if is_on(features, "backup"):
-        from ..models import BackupJob
-        names = (db.query(BackupJob.client_name).filter(func.lower(BackupJob.client_name).like(_like(t)))
-                 .distinct().limit(PER_TYPE).all())
         known_vms = {(v.get("vm") or "").lower() for v in vms}
-        for (c,) in names:
-            if c and c.lower() not in known_vms:
+        n = 0
+        for c in _backup_clients(db):
+            if t in c.lower() and c.lower() not in known_vms:
                 out.append({"type": "client", "label": c, "sub": "Client backup", "page": "bk-clients"})
+                n += 1
+                if n >= PER_TYPE:
+                    break
     if _spend_ok(user, features):
         out.extend(_spend_hits(db, t))
     return {"q": term, "items": out[:60]}
