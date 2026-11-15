@@ -262,6 +262,8 @@ function renderHistoryVmChanges(mountId, changes) {
     return;
   }
   const powerPill = (r) => `<span class="pill ${r.isPoweredOn ? 'ok' : ''}">${esc(r.powerState || '—')}</span>`;
+  const aiBar = `<div class="sim-actions hidden" data-ai-gate="vm_changes"><button class="btn btn-secondary btn-sm" type="button" data-ai-act="vm-changes" data-ai-mount="${esc(mountId)}">AI tóm tắt biến động</button></div>
+    <div id="${esc(mountId)}AiChanges" class="ai-out" aria-live="polite"></div>`;
   const vmRow = (r, dateField, dateLabel) => `<tr>
       <td><strong>${esc(r.vm)}</strong></td><td>${esc(r.vcenterLabel)}</td><td>${esc(r.cluster || '—')}</td>
       <td>${esc(r.host || '—')}</td><td>${powerPill(r)}</td>
@@ -360,6 +362,7 @@ function renderHistoryVmChanges(mountId, changes) {
       <span class="delta down">−${r.count} VM loại bỏ</span> (${fmtInt(r.vcpu)} vCPU · ${fmtInt(r.ramGB)} GB RAM), đối chiếu định danh VM trên toàn vCenter.${excludedNote}${resizedNote}
       <span class="muted">${esc(identityNote)} Cùng danh sách này được đưa vào Phụ lục A của Báo cáo Kỹ thuật.</span>
     </div>
+    ${aiBar}
     ${renamedBox}
     <div class="table-scroll">
       <table class="data-table history-table">
@@ -453,7 +456,7 @@ async function renderHistoryPanel(mountId, opts = {}) {
     historyEmpty(mountId, data.pointCount === 1
       ? 'Mới có 1 ngày snapshot trong khoảng này — biểu đồ biến động sẽ xuất hiện sau lần đồng bộ tiếp theo (polling tự động theo lịch).'
       : 'Chưa có snapshot nào trong khoảng thời gian này. Hãy đồng bộ vCenter hoặc chờ polling tự động.');
-    if (opts.showVmChanges) renderHistoryVmChanges(mountId, changes);
+    if (opts.showVmChanges) { renderHistoryVmChanges(mountId, changes); if (typeof aiGate === 'function') aiGate(document.getElementById(`${mountId}VmChanges`)); }
     return;
   }
   renderHistoryKpis(mountId, data, changes);
@@ -465,5 +468,5 @@ async function renderHistoryPanel(mountId, opts = {}) {
     ins.classList.toggle('hidden', !(data.insights || []).length);
   }
   renderHistoryTable(mountId, data);
-  if (opts.showVmChanges) renderHistoryVmChanges(mountId, changes);
+  if (opts.showVmChanges) { renderHistoryVmChanges(mountId, changes); if (typeof aiGate === 'function') aiGate(document.getElementById(`${mountId}VmChanges`)); }
 }

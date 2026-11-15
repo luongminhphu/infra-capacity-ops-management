@@ -4,7 +4,7 @@ Both receive FACTS computed by code (inbox items, capacity brief, backup KPIs, b
 before sending, and return {headline, points[{level, text}], decisions[]} written in Vietnamese. The
 answer never replaces numbers: it is a summary shown with the label "AI soạn", next to the rule-based
 text which stays the reference."""
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -40,6 +40,7 @@ AUDIENCE = {
     "technical": "kỹ sư hạ tầng (cụ thể theo cluster / host)",
     "backup": "trưởng nhóm vận hành backup",
     "budget": "trưởng phòng IT và tài chính (ngân sách, gia hạn, quyết định chi)",
+    "changes": "kỹ sư capacity: VM nào thêm / bỏ / đổi cấu hình trong kỳ, cluster nào tăng nhiều nhất và tác động tới ngưỡng",
 }
 
 
@@ -52,12 +53,15 @@ def _clean(raw: Dict[str, Any]) -> Dict[str, Any]:
             "decisions": [str(d).strip()[:400] for d in (raw.get("decisions") or [])[:6] if str(d).strip()]}
 
 
-def summarize(db: Session, user: Optional[User], task: str, audience: str, facts: Dict[str, Any]) -> Dict[str, Any]:
-    """Run one summary task (masked, cached, accounted). Raises ai_platform.AiBlocked / AiError."""
+def run_json(db: Session, user: Optional[User], task: str, system: str, facts: Any, schema: Dict[str, Any],
+             clean: Callable[[Dict[str, Any]], Any], max_tokens: int = 3000, cache: bool = True,
+             cache_key: Any = None) -> Dict[str, Any]:
+    """Shared path of every structured AI task: policy check → mask facts → call (cached, accounted)
+    → validate with `clean` → unmask. Raises ai_platform.AiBlocked / transport.AiError."""
     import json
+    import time
 
     from .spend import ai as transport
-    import time
     try:
         cfg = ai_platform.check(db, task, user)
     except ai_platform.AiBlocked as exc:
@@ -65,13 +69,19 @@ def summarize(db: Session, user: Optional[User], task: str, audience: str, facts
         raise
     masker = ai_platform.masker_for(db) if (cfg.mask_names is None or cfg.mask_names) else ai_platform.Masker([])
     masked = masker.mask(facts)
-    system = SYSTEM.format(audience=AUDIENCE[audience])
     text = "Dữ kiện (JSON):\n" + json.dumps(masked, ensure_ascii=False, default=str)
-    result, cached = ai_platform.run(db, user, task, lambda: _clean(transport.complete_json(cfg, system, text, SUMMARY_SCHEMA, 3000)),
-                                     facts={"audience": audience, "facts": masked}, cache=True)
+    result, cached = ai_platform.run(db, user, task, lambda: clean(transport.complete_json(cfg, system, text, schema, max_tokens)),
+                                     facts={"k": cache_key, "facts": masked}, cache=cache)
     out = masker.unmask(result)
-    out["cached"] = cached
+    if isinstance(out, dict):
+        out["cached"] = cached
     return out
+
+
+def summarize(db: Session, user: Optional[User], task: str, audience: str, facts: Dict[str, Any]) -> Dict[str, Any]:
+    """Run one summary task (masked, cached, accounted). Raises ai_platform.AiBlocked / AiError."""
+    return run_json(db, user, task, SYSTEM.format(audience=AUDIENCE[audience]), facts, SUMMARY_SCHEMA, _clean,
+                    cache_key=audience)
 
 
 # ---------------------------------------------------------------- facts builders (numbers from code only)

@@ -35,6 +35,10 @@ TASKS: Dict[str, Tuple[str, str, bool]] = {
     "quote_compare": ("Tóm tắt khác biệt báo giá", "Chỉ ra khác biệt nội dung / cấu hình giữa các báo giá, rủi ro và câu hỏi cho NCC.", True),
     "home_brief": ("Bản tin trang chủ", "Tóm tắt việc cần làm hôm nay từ hộp việc và bản tin capacity.", True),
     "report_summary": ("Tổng kết báo cáo PDF", "Viết phần “Tổng kết — vấn đề & quyết định” của báo cáo PDF từ số liệu đã tính.", True),
+    "backup_analysis": ("Phân tích lỗi backup", "Gom job lỗi theo nguyên nhân gốc, giải thích mã lỗi lạ, đề xuất thứ tự xử lý (mức độ vẫn theo luật).", True),
+    "column_mapping": ("Ánh xạ cột file nhập", "Đề xuất cột nào là tên / CPU / RAM… cho file host / VM bố cục lạ (chỉ gửi tiêu đề cột và dạng dữ liệu mẫu).", True),
+    "os_classify": ("Phân loại hệ điều hành", "Đề xuất họ / phiên bản HĐH cho VM “Other / Unknown”; người xác nhận mới ghi đè.", True),
+    "vm_changes": ("Tóm tắt biến động VM", "Tóm tắt VM thêm / bỏ / đổi cấu hình trong kỳ và tác động tới capacity.", True),
 }
 
 # USD per million tokens (input, output) — Claude API list prices. An unknown model is priced at
@@ -226,7 +230,7 @@ def masker_for(db: Session) -> Masker:
 
 
 # ---------------------------------------------------------------- running a task
-PROMPT_VERSION = "2026-11-sa4"
+PROMPT_VERSION = "2026-11-sa5"
 RUN_RETENTION_DAYS = 400
 # Budget reserved by calls in flight (this process): worst-case cost of one call.
 _reserved = {"usd": 0.0}
