@@ -7,7 +7,7 @@ environment variables / .env — never hardcoded and never committed to git.
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, List
+from typing import Literal, List, Optional
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -20,9 +20,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 
+def _positive_int(v) -> Optional[int]:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 class VCenterConfig:
     def __init__(self, key: str, name: str, host: str, port: int, username: str,
-                 password: str, verify_ssl: bool, demo: bool = False, ca_pem: str = "", origin: str = "env"):
+                 password: str, verify_ssl: bool, demo: bool = False, ca_pem: str = "", origin: str = "env",
+                 timeout: Optional[int] = None):
         self.key = key
         self.name = name
         self.host = host
@@ -33,6 +42,8 @@ class VCenterConfig:
         self.demo = demo
         self.ca_pem = ca_pem          # CA chain (PEM text) trusted for this vCenter, when verify_ssl is on
         self.origin = origin          # "env" (ConfigMap / .env) or "ui" (Settings → Nguồn dữ liệu)
+        # Seconds per SOAP call (connect / each PropertyCollector page). None → VCENTER_TIMEOUT_SECONDS.
+        self.timeout = timeout
 
 
 class NetBackupConfig:
@@ -172,6 +183,12 @@ class Settings(BaseSettings):
     # vCenters and backup servers polled at the same time (each in its own thread / DB session).
     sync_concurrency: int = Field(default=4)
     enable_scheduler: bool = Field(default=True)
+    # Socket timeout of every vCenter SOAP call (login, each PropertyCollector page). Per source:
+    # VCENTER_i_TIMEOUT. pyVmomi waits forever without it (one hung vCenter froze every poll).
+    vcenter_timeout_seconds: int = Field(default=120)
+    # Hard deadline of one source's sync inside a poll round / "sync all": past it the source is
+    # reported as failed and the round goes on (the worker thread ends when its socket times out).
+    sync_source_deadline_seconds: int = Field(default=1800)
 
     # Compliance / overcommit default thresholds (mirrors the original client-side policy)
     cpu_overcommit_max: float = 6.0
@@ -231,6 +248,7 @@ class Settings(BaseSettings):
                 password=os.environ.get(prefix + "PASSWORD", ""),
                 verify_ssl=os.environ.get(prefix + "VERIFY_SSL", "false").lower() in ("1", "true", "yes"),
                 demo=demo,
+                timeout=_positive_int(os.environ.get(prefix + "TIMEOUT")),
             ))
         return result
 

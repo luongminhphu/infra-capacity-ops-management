@@ -6,12 +6,21 @@ Performance notes
   (not one history query per VM).
 * Snapshot rows are written with bulk INSERTs.
 * Sources are polled concurrently (SYNC_CONCURRENCY threads, one DB session each).
+
+Reliability
+* Every vCenter SOAP call has a socket timeout (vcenter/client.py) and each source has an
+  overall deadline in a round (SYNC_SOURCE_DEADLINE_SECONDS): one hung source cannot stall the
+  other sources, the next round or the 90 % Discord alerts.
+* A source is synced by one thread at a time (collectors/locks.py), shared with manual syncs.
+* The loop records a heartbeat read by /api/health/ready.
 """
 import asyncio
 import datetime as dt
 import logging
 import math
-from concurrent.futures import ThreadPoolExecutor
+import queue
+import threading
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy import insert
@@ -23,6 +32,7 @@ from ..database import SessionLocal
 from ..models import ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, VmSnapshot
 from ..vcenter import client as vcenter_client
 from ..vcenter import demo_generator
+from .locks import SourceBusy, source_lock
 
 logger = logging.getLogger("vco.scheduler")
 
@@ -121,17 +131,22 @@ def sync_vcenter(db: Session, cfg: VCenterConfig, settings: Optional[Settings] =
     with `host_count`, `vm_count`, `finding_count` set on the instance. Raises
     vcenter_client.VCenterConnectionError on connection failure (the run is still
     persisted with status='error' for visibility)."""
-    settings = settings or get_settings()
-    started_at = dt.datetime.utcnow()
-    run = SnapshotRun(vcenter_key=cfg.key, source="live", status="ok", started_at=started_at)
-    db.add(run)
-    db.flush()
+    with source_lock("vcenter", cfg.key):           # raises SourceBusy while another sync runs
+        return _sync_vcenter_locked(db, cfg, settings or get_settings())
 
+
+def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) -> SnapshotRun:
+    started_at = dt.datetime.utcnow()
     try:
         if cfg.demo:
             host_rows, vm_rows = demo_generator.collect_inventory(cfg)
         else:
             host_rows, vm_rows = vcenter_client.collect_inventory(cfg)
+        # The run row is written only once vCenter has answered: no DB transaction (and, on
+        # SQLite, no database write lock) stays open while waiting on the network.
+        run = SnapshotRun(vcenter_key=cfg.key, source="live", status="ok", started_at=started_at)
+        db.add(run)
+        db.flush()
         now = dt.datetime.utcnow()
         _enrich_activity(db, cfg.key, vm_rows, now)
         policy = _policy_from_settings(settings)
@@ -176,17 +191,26 @@ def sync_vcenter(db: Session, cfg: VCenterConfig, settings: Optional[Settings] =
         logger.info("Synced vCenter %s: %d hosts, %d vms, %d findings in %.1fs", cfg.key, len(host_rows), len(vm_rows),
                     len(findings), (run.finished_at - run.started_at).total_seconds())
         return run
-    except Exception as exc:  # noqa: BLE001
-        db.rollback()
-        # Record the failure as a NEW row (same pattern as backup/collector.py). Re-merging the
-        # rolled-back `run` would reuse its flushed primary key, which SQLite hands out again
-        # to a concurrent sync once this INSERT is rolled back — the error row then collides
-        # with that run's id and is never saved.
-        failed = SnapshotRun(vcenter_key=cfg.key, source="live", status="error", error_message=str(exc),
-                             started_at=started_at, finished_at=dt.datetime.utcnow())
-        db.add(failed)
-        db.commit()
+    except Exception as exc:  # noqa: BLE001 — logged, recorded as an error run, re-raised
+        # Log the original error first: if the database is the thing that is down, recording
+        # the run below fails too and must not hide this stack.
         logger.exception("Sync failed for vCenter %s", cfg.key)
+        try:
+            db.rollback()
+            # Record the failure as a NEW row (same pattern as backup/collector.py). Re-merging the
+            # rolled-back `run` would reuse its flushed primary key, which SQLite hands out again
+            # to a concurrent sync once this INSERT is rolled back — the error row then collides
+            # with that run's id and is never saved.
+            failed = SnapshotRun(vcenter_key=cfg.key, source="live", status="error", error_message=str(exc),
+                                 started_at=started_at, finished_at=dt.datetime.utcnow())
+            db.add(failed)
+            db.commit()
+        except Exception:  # noqa: BLE001 — keep the original error as the one raised
+            logger.exception("Could not record the failed sync run of vCenter %s", cfg.key)
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
         raise
 
 
@@ -214,31 +238,77 @@ def _sync_backup_task(cfg, settings: Settings) -> Dict[str, Any]:
         return backup_result(cfg, sync_netbackup(db, cfg, settings))
 
 
-def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, Any]], workers: int) -> List[Dict[str, Any]]:
-    """Run sync tasks in parallel threads; a failure becomes {"ok": False, "error": ...}."""
-    if not tasks:
+def deadline_seconds(settings: Optional[Settings] = None) -> float:
+    return max(10, (settings or get_settings()).sync_source_deadline_seconds)
+
+
+def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, Any]], workers: int,
+              deadline: Optional[float] = None) -> List[Dict[str, Any]]:
+    """Run sync tasks in parallel threads (at most `workers` at once) and return one result per
+    task, in order. A failure becomes {"ok": False, "error": ...}; a source already being synced
+    {"ok": False, "skipped": True, ...}. A task still running `deadline` seconds after it started
+    is abandoned: reported as failed, its daemon thread left to end on its socket timeout (it
+    keeps the source lock until then, so the next round skips that source instead of piling up).
+
+    Plain threads rather than ThreadPoolExecutor: leaving a `with ThreadPoolExecutor` block
+    waits for every thread, so one hung source used to block the whole round."""
+    n = len(tasks)
+    if not n:
         return []
-    with ThreadPoolExecutor(max_workers=max(1, min(workers, len(tasks))), thread_name_prefix="sync") as pool:
-        futures = [pool.submit(t) for t in tasks]
-        out = []
-        for key, fut in zip(keys, futures):
-            try:
-                out.append(fut.result())
-            except Exception as exc:  # noqa: BLE001 — already logged and recorded as an error run
-                out.append({**key, "ok": False, "error": str(exc)})
-        return out
+    deadline = deadline if deadline is not None else deadline_seconds()
+    workers = max(1, min(workers, n))
+    done: "queue.Queue" = queue.Queue()
+    results: List[Optional[Dict[str, Any]]] = [None] * n
+    running: Dict[int, float] = {}          # task index -> monotonic start
+    next_idx = 0
+
+    def runner(i: int) -> None:
+        try:
+            done.put((i, tasks[i](), None))
+        except BaseException as exc:  # noqa: BLE001 — handed over to the waiting thread
+            done.put((i, None, exc))
+
+    while next_idx < n or running:
+        while next_idx < n and len(running) < workers:
+            running[next_idx] = time.monotonic()
+            threading.Thread(target=runner, args=(next_idx,), name=f"sync-{next_idx}", daemon=True).start()
+            next_idx += 1
+        wait = max(0.01, min(running.values()) + deadline - time.monotonic())
+        try:
+            i, res, exc = done.get(timeout=wait)
+        except queue.Empty:
+            now = time.monotonic()
+            for i, start in list(running.items()):
+                if now - start >= deadline:
+                    del running[i]
+                    name = keys[i].get("vcenterKey") or keys[i].get("key")
+                    logger.error("Sync of %s still running after %.0fs (SYNC_SOURCE_DEADLINE_SECONDS); "
+                                 "abandoned for this round", name, deadline)
+                    results[i] = {**keys[i], "ok": False, "timedOut": True,
+                                  "error": f"Quá hạn {int(deadline)} giây, bỏ qua lượt này (SYNC_SOURCE_DEADLINE_SECONDS)."}
+            continue
+        if i not in running:                 # finished after being abandoned: already reported
+            continue
+        del running[i]
+        if exc is None:
+            results[i] = res
+        elif isinstance(exc, SourceBusy):
+            results[i] = {**keys[i], "ok": False, "skipped": True, "error": str(exc)}
+        else:                                # already logged and recorded as an error run
+            results[i] = {**keys[i], "ok": False, "error": str(exc)}
+    return [r for r in results if r is not None]
 
 
 def sync_vcenters(settings: Settings, configs: Optional[List[VCenterConfig]] = None) -> List[Dict[str, Any]]:
     configs = settings.vcenters() if configs is None else configs
     return run_syncs([lambda c=c: _sync_vcenter_task(c, settings) for c in configs],
-                     [{"vcenterKey": c.key} for c in configs], settings.sync_concurrency)
+                     [{"vcenterKey": c.key} for c in configs], settings.sync_concurrency, deadline_seconds(settings))
 
 
 def sync_backups(settings: Settings, configs=None) -> List[Dict[str, Any]]:
     configs = settings.netbackups() if configs is None else configs
     return run_syncs([lambda c=c: _sync_backup_task(c, settings) for c in configs],
-                     [{"key": c.key} for c in configs], settings.sync_concurrency)
+                     [{"key": c.key} for c in configs], settings.sync_concurrency, deadline_seconds(settings))
 
 
 def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
@@ -248,7 +318,7 @@ def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
     tasks = [lambda c=c: _sync_vcenter_task(c, settings) for c in vcs] + \
             [lambda c=c: _sync_backup_task(c, settings) for c in nbus]
     keys = [{"vcenterKey": c.key} for c in vcs] + [{"key": c.key} for c in nbus]
-    return run_syncs(tasks, keys, settings.sync_concurrency)
+    return run_syncs(tasks, keys, settings.sync_concurrency, deadline_seconds(settings))
 
 
 def _ops_alerts() -> None:
@@ -261,20 +331,54 @@ def _ops_alerts() -> None:
         logger.exception("Operations alerts check failed")
 
 
+# ---------------------------------------------------------------------------
+# Heartbeat (read by /api/health/ready)
+# ---------------------------------------------------------------------------
+_heartbeat: Dict[str, Any] = {"at": None, "interval": None, "rounds": 0}
+
+
+def _beat(interval: float) -> None:
+    _heartbeat.update(at=time.monotonic(), interval=interval)
+
+
+def heartbeat_status(settings: Optional[Settings] = None) -> Dict[str, Any]:
+    """{"ok", "ageSeconds", "maxAgeSeconds", "rounds", "reason"?}. The loop beats before and
+    after every round and between syncs and alerts, so a gap longer than 3 poll intervals + two
+    source deadlines (more sources than SYNC_CONCURRENCY run in waves) + 2 min margin means the
+    loop is stuck or dead."""
+    settings = settings or get_settings()
+    at, interval = _heartbeat["at"], _heartbeat["interval"]
+    if at is None:
+        return {"ok": False, "reason": "scheduler_not_started"}
+    age = time.monotonic() - at
+    max_age = 3 * interval + 2 * deadline_seconds(settings) + 120
+    out = {"ok": age <= max_age, "ageSeconds": round(age), "maxAgeSeconds": round(max_age),
+           "rounds": _heartbeat["rounds"]}
+    if not out["ok"]:
+        out["reason"] = "scheduler_stale"
+    return out
+
+
 async def scheduler_loop(app_settings: Settings):
     """Poll every source each interval, off the API event loop."""
     interval = max(5, app_settings.poll_interval_minutes) * 60
     while True:
         started = dt.datetime.utcnow()
+        _beat(interval)
         try:
             results = await asyncio.to_thread(sync_everything, app_settings)
-            failed = [r.get("vcenterKey") or r.get("key") for r in results if not r["ok"]]
+            failed = [r.get("vcenterKey") or r.get("key") for r in results if not r["ok"] and not r.get("skipped")]
+            skipped = [r.get("vcenterKey") or r.get("key") for r in results if r.get("skipped")]
+            _beat(interval)
             await asyncio.to_thread(_ops_alerts)
-            logger.info("Scheduled sync of %d sources finished in %.1fs%s", len(results),
+            logger.info("Scheduled sync of %d sources finished in %.1fs%s%s", len(results),
                         (dt.datetime.utcnow() - started).total_seconds(),
-                        f"; failed: {', '.join(failed)} (retry next cycle)" if failed else "")
+                        f"; failed: {', '.join(failed)} (retry next cycle)" if failed else "",
+                        f"; skipped (sync already running): {', '.join(skipped)}" if skipped else "")
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
             logger.exception("Scheduled sync cycle failed; will retry next cycle")
+        _heartbeat["rounds"] += 1
+        _beat(interval)
         await asyncio.sleep(interval)
