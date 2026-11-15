@@ -127,25 +127,30 @@ async function renderQuotesPage() {
   qtRenderList();
 }
 
+/* Gói báo giá as a grouped list (pages/danh-sach.md). The package itself is a workbench (quotes, line comparison,
+   evaluation, decision) too wide for a side pane, so it keeps its full-width page. */
 function qtRenderList() {
-  const rows = (qtState.list || []).map(r => `<tr data-qt-code="${esc(r.code)}" class="sp-row" tabindex="0">
-      <td><b>${esc(r.code)}</b></td><td class="wrap">${esc(r.title)}</td><td>${esc(r.workstreamLabel)}</td>
-      <td>${spPill(...(QT_STATUS[r.status] || ['na', r.statusLabel]))}</td>
-      <td class="num">${esc(r.quotations)}/${esc(r.minQuotes)}</td>
-      <td class="wrap">${esc(r.selectedVendor || '—')}${r.selectedTotal ? `<span class="muted-sub">${spMoney(r.selectedTotal)}</span>` : ''}</td>
-      <td>${esc(spTime(r.updatedAt))}</td></tr>`).join('');
+  const list = qtState.list || [];
+  const row = (r) => `<li class="sp-li" role="option" id="qt-opt-${esc(r.code)}" data-qt-code="${esc(r.code)}" aria-selected="false">
+      <span class="hm-lv lv-${esc((QT_STATUS[r.status] || ['na'])[0])}" aria-hidden="true"></span>
+      <span class="sp-li-t">${esc(r.title)}</span>
+      <span class="sp-li-r"><b class="num">${esc(r.quotations)}/${esc(r.minQuotes)} báo giá</b>${r.selectedTotal ? spMoney(r.selectedTotal) : esc(spTime(r.updatedAt))}</span>
+      <span class="sp-li-m">${esc(r.code)} · ${esc(r.workstreamLabel)}${r.selectedVendor ? ` · chọn ${esc(r.selectedVendor)}` : ''}</span>
+      <span class="sr-only">${esc((QT_STATUS[r.status] || ['', r.statusLabel])[1])}</span></li>`;
+  const groups = ['comparing', 'draft', 'selected', 'closed'].map(k => {
+    const g = list.filter(r => r.status === k);
+    return g.length ? `<li class="hm-group" role="presentation"><span>${esc(QT_STATUS[k][1])}</span><span>${g.length}</span></li>${g.map(row).join('')}` : '';
+  }).join('');
   $('#spendMount').innerHTML = `
-    <section class="table-card">
+    <section class="panel qt-list-panel">
       <div class="panel-head">
         <div><div class="panel-title">So sánh báo giá</div>
           <p class="panel-sub">Mỗi gói nhận báo giá của nhiều NCC (mặc định 3). Hệ thống đọc file, kiểm tra công thức tiền, so sánh từng hạng mục và lập phiếu đánh giá NCC.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-qt-prices><i data-lucide="search"></i>Tra cứu đơn giá</button>${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-qt-new><i data-lucide="plus"></i>Tạo gói báo giá</button>' : ''}</div>
       </div>
       ${qtState.error ? `<p class="criteria-status error">${esc(qtState.error)}</p>` : ''}
-      <div class="table-scroll"><table class="data-table sp-table">
-        <thead><tr><th>Mã</th><th>Gói</th><th>Khối</th><th>Trạng thái</th><th class="num">Báo giá</th><th>NCC được chọn</th><th>Cập nhật</th></tr></thead>
-        <tbody>${rows || uiEmptyRow(7, 'Chưa có gói báo giá.')}</tbody>
-      </table></div>
+      ${groups ? `<ul class="hm-rows" id="qtList" role="listbox" tabindex="0" aria-label="Gói báo giá, nhóm theo trạng thái">${groups}</ul>` : uiEmpty(spCan('editor') ? 'Chưa có gói báo giá. Bấm “Tạo gói báo giá”.' : 'Chưa có gói báo giá.')}
+      <p class="hm-hint"><span>${list.length} gói</span><span><kbd>J</kbd> <kbd>K</kbd> chuyển · <kbd>Enter</kbd> mở</span></p>
     </section>`;
   refreshIcons();
 }
@@ -167,8 +172,14 @@ function qtBind() {
     if (act) return qtAction(act.dataset.qtAct, act.dataset.qid, act);
   });
   mount.addEventListener('keydown', (e) => {
-    const row = spState.sub === 'quotes' && e.target.closest('[data-qt-code]');
-    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); qtOpen(row.dataset.qtCode); }
+    if (spState.sub !== 'quotes' || !e.target.closest('#qtList')) return;
+    const k = e.key.toLowerCase();
+    if (k === 'enter' || k === ' ') {
+      const sel = $('#qtList [aria-selected="true"]') || $('#qtList [role="option"]');
+      if (sel) { e.preventDefault(); qtOpen(sel.dataset.qtCode); }
+      return;
+    }
+    spListKeys(e, 'qtCode', ($('#qtList [aria-selected="true"]') || {}).dataset?.qtCode, (code) => spListSelect('#qtList', 'qtCode', code, true));
   });
 }
 

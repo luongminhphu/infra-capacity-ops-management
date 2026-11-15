@@ -121,6 +121,52 @@ function spDetailPane() {
   return pane && matchMedia('(min-width: 1024px)').matches ? pane : null;
 }
 
+/* Shared by Hợp đồng / Đợt thanh toán: render an object's detail in the page's pane on wide screens, else in the
+   dialog. Same body / ids either way; the dialog's stale copy is cleared so ids stay unique. `title` is escaped HTML. */
+function spPaneOrDialog(paneSel, title, code, body, actions) {
+  const pane = $(paneSel);
+  if (pane && matchMedia('(min-width: 1024px)').matches) {
+    if (!$('#spDialog').open) $('#spDialogBody').innerHTML = '';
+    const render = () => {
+      pane.innerHTML = `<div class="sp-pane-head"><h3 id="spPaneTitle">${title}</h3><span class="muted-sub">${esc(code)}</span></div>
+        <div class="sp-pane-actions">${(actions || '').replace('<span class="src-spacer"></span>', '').trim()}</div>
+        <p class="src-result" id="spDialogMsg" role="status"></p>
+        <div class="sp-dialog-body">${body}</div>`;
+      refreshIcons();
+    };
+    render();
+    return pane;
+  }
+  spDialog(`${esc(code)} — ${title}`, body, actions);
+  return $('#spDialogBody');
+}
+
+/* Keyboard for a list → detail listbox: J / K / arrows move, Enter opens. `open(key)` renders the detail. */
+function spListKeys(e, keyAttr, current, open) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const lb = e.currentTarget === e.target ? e.target : e.target.closest('[role="listbox"]');
+  if (!lb) return;
+  const keys = [...lb.querySelectorAll('[role="option"]')].map(o => o.dataset[keyAttr]);
+  const i = keys.indexOf(current), k = e.key.toLowerCase();
+  let next = null;
+  if (k === 'arrowdown' || k === 'j') next = keys[Math.min(i + 1, keys.length - 1)];
+  else if (k === 'arrowup' || k === 'k') next = keys[Math.max(i - 1, 0)];
+  else if (k === 'enter' || k === ' ') next = current || keys[0];
+  if (!next) return;
+  e.preventDefault();
+  open(next, true);
+}
+
+/* Mark the selected option of a listbox (aria-selected + aria-activedescendant). */
+function spListSelect(listSel, keyAttr, key, focus) {
+  const lb = $(listSel);
+  if (!lb) return;
+  let sel = null;
+  lb.querySelectorAll('[role="option"]').forEach(o => { const on = o.dataset[keyAttr] === String(key); o.setAttribute('aria-selected', String(on)); if (on) sel = o; });
+  if (sel) { lb.setAttribute('aria-activedescendant', sel.id); sel.scrollIntoView({ block: 'nearest' }); } else lb.removeAttribute('aria-activedescendant');
+  if (focus) lb.focus();
+}
+
 const SP_VIEWS = [['open', 'Cần theo dõi'], ['expiring', 'Sắp hết hạn'], ['overdue', 'Quá hạn'], ['all', 'Tất cả']];
 
 /* Time buckets of the page's items (server order: by end date). Money per bucket = sum of the rows shown. */
