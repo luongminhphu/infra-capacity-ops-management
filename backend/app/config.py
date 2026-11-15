@@ -7,7 +7,7 @@ environment variables / .env — never hardcoded and never committed to git.
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, List
+from typing import Literal, List, Optional
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -62,6 +62,29 @@ class NetBackupConfig:
         self.origin = origin
 
 
+DEFAULT_JWT_SECRET = "change-me-in-.env-please"
+# Placeholder values shipped in .env.example / k8s/02-secret.example.yaml: never valid keys.
+PLACEHOLDER_SECRETS = frozenset({
+    DEFAULT_JWT_SECRET,
+    "change-me-to-a-long-random-string",
+    "change-me-to-another-long-random-string",
+})
+MIN_JWT_SECRET_LEN = 16
+
+
+def jwt_secret_problem(secret: Optional[str]) -> Optional[str]:
+    """Why JWT_SECRET is unsafe to start with (None = acceptable). Anyone knowing the key can
+    sign an admin session cookie and decrypt stored source passwords (secrets_box fallback)."""
+    value = (secret or "").strip()
+    if not value:
+        return "JWT_SECRET is empty"
+    if value in PLACEHOLDER_SECRETS:
+        return "JWT_SECRET is the default / example placeholder"
+    if len(value) < MIN_JWT_SECRET_LEN:
+        return f"JWT_SECRET is shorter than {MIN_JWT_SECRET_LEN} characters"
+    return None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -70,7 +93,7 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="postgresql+psycopg2://ico_app:devpassword@localhost:5432/infra_capacity_ops")
 
-    jwt_secret: str = Field(default="change-me-in-.env-please")
+    jwt_secret: str = Field(default=DEFAULT_JWT_SECRET)
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 12  # 12h session
 
@@ -193,12 +216,13 @@ class Settings(BaseSettings):
     # Job rows older than this are purged after each sync (keeps the table bounded).
     backup_retention_days: int = Field(default=400)
 
-    cors_origins: str = Field(default="*")
+    # Empty = no cross-origin access: the frontend is served by this app on the same origin.
+    cors_origins: str = Field(default="")
 
     def cors_origin_list(self) -> List[str]:
-        if self.cors_origins == "*":
+        if (self.cors_origins or "").strip() == "*":
             return ["*"]
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return [o.strip() for o in (self.cors_origins or "").split(",") if o.strip()]
 
     # ---- Data sources ----
     # Sources come from VCENTER_i_* / NETBACKUP_i_* variables and from Settings → Nguồn dữ liệu

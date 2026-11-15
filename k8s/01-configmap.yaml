@@ -8,7 +8,7 @@ metadata:
 data:
   ADMIN_USERNAME: "admin"
   COOKIE_SECURE: "false"          # đặt "true" nếu Ingress/NodePort của bạn phục vụ qua HTTPS
-  CORS_ORIGINS: "*"
+  CORS_ORIGINS: ""                # để trống: frontend cùng origin, không cần CORS
   ENABLE_SCHEDULER: "true"
   POLL_INTERVAL_MINUTES: "60"
   SYNC_CONCURRENCY: "4"             # số vCenter / máy chủ backup đồng bộ song song

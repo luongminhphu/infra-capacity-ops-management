@@ -1,16 +1,18 @@
 """Inventory & License Assessment API.
 
-All endpoints reuse the existing cookie-JWT auth (`get_current_user`) and the
+Reads use the cookie-JWT auth (`get_current_user`); writes to shared configuration (rule
+versions / activation, entitlements) need `require_admin`. Assessments use the
 latest snapshot per vCenter from data_access, so live-polled and imported
 inventories are assessed through the same path.
 """
+import logging
 import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from .. import data_access, report_license
@@ -20,12 +22,13 @@ from ..licensing import assess as assess_mod
 from ..licensing import os_classify, rules as rules_mod, whatif as whatif_mod
 from ..models import LicenseAssessment, LicenseEntitlement, LicenseRuleSet, ReportLogo, User, VmOsOverride
 from ..features import require_feature
-from ..security import get_current_user
+from ..security import get_current_user, require_admin
 from ..timeutil import to_iso_utc
 
 from ..scope import scope_keys as _scope_keys
 from ..licensing.inventory import _load_inventory, _override_dict, _overrides_map, _filter_scope, _parse_clusters  # noqa: F401,E402
 
+logger = logging.getLogger("vco.routers.licensing")
 router = APIRouter(prefix="/api/licensing", tags=["licensing"])
 # Asset endpoints above (clusters, inventory, OS overrides) serve Tài sản → ESXi / Hệ điều hành and stay on
 # whatever the License module switch says. Everything that is license assessment lives on this router.
@@ -189,9 +192,22 @@ def delete_override(override_id: int, db: Session = Depends(get_db), user: User 
 class RuleVersionIn(BaseModel):
     params: Dict[str, Any]
     name: Optional[str] = None
-    sourceUrl: Optional[str] = None
+    sourceUrl: Optional[str] = Field(default=None, max_length=500)
     sourceNote: Optional[str] = None
     activate: bool = False
+
+    @field_validator("sourceUrl")
+    @classmethod
+    def _http_url_only(cls, v: Optional[str]) -> Optional[str]:
+        # Rendered as a link for every user: only http(s), never javascript: / data: / file:.
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return ""                   # explicit clear (None keeps the previous version's link)
+        if not v.lower().startswith(("http://", "https://")) or any(c in v for c in " \t\r\n<>\"'"):
+            raise ValueError("Link nguồn phải là địa chỉ http:// hoặc https:// hợp lệ.")
+        return v
 
 
 class RuleVerifyIn(BaseModel):
@@ -205,7 +221,7 @@ def list_rules(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 
 @license_router.post("/rules/{rule_id}/versions")
-def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     base = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not base:
         raise HTTPException(404, "Không tìm thấy rule")
@@ -214,7 +230,7 @@ def new_rule_version(rule_id: int, payload: RuleVersionIn, db: Session = Depends
 
 
 @license_router.post("/rules/{rule_id}/activate")
-def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
         raise HTTPException(404, "Không tìm thấy rule")
@@ -224,7 +240,7 @@ def activate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @license_router.post("/rules/{rule_id}/deactivate")
-def deactivate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def deactivate_rule(rule_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
         raise HTTPException(404, "Không tìm thấy rule")
@@ -291,7 +307,7 @@ def _apply_ent(row: LicenseEntitlement, p: EntitlementIn, user: User):
 
 
 @license_router.post("/entitlements")
-def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = LicenseEntitlement()
     _apply_ent(row, payload, user)
     db.add(row)
@@ -301,7 +317,7 @@ def create_entitlement(payload: EntitlementIn, db: Session = Depends(get_db), us
 
 
 @license_router.put("/entitlements/{ent_id}")
-def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = db.query(LicenseEntitlement).filter(LicenseEntitlement.id == ent_id).first()
     if not row:
         raise HTTPException(404, "Không tìm thấy entitlement")
@@ -312,7 +328,7 @@ def update_entitlement(ent_id: int, payload: EntitlementIn, db: Session = Depend
 
 
 @license_router.delete("/entitlements/{ent_id}")
-def delete_entitlement(ent_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_entitlement(ent_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = db.query(LicenseEntitlement).filter(LicenseEntitlement.id == ent_id).first()
     if not row:
         raise HTTPException(404, "Không tìm thấy entitlement")
@@ -477,8 +493,9 @@ def report_pdf(vcenter: Optional[str] = Query(default="all"), cluster: Optional[
     try:
         pdf_bytes = report_license.build_license_pdf(result, logo_data_url=logo_data_url, prepared_by=preparedBy or user.username,
                                                      snapshot=snap_meta)
-    except Exception as exc:  # pragma: no cover - surfaced to the UI
-        raise HTTPException(status_code=500, detail=f"Không thể tạo PDF: {exc}")
+    except Exception as exc:  # noqa: BLE001 — details go to the log, not to the client
+        logger.exception("License PDF render failed")
+        raise HTTPException(status_code=500, detail="Không thể tạo PDF. Vui lòng thử lại hoặc báo quản trị viên kiểm tra log.") from exc
     sc = result.get("scope") or {}
     label = "_".join(_ascii_slug(c) for c in (sc.get("clusters") or [])[:3]) or (_ascii_slug(vcenter) if vcenter and vcenter != "all" else "tat_ca")
     filename = f"ICO_License_executive_summary_{label}{('_snapshot' + str(snapshot)) if snapshot else ''}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"

@@ -14,7 +14,7 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Font
 
 from .excel_style import (BLUE, CRIT, CRIT_BG, NAVY, NUM, NUM1, OK, OK_BG, TEAL, WARN, WARN_BG, _fill, _font, _print_setup,
-                           _section, _sheet_title, _table, _tile, _widths, _write_rows)
+                           _section, _sheet_title, _table, _tile, _widths, _write_rows, ext_cell)
 from .timeutil import VN_TZ
 
 STATUS_TXT = {"ok": "Đạt", "warn": "Cần theo dõi", "crit": "Cần xử lý", "na": "Không hoạt động"}
@@ -90,18 +90,18 @@ def _overview(wb, r: Dict[str, Any], servers: List[Dict[str, Any]], subtitle: st
     row = _section(ws, last + 2, "Phát hiện & khuyến nghị", 12)
     for f in r["findings"]:
         ws.cell(row=row, column=1, value=SEV_TXT[f["severity"]]).font = _font(10, True)
-        ws.cell(row=row, column=2, value=f["area"]).font = _font(10)
+        ext_cell(ws, row, 2, f["area"]).font = _font(10)
         ws.merge_cells(start_row=row, start_column=3, end_row=row, end_column=7)
-        ws.cell(row=row, column=3, value=f["title"] + (f" — {f['detail']}" if f["detail"] else "")).alignment = Alignment(wrap_text=True, vertical="top")
+        ext_cell(ws, row, 3, f["title"] + (f" — {f['detail']}" if f["detail"] else "")).alignment = Alignment(wrap_text=True, vertical="top")
         ws.merge_cells(start_row=row, start_column=8, end_row=row, end_column=12)
-        ws.cell(row=row, column=8, value=f["action"]).alignment = Alignment(wrap_text=True, vertical="top")
+        ext_cell(ws, row, 8, f["action"]).alignment = Alignment(wrap_text=True, vertical="top")
         ws.row_dimensions[row].height = 44
         row += 1
     _status_rules(ws, f"A{last + 3}:A{row}")
     row = _section(ws, row + 1, "Nguồn dữ liệu", 12)
     for s in servers:
-        ws.cell(row=row, column=1, value=s["name"])
-        ws.cell(row=row, column=3, value=f"{s['host']}:{s['port']}" + (" (demo)" if s.get("demo") else ""))
+        ext_cell(ws, row, 1, s["name"])
+        ext_cell(ws, row, 3, f"{s['host']}:{s['port']}" + (" (demo)" if s.get("demo") else ""))
         ws.cell(row=row, column=6, value=_local(s.get("lastSyncAt"))).number_format = DATE_FMT
         row += 1
 
