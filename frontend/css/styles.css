@@ -1318,3 +1318,21 @@ kbd{font:inherit;font-size:var(--fs-caption);padding:0 5px;border:1px solid var(
 .data-table th{color:var(--text-secondary);font-weight:var(--fw-semibold);}
 /* tone-* on a card colors its border only; text stays ink */
 .rec-card-web.tone-ok,.rec-card-web.tone-opportunity,.rec-card-web.prio-cao,.rec-card-web.prio-tb{color:var(--text-primary);}
+
+/* ── Backup & License (PR 3/6) ─ */
+/* Neutral fact tag (HA, DRS, SA, edition): not a status, so no glyph and no status color */
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);font-size:var(--fs-caption);font-weight:var(--fw-medium);color:var(--text-primary);white-space:nowrap;}
+.note-line{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:0 0 var(--space-4);color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.chart-wrap-split{min-height:220px;}
+.chart-wrap-mini{min-height:120px;margin-top:var(--space-2);}
+details.lic-scope{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-surface);}
+details.lic-scope>summary{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);cursor:pointer;list-style:none;min-height:40px;}
+details.lic-scope>summary::-webkit-details-marker{display:none;}
+details.lic-scope>summary::after{content:"";width:8px;height:8px;margin-left:auto;border-right:2px solid var(--text-secondary);border-bottom:2px solid var(--text-secondary);transform:rotate(45deg);transition:transform var(--transition);}
+details.lic-scope[open]>summary::after{transform:rotate(-135deg);}
+.lic-scope-hint{color:var(--text-brand);font-size:var(--fs-caption);}
+.lic-scope-body{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:0 var(--space-3) var(--space-3);}
+.lic-scope-body .lic-scope-note{flex-basis:100%;margin:var(--space-1) 0 0;}
+.lic-scope-bar{display:block;}
+.kpi-strip{grid-template-columns:repeat(auto-fit,minmax(176px,1fr));}
+.kpi-st{margin-top:2px;}

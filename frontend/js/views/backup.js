@@ -84,7 +84,7 @@ function renderBackupHead() {
   const chips = servers.map(s => {
     const cls = s.lastStatus === 'error' ? 'crit' : (s.lastStatus === 'ok' ? 'ok' : 'na');
     const t = s.lastStatus === 'error' ? `Lỗi: ${s.lastError}` : (s.lastSyncAt ? `Đồng bộ ${bkDate(s.lastSyncAt)}` : 'Chưa đồng bộ');
-    return `<span class="pill ${cls}" title="${esc(t)}${s.warning ? ' · ' + esc(s.warning) : ''}"><span class="pill-dot"></span>${esc(s.name)} · ${esc(t)}</span>`;
+    return `<span class="pill ${cls}" title="${esc(t)}${s.warning ? ' · ' + esc(s.warning) : ''}">${esc(s.name)} · ${esc(t)}</span>`;
   }).join(' ');
   head.innerHTML = `
     <div class="lic-head-row">
@@ -152,7 +152,8 @@ function bkKpis(s) {
     ['Dữ liệu đã backup', `${bkNum(k.dataTB, 2)} TB`, `Trong ${s.period.days} ngày · bản sao DR ${bkPct(k.copyRate)} thành công`],
     ['Disk pool cao nhất', `<span class="${tone(k.storageMaxPct, th.storage_warn_pct, th.storage_crit_pct, false)}">${bkPct(k.storageMaxPct, 0)}</span>`, esc(k.storageMaxName || 'Chưa có dữ liệu storage')],
   ];
-  return `<div class="kpi-grid lic-kpi-6">${cards.map(([l, v, sub]) => `<div class="kpi-card"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${sub}</div></div>`).join('')}</div>`;
+  // valueHtml / subHtml: the values above already went through bkPct / bkNum / esc.
+  return `<div class="kpi-strip-wrap">${uiKpiStrip(cards.map(([l, v, sub]) => ({ label: l, valueHtml: v, subHtml: sub })))}</div>`;
 }
 
 function bkFindingsTable(findings, limit) {
@@ -164,18 +165,31 @@ function bkFindingsTable(findings, limit) {
     <tbody>${rows || uiEmptyRow(4, 'Không có phát hiện nào.')}</tbody></table></div>`;
 }
 
+/* The rule headline is one run-on line joined with " · " (shared with the PDF): show the first clause as
+   the verdict sentence and the rest as points. Display only — the text is unchanged. */
+function bkVerdict(s, r) {
+  const parts = String(s.headline || '').split(' · ').map(x => x.trim()).filter(Boolean);
+  const head = parts.shift() || '';
+  return `<section class="verdict tone-rule-${esc(r.cls)}" aria-label="Kết luận backup">
+      <div class="verdict-meta">${bkPill(r.cls, r.label)}<span>${esc(s.period ? `${s.period.days} ngày qua` : '')}</span></div>
+      <h2>${esc(head.replace(/\.$/, ''))}.</h2>
+      ${parts.length ? `<ul class="verdict-points">${parts.map(x => `<li>${esc(x.replace(/\.$/, ''))}</li>`).join('')}</ul>` : ''}
+    </section>`;
+}
+
 function bkOverview(s) {
   const r = BK_READY[s.readiness];
   const groups = (s.failureGroups || []).map(g => `<tr><td><b>${esc(g.label)}</b><span class="muted-sub bk-wrap">${esc(g.action)}</span></td><td class="num">${bkNum(g.count)}</td><td class="num">${bkNum(g.clientCount)}</td></tr>`).join('');
   const crit = (s.clients || []).filter(c => c.status !== 'ok').slice(0, 8).map(c => `<tr><td><b>${esc(c.client)}</b><span class="muted-sub">${esc(c.policies.join(', '))}</span></td>
     <td>${bkDate(c.lastSuccessAt)}<span class="muted-sub">${bkHours(c.hoursSinceSuccess)} trước</span></td><td class="wrap">${esc(c.lastStatusText)}</td><td>${bkPill(c.status, c.statusLabel)}</td></tr>`).join('');
   return `
-    <section class="insight-box bk-brief bk-${s.readiness}"><div class="bk-brief-head">${bkPill(r.cls, r.label)}<strong>${esc(s.headline)}</strong></div></section>
+    ${bkVerdict(s, r)}
     ${bkKpis(s)}
     <section class="chart-grid exec-chart-grid">
       <article class="card chart-card">
         <div class="panel-head panel-head-tight"><div><div class="panel-title">Kết quả job backup theo ngày</div><p class="panel-sub">Job ở cấp thực thi (không đếm trùng job cha của VMware / multistream).</p></div></div>
-        <div class="chart-wrap"><canvas id="bkChartDaily"></canvas></div>
+        <div class="chart-wrap chart-wrap-split"><canvas id="bkChartDaily" role="img" aria-label="Số job theo kết quả mỗi ngày"></canvas></div>
+        <div class="chart-wrap chart-wrap-mini"><canvas id="bkChartDailyTb" role="img" aria-label="Dung lượng đã backup mỗi ngày (TB)"></canvas></div>
       </article>
       <article class="card chart-card">
         <div class="panel-head panel-head-tight"><div><div class="panel-title">Nguyên nhân lỗi</div><p class="panel-sub">Gom theo đầu mối xử lý.</p></div>
@@ -611,19 +625,27 @@ function bkChartDaily(s) {
   const el = $('#bkChartDaily'); if (!el) return;
   const c = chartPalette();
   const labels = s.daily.map(d => `${d.date.slice(8, 10)}/${d.date.slice(5, 7)}`);
+  // Outcomes ARE statuses, so status colors are right here; TB moves to its own chart below the same x axis
+  // (MASTER.md §8: one y axis per chart — the old version had job count and TB on two axes).
   bkState().charts.daily = new Chart(el, {
     type: 'bar',
     data: { labels, datasets: [
-      { label: 'Thành công', data: s.daily.map(d => d.success), backgroundColor: c.ok, stack: 'j', order: 1 },
-      { label: 'Một phần', data: s.daily.map(d => d.partial), backgroundColor: c.warn, stack: 'j', order: 1 },
-      { label: 'Lỗi', data: s.daily.map(d => d.failed), backgroundColor: c.crit, stack: 'j', order: 1 },
-      { label: 'Dữ liệu (TB)', data: s.daily.map(d => d.tb), type: 'line', yAxisID: 'tb', order: 0, borderColor: c.primary, backgroundColor: c.primary, pointRadius: 2, tension: .3 },
+      { label: 'Thành công', data: s.daily.map(d => d.success), backgroundColor: c.ok, stack: 'j' },
+      { label: 'Một phần', data: s.daily.map(d => d.partial), backgroundColor: c.warn, stack: 'j' },
+      { label: 'Lỗi', data: s.daily.map(d => d.failed), backgroundColor: c.crit, stack: 'j' },
     ] },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { labels: { color: c.muted, boxWidth: 10 } } },
-      scales: { x: { stacked: true, ticks: { color: c.muted }, grid: { display: false } },
-        y: { stacked: true, beginAtZero: true, ticks: { color: c.muted }, grid: { color: c.divider }, title: { display: true, text: 'Job', color: c.muted } },
-        tb: { position: 'right', beginAtZero: true, ticks: { color: c.muted }, grid: { display: false }, title: { display: true, text: 'TB', color: c.muted } } } },
+      plugins: { legend: { labels: { color: c.text, boxWidth: 10 } } },
+      scales: { x: { stacked: true, ticks: { color: c.axis }, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: c.axis }, grid: { color: c.grid }, title: { display: true, text: 'Số job', color: c.axis } } } },
+  });
+  const tb = $('#bkChartDailyTb'); if (!tb) return;
+  bkState().charts.dailyTb = new Chart(tb, {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Dữ liệu đã backup (TB)', data: s.daily.map(d => d.tb), borderColor: c.series[0], backgroundColor: c.series[0], pointRadius: 2, borderWidth: 2, tension: .25 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, title: { display: true, text: 'Dữ liệu đã backup (TB)', color: c.axis, align: 'start', font: { weight: 500 } } },
+      scales: { x: { ticks: { color: c.axis }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: c.axis, maxTicksLimit: 4 }, grid: { color: c.grid } } } },
   });
 }
 
@@ -632,11 +654,11 @@ function bkChartStorage(s) {
   const el = $('#bkChartStorage'); const tr = s.storageTrend;
   if (!el || !tr || tr.dates.length < 2) return;
   const c = chartPalette();
-  const colors = [c.primary, c.accent, c.series[2], c.series[3], c.series[4], c.muted];
+  const colors = c.series;   /* validated HSC series; never status colors for pools; the limit line is ink */
   bkState().charts.storage = new Chart(el, {
     type: 'line',
     data: { labels: tr.dates.map(d => `${d.slice(8, 10)}/${d.slice(5, 7)}`), datasets: tr.series.map((x, i) => ({ label: x.name, data: x.values, borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length], pointRadius: 0, tension: .2, spanGaps: true }))
-      .concat([{ label: `Nghiêm trọng ${s.thresholds.storage_crit_pct}%`, data: tr.dates.map(() => s.thresholds.storage_crit_pct), borderColor: c.crit, borderDash: [5, 4], pointRadius: 0, borderWidth: 1 }]) },
+      .concat([{ label: `Nghiêm trọng ${s.thresholds.storage_crit_pct}%`, data: tr.dates.map(() => s.thresholds.storage_crit_pct), borderColor: c.text, borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 }]) },
     options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels: { color: c.muted, boxWidth: 10 } }, title: { display: true, text: 'Mức dùng disk pool 30 ngày (%)', color: c.muted } },
       scales: { x: { ticks: { color: c.muted, maxTicksLimit: 10 }, grid: { display: false } }, y: { min: 0, max: 100, ticks: { color: c.muted }, grid: { color: c.divider } } } },
   });
