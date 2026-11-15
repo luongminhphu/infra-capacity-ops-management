@@ -23,11 +23,11 @@ function renderBomView() {
     const cats = d.categories.filter(c => d.configs.some(x => x.category === c.key));
     const total = d.configs.reduce((s, c) => s + Number(c.total || 0), 0);
     body = `
-      <div class="kpi-grid">
-        <div class="kpi-card"><div class="label">Định dạng nhận ra</div><div class="value bom-kpi-text">${esc(d.layoutLabel)}</div><div class="sub">${esc(d.fileName)} · sheet ${esc(d.sheet)} · tiêu đề dòng ${esc(d.headerRow)}</div></div>
-        <div class="kpi-card"><div class="label">Cấu hình</div><div class="value">${esc(d.configs.length)}</div><div class="sub">${esc(cats.length)} đầu mục</div></div>
-        <div class="kpi-card"><div class="label">Tổng giá trị (theo file)</div><div class="value bom-kpi-text">${esc(bomMoney(total, cur))}</div><div class="sub">chưa VAT · tính lại bằng công thức trong Excel</div></div>
-      </div>
+      <div class="kpi-strip-wrap">${uiKpiStrip([
+        { label: 'Định dạng nhận ra', value: d.layoutLabel, sub: `${d.fileName} · sheet ${d.sheet} · tiêu đề dòng ${d.headerRow}` },
+        { label: 'Cấu hình', value: String(d.configs.length), sub: `${cats.length} đầu mục` },
+        { label: 'Tổng giá trị (theo file)', value: bomMoney(total, cur), sub: 'chưa VAT · tính lại bằng công thức trong Excel' },
+      ])}</div>
       ${d.warnings.length ? `<div class="insight-box">${d.warnings.map(w => `<div>${uiPill('warn', 'Lưu ý')} ${esc(w)}</div>`).join('')}</div>` : ''}
       ${cats.map((c, ci) => `
         <section class="table-card bom-cat">
@@ -41,7 +41,12 @@ function renderBomView() {
       <div class="panel-head"><div><div class="panel-title">Chuẩn hoá BOM</div>
         <p class="panel-sub">Tải file Excel BOM thô — Dell Solutions Configurator, Cisco CCW, HPE hoặc bảng kê thông thường. Hệ thống gom theo đầu mục, tóm tắt thông số mỗi cấu hình (CPU, RAM, ổ đĩa, cổng mạng, HBA, license…) và xuất file Excel trình bày chuẩn, có công thức tổng.</p></div></div>
       <div class="settings-form bom-form">
-        <label class="field"><span>File BOM (.xlsx)</span><input type="file" id="bomFile" accept=".xlsx"></label>
+        <label class="dropzone sp-span2" id="bomDrop">
+          <input type="file" id="bomFile" accept=".xlsx" class="sr-only">
+          <i data-lucide="file-spreadsheet" aria-hidden="true"></i>
+          <span class="dz-main">${d ? `<b>${esc(d.fileName)}</b> — chọn file khác` : '<b>Chọn file BOM .xlsx</b> hoặc kéo thả vào đây'}</span>
+          <span class="dz-sub">Dell Solutions Configurator, Cisco CCW, HPE hoặc bảng kê thường. File chỉ đọc để xem trước, không lưu trên máy chủ.</span>
+        </label>
         ${field('bomName', 'Tên dự án', p.name, 'maxlength="120"')}
         ${field('bomCustomer', 'Khách hàng', p.customer, 'maxlength="120"')}
         ${field('bomBy', 'Người lập', p.preparedBy || (currentUser && currentUser.username) || '', 'maxlength="80"')}
@@ -53,7 +58,7 @@ function renderBomView() {
       <div class="sim-actions"><button class="btn btn-primary btn-sm" type="button" id="bomExport" ${d ? '' : 'disabled'}><i data-lucide="download"></i>Xuất Excel</button></div>
       <p class="criteria-status" id="bomMsg" role="status"></p>
     </section>
-    ${body || uiEmpty('Chưa có file. Chọn file BOM .xlsx ở trên để xem trước.')}`;
+    ${body}`;
   refreshIcons();
   bomBind();
 }
@@ -96,9 +101,9 @@ async function bomResummarise(i) {
 
 function bomBind() {
   const d = bomState.data;
-  $('#bomFile').onchange = async (e) => {
-    const f = e.target.files[0];
+  const readFile = async (f) => {
     if (!f) return;
+    if (!/\.xlsx$/i.test(f.name)) { bomStatus('Chỉ nhận file .xlsx.', 'error'); return; }
     bomReadProject();
     bomStatus('Đang đọc file…');
     const fd = new FormData(); fd.append('file', f);
@@ -111,6 +116,11 @@ function bomBind() {
       bomStatus(`Đã đọc ${r.configs.length} cấu hình (${r.layoutLabel}). Kiểm tra đầu mục và thông số rồi bấm Xuất Excel.`);
     } catch (err) { bomStatus(err.message, 'error'); }
   };
+  $('#bomFile').onchange = (e) => readFile(e.target.files[0]);
+  const zone = $('#bomDrop');
+  ['dragenter', 'dragover'].forEach(t => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => zone.addEventListener(t, () => zone.classList.remove('over')));
+  zone.addEventListener('drop', (e) => { e.preventDefault(); readFile(e.dataTransfer.files[0]); });
   ['#bomName', '#bomCustomer', '#bomBy', '#bomVat', '#bomNote'].forEach(id => { const el = $(id); if (el) el.onchange = bomReadProject; });
   $('#bomCur').onchange = () => { bomReadProject(); renderBomView(); };
   $('#bomHide').onchange = () => { bomReadProject(); renderBomView(); };

@@ -113,14 +113,26 @@ function syncNavState() {
   if (location.hash.replace(/\?.*$/, '') !== want) history.replaceState(null, '', want + keep);
 }
 
+const PAGE_TAB_GROUPS = {
+  settings: [['Đánh giá', ['settings', 'bk-config']], ['Dữ liệu & tính năng', ['set-sources', 'set-features', 'set-ai']],
+    ['Người dùng & bảo mật', ['set-users', 'set-auth']], ['Chi phí & giao diện', ['set-spend', 'set-brand']]],
+};
+
 /* In-page tabs of the current menu entry (hidden when the entry has a single page). */
 function renderPageTabs(route) {
   const bar = $('#pageTabs');
   if (!bar) return;
   const tabs = route ? route.entry.tabs.filter(([id]) => navItemVisible(id)) : [];
   bar.classList.toggle('hidden', tabs.length < 2);
-  bar.innerHTML = tabs.map(([id, , label]) => `<button class="sim-tab${id === activeNavId ? ' active' : ''}" type="button" role="tab"
-      aria-selected="${id === activeNavId}" data-nav-link="${id}">${esc(label)}</button>`).join('');
+  const tab = ([id, , label]) => `<button class="sim-tab${id === activeNavId ? ' active' : ''}" type="button" role="tab"
+      aria-selected="${id === activeNavId}" data-nav-link="${id}">${esc(label)}</button>`;
+  const groups = route && PAGE_TAB_GROUPS[route.entry.key];
+  bar.classList.toggle('page-tabs-grouped', !!groups && tabs.length >= 2);
+  // Many tabs (Cài đặt: 9) read as labelled groups instead of one overflowing row.
+  bar.innerHTML = groups ? groups.map(([label, ids]) => {
+    const inGroup = tabs.filter(([id]) => ids.includes(id));
+    return inGroup.length ? `<div class="tab-group" role="presentation"><span class="tab-group-label">${esc(label)}</span>${inGroup.map(tab).join('')}</div>` : '';
+  }).join('') : tabs.map(tab).join('');
 }
 
 /* Show only the global filters that apply to the current page. */
