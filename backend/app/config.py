@@ -172,6 +172,9 @@ class Settings(BaseSettings):
     # vCenters and backup servers polled at the same time (each in its own thread / DB session).
     sync_concurrency: int = Field(default=4)
     enable_scheduler: bool = Field(default=True)
+    # vCenter snapshot history (runs, hosts, VMs, cluster aggregates, findings) older than this
+    # many months is purged once a day; the latest successful run per vCenter is always kept. 0 = keep all.
+    snapshot_retention_months: int = Field(default=36)
 
     # Compliance / overcommit default thresholds (mirrors the original client-side policy)
     cpu_overcommit_max: float = 6.0
