@@ -79,3 +79,28 @@ def test_devices_like_is_escaped(app_, editor):
     assert _devices_for_host(db, "esx_1") == [] and _devices_for_host(db, "esx%") == []
     assert [d["serial"] for d in _devices_for_host(db, "esxa1")] == ["SN-X"]
     db.close()
+
+
+def test_search_backup_clients_recent_window_only(app_):
+    """QRY-02: clients come from the last CLIENT_WINDOW_DAYS of jobs (cached), not the whole table."""
+    import datetime as dt
+    from app.database import SessionLocal
+    from app.models import BackupJob
+    from app.services import entities
+    now = dt.datetime.utcnow()
+    with SessionLocal() as db:
+        db.add_all([BackupJob(nbu_key="nbu-qry02", job_id=9100001, client_name="ZqRecent-Client01", start_time=now - dt.timedelta(days=3)),
+                    BackupJob(nbu_key="nbu-qry02", job_id=9100002, client_name="ZqStale-Client02", start_time=now - dt.timedelta(days=200)),
+                    BackupJob(nbu_key="nbu-qry02", job_id=9100003, client_name="sql-prod-01", start_time=now)])
+        db.commit()
+    try:
+        entities._cache.clear()
+        viewer = _login(app_, "viewer1")
+        items = viewer.get("/api/search?q=zq").json()["items"]
+        assert [(i["type"], i["label"]) for i in items] == [("client", "ZqRecent-Client01")]
+        # A client that is also a VM shows once, as the VM.
+        assert [i["type"] for i in viewer.get("/api/search?q=sql-prod").json()["items"]] == ["vm"]
+    finally:
+        with SessionLocal() as db:
+            db.query(BackupJob).filter(BackupJob.nbu_key == "nbu-qry02").delete()
+            db.commit()

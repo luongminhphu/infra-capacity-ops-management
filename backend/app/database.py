@@ -80,6 +80,21 @@ def ensure_schema() -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
                     if name in indexed:
                         conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_{name} ON {table} ({name})"))
+        # Composite indexes for the hot history queries (audit QRY-03):
+        # * vm_snapshots: history.py filters vcenter_key = ? AND captured_at >= ? (VM changes window);
+        # * snapshot_runs: data_access.latest_run_for_key / scheduler._enrich_activity filter
+        #   vcenter_key, status, source and take the newest finished_at.
+        # Plain CREATE INDEX on purpose: ensure_schema runs inside engine.begin() and PostgreSQL
+        # refuses CREATE INDEX CONCURRENTLY in a transaction. On a large existing vm_snapshots table
+        # the first start blocks writes to it while the index builds (reads are unaffected); for a
+        # very large table create it beforehand by hand with CONCURRENTLY and the same name —
+        # IF NOT EXISTS then makes this a no-op.
+        for name, table, cols in (
+            ("ix_vm_snapshots_vc_captured", "vm_snapshots", "vcenter_key, captured_at"),
+            ("ix_snapshot_runs_latest", "snapshot_runs", "vcenter_key, status, source, finished_at"),
+        ):
+            if table in insp.get_table_names():
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
         # One short name per vendor (used in every comparison / evaluation document and in tờ trình);
         # partial unique index on the lower-cased value works on SQLite and PostgreSQL.
         if "spend_vendors" in insp.get_table_names():

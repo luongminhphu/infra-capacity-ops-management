@@ -23,6 +23,7 @@ from ..database import SessionLocal
 from ..models import ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, VmSnapshot
 from ..vcenter import client as vcenter_client
 from ..vcenter import demo_generator
+from . import retention
 
 logger = logging.getLogger("vco.scheduler")
 
@@ -270,6 +271,7 @@ async def scheduler_loop(app_settings: Settings):
             results = await asyncio.to_thread(sync_everything, app_settings)
             failed = [r.get("vcenterKey") or r.get("key") for r in results if not r["ok"]]
             await asyncio.to_thread(_ops_alerts)
+            await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
             logger.info("Scheduled sync of %d sources finished in %.1fs%s", len(results),
                         (dt.datetime.utcnow() - started).total_seconds(),
                         f"; failed: {', '.join(failed)} (retry next cycle)" if failed else "")

@@ -14,6 +14,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -140,10 +141,18 @@ def spend_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
                         f"{'Quá hạn ' + str(-d) + ' ngày' if d < 0 else 'Đến hạn sau ' + str(d) + ' ngày'} ({service.date_vn(p.due_date)}) · "
                         f"{service.money_vn(p.amount)} · {'đã nộp hồ sơ' if p.status == 'submitted' else 'chờ hồ sơ'}.",
                         page="spend-contracts", due=p.due_date, feature="spend", role="spend:viewer"))
-    for r in db.query(QuoteRequest).filter(QuoteRequest.status == "comparing").limit(MAX_PER_SOURCE):
-        qs = db.query(Quotation.state).filter(Quotation.request_id == r.id).all()
-        verified = sum(1 for (s,) in qs if s == "verified")
-        waiting = sum(1 for (s,) in qs if s == "extracted")
+    comparing = db.query(QuoteRequest).filter(QuoteRequest.status == "comparing").limit(MAX_PER_SOURCE).all()
+    # Quotation counts per (request, state) in one grouped query (not one query per request).
+    q_counts: Dict[Tuple[int, str], int] = {}
+    if comparing:
+        q_counts = {(rid, st): n for rid, st, n in
+                    db.query(Quotation.request_id, Quotation.state, func.count(Quotation.id))
+                    .filter(Quotation.request_id.in_([r.id for r in comparing]),
+                            Quotation.state.in_(("verified", "extracted")))
+                    .group_by(Quotation.request_id, Quotation.state).all()}
+    for r in comparing:
+        verified = q_counts.get((r.id, "verified"), 0)
+        waiting = q_counts.get((r.id, "extracted"), 0)
         if waiting:
             out.append(item("spend", "task", _key("qtv", r.code, waiting), f"{r.code} — {waiting} báo giá chờ kiểm tra",
                             f"{r.title}: đối chiếu dòng đọc được với file gốc rồi bấm “Đã kiểm tra”.", page="spend-quotes",

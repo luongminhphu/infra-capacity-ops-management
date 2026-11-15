@@ -1188,6 +1188,11 @@ bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job
   gian" (3/6/12 tháng) và dự báo "còn bao lâu thì hết công suất".
 - Import CSV/JSON thủ công cũng được lưu thành `SnapshotRun` riêng (nguồn `import`) nên vẫn góp
   phần vào lịch sử xu hướng.
+- **Giữ lịch sử 36 tháng** (`SNAPSHOT_RETENTION_MONTHS`, mặc định 36; `0` = giữ hết): mỗi ngày một lần,
+  sau lượt poll, app xoá các `SnapshotRun` (kèm host, VM, tổng hợp cluster, finding) bắt đầu trước mốc
+  36 tháng. Lượt thành công mới nhất của mỗi vCenter (và của import) luôn được giữ, kể cả khi đã cũ.
+  Xoá theo lô 20 run, mỗi lô một transaction, nên lần dọn đầu trên DB lớn không khoá bảng lâu. Số dòng
+  đã xoá ghi trong log `vco.retention`. Báo cáo xu hướng dài hơn 36 tháng sẽ không còn dữ liệu cũ.
 - `lastActivityDays`/`powerOffDays` của VM được tính dựa trên **lịch sử polling của chính ứng
   dụng** (vCenter API không trả trực tiếp "đã tắt bao lâu") — nghĩa là ngay sau khi triển khai lần
   đầu, các chỉ số này sẽ cần vài chu kỳ polling để chính xác dần theo thời gian thực tế.
