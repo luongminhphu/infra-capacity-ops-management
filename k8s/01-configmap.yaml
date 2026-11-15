@@ -13,6 +13,8 @@ data:
   POLL_INTERVAL_MINUTES: "60"
   SNAPSHOT_RETENTION_MONTHS: "36"   # giữ lịch sử snapshot vCenter 36 tháng (0 = giữ hết)
   SYNC_CONCURRENCY: "4"             # số vCenter / máy chủ backup đồng bộ song song
+  VCENTER_TIMEOUT_SECONDS: "120"    # chờ tối đa mỗi lời gọi vCenter (riêng nguồn: VCENTER_i_TIMEOUT)
+  SYNC_SOURCE_DEADLINE_SECONDS: "1800"  # hạn tổng một nguồn trong một lượt poll
   # Storage criteria off by default (shared SAN + thick provisioning makes
   # datastore "% allocated" misleading); toggle in UI under "Tiêu chí đánh giá".
   INCLUDE_STORAGE: "false"

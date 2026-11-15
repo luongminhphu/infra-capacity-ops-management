@@ -1190,6 +1190,24 @@ cho mỗi loại đối tượng thay vì một lời gọi cho từng thuộc t
 vCenter từ chối); thời gian idle / tắt máy của VM tính từ snapshot trước trong một truy vấn; snapshot ghi
 bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job không đổi không bị ghi lại.
 
+**Độ tin cậy đồng bộ**:
+- Mỗi lời gọi tới vCenter (kể cả bước dò phiên bản API trước khi đăng nhập) chờ tối đa
+  `VCENTER_TIMEOUT_SECONDS` giây (mặc định 120; riêng từng nguồn: `VCENTER_i_TIMEOUT`). Quá hạn →
+  lỗi "vCenter '…' không phản hồi trong N giây". Lỗi mạng / timeout không còn chuyển sang cách đọc
+  từng object (chỉ chuyển khi vCenter từ chối yêu cầu đọc theo lô).
+- Mỗi nguồn có hạn tổng `SYNC_SOURCE_DEADLINE_SECONDS` (mặc định 1800) trong một lượt poll / "Sync all":
+  quá hạn thì nguồn đó báo lỗi, các nguồn khác và cảnh báo Discord 90 % vẫn chạy.
+- Một nguồn chỉ được đồng bộ một luồng tại một thời điểm (dùng chung giữa lịch poll và nút "Đồng bộ
+  ngay"). Bấm khi nguồn đang đồng bộ → HTTP 409 "Đang đồng bộ nguồn này, thử lại sau."; lịch poll bỏ
+  qua nguồn đó ở lượt này. Khoá nằm trong tiến trình — đúng khi chạy 1 replica, `strategy: Recreate`.
+- Lần đồng bộ NetBackup chạm giới hạn 300 trang job (30 000 job) ghi cảnh báo vào lượt đồng bộ
+  (hiện ở cột cảnh báo của máy chủ backup) và log WARNING.
+- Cảnh báo Discord: nếu module capacity / backup lỗi khi tính, cảnh báo của module đó giữ nguyên (không
+  gửi "Đã hết" sai). Trạng thái gửi theo từng kênh: kênh lỗi sẽ nhận lại ở chu kỳ sau.
+- Kiểm tra sức khoẻ: `/api/health` (liveness, không I/O) và `/api/health/ready` (readiness: DB trả lời
+  `SELECT 1` và vòng poll còn nhịp — trễ quá 3 × chu kỳ + 2 × hạn tổng một nguồn + 2 phút thì 503). k8s dùng
+  `/api/health/ready` cho readinessProbe.
+
 - Mỗi lần đồng bộ (thủ công qua "Đồng bộ ngay"/"Sync all", hoặc tự động theo
   `POLL_INTERVAL_MINUTES`, mặc định 60 phút) tạo một `SnapshotRun` mới trong Postgres — đây là
   nguồn dữ liệu cho biểu đồ xu hướng (Executive View), panel "Biến động tài nguyên theo thời

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import hashlib
 
@@ -138,8 +138,39 @@ app.add_middleware(ArchiveMiddleware)
 
 
 @app.get("/api/health")
-def health():
+async def health():
+    """Liveness: the process answers. No I/O and `async` (not the threadpool), so a busy
+    threadpool or a database outage never gets the pod restarted."""
     return {"status": "ok", "app": "Infra Capacity Ops Management"}
+
+
+@app.get("/api/health/ready")
+def health_ready():
+    """Readiness: the database answers SELECT 1 and, when the scheduler is on, its loop ticked
+    recently. 503 with a short reason otherwise (no hostnames, no error text)."""
+    from sqlalchemy import text
+    from .collectors.scheduler import heartbeat_status
+
+    checks = {}
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["database"] = {"ok": True}
+    except Exception as exc:  # noqa: BLE001 — reported as not ready; detail goes to the log only
+        logger.warning("Readiness: database check failed (%s)", type(exc).__name__, exc_info=True)
+        checks["database"] = {"ok": False, "reason": "database_unavailable"}
+    s = get_settings()
+    if s.enable_scheduler:
+        hb = heartbeat_status(s)
+        if _scheduler_task is not None and _scheduler_task.done():
+            hb = {**hb, "ok": False, "reason": "scheduler_stopped"}
+        checks["scheduler"] = hb
+    else:
+        checks["scheduler"] = {"ok": True, "disabled": True}
+    ready = all(c["ok"] for c in checks.values())
+    if not ready:
+        logger.warning("Readiness failed: %s", ", ".join(f"{k}={c.get('reason')}" for k, c in checks.items() if not c["ok"]))
+    return JSONResponse({"status": "ok" if ready else "not_ready", "checks": checks}, status_code=200 if ready else 503)
 
 
 def _asset_version() -> str:

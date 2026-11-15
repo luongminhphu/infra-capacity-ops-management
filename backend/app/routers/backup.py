@@ -12,6 +12,7 @@ from .. import data_access
 from ..backup import analysis
 from ..backup.client import NetBackupError
 from ..backup.collector import sync_netbackup
+from ..collectors.locks import SourceBusy
 from ..collectors.scheduler import sync_backups
 from ..config import get_settings
 from ..database import get_db
@@ -69,6 +70,8 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
     cfg = _cfg(key)
     try:
         run = sync_netbackup(db, cfg)
+    except SourceBusy as exc:            # the scheduler (or another click) is syncing it right now
+        raise HTTPException(409, str(exc)) from exc
     except NetBackupError as exc:
         raise HTTPException(502, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 — details go to the log, not to the client
@@ -262,10 +265,13 @@ def put_schedules(payload: SchedulesIn, db: Session = Depends(get_db), user: Use
 
 
 @router.post("/schedules/import")
-async def import_schedules(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(require_admin)):
+def import_schedules(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(require_admin)):
     """Load the schedule workbook (HSC-Backup-Management template). Systems already defined keep
-    their policy mapping; systems not in the file are kept unchanged."""
-    data = await file.read()
+    their policy mapping; systems not in the file are kept unchanged.
+
+    A plain `def` (FastAPI runs it in the threadpool): openpyxl parsing and the DB writes are
+    synchronous and used to block the event loop, /api/health included."""
+    data = file.file.read(5 * 1024 * 1024 + 1)
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(400, "File quá lớn (tối đa 5 MB)")
     try:
