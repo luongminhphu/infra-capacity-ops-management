@@ -7,7 +7,7 @@ environment variables / .env — never hardcoded and never committed to git.
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import Literal, List
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -77,12 +77,16 @@ class Settings(BaseSettings):
     admin_username: str = Field(default="admin")
     admin_password: str = Field(default="")  # required on first boot if no users exist
 
-    cookie_secure: bool = Field(default=False)  # set True when served over HTTPS
+    cookie_secure: bool = Field(default=False)  # set True when served over HTTPS (implied by an https PUBLIC_URL)
+    # External URL users type, e.g. https://ico.contoso.com or https://ico-contoso.msappproxy.net (Microsoft Entra
+    # Application Proxy). Used for the Entra redirect URI, the passkey relying party (RP ID = its host name)
+    # and secure cookies. Behind App Proxy the Host header is the internal one, so this must be set.
+    public_url: str = Field(default="")
 
     # ---- Sign-in: local accounts and / or Microsoft Entra ID (OIDC) ----
     # auth_mode: "local" (username / password only), "entra" (Entra ID only; local accounts listed in
     # auth_breakglass_users still work as emergency access), "both".
-    auth_mode: str = Field(default="local")
+    auth_mode: Literal["local", "entra", "both"] = Field(default="local")
     auth_breakglass_users: str = Field(default="")          # comma separated local usernames, e.g. "admin"
     entra_tenant_id: str = Field(default="")
     entra_client_id: str = Field(default="")
@@ -96,6 +100,12 @@ class Settings(BaseSettings):
     entra_allowed_groups: str = Field(default="")           # optional: group object IDs (comma separated)
     entra_allowed_roles: str = Field(default="")            # optional: app role values (comma separated)
     entra_login_label: str = Field(default="Đăng nhập bằng Microsoft")
+    # Login page goes straight to Microsoft when Entra is the only way in (seamless SSO behind App Proxy).
+    entra_auto_redirect: bool = Field(default=False)
+    # Local accounts: "passkey" (Face ID / Touch ID / security key, no password — break-glass users keep
+    # their password), "password", or "both".
+    auth_local_method: Literal["passkey", "password", "both"] = Field(default="both")
+    passkey_rp_name: str = Field(default="Infra Capacity Ops")
 
     # ---- Admins (MCP server access) ----
     # Local accounts that are admins (comma separated; empty = ADMIN_USERNAME).
@@ -131,8 +141,26 @@ class Settings(BaseSettings):
     def entra_admin_role_list(self) -> List[str]:
         return [r.strip() for r in self.entra_admin_roles.split(",") if r.strip()]
 
+    def public_base(self) -> str:
+        return self.public_url.strip().rstrip("/")
+
+    def oidc_redirect_uri(self) -> str:
+        """ENTRA_REDIRECT_URI, or derived from PUBLIC_URL."""
+        if self.entra_redirect_uri:
+            return self.entra_redirect_uri
+        return f"{self.public_base()}/api/auth/oidc/callback" if self.public_base() else ""
+
+    def secure_cookies(self) -> bool:
+        return bool(self.cookie_secure or self.public_base().lower().startswith("https://"))
+
+    def passkey_enabled(self) -> bool:
+        return self.auth_local_method in ("passkey", "both")
+
+    def password_enabled_for(self, username: str) -> bool:
+        return self.auth_local_method in ("password", "both") or username.lower() in self.breakglass()
+
     def entra_enabled(self) -> bool:
-        return self.auth_mode in ("entra", "both") and bool(self.entra_tenant_id and self.entra_client_id and self.entra_redirect_uri)
+        return self.auth_mode in ("entra", "both") and bool(self.entra_tenant_id and self.entra_client_id and self.oidc_redirect_uri())
 
     def local_enabled(self) -> bool:
         return self.auth_mode in ("local", "both")

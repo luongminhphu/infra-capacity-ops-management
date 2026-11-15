@@ -1810,6 +1810,7 @@ function syncViewSections() {
   const sub = appState.settingsSub || 'criteria';
   $$('#viewSettings [data-set-tab]').forEach(el => el.classList.toggle('set-off', el.dataset.setTab !== sub));
   if (appState.view === 'settings' && sub === 'ai' && typeof renderAiSettings === 'function') renderAiSettings();
+  if (appState.view === 'settings' && sub === 'auth' && typeof renderAuthSettings === 'function') renderAuthSettings();
   document.body.dataset.view = appState.view;
   if (typeof syncNavState === 'function') syncNavState();
   // AI buttons outside page renderers (Hỏi ICO in the top bar, Sizing): show when their task is on.

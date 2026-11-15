@@ -32,6 +32,8 @@ class User(Base):
     # Source "entra" = granted by an app role (refreshed at each sign-in), "ui" = set by an admin.
     spend_role = Column(String(16), nullable=False, default="none")
     spend_role_source = Column(String(8), nullable=True)
+    # Bumped to sign the account out everywhere (passkey revoked / deleted): sessions carry it as "sv".
+    session_version = Column(Integer, nullable=False, default=0)
 
 
 class ApiToken(Base):
@@ -585,6 +587,38 @@ class ReportArchive(Base):
     content = Column(LargeBinary, nullable=False)
     created_by = Column(String(128), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, default=utcnow, index=True)
+
+
+class UserPasskey(Base):
+    """A WebAuthn credential (passkey) of a local account: iPhone / Mac (iCloud Keychain), Android,
+    Windows Hello or a security key. Only the public key is stored."""
+    __tablename__ = "user_passkeys"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    credential_id = Column(String(512), nullable=False, unique=True)     # base64url
+    public_key = Column(Text, nullable=False)                           # base64url COSE key
+    sign_count = Column(BigInteger, nullable=False, default=0)
+    transports = Column(String(120))
+    aaguid = Column(String(40))
+    backed_up = Column(Boolean, nullable=False, default=False)          # synced passkey (iCloud Keychain…)
+    name = Column(String(80), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    last_used_at = Column(DateTime)
+
+
+class PasskeyInvite(Base):
+    """One-time link that lets a local account (created without a password) register its first
+    passkey. Only the SHA-256 of the token is stored."""
+    __tablename__ = "passkey_invites"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime)
+    created_by = Column(String(255), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
 
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
