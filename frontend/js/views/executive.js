@@ -41,13 +41,19 @@ function renderExecutiveKpis() {
   const critCount = findings.filter(f => f.severity === 'critical').length;
   const overCount = clusters.filter(c => c.overall.cls === 'crit' || c.overall.cls === 'bad').length;
 
-  const cards = [
-    execKpiCard('Tổng năng lực CPU (pCPU logic)', fmtInt(model.totalLogicalCores), `${fmtInt(model.totalCores)} core vật lý × HT ${model.htFactor}x`),
-    execKpiCard('Tổng năng lực RAM', `${fmtNum(model.totalRamGB, 0)} GB`, `Đang dùng ${fmtNum(model.usedRamGB, 0)} GB (${isFinite(model.ramPct) ? fmtNum(model.ramPct, 0) : 'NA'}% ngưỡng overcommit)`),
-    execKpiCard('Cluster cần đầu tư/mở rộng', overCount, `Trên tổng ${clusters.length} cluster đang vận hành`, overCount > 0 ? 'tone-bad' : 'tone-ok'),
-    execKpiCard('Compliance Critical', critCount, `${findings.length} findings tổng cộng`, critCount > 0 ? 'tone-crit' : 'tone-ok'),
-  ];
-  $('#execKpis').innerHTML = cards.join('');
+  const box = $('#execKpis');
+  box.className = 'kpi-strip-wrap';
+  box.innerHTML = uiKpiStrip([
+    { label: 'CPU so với ngưỡng overcommit', value: isFinite(model.cpuPct) ? `${fmtNum(model.cpuPct, 0)}%` : 'NA',
+      sub: `${fmtInt(model.usedVcpu)} / ${fmtInt(model.totalLogicalCores)} pCPU logic · ${fmtInt(model.totalCores)} core × HT ${model.htFactor}x`,
+      pct: model.cpuPct, status: getStatusForPct(model.cpuPct, 80, 100) },
+    { label: 'RAM so với ngưỡng overcommit', value: isFinite(model.ramPct) ? `${fmtNum(model.ramPct, 0)}%` : 'NA',
+      sub: `${fmtNum(model.usedRamGB, 0)} / ${fmtNum(model.totalRamGB, 0)} GB`, pct: model.ramPct, status: getStatusForPct(model.ramPct, 80, 100) },
+    { label: 'Cluster cần đầu tư / mở rộng', value: String(overCount), unit: `/ ${clusters.length} cluster`,
+      sub: overCount ? 'CẢNH BÁO hoặc VƯỢT NGƯỠNG' : 'Không cluster nào cần mở rộng' },
+    { label: 'Phát hiện nghiêm trọng (compliance)', value: String(critCount), unit: `/ ${findings.length} phát hiện`,
+      sub: critCount ? 'Xem tab Compliance' : 'Không có mục nghiêm trọng' },
+  ]);
 }
 
 function renderExecutiveTopRisk() {
@@ -56,22 +62,9 @@ function renderExecutiveTopRisk() {
     .sort((a, b) => Math.max(b.model.cpuPct || 0, b.model.ramPct || 0) - Math.max(a.model.cpuPct || 0, a.model.ramPct || 0))
     .slice(0, 6);
 
-  const box = $('#execTopRisk');
-  if (!clusters.length) { box.innerHTML = `<div class="empty-state">Chưa có dữ liệu cluster.</div>`; return; }
-
-  box.innerHTML = clusters.map(c => `
-    <div class="risk-cluster-row">
-      <div>
-        <div class="rc-name">${esc(c.name)}</div>
-        <div class="rc-metric">${c.hosts} host · ${c.vms} VM</div>
-      </div>
-      <div style="display:flex;gap:1.2rem;align-items:center;">
-        <span class="rc-metric">CPU ${isFinite(c.model.cpuPct) ? fmtNum(c.model.cpuPct, 0) : 'NA'}%</span>
-        <span class="rc-metric">RAM ${isFinite(c.model.ramPct) ? fmtNum(c.model.ramPct, 0) : 'NA'}%</span>
-        <span class="pill ${c.overall.cls}">${esc(c.overall.text)}</span>
-      </div>
-    </div>
-  `).join('');
+  $('#execTopRisk').innerHTML = uiSmallMultiples(clusters.map(c => ({
+    name: c.name, status: c.overall, sub: `${c.hosts} host · ${c.vms} VM`,
+    metrics: [{ label: 'CPU', pct: c.model.cpuPct }, { label: 'RAM', pct: c.model.ramPct }] })), { empty: 'Chưa có dữ liệu cluster.' });
 }
 
 function renderExecutiveForecastCard(elId, label, forecast, unavailableReason) {
@@ -111,15 +104,15 @@ async function renderExecutiveTrendChart() {
       data: {
         labels,
         datasets: [
-          { label: 'CPU % công suất vật lý', data: cpuUsedPct, borderColor: colors.primary, backgroundColor: colors.primary + '33', tension: .3, fill: true },
-          { label: 'RAM % công suất vật lý', data: ramUsedPct, borderColor: colors.accent, backgroundColor: colors.accent + '33', tension: .3, fill: true },
+          { label: 'CPU % công suất vật lý', data: cpuUsedPct, borderColor: colors.series[0], backgroundColor: colors.series[0], borderWidth: 2, pointRadius: 2, tension: .25, fill: false },
+          { label: 'RAM % công suất vật lý', data: ramUsedPct, borderColor: colors.series[1], backgroundColor: colors.series[1], borderWidth: 2, pointRadius: 2, tension: .25, fill: false },
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         scales: {
-          x: { ticks: { color: colors.muted, maxRotation: 0 }, grid: { color: colors.divider } },
-          y: { beginAtZero: true, max: 100, ticks: { color: colors.muted }, grid: { color: colors.divider } },
+          x: { ticks: { color: colors.axis, maxRotation: 0 }, grid: { display: false } },
+          y: { beginAtZero: true, max: 100, ticks: { color: colors.axis }, grid: { color: colors.grid } },
         },
         plugins: { legend: { labels: { color: colors.text } } },
       }
@@ -133,7 +126,6 @@ async function renderExecutiveTrendChart() {
 
 async function renderExecutiveByVcenterChart() {
   if (typeof Chart === 'undefined') return;
-  const colors = chartPalette();
   destroyChart('execByVcenter');
   let grouped;
   try {
@@ -143,33 +135,13 @@ async function renderExecutiveByVcenterChart() {
   }
   const byVcenter = grouped.byVcenter || {};
   const keys = Object.keys(byVcenter);
-  toggleChartEmptyState('chartExecByVcenter', keys.length > 0, 'Chưa có dữ liệu theo vCenter.');
-  if (!keys.length) return;
-  const cpuVals = [], ramVals = [];
-  keys.forEach(k => {
+  if (!keys.length) { $('#execByVcenter').innerHTML = uiEmpty('Chưa có dữ liệu theo vCenter.'); return; }
+  $('#execByVcenter').innerHTML = uiSmallMultiples(keys.map(k => {
     const m = buildCapacityModel(byVcenter[k].hosts || [], byVcenter[k].vms || []);
-    cpuVals.push(isFinite(m.cpuPct) ? Math.round(m.cpuPct) : 0);
-    ramVals.push(isFinite(m.ramPct) ? Math.round(m.ramPct) : 0);
-  });
-
-  appState.charts.execByVcenter = new Chart($('#chartExecByVcenter'), {
-    type: 'bar',
-    data: {
-      labels: keys.map(k => k === 'import' ? 'Import thủ công' : k),
-      datasets: [
-        { label: 'CPU % ngưỡng overcommit', data: cpuVals, backgroundColor: colors.primary },
-        { label: 'RAM % ngưỡng overcommit', data: ramVals, backgroundColor: colors.accent },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: {
-        x: { ticks: { color: colors.muted }, grid: { display: false } },
-        y: { beginAtZero: true, ticks: { color: colors.muted }, grid: { color: colors.divider } },
-      },
-      plugins: { legend: { labels: { color: colors.text } } },
-    }
-  });
+    return { name: k === 'import' ? 'Import thủ công' : k, sub: `${fmtInt(m.hostCount)} host · ${fmtInt(m.vmCount)} VM`,
+      status: combineStatus(getStatusForPct(m.cpuPct, 80, 100), getStatusForPct(m.ramPct, 80, 100)),
+      metrics: [{ label: 'CPU', pct: m.cpuPct }, { label: 'RAM', pct: m.ramPct }] };
+  }), { legend: false });
 }
 
 /* ---- Management brief (headline, key points, recommendations, decision
@@ -190,17 +162,13 @@ function renderExecutiveBriefCard(brief) {
     card.innerHTML = `<div class="empty-state">${esc((brief && brief.message) || 'Chưa có dữ liệu để tổng hợp nhận định. Hãy đồng bộ vCenter hoặc import dữ liệu trước.')}</div>`;
     return;
   }
-  card.className = `card exec-brief-card ${brief.health_cls || ''}`;
-  const storageNote = brief.include_storage ? '' : `<span class="pill">Storage: không đánh giá (SAN)</span>`;
+  card.className = `verdict tone-rule-${brief.health_cls || 'na'}`;
+  const storageNote = brief.include_storage ? '' : '<span>Storage không đánh giá (SAN dùng chung)</span>';
   card.innerHTML = `
-    <div class="exec-brief-head">
-      <span class="pill ${esc(brief.health_cls || '')}">${esc(brief.health_word || '')}</span>
-      <span class="exec-brief-kicker">Tóm tắt · ${esc(brief.scope || '')}</span>
-      ${storageNote}
-    </div>
-    <div class="exec-brief-headline">${esc(brief.headline || '')}</div>
-    <ul class="exec-brief-points">${(brief.points || []).map(p => `<li>${esc(p)}</li>`).join('')}</ul>
-    <div class="exec-brief-decision"><strong>Quyết định cần phê duyệt:</strong> ${esc(brief.decision_line || '')}</div>`;
+    <div class="verdict-meta">${uiPill(brief.health_cls || 'na', brief.health_word || '')}<span>${esc(brief.scope || '')}</span>${storageNote}</div>
+    <h2>${esc(brief.headline || '')}</h2>
+    <ul class="verdict-points">${(brief.points || []).map(p => `<li>${esc(p)}</li>`).join('')}</ul>
+    <p class="verdict-decision"><strong>Quyết định cần phê duyệt:</strong> ${esc(brief.decision_line || '')}</p>`;
 }
 
 function renderExecutiveRecommendations(brief) {

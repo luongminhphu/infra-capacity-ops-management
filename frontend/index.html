@@ -126,40 +126,9 @@
 
       <!-- ================= TỔNG QUAN · ĐIỀU HÀNH ================= -->
       <section id="viewExecutive" class="view-section hidden">
-        <section class="card exec-brief-card" id="execBrief" aria-live="polite">
+        <!-- pages/dieu-hanh.md: verdict → ranked decisions → KPI strip → projection → small multiples -->
+        <section class="verdict" id="execBrief" aria-live="polite">
           <div class="empty-state">Đang tổng hợp nhận định...</div>
-        </section>
-
-        <section class="exec-grid" id="execKpis"></section>
-
-        <div id="execHistoryMount"></div>
-
-        <section class="chart-grid exec-chart-grid">
-          <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Xu hướng sử dụng tài nguyên (toàn hệ thống)</div><p class="panel-sub">Tổng vCPU/RAM đã dùng so với tổng năng lực vật lý theo thời gian, tổng hợp từ lịch sử polling.</p></div></div>
-            <div class="chart-wrap"><canvas id="chartExecTrend"></canvas></div>
-          </article>
-          <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Phân bổ theo vCenter</div><p class="panel-sub">Mức sử dụng CPU/RAM theo từng vCenter.</p></div></div>
-            <div class="chart-wrap"><canvas id="chartExecByVcenter"></canvas></div>
-          </article>
-        </section>
-
-        <div class="insight-card" id="execForecastCpu"></div>
-        <div class="insight-card" id="execForecastRam"></div>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div><div class="panel-title">Top cluster rủi ro cao nhất</div><p class="panel-sub">Xếp hạng theo % ngưỡng overcommit CPU/RAM đã dùng — ưu tiên đầu tư/mở rộng.</p></div>
-          </div>
-          <div id="execTopRisk"></div>
-        </section>
-
-        <section class="panel" id="execRecommendationsPanel">
-          <div class="panel-head">
-            <div><div class="panel-title">Nhận định &amp; đề xuất</div><p class="panel-sub">Mỗi đề xuất gồm ý nghĩa, việc cần làm, rủi ro nếu chưa hành động và nội dung cần phê duyệt; System Owner của từng cluster chịu trách nhiệm xử lý.</p></div>
-          </div>
-          <div id="execRecommendations"></div>
         </section>
 
         <section class="panel" id="execDecisionPanel">
@@ -171,24 +140,53 @@
             <tbody></tbody>
           </table></div>
         </section>
+
+        <section id="execKpis"></section>
+
+        <section class="chart-grid chart-grid-2">
+          <article class="card chart-card">
+            <div class="panel-head"><div><div class="panel-title">Xu hướng sử dụng tài nguyên</div><p class="panel-sub">Tổng vCPU / RAM đã dùng so với tổng năng lực vật lý, một snapshot mỗi ngày.</p></div></div>
+            <div class="chart-wrap"><canvas id="chartExecTrend" role="img" aria-label="Xu hướng CPU và RAM theo phần trăm công suất vật lý"></canvas></div>
+            <div class="exec-forecasts"><div class="insight-card" id="execForecastCpu"></div><div class="insight-card" id="execForecastRam"></div></div>
+          </article>
+          <article class="card chart-card">
+            <div class="panel-head"><div><div class="panel-title">Theo vCenter</div><p class="panel-sub">CPU / RAM theo % ngưỡng overcommit.</p></div></div>
+            <div id="execByVcenter"></div>
+          </article>
+        </section>
+
+        <section class="card panel-flush">
+          <div class="panel-head"><div><div class="panel-title">Cluster rủi ro cao nhất</div><p class="panel-sub">Xếp theo % ngưỡng overcommit CPU / RAM, cao nhất trước — ưu tiên đầu tư / mở rộng.</p></div></div>
+          <div id="execTopRisk"></div>
+        </section>
+
+        <div id="execHistoryMount"></div>
+
+        <section class="panel" id="execRecommendationsPanel">
+          <div class="panel-head">
+            <div><div class="panel-title">Nhận định &amp; đề xuất</div><p class="panel-sub">Mỗi đề xuất gồm ý nghĩa, việc cần làm, rủi ro nếu chưa hành động và nội dung cần phê duyệt; System Owner của từng cluster chịu trách nhiệm xử lý.</p></div>
+          </div>
+          <div id="execRecommendations"></div>
+        </section>
       </section>
 
       <!-- ================= TỔNG QUAN · CAPACITY ================= -->
       <section id="viewDashboard" class="view-section">
         <section class="kpi-grid" id="capacityKpis"></section>
 
-        <section class="chart-grid">
+        <section class="card panel-flush">
+          <div class="panel-head"><div><div class="panel-title">Theo cluster</div><p class="panel-sub" id="clusterUtilSub">CPU / RAM / Storage % sử dụng theo từng cluster.</p></div></div>
+          <div id="clusterUtilSm"></div>
+        </section>
+
+        <section class="chart-grid chart-grid-host">
           <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Utilization theo cluster</div><p class="panel-sub" id="clusterUtilSub">CPU / RAM / Storage % sử dụng theo từng cluster.</p></div></div>
-            <div class="chart-wrap"><canvas id="chartClusterUtil"></canvas></div>
+            <div class="panel-head"><div><div class="panel-title">10 host dùng nhiều nhất</div><p class="panel-sub">CPU / RAM theo % ngưỡng overcommit của từng host.</p></div></div>
+            <div class="chart-wrap chart-wrap-tall"><canvas id="chartHostUtil" aria-label="10 host dùng nhiều nhất, CPU và RAM theo phần trăm ngưỡng" role="img"></canvas></div>
           </article>
           <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">Utilization theo host</div><p class="panel-sub">Top host theo mức sử dụng CPU/RAM.</p></div></div>
-            <div class="chart-wrap"><canvas id="chartHostUtil"></canvas></div>
-          </article>
-          <article class="card chart-card">
-            <div class="panel-head"><div><div class="panel-title">VM power state</div><p class="panel-sub">Phân bố trạng thái nguồn của VM.</p></div></div>
-            <div class="chart-wrap"><canvas id="chartPowerState"></canvas></div>
+            <div class="panel-head"><div><div class="panel-title">Trạng thái nguồn VM</div><p class="panel-sub">Bật / tắt trong phạm vi đang xem.</p></div></div>
+            <div id="powerStateBox"></div>
           </article>
         </section>
 

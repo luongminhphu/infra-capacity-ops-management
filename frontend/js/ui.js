@@ -309,3 +309,42 @@ function highlightSortHeaders(tableId, tableKey) {
 if (window.Chart) {
   Chart.defaults.font.family = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
 }
+
+/* ---------- Data marks (MASTER.md §7–8) ----------
+   uiBullet: % of the overcommit limit as a bar with notches at 80 % (THEO DÕI) and 100 % (limit).
+   The fill is the series color, never a status color: the status is said by the pill next to it.
+   Scale 0–120 % so an overrun is visible past the 100 % notch. */
+function uiBullet(pct, label) {
+  const ok = isFinite(pct);
+  const w = ok ? Math.max(0, Math.min(pct, 120)) / 1.2 : 0;
+  const text = ok ? `${fmtNum(pct, 1)}%` : 'NA';
+  return `<span class="bullet${ok && pct > 100 ? ' over' : ''}" role="img" aria-label="${esc(`${label ? `${label}: ` : ''}${text} ngưỡng`)}"><i style="width:${w.toFixed(2)}%"></i></span>`;
+}
+
+/* uiKpiStrip: one joined band of KPIs (label, value, small unit, sub, optional bullet + status pill). */
+function uiKpiStrip(items) {
+  return `<div class="kpi-strip">${items.map(k => `<div class="kpi-cell${k.muted ? ' muted' : ''}">
+      <div class="kpi-l">${esc(k.label)}</div>
+      <div class="kpi-v">${k.valueHtml !== undefined ? k.valueHtml : esc(k.value)}${k.unit ? `<small>${esc(k.unit)}</small>` : ''}</div>
+      ${k.sub ? `<div class="kpi-s">${esc(k.sub)}</div>` : ''}
+      ${k.pct !== undefined && k.pct !== null ? `<div class="kpi-b">${uiBullet(k.pct, k.label)}${k.status ? uiPill(k.status.cls, k.status.text) : ''}</div>` : ''}
+    </div>`).join('')}</div>`;
+}
+
+/* uiSmallMultiples: one cell per entity (cluster / vCenter) with CPU / RAM (/ Storage) bullets. */
+function uiSmallMultiples(rows, opts = {}) {
+  if (!rows.length) return uiEmpty(opts.empty || 'Chưa có dữ liệu.');
+  return `<div class="sm-grid">${rows.map(r => `<article class="sm-cell">
+      <h4><span class="sm-name">${r.nameHtml || esc(r.name)}</span>${r.status ? uiPill(r.status.cls, r.status.text) : ''}</h4>
+      ${r.metrics.map(m => `<div class="sm-row"><span>${esc(m.label)}</span>${uiBullet(m.pct, `${r.name} ${m.label}`)}<b class="num">${isFinite(m.pct) ? `${fmtNum(m.pct, 1)}%` : 'NA'}</b></div>`).join('')}
+      ${r.sub ? `<p class="sm-sub">${esc(r.sub)}</p>` : ''}</article>`).join('')}</div>
+    ${opts.legend === false ? '' : '<p class="sm-legend">% của ngưỡng overcommit. Vạch mảnh = 80 % (bắt đầu THEO DÕI), vạch đậm = 100 % (ngưỡng).</p>'}`;
+}
+
+/* Common Chart.js scales / legend in design tokens (grid, axis ink, Inter). */
+function uiChartBase(colors, extra = {}) {
+  return Object.assign({ maintainAspectRatio: false, responsive: true,
+    plugins: { legend: { labels: { color: colors.text, boxWidth: 12, boxHeight: 12 } } },
+    scales: { x: { ticks: { color: colors.axis || colors.muted }, grid: { color: colors.grid || colors.divider } },
+              y: { beginAtZero: true, ticks: { color: colors.axis || colors.muted }, grid: { color: colors.grid || colors.divider } } } }, extra);
+}

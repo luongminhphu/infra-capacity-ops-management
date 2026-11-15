@@ -9,12 +9,8 @@
    ========================================================= */
 
 function barCellHtml(pct, extraLabel) {
-  const width = isFinite(pct) ? clamp(pct, 0, 130) : 0;
-  const color = getBarColor(pct);
-  return `<div class="mini-bar-cell">
-      <div class="mini-bar"><span style="width:${width}%; background:${color}"></span></div>
-      <span>${fmtPct(pct)}${extraLabel ? ' · ' + extraLabel : ''}</span>
-    </div>`;
+  // Bullet with 80 / 100 % notches (MASTER.md §7); the row's pill carries the status, not the bar color.
+  return `<div class="mini-bar-cell">${uiBullet(pct)}<span class="num">${fmtPct(pct)}${extraLabel ? ' · ' + esc(extraLabel) : ''}</span></div>`;
 }
 
 function renderCapacityKpis() {
@@ -53,17 +49,9 @@ function renderCapacityKpis() {
     }
   ];
 
-  $('#capacityKpis').innerHTML = cards.map(c => `
-    <article class="kpi-card${c.muted ? ' kpi-muted' : ''}">
-      <div class="label">${esc(c.label)}</div>
-      <div class="value">${c.value}</div>
-      <div class="sub">${esc(c.sub)}</div>
-      ${c.pct !== null ? `
-        <div class="bar" style="margin-top:.7rem;"><span style="width:${clamp(isFinite(c.pct)?c.pct:0,0,130)}%; background:${getBarColor(c.pct)}"></span></div>
-        <div class="bar-label"><span class="pill ${c.status.cls}">${esc(c.status.text)}</span><span>${fmtPct(c.pct)}</span></div>
-      ` : ''}
-    </article>
-  `).join('');
+  const box = $('#capacityKpis');
+  box.className = 'kpi-strip-wrap';
+  box.innerHTML = uiKpiStrip(cards.map(c => ({ label: c.label, valueHtml: c.value, sub: c.sub, pct: c.pct, status: c.status, muted: c.muted })));
 }
 
 function renderClusterTable() {
@@ -112,56 +100,56 @@ function renderDashboardCharts() {
   const hostRows = buildHostRows().sort((a,b) => Math.max(b.cpuPct||0,b.ramPct||0) - Math.max(a.cpuPct||0,a.ramPct||0)).slice(0, 10);
   const dsRows = buildDatastoreRows().slice(0, 10);
 
-  ['clusterUtil','hostUtil','powerState','datastore','overcommit'].forEach(destroyChart);
+  ['clusterUtil','hostUtil','powerState','datastore','overcommit'].forEach(destroyChart);   // clusterUtil / powerState: legacy keys
   const showStorage = !!appState.policy.includeStorage;
   const dsCard = $('#datastoreChartCard');
   const dsGrid = $('#datastoreChartGrid');
   if (dsCard) dsCard.classList.toggle('hidden', !showStorage);
   if (dsGrid) dsGrid.classList.toggle('storage-off', !showStorage);
   const utilSub = $('#clusterUtilSub');
-  if (utilSub) utilSub.textContent = showStorage ? 'CPU / RAM / Storage % sử dụng theo từng cluster.' : 'CPU / RAM % theo ngưỡng overcommit từng cluster (Storage không đánh giá — SAN dùng chung).';
+  if (utilSub) utilSub.textContent = showStorage ? 'CPU / RAM / Storage theo % ngưỡng của từng cluster.' : 'CPU / RAM theo % ngưỡng overcommit của từng cluster. Storage không đánh giá (SAN dùng chung).';
 
-  appState.charts.clusterUtil = new Chart($('#chartClusterUtil'), {
-    type: 'bar',
-    data: {
-      labels: clusterRows.map(c => c.name),
-      datasets: [
-        { label:'CPU % (overcommit)', data: clusterRows.map(c => Number((c.model.cpuPct||0).toFixed(1))), backgroundColor: colors.primary, borderRadius: 5 },
-        { label:'RAM % (overcommit)', data: clusterRows.map(c => Number((c.model.ramPct||0).toFixed(1))), backgroundColor: colors.accent, borderRadius: 5 },
-        ...(showStorage ? [{ label:'Storage %', data: clusterRows.map(c => Number((c.model.storagePct||0).toFixed(1))), backgroundColor: colors.warn, borderRadius: 5 }] : [])
-      ]
-    },
-    options: { maintainAspectRatio:false, plugins:{legend:{labels:{color:colors.text}}}, scales:{ x:{ticks:{color:colors.muted},grid:{color:colors.divider}}, y:{beginAtZero:true,ticks:{color:colors.muted},grid:{color:colors.divider}} } }
-  });
+  // Cluster utilization as small multiples (one cell per cluster, CPU / RAM / Storage bullets) —
+  // same numbers as the cluster table; replaces a grouped bar chart that hid the 80 / 100 % limits.
+  $('#clusterUtilSm').innerHTML = uiSmallMultiples(clusterRows.map(c => ({
+    name: c.name, status: c.overall, sub: `${c.hosts} host · ${c.vms} VM`,
+    metrics: [{ label: 'CPU', pct: c.model.cpuPct }, { label: 'RAM', pct: c.model.ramPct },
+      ...(showStorage ? [{ label: 'Storage', pct: c.model.storagePct }] : [])] })), { empty: 'Chưa có dữ liệu cluster.' });
 
+  const series = colors.series;
   appState.charts.hostUtil = new Chart($('#chartHostUtil'), {
     type: 'bar',
     data: {
       labels: hostRows.map(h => h.host),
       datasets: [
-        { label:'CPU % (overcommit)', data: hostRows.map(h => Number((h.cpuPct||0).toFixed(1))), backgroundColor: colors.primary, borderRadius: 5 },
-        { label:'RAM % (overcommit)', data: hostRows.map(h => Number((h.ramPct||0).toFixed(1))), backgroundColor: colors.accent, borderRadius: 5 }
+        { label:'CPU % ngưỡng', data: hostRows.map(h => Number((h.cpuPct||0).toFixed(1))), backgroundColor: series[0], borderRadius: 3, barPercentage: .8 },
+        { label:'RAM % ngưỡng', data: hostRows.map(h => Number((h.ramPct||0).toFixed(1))), backgroundColor: series[1], borderRadius: 3, barPercentage: .8 }
       ]
     },
-    options: { indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{labels:{color:colors.text}}}, scales:{ x:{beginAtZero:true,ticks:{color:colors.muted},grid:{color:colors.divider}}, y:{ticks:{color:colors.muted},grid:{color:colors.divider}} } }
+    options: uiChartBase(colors, { indexAxis:'y',
+      scales: { x: { beginAtZero:true, suggestedMax: 100, ticks:{color:colors.axis}, grid:{color:colors.grid} },
+                // reserve room for full host names (they were clipped on the left)
+                y: { ticks:{color:colors.text, autoSkip:false}, grid:{display:false}, afterFit: (sc) => { sc.width = Math.max(sc.width, 190); } } } })
   });
 
+  // Powered on / off: a single labelled bar instead of a neon status-green donut (power state is not a status).
   const vms = getFilteredVms();
   const onCount = vms.filter(v => v.isPoweredOn).length;
   const offCount = vms.length - onCount;
-  appState.charts.powerState = new Chart($('#chartPowerState'), {
-    type: 'doughnut',
-    data: { labels:['Powered On','Powered Off'], datasets:[{ data:[onCount, offCount], backgroundColor:[colors.ok, colors.faint], borderWidth:0 }] },
-    options: { maintainAspectRatio:false, plugins:{legend:{labels:{color:colors.text}}} }
-  });
+  const onPct = vms.length ? onCount / vms.length * 100 : 0;
+  $('#powerStateBox').innerHTML = vms.length ? `
+    <div class="split-bar" role="img" aria-label="${esc(`${onCount} VM bật, ${offCount} VM tắt`)}"><i style="width:${onPct.toFixed(2)}%"></i></div>
+    <dl class="split-legend"><div><dt><span class="sw s1"></span>Đang bật</dt><dd class="num">${fmtInt(onCount)} <small>${fmtNum(onPct, 0)}%</small></dd></div>
+      <div><dt><span class="sw s4"></span>Đang tắt</dt><dd class="num">${fmtInt(offCount)} <small>${fmtNum(100 - onPct, 0)}%</small></dd></div></dl>
+    <p class="sm-legend">${fmtInt(vms.length)} VM trong phạm vi. VM tắt không tính vào CPU / RAM.</p>` : uiEmpty('Chưa có VM trong phạm vi.');
 
   if (showStorage) appState.charts.datastore = new Chart($('#chartDatastore'), {
     type: 'bar',
     data: {
       labels: dsRows.map(d => d.name),
       datasets: [
-        { label:'Provisioned GB', data: dsRows.map(d => Number(d.provGB.toFixed(1))), backgroundColor: colors.faint, borderRadius: 5 },
-        { label:'Used GB', data: dsRows.map(d => Number(d.usedGB.toFixed(1))), backgroundColor: colors.warn, borderRadius: 5 }
+        { label:'Provisioned GB', data: dsRows.map(d => Number(d.provGB.toFixed(1))), backgroundColor: colors.series[3], borderRadius: 3 },
+        { label:'Used GB', data: dsRows.map(d => Number(d.usedGB.toFixed(1))), backgroundColor: colors.series[0], borderRadius: 3 }
       ]
     },
     options: { maintainAspectRatio:false, plugins:{legend:{labels:{color:colors.text}}}, scales:{ x:{ticks:{color:colors.muted},grid:{color:colors.divider}}, y:{beginAtZero:true,ticks:{color:colors.muted},grid:{color:colors.divider}} } }
@@ -173,10 +161,10 @@ function renderDashboardCharts() {
     data: {
       labels: clusterRows.map(c => c.name),
       datasets: [
-        { type:'bar', label:'CPU overcommit (x)', data: clusterRows.map(c => Number((c.model.cpuOvercommit||0).toFixed(2))), backgroundColor: colors.primary, borderRadius: 5 },
-        { type:'bar', label:'RAM overcommit (x)', data: clusterRows.map(c => Number((c.model.ramOvercommit||0).toFixed(2))), backgroundColor: colors.accent, borderRadius: 5 },
-        { type:'line', label:`Ngưỡng CPU (${fmtNum(cpuOcMax,1)}x)`, data: clusterRows.map(() => cpuOcMax), borderColor: colors.bad, borderWidth: 2, borderDash: [6,4], pointRadius: 0, fill: false },
-        { type:'line', label:`Ngưỡng RAM (${fmtNum(ramOcMax,1)}x)`, data: clusterRows.map(() => ramOcMax), borderColor: colors.warn, borderWidth: 2, borderDash: [2,3], pointRadius: 0, fill: false }
+        { type:'bar', label:'CPU overcommit (x)', data: clusterRows.map(c => Number((c.model.cpuOvercommit||0).toFixed(2))), backgroundColor: colors.series[0], borderRadius: 3 },
+        { type:'bar', label:'RAM overcommit (x)', data: clusterRows.map(c => Number((c.model.ramOvercommit||0).toFixed(2))), backgroundColor: colors.series[1], borderRadius: 3 },
+        { type:'line', label:`Ngưỡng CPU (${fmtNum(cpuOcMax,1)}x)`, data: clusterRows.map(() => cpuOcMax), borderColor: colors.text, borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, fill: false },  // limits in ink, not status colors
+        { type:'line', label:`Ngưỡng RAM (${fmtNum(ramOcMax,1)}x)`, data: clusterRows.map(() => ramOcMax), borderColor: colors.muted, borderWidth: 1.5, borderDash: [2,3], pointRadius: 0, fill: false }
       ]
     },
     options: { maintainAspectRatio:false, plugins:{legend:{labels:{color:colors.text}}}, scales:{ x:{ticks:{color:colors.muted},grid:{color:colors.divider}}, y:{beginAtZero:true,ticks:{color:colors.muted},grid:{color:colors.divider}} } }
