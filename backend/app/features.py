@@ -23,9 +23,20 @@ def get_features(db: Session) -> Dict[str, bool]:
     return {k: rows.get(f"feature.{k}", "true") != "false" for k in FEATURES}
 
 
+def is_on(features: Dict[str, bool], key: str) -> bool:
+    """One way to read a flag from get_features(): unknown keys are on."""
+    return features.get(key) is not False
+
+
+def ensure_feature(db: Session, key: str) -> None:
+    """For code paths outside a gated router (services, AI tools): 404 when the module is off,
+    exactly like require_feature."""
+    if not is_on(get_features(db), key):
+        raise HTTPException(404, f"Tính năng {FEATURES[key]['label']} đang tắt (Cài đặt → Tính năng).")
+
+
 def require_feature(key: str):
     """Router dependency: a hidden module's API answers 404, like the page in the menu."""
     def _dep(db: Session = Depends(get_db)) -> None:
-        if not get_features(db).get(key, True):
-            raise HTTPException(404, f"Tính năng {FEATURES[key]['label']} đang tắt (Cài đặt → Tính năng).")
+        ensure_feature(db, key)
     return _dep

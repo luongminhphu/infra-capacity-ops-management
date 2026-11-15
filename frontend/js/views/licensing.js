@@ -104,9 +104,11 @@ async function licLoad(force = false) {
   st.loading = true;
   licSetStatus('Đang tải inventory và tính toán license…');
   try {
+    // ESXi / Hệ điều hành belong to Tài sản: with the License module off only the inventory is loaded.
+    const licOn = featureOn('license');
     const [inv, assess, rules, ents, snaps] = await Promise.all([
-      api.licInventory(sc.vcenter, sc.cluster, sc.clusters), api.licAssess(sc.vcenter, sc.cluster, sc.clusters),
-      api.licRules(), api.licEntitlements(), api.licSnapshots(),
+      api.licInventory(sc.vcenter, sc.cluster, sc.clusters), licOn ? api.licAssess(sc.vcenter, sc.cluster, sc.clusters) : null,
+      licOn ? api.licRules() : [], licOn ? api.licEntitlements() : { items: [] }, licOn ? api.licSnapshots() : [],
     ]);
     st.inv = inv; st.assess = assess; st.rules = rules; st.ents = ents.items; st.entMeta = ents; st.snaps = snaps;
     st.lastScopeKey = key; st.viewingSnapshot = null;
@@ -166,7 +168,8 @@ window.renderLicensingView = renderLicensingView;
 function renderLicBody() {
   const st = licState();
   const body = $('#licBody');
-  if (!st.inv || !st.assess) { body.innerHTML = `<div class="empty-note">${st.loading ? 'Đang tải dữ liệu…' : 'Chưa có dữ liệu inventory. Hãy đồng bộ vCenter hoặc import dữ liệu trước.'}</div>`; return; }
+  const needsAssess = !['hardware', 'os'].includes(st.sub);
+  if (!st.inv || (needsAssess && !st.assess)) { body.innerHTML = `<div class="empty-note">${st.loading ? 'Đang tải dữ liệu…' : 'Chưa có dữ liệu inventory. Hãy đồng bộ vCenter hoặc import dữ liệu trước.'}</div>`; return; }
   if (st.sub === 'hardware') body.innerHTML = renderLicHardware();
   else if (st.sub === 'os') { body.innerHTML = renderLicOs(); renderLicOsTable(); if (typeof aiGate === 'function') aiGate(body); }
   else if (st.sub === 'assess') body.innerHTML = renderLicAssess();

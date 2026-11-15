@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from . import ai_platform
+from .features import is_on
 from .models import User
 
 MAX_QUESTION = 500
@@ -107,7 +108,7 @@ class Toolbox:
                 for r in rows if not want or want in str(r["name"]).lower()][:MAX_LIST]
 
     def _backup(self):
-        if self.features.get("backup") is False:
+        if not is_on(self.features, "backup"):
             raise HTTPException(404, "Module Backup đang tắt.")
         from .routers import backup as backup_router
         return backup_router.build_summary(self.db, "all", 7)

@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..features import get_features
+from ..features import get_features, is_on
 from . import fiscal, service, settings as spend_settings
 from .models import OpexItem, SpendNotifyChannel, SpendReminderLog, SpendSmtpConfig, SpendVendor
 from .notify import NotifyError, ReminderLine, send
@@ -147,7 +147,7 @@ def tick(now: Optional[dt.datetime] = None) -> Optional[Dict[str, object]]:
     now = now or dt.datetime.utcnow()
     db = SessionLocal()
     try:
-        if not get_features(db).get("spend", True):
+        if not is_on(get_features(db), "spend"):
             return None
         cfg = spend_settings.load(db)
         local = now.replace(tzinfo=dt.timezone.utc).astimezone(fiscal.VN_TZ)
