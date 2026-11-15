@@ -45,7 +45,7 @@ function vdRender() {
   $('#spendMount').innerHTML = `
     <section class="table-card">
       <div class="panel-head">
-        <div><div class="panel-title">Nhà cung cấp</div>
+        <div><div class="panel-title" role="heading" aria-level="2">Nhà cung cấp</div>
           <p class="panel-sub">Tên viết tắt dùng thống nhất trong bảng so sánh, phiếu đánh giá và tờ trình. Tên gọi khác giúp nhận đúng NCC khi tên trên báo giá viết khác.</p></div>
       </div>
       ${noShort ? `<p class="criteria-status">${esc(noShort)} nhà cung cấp chưa có tên viết tắt.</p>` : ''}
@@ -144,7 +144,7 @@ function qtRenderList() {
   $('#spendMount').innerHTML = `
     <section class="panel qt-list-panel">
       <div class="panel-head">
-        <div><div class="panel-title">So sánh báo giá</div>
+        <div><div class="panel-title" role="heading" aria-level="2">So sánh báo giá</div>
           <p class="panel-sub">Mỗi gói nhận báo giá của nhiều NCC (mặc định 3). Hệ thống đọc file, kiểm tra công thức tiền, so sánh từng hạng mục và lập phiếu đánh giá NCC.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-qt-prices><i data-lucide="search"></i>Tra cứu đơn giá</button>${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-qt-new><i data-lucide="plus"></i>Tạo gói báo giá</button>' : ''}</div>
       </div>
@@ -227,7 +227,7 @@ function qtRenderDetail() {
     <section class="panel">
       <div class="panel-head">
         <div><button class="btn btn-ghost btn-sm" type="button" data-qt-back><i data-lucide="arrow-left"></i>Danh sách gói</button>
-          <div class="panel-title">${esc(d.code)} — ${esc(d.title)}</div>
+          <div class="panel-title" role="heading" aria-level="2">${esc(d.code)} — ${esc(d.title)}</div>
           <p class="panel-sub">${esc(d.workstreamLabel)} · dự toán ${spMoney(d.estimateAmount)}${d.capex ? ` · Capex ${esc(d.capex.code)}` : ''}${d.renovation ? ` · cải tạo ${esc(d.renovation.floor)} (${esc(d.renovation.code)})` : ''} · ${spPill(...(QT_STATUS[d.status] || ['na', d.statusLabel]))}</p></div>
         <div class="panel-toolbar">
           ${spCan('editor') && !qtLocked() ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="edit"><i data-lucide="pencil"></i>Sửa gói</button>' : ''}

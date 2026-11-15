@@ -233,7 +233,7 @@ function renderLicHardware() {
     <div class="kpi-grid lic-kpi-6">${kpis.map(([l, v, s]) => `<div class="kpi-card"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('')}</div>
     <section class="table-card">
       <div class="panel-head">
-        <div><div class="panel-title">ESXi theo vCenter / cluster / host</div><p class="panel-sub">Bấm vào dòng cluster để xem từng host. Physical core là số core vật lý của CPU; logical thread là số luồng khi bật Hyper-Threading; vCPU là tài nguyên ảo cấp cho VM — chỉ physical core được dùng để tính license.</p></div>
+        <div><div class="panel-title" role="heading" aria-level="2">ESXi theo vCenter / cluster / host</div><p class="panel-sub">Bấm vào dòng cluster để xem từng host. Physical core là số core vật lý của CPU; logical thread là số luồng khi bật Hyper-Threading; vCPU là tài nguyên ảo cấp cho VM — chỉ physical core được dùng để tính license.</p></div>
         <div class="panel-toolbar">
           <button class="btn btn-secondary btn-sm" data-lic-action="hw-expand" type="button">Mở tất cả</button>
           <button class="btn btn-secondary btn-sm" data-lic-action="hw-collapse" type="button">Thu gọn</button>
@@ -262,7 +262,7 @@ function renderLicOs() {
     <div class="kpi-grid lic-kpi-5">${cats.map(([k, b]) => `<div class="kpi-card lic-cat-card" data-lic-cat="${k}" title="Lọc theo ${LIC_CATEGORY_LABEL[k]}"><div class="label">${LIC_CATEGORY_LABEL[k]}</div><div class="value">${b.count}</div><div class="sub">${b.poweredOn} đang bật · ${licNum(b.vcpu)} vCPU · ${licNum(b.ramGB)} GB</div></div>`).join('')}</div>
     <section class="table-card">
       <div class="panel-head">
-        <div><div class="panel-title">VM inventory &amp; phân loại guest OS</div>
+        <div><div class="panel-title" role="heading" aria-level="2">VM inventory &amp; phân loại guest OS</div>
           <p class="panel-sub">Nguồn bằng chứng theo thứ tự ưu tiên: Override thủ công → VMware Tools (OS thực tế guest báo về) → Cấu hình VM (guestId đặt lúc tạo, có thể lỗi thời) → Tên VM. Edition Windows Server không lấy được từ vCenter, chỉ có khi override. Độ tin cậy: ${Object.entries(s.byConfidence).map(([k, v]) => `${LIC_CONF_LABEL[k]} ${v}`).join(' · ')}.</p></div>
         <div class="panel-toolbar">
           <select id="licOsCat" data-lic-filter="category">${opt(LIC_CATEGORY_LABEL, st.filters.category, 'Tất cả phân loại')}</select>
@@ -429,7 +429,7 @@ function renderLicAssess() {
 
     <section class="table-card">
       <div class="panel-head">
-        <div><div class="panel-title">Nhu cầu license theo cluster</div><p class="panel-sub">Windows Server được tính theo cluster vì HA/DRS/vMotion cho phép mọi VM chạy trên mọi host; không đếm theo host hiện tại và không chỉ đếm số VM Windows. Chế độ đếm OSE Standard: <b>${ws.peakMode === 'current_placement' ? 'theo host hiện tại (tham chiếu)' : 'toàn cluster'}</b>.</p></div>
+        <div><div class="panel-title" role="heading" aria-level="2">Nhu cầu license theo cluster</div><p class="panel-sub">Windows Server được tính theo cluster vì HA/DRS/vMotion cho phép mọi VM chạy trên mọi host; không đếm theo host hiện tại và không chỉ đếm số VM Windows. Chế độ đếm OSE Standard: <b>${ws.peakMode === 'current_placement' ? 'theo host hiện tại (tham chiếu)' : 'toàn cluster'}</b>.</p></div>
         <div class="panel-toolbar">
           ${st.viewingSnapshot ? '' : '<button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot</button>'}
           <button class="btn btn-secondary btn-sm" data-lic-action="export-pdf" type="button" title="Executive summary: kết luận, quyết định đề nghị, tổng quan license theo cluster">Xuất PDF · Executive summary</button>
@@ -461,9 +461,9 @@ function renderLicAssess() {
     <div class="insight-box"><strong>So sánh edition Windows Server:</strong> ${recText}</div>
 
     <div class="lic-3col">
-      <div class="sim-card"><h4 class="lic-h4">Công thức — Windows Server</h4>${list(ws.formula)}<h4 class="lic-h4">Giả định</h4>${list(ws.assumptions)}</div>
-      <div class="sim-card"><h4 class="lic-h4">Công thức — VMware</h4>${list(vm.formula)}<h4 class="lic-h4">Giả định</h4>${list(vm.assumptions)}</div>
-      <div class="sim-card lic-gap-card"><h4 class="lic-h4">Thiếu dữ liệu / cần xác nhận</h4>${list([...(ws.dataGaps || []), ...(vm.dataGaps || [])])}</div>
+      <div class="sim-card"><h3 class="lic-h4">Công thức — Windows Server</h3>${list(ws.formula)}<h3 class="lic-h4">Giả định</h3>${list(ws.assumptions)}</div>
+      <div class="sim-card"><h3 class="lic-h4">Công thức — VMware</h3>${list(vm.formula)}<h3 class="lic-h4">Giả định</h3>${list(vm.assumptions)}</div>
+      <div class="sim-card lic-gap-card"><h3 class="lic-h4">Thiếu dữ liệu / cần xác nhận</h3>${list([...(ws.dataGaps || []), ...(vm.dataGaps || [])])}</div>
     </div>
 
     ${st.viewingSnapshot ? '' : renderLicEntitlements() + renderLicRules()}`;
@@ -506,7 +506,7 @@ function renderLicEntitlements() {
     <td><button class="btn btn-secondary btn-sm" data-lic-action="ent-edit" data-id="${x.id}" type="button">Sửa</button> <button class="btn btn-secondary btn-sm btn-danger" data-lic-action="ent-delete" data-id="${x.id}" type="button">Xoá</button></td>
   </tr>`).join('');
   return `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title">Entitlement hiện có &amp; đơn giá</div><p class="panel-sub">Nhập license đang sở hữu, hoặc chọn tình trạng <b>Chưa có</b> để xác nhận chưa mua license sản phẩm đó (toàn bộ nhu cầu được tính là thiếu hụt; có thể kèm báo giá để ước chi phí). Số lượng pack được quy đổi sang core; đơn giá là giá mỗi đơn vị đã chọn (pack/core/CPU). Không có giá mặc định — thiếu giá thì không hiển thị chi phí.</p></div></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Entitlement hiện có &amp; đơn giá</div><p class="panel-sub">Nhập license đang sở hữu, hoặc chọn tình trạng <b>Chưa có</b> để xác nhận chưa mua license sản phẩm đó (toàn bộ nhu cầu được tính là thiếu hụt; có thể kèm báo giá để ước chi phí). Số lượng pack được quy đổi sang core; đơn giá là giá mỗi đơn vị đã chọn (pack/core/CPU). Không có giá mặc định — thiếu giá thì không hiển thị chi phí.</p></div></div>
     ${form}
     <div class="table-scroll"><table class="data-table lic-table"><thead><tr><th>Sản phẩm</th><th>Đơn vị</th><th class="num">Số lượng</th><th class="num">Đơn giá</th><th>Phạm vi</th><th>Hết hạn</th><th>Ghi chú</th><th></th></tr></thead>
     <tbody>${rows || uiEmptyRow(8, 'Chưa có entitlement nào.')}</tbody></table></div>
@@ -544,7 +544,7 @@ function renderLicRules() {
     </div>
     <p class="logo-upload-hint hidden" id="licRuleErr"></p></div>` : '';
   return `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title">Rule licensing (có version, nguồn, ngày xác minh)</div><p class="panel-sub">Engine chỉ đọc tham số từ rule đang kích hoạt. Rule mặc định lấy từ tài liệu công khai của Microsoft/Broadcom và ở trạng thái "Chưa xác minh" cho tới khi người có trách nhiệm đối chiếu và bấm Xác minh. Tham số ví dụ: min_cores_per_host, standard_peak_mode (cluster_total | current_placement), include_powered_off, min_cores_per_cpu, min_cores_per_order.</p></div></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Rule licensing (có version, nguồn, ngày xác minh)</div><p class="panel-sub">Engine chỉ đọc tham số từ rule đang kích hoạt. Rule mặc định lấy từ tài liệu công khai của Microsoft/Broadcom và ở trạng thái "Chưa xác minh" cho tới khi người có trách nhiệm đối chiếu và bấm Xác minh. Tham số ví dụ: min_cores_per_host, standard_peak_mode (cluster_total | current_placement), include_powered_off, min_cores_per_cpu, min_cores_per_order.</p></div></div>
     ${editor}
     <div class="table-scroll"><table class="data-table lic-table"><thead><tr><th>Rule</th><th class="num">Version</th><th>Trạng thái</th><th>Nguồn</th><th>Xác minh</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
@@ -575,7 +575,7 @@ function renderLicWhatif() {
   }[w.type];
 
   return `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title">What-if license gắn với capacity</div><p class="panel-sub">Mỗi kịch bản được tính lại cả license (VMware per-core, Windows Server Standard/Datacenter) lẫn capacity (overcommit CPU/RAM theo chính sách, khả năng chịu lỗi N+1 của cluster). Kịch bản vi phạm capacity/HA sẽ bị đánh dấu <span class="pill crit">Không đề xuất</span> dù có tiết kiệm license.</p></div></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">What-if license gắn với capacity</div><p class="panel-sub">Mỗi kịch bản được tính lại cả license (VMware per-core, Windows Server Standard/Datacenter) lẫn capacity (overcommit CPU/RAM theo chính sách, khả năng chịu lỗi N+1 của cluster). Kịch bản vi phạm capacity/HA sẽ bị đánh dấu <span class="pill crit">Không đề xuất</span> dù có tiết kiệm license.</p></div></div>
     <div class="sim-tabbar">${LIC_SCENARIOS.map(s => `<button class="sim-tab${w.type === s.type ? ' active' : ''}" data-lic-wtype="${s.type}" type="button">${s.label}</button>`).join('')}</div>
     <p class="muted-sub">${hint}</p>
     <div class="sim-form-grid lic-form-5">${fields}</div>
@@ -606,14 +606,14 @@ function renderLicWhatifResult(r) {
     <div class="lic-opt-head"><b>${esc(r.description)}</b> <span class="pill ${verdict[0]}">${verdict[1]}</span></div>
     <div class="insight-box">${r.insights.map(x => `<div>• ${esc(x)}</div>`).join('')}${reasons.length ? `<div class="lic-reasons">${reasons.map(x => `<div>⚠ ${esc(x)}</div>`).join('')}</div>` : ''}</div>
     <div class="lic-2col">
-      <div><h4 class="lic-h4">License trước → sau</h4><table class="data-table lic-table"><thead><tr><th>Chỉ số</th><th class="num">Trước</th><th class="num">Sau</th><th class="num">Δ</th></tr></thead><tbody>
+      <div><h3 class="lic-h4">License trước → sau</h3><table class="data-table lic-table"><thead><tr><th>Chỉ số</th><th class="num">Trước</th><th class="num">Sau</th><th class="num">Δ</th></tr></thead><tbody>
         ${dRow('Host', d.hosts, 'host')}${dRow('Physical core', d.physicalCores)}${dRow('VM Windows Server', d.windowsServerVms, 'VM')}
         ${dRow('VMware core nhu cầu', d.vmwareCores)}${dRow('VMware core thiếu', d.vmwareShortfall)}
         ${dRow('WS Standard core', d.wsStandardCores)}${dRow('WS Standard core (tối đa)', d.wsStandardCoresMax)}${dRow('WS Standard thiếu', d.wsStandardShortfall)}
         ${dRow('WS Datacenter core', d.wsDatacenterCores)}${dRow('WS Datacenter thiếu', d.wsDatacenterShortfall)}
         ${dRow('Chi phí VMware (toàn bộ nhu cầu)', d.vmwareCost, '', true)}${dRow('Chi phí WS Standard', d.wsStandardCost, '', true)}${dRow('Chi phí WS Datacenter', d.wsDatacenterCost, '', true)}
       </tbody></table></div>
-      <div><h4 class="lic-h4">Capacity cluster bị ảnh hưởng</h4><table class="data-table lic-table"><thead><tr><th>Cluster</th><th class="num">Host</th><th class="num">VM</th><th class="num">CPU % ngưỡng</th><th class="num">RAM % ngưỡng</th><th>HA N+1</th></tr></thead><tbody>${capRows}</tbody></table>
+      <div><h3 class="lic-h4">Capacity cluster bị ảnh hưởng</h3><table class="data-table lic-table"><thead><tr><th>Cluster</th><th class="num">Host</th><th class="num">VM</th><th class="num">CPU % ngưỡng</th><th class="num">RAM % ngưỡng</th><th>HA N+1</th></tr></thead><tbody>${capRows}</tbody></table>
       <p class="muted-sub">% ngưỡng = overcommit sau kịch bản / overcommit tối đa theo chính sách. &gt;80% cảnh báo, &gt;100% vi phạm.</p></div>
     </div>
   </section>`;
@@ -640,7 +640,7 @@ function renderLicSnapshots() {
     </tr>`;
   }).join('');
   return `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title">Snapshot assessment</div><p class="panel-sub">Mỗi snapshot lưu toàn bộ đầu vào (inventory, override, version rule và tham số, entitlement) cùng kết quả và hash. "Tái lập" chạy lại engine trên đầu vào đã lưu và so hash để chứng minh kết quả tái lập được, độc lập với inventory hiện tại.</p></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Snapshot assessment</div><p class="panel-sub">Mỗi snapshot lưu toàn bộ đầu vào (inventory, override, version rule và tham số, entitlement) cùng kết quả và hash. "Tái lập" chạy lại engine trên đầu vào đã lưu và so hash để chứng minh kết quả tái lập được, độc lập với inventory hiện tại.</p></div>
       <div class="panel-toolbar"><input id="licSnapTitle" placeholder="Tiêu đề snapshot (tuỳ chọn)"><button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot phạm vi hiện tại</button></div></div>
     <div class="table-scroll"><table class="data-table lic-table"><thead><tr><th class="num">#</th><th>Thời điểm</th><th>Tiêu đề</th><th>Phạm vi</th><th>Kết luận</th><th class="num">VMware core</th><th class="num">Windows Server core</th><th>Hash</th><th></th></tr></thead>
     <tbody>${rows || uiEmptyRow(9, 'Chưa có snapshot.')}</tbody></table></div>

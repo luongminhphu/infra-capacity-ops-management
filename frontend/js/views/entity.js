@@ -40,14 +40,14 @@ function entityHostHtml(d) {
   const hw = d.hardware, c = d.capacity, cl = d.clusterStatus;
   const vms = d.vms.map(v => `<tr><td>${uiEntityLink('vm', v.name, d.vcenterKey, false)}</td><td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td>
       <td class="num">${enVal(v.vcpu)}</td><td class="num">${enVal(v.ramGB)}</td><td>${enVal(v.ip)}</td></tr>`).join('');
-  const dev = d.devices === null ? '' : `<section class="panel"><div class="panel-title">Bảo hành / hợp đồng (Opex)</div>
+  const dev = d.devices === null ? '' : `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Bảo hành / hợp đồng (Opex)</div>
       ${d.devices.length ? `<ul class="home-list">${d.devices.map(x => `<li class="home-item"><div class="home-item-main">
         <a class="home-item-title" href="${esc(homeLink('spend-opex', `code=${x.code}`))}">${esc(x.code)} — ${esc(x.title)}</a>
         <p class="home-item-detail">Serial ${esc(x.serial)} · hết hạn ${esc(spDateSafe(x.endDate))} · ${esc(x.statusLabel)}</p></div></li>`).join('')}</ul>`
         : '<p class="muted-sub">Chưa có khoản Opex nào khai báo thiết bị này (Opex → Thiết bị liên quan → tên host).</p>'}</section>`;
   return `
     <section class="panel"><div class="panel-head"><div><div class="eyebrow">Host · ${esc(d.vcenterKey || 'import')}</div>
-      <div class="panel-title">${esc(d.name)} ${c.overall ? uiPill(c.overall.cls, c.overall.text) : ''}</div>
+      <div class="panel-title" role="heading" aria-level="2">${esc(d.name)} ${c.overall ? uiPill(c.overall.cls, c.overall.text) : ''}</div>
       <p class="panel-sub">Cluster <b>${esc(d.cluster || '—')}</b> · ${esc(c.vmCount ?? 0)} VM đang chạy</p></div>
       <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="dashboard">Capacity</button>
         <button class="btn btn-ghost btn-sm" type="button" data-nav-link="lic-hardware">ESXi & phần cứng</button></div></div>
@@ -56,12 +56,12 @@ function entityHostHtml(d) {
               ['CPU', `${enVal(hw.cpuModel)}`], ['Socket × core', `${enVal(hw.cpuSockets)} × ${enVal(hw.cores)}`], ['RAM (GB)', enVal(hw.ramGB)],
               ['ESXi', `${enVal(hw.esxiVersion)} ${hw.esxiBuild ? `(build ${esc(hw.esxiBuild)})` : ''}`], ['Trạng thái host', enVal(hw.status)]])}
     </section>
-    ${cl ? `<section class="panel"><div class="panel-title">Cluster ${esc(cl.name)} ${uiPill(cl.overall.cls, cl.overall.text)}</div>
+    ${cl ? `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Cluster ${esc(cl.name)} ${uiPill(cl.overall.cls, cl.overall.text)}</div>
       ${enDl([['Host', enVal(cl.hosts)], ['VM', enVal(cl.vms)], ['CPU', enPct(cl.cpuPct)], ['RAM', enPct(cl.ramPct)],
               ['HA', cl.ha === true ? 'Bật' : cl.ha === false ? 'Tắt' : '—'], ['DRS', cl.drs === true ? 'Bật' : cl.drs === false ? 'Tắt' : '—']])}</section>` : ''}
-    <section class="panel"><div class="panel-title">Phát hiện compliance</div>${enFindings(d.findings)}</section>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>
     ${dev}
-    <section class="table-card"><div class="panel-title">VM trên host (${esc(d.vms.length)})</div>
+    <section class="table-card"><div class="panel-title" role="heading" aria-level="2">VM trên host (${esc(d.vms.length)})</div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>VM</th><th>Nguồn</th><th class="num">vCPU</th><th class="num">RAM (GB)</th><th>IP</th></tr></thead>
       <tbody>${vms || `<tr><td colspan="5">${uiEmpty('Không có VM.')}</td></tr>`}</tbody></table></div></section>`;
 }
@@ -69,7 +69,7 @@ function entityHostHtml(d) {
 function entityVmHtml(d) {
   const c = d.config, os = d.os, b = d.backup;
   const cov = b ? { protected: ['ok', 'Có backup'], failing: ['warn', 'Có job nhưng lỗi'], unprotected: ['crit', 'Chưa backup'] }[b.coverage] : null;
-  const backup = b === null ? '' : `<section class="panel"><div class="panel-title">Backup ${cov ? uiPill(...cov) : uiPill('na', 'Không xác định')}</div>
+  const backup = b === null ? '' : `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Backup ${cov ? uiPill(...cov) : uiPill('na', 'Không xác định')}</div>
       ${b.client ? enDl([['Client', enVal(b.client.client)], ['Đánh giá', uiPill(({ ok: 'ok', warn: 'warn', crit: 'crit' })[b.client.status] || 'na', b.client.statusLabel)],
                          ['Policy', enVal((b.client.policies || []).join(', '))], ['Thành công gần nhất', b.client.lastSuccessAt ? esc(spTimeSafe(b.client.lastSuccessAt)) : '—'],
                          ['Đã qua (giờ)', enVal(b.client.hoursSinceSuccess)], ['RPO (giờ)', enVal(b.client.rpoHours)],
@@ -78,7 +78,7 @@ function entityVmHtml(d) {
       <button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-coverage">Độ phủ backup VM</button></section>`;
   return `
     <section class="panel"><div class="panel-head"><div><div class="eyebrow">VM · ${esc(d.vcenterKey || 'import')}</div>
-      <div class="panel-title">${esc(d.name)} ${c.isPoweredOn ? uiPill('ok', 'Đang chạy') : uiPill('na', 'Tắt')}</div>
+      <div class="panel-title" role="heading" aria-level="2">${esc(d.name)} ${c.isPoweredOn ? uiPill('ok', 'Đang chạy') : uiPill('na', 'Tắt')}</div>
       <p class="panel-sub">Cluster <b>${esc(d.cluster || '—')}</b> · host ${d.host ? uiEntityLink('host', d.host, d.vcenterKey, false) : '—'}</p></div>
       <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="history">Xu hướng & biến động</button>
         <button class="btn btn-ghost btn-sm" type="button" data-nav-link="lic-os">Hệ điều hành</button></div></div>
@@ -88,7 +88,7 @@ function entityVmHtml(d) {
               ...(os ? [['Hệ điều hành', `${enVal(os.label)} ${os.version ? esc(os.version) : ''} ${os.edition ? esc(os.edition) : ''}${os.overridden ? ' <span class="pill na">ghi đè</span>' : ''}`]] : [])])}
     </section>
     ${backup}
-    <section class="panel"><div class="panel-title">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
 }
 
 

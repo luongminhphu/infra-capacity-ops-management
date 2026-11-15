@@ -71,7 +71,7 @@ function historyPanelTemplate(mountId, opts) {
     <section class="panel history-panel" id="${mountId}Panel">
       <div class="panel-head">
         <div>
-          <div class="panel-title">Biến động tài nguyên CPU/RAM theo thời gian</div>
+          <div class="panel-title" role="heading" aria-level="2">Biến động tài nguyên CPU/RAM theo thời gian</div>
           <p class="panel-sub" id="${mountId}Sub">So sánh mức sử dụng so với ngưỡng overcommit giữa các snapshot đã lưu — chọn khoảng thời gian và cách nhóm.</p>
         </div>
         <div class="history-controls">
@@ -82,11 +82,11 @@ function historyPanelTemplate(mountId, opts) {
       <div class="history-kpis" id="${mountId}Kpis"></div>
       <div class="chart-grid history-chart-grid">
         <article class="card chart-card">
-          <div class="panel-head"><div><div class="panel-title">CPU — % ngưỡng overcommit</div><p class="panel-sub">Mỗi đường là một ${historyState.group === 'cluster' ? 'cluster (nhóm dự án)' : 'vCenter'}; đường đứt là tổng của phạm vi đang xem.</p></div></div>
+          <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">CPU — % ngưỡng overcommit</div><p class="panel-sub">Mỗi đường là một ${historyState.group === 'cluster' ? 'cluster (nhóm dự án)' : 'vCenter'}; đường đứt là tổng của phạm vi đang xem.</p></div></div>
           <div class="chart-wrap"><canvas id="${mountId}ChartCpu"></canvas></div>
         </article>
         <article class="card chart-card">
-          <div class="panel-head"><div><div class="panel-title">RAM — % ngưỡng overcommit</div><p class="panel-sub">Mỗi đường là một ${historyState.group === 'cluster' ? 'cluster (nhóm dự án)' : 'vCenter'}; đường đứt là tổng của phạm vi đang xem.</p></div></div>
+          <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">RAM — % ngưỡng overcommit</div><p class="panel-sub">Mỗi đường là một ${historyState.group === 'cluster' ? 'cluster (nhóm dự án)' : 'vCenter'}; đường đứt là tổng của phạm vi đang xem.</p></div></div>
           <div class="chart-wrap"><canvas id="${mountId}ChartRam"></canvas></div>
         </article>
       </div>
@@ -289,7 +289,7 @@ function renderHistoryVmChanges(mountId, changes) {
   const card = (title, sub, count, tone, headers, bodyHtml) => `
     <article class="card history-vm-card ${tone}">
       <div class="panel-head">
-        <div><div class="panel-title">${esc(title)} <span class="pill ${tone === 'added' ? 'ok' : tone === 'removed' ? 'warn' : ''}">${count} VM</span></div><p class="panel-sub">${esc(sub)}</p></div>
+        <div><div class="panel-title" role="heading" aria-level="2">${esc(title)} <span class="pill ${tone === 'added' ? 'ok' : tone === 'removed' ? 'warn' : ''}">${count} VM</span></div><p class="panel-sub">${esc(sub)}</p></div>
       </div>
       <div class="table-scroll history-vm-scroll">
         <table class="data-table">

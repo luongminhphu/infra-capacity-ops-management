@@ -29,7 +29,7 @@ async function renderProposalsPage() {
   $('#spendMount').innerHTML = `
     <section class="table-card">
       <div class="panel-head">
-        <div><div class="panel-title">Tờ trình</div><p class="panel-sub">Soạn tờ trình từ mẫu .docx của công ty cho một dự án Capex hoặc một / nhiều khoản Opex. ${ppState.ai.enabled ? 'AI đang bật: nội dung từng mục được soạn sẵn để bạn chỉnh tiếp.' : 'AI đang tắt: file chỉ điền các trường dữ liệu và bảng chi phí.'}</p></div>
+        <div><div class="panel-title" role="heading" aria-level="2">Tờ trình</div><p class="panel-sub">Soạn tờ trình từ mẫu .docx của công ty cho một dự án Capex hoặc một / nhiều khoản Opex. ${ppState.ai.enabled ? 'AI đang bật: nội dung từng mục được soạn sẵn để bạn chỉnh tiếp.' : 'AI đang tắt: file chỉ điền các trường dữ liệu và bảng chi phí.'}</p></div>
         <div class="panel-toolbar">${spCan('editor') ? `<button class="btn btn-primary btn-sm" type="button" data-pp-new ${noTpl ? 'disabled title="Chưa có mẫu — admin tải mẫu ở Cài đặt"' : ''}><i data-lucide="plus"></i>Soạn tờ trình</button>` : ''}</div>
       </div>
       ${noTpl ? '<div class="insight-box">Chưa có mẫu tờ trình. Quản trị viên tải Mẫu A / Mẫu B (.docx) ở Cài đặt → Chi phí &amp; nhắc hạn → Tờ trình &amp; AI.</div>' : ''}

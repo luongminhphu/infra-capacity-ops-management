@@ -77,7 +77,7 @@ function buildInsight(clusterName, before, after) {
 
 function renderSimResult(clusterName, before, after, extraRows, title) {
   const html = `
-    <div class="panel-head"><div><div class="panel-title">${esc(title)}</div><p class="panel-sub">So sánh before/after cho cluster ${esc(clusterName)}.</p></div></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">${esc(title)}</div><p class="panel-sub">So sánh before/after cho cluster ${esc(clusterName)}.</p></div></div>
     <div class="compare-grid">
       <div class="compare-col">
         <h5>Before</h5>

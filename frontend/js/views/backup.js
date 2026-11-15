@@ -187,12 +187,12 @@ function bkOverview(s) {
     ${bkKpis(s)}
     <section class="chart-grid exec-chart-grid">
       <article class="card chart-card">
-        <div class="panel-head panel-head-tight"><div><div class="panel-title">Kết quả job backup theo ngày</div><p class="panel-sub">Job ở cấp thực thi (không đếm trùng job cha của VMware / multistream).</p></div></div>
+        <div class="panel-head panel-head-tight"><div><div class="panel-title" role="heading" aria-level="2">Kết quả job backup theo ngày</div><p class="panel-sub">Job ở cấp thực thi (không đếm trùng job cha của VMware / multistream).</p></div></div>
         <div class="chart-wrap chart-wrap-split"><canvas id="bkChartDaily" role="img" aria-label="Số job theo kết quả mỗi ngày"></canvas></div>
         <div class="chart-wrap chart-wrap-mini"><canvas id="bkChartDailyTb" role="img" aria-label="Dung lượng đã backup mỗi ngày (TB)"></canvas></div>
       </article>
       <article class="card chart-card">
-        <div class="panel-head panel-head-tight"><div><div class="panel-title">Nguyên nhân lỗi</div><p class="panel-sub">Gom theo đầu mối xử lý.</p></div>
+        <div class="panel-head panel-head-tight"><div><div class="panel-title" role="heading" aria-level="2">Nguyên nhân lỗi</div><p class="panel-sub">Gom theo đầu mối xử lý.</p></div>
           <div class="panel-toolbar"><button class="btn btn-secondary btn-sm hidden" type="button" data-ai-act="backup" data-ai-gate="backup_analysis">AI phân tích lỗi</button></div></div>
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Nhóm</th><th>Job</th><th>Client</th></tr></thead>
         <tbody>${groups || uiEmptyRow(3, 'Không có job lỗi trong kỳ.')}</tbody></table></div>
@@ -200,13 +200,13 @@ function bkOverview(s) {
     </section>
     <section class="table-card ai-out" id="bkAiOut" aria-live="polite"></section>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Client cần xử lý</div><p class="panel-sub">Lỗi liên tiếp, quá RPO hoặc lần gần nhất không thành công.</p></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Client cần xử lý</div><p class="panel-sub">Lỗi liên tiếp, quá RPO hoặc lần gần nhất không thành công.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-clients">Xem tất cả client</button></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Client</th><th>Thành công gần nhất</th><th>Kết quả lần cuối</th><th>Đánh giá</th></tr></thead>
       <tbody>${crit || uiEmptyRow(4, 'Mọi client đều đạt.')}</tbody></table></div>
     </section>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Phát hiện &amp; khuyến nghị</div><p class="panel-sub">Theo các ngưỡng tại trang Nguồn &amp; ngưỡng.</p></div></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Phát hiện &amp; khuyến nghị</div><p class="panel-sub">Theo các ngưỡng tại trang Nguồn &amp; ngưỡng.</p></div></div>
       ${bkFindingsTable(s.findings)}
     </section>`;
 }
@@ -236,7 +236,7 @@ function bkClients(s) {
   const sel = list.find(c => c._i === st.clientSel);
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Client &amp; RPO</div><p class="panel-sub">RPO = thời gian từ bản backup thành công gần nhất (status 0 hoặc 1). Cảnh báo khi quá ${bkNum(s.thresholds.rpo_hours)} giờ; nghiêm trọng khi quá ${bkNum(s.thresholds.rpo_crit_hours)} giờ hoặc lỗi liên tiếp từ ${s.thresholds.consecutive_fail} lần.</p></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Client &amp; RPO</div><p class="panel-sub">RPO = thời gian từ bản backup thành công gần nhất (status 0 hoặc 1). Cảnh báo khi quá ${bkNum(s.thresholds.rpo_hours)} giờ; nghiêm trọng khi quá ${bkNum(s.thresholds.rpo_crit_hours)} giờ hoặc lỗi liên tiếp từ ${s.thresholds.consecutive_fail} lần.</p></div>
         <div class="panel-toolbar">
           <select data-bk-filter="clientStatus" aria-label="Lọc theo đánh giá">${['all', 'crit', 'warn', 'ok'].map(k => `<option value="${k}" ${f.status === k ? 'selected' : ''}>${k === 'all' ? 'Tất cả' : BK_STATUS[k]} (${cnt(k)})</option>`).join('')}</select>
           <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="clientQ" placeholder="Tìm client / policy" aria-label="Tìm client hoặc policy" value="${esc(f.q)}"/></span>
@@ -303,11 +303,11 @@ function bkJobs() {
   }
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Job backup</div><p class="panel-sub">Job của máy chủ backup trong kỳ đã chọn (lưu lịch sử theo mỗi lần đồng bộ).</p></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Job backup</div><p class="panel-sub">Job của máy chủ backup trong kỳ đã chọn (lưu lịch sử theo mỗi lần đồng bộ).</p></div>
         <div class="panel-toolbar">
-          <select data-bk-filter="jobOutcome">${[['all', 'Mọi kết quả'], ['failed', 'Lỗi'], ['partial', 'Một phần'], ['success', 'Thành công'], ['running', 'Đang chạy']].map(([k, l]) => `<option value="${k}" ${f.outcome === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
-          <select data-bk-filter="jobCategory">${[['backup', 'Backup'], ['copy', 'Nhân bản (DR)'], ['restore', 'Restore'], ['all', 'Mọi loại job']].map(([k, l]) => `<option value="${k}" ${f.category === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
-          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="jobQ" placeholder="Client, policy, job ID, mã lỗi" value="${esc(f.q)}"/></span>
+          <select data-bk-filter="jobOutcome" aria-label="Lọc theo kết quả job">${[['all', 'Mọi kết quả'], ['failed', 'Lỗi'], ['partial', 'Một phần'], ['success', 'Thành công'], ['running', 'Đang chạy']].map(([k, l]) => `<option value="${k}" ${f.outcome === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <select data-bk-filter="jobCategory" aria-label="Lọc theo loại job">${[['backup', 'Backup'], ['copy', 'Nhân bản (DR)'], ['restore', 'Restore'], ['all', 'Mọi loại job']].map(([k, l]) => `<option value="${k}" ${f.category === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="jobQ" aria-label="Tìm job" placeholder="Client, policy, job ID, mã lỗi" value="${esc(f.q)}"/></span>
           <button class="btn btn-secondary btn-sm" type="button" data-bk-action="jobs-search">Lọc</button>
         </div></div>
       ${body}
@@ -339,12 +339,12 @@ function bkCoverage(s) {
     ${bkScopePanel(cov)}
     <div class="kpi-strip-wrap">${uiKpiStrip(k.map(([label, valueHtml, sub]) => ({ label, valueHtml, sub })))}</div>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Độ phủ theo cluster</div><p class="panel-sub">Đối chiếu VM ${cov.scopeActive ? 'trong phạm vi cần backup' : 'trong inventory vCenter'} với client NetBackup theo tên VM, hostname guest hoặc IP.</p></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Độ phủ theo cluster</div><p class="panel-sub">Đối chiếu VM ${cov.scopeActive ? 'trong phạm vi cần backup' : 'trong inventory vCenter'} với client NetBackup theo tên VM, hostname guest hoặc IP.</p></div>
         <div class="panel-toolbar">${filt}</div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>vCenter</th><th>Cluster</th><th>VM</th><th>Có backup</th><th>Lỗi</th><th>Chưa backup</th><th>Độ phủ</th></tr></thead><tbody>${byCl}</tbody></table></div>
     </section>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">VM cần xác nhận backup</div><p class="panel-sub">Xác nhận với System Owner: bổ sung vào policy / query VMware hoặc ghi nhận ngoại lệ (thêm từ khoá loại trừ ở trang Nguồn &amp; ngưỡng).</p></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">VM cần xác nhận backup</div><p class="panel-sub">Xác nhận với System Owner: bổ sung vào policy / query VMware hoặc ghi nhận ngoại lệ (thêm từ khoá loại trừ ở trang Nguồn &amp; ngưỡng).</p></div>
         <div class="panel-toolbar">
           ${filt}
           <select data-bk-filter="covState">${[['unprotected', 'Chưa backup'], ['failing', 'Có job nhưng lỗi'], ['all', 'Cả hai']].map(([kk, l]) => `<option value="${kk}" ${f.state === kk ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -446,7 +446,7 @@ function bkScopePanel(cov) {
   const label = cov.scopeActive ? esc(cov.scopeLabel) : 'Toàn bộ hệ thống trong inventory vCenter';
   return `
     <section class="table-card bk-scope-card">
-      <div class="panel-head panel-head-tight"><div><div class="panel-title">Phạm vi cần backup</div>
+      <div class="panel-head panel-head-tight"><div><div class="panel-title" role="heading" aria-level="2">Phạm vi cần backup</div>
         <p class="panel-sub">Chỉ VM thuộc phạm vi này được tính độ phủ, đưa vào phát hiện và báo cáo PDF / Excel. Có thể chọn nhiều cluster trên nhiều vCenter.</p></div>
         ${editing ? '' : `<div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="scope-edit"><i data-lucide="filter"></i>Chỉnh phạm vi</button></div>`}</div>
       ${editing ? `<div id="bkScopeEditor">${bkScopeEditorHtml()}</div>`
@@ -530,7 +530,7 @@ function bkSchedule(s) {
       { label: 'Nguồn lịch', value: bkNum((sc.rules || []).length), sub: `${sc.mode === 'fixed' ? 'Chế độ khung cố định' : 'Chế độ đọc từ NetBackup'} · ${nbN} theo NetBackup · ${fxN} theo khung ${sc.fixedWindow || ''} · ${manN} thủ công / Excel` },
     ])}</div>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Tuân thủ lịch theo từng đêm</div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Tuân thủ lịch theo từng đêm</div>
         <p class="panel-sub">Mỗi đêm backup tính từ ${sc.cutoffHour}:00 hôm đó đến trước ${sc.cutoffHour}:00 hôm sau — job chạy qua nửa đêm (20:00 → 04:00) thuộc đêm bắt đầu. Đạt = mọi client có bản backup thành công, đúng loại (Full / Incremental), xong trước giờ kết thúc + ${sc.graceMinutes} phút. Di chuột lên ô để xem chi tiết.</p></div></div>
       <div class="bk-legend">${legend}</div>
       <div class="table-scroll"><table class="data-table bk-sched-table"><thead><tr><th>Hệ thống / policy</th><th>Lịch</th>${head}<th>Tuân thủ</th><th>RPO</th><th></th></tr></thead>
@@ -544,7 +544,7 @@ function bkScheduleEditor() {
   const st = bkState();
   const ed = st.sched;
   if (!ed) {
-    return `<section class="table-card"><div class="panel-head"><div><div class="panel-title">Lịch thủ công / import Excel</div>
+    return `<section class="table-card"><div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Lịch thủ công / import Excel</div>
       <p class="panel-sub">Mặc định lịch được đọc tự động từ schedule của từng policy NetBackup. Khai báo thủ công khi muốn gom nhiều policy thành một hệ thống, hoặc áp lịch đã duyệt khác với cấu hình NetBackup — lịch thủ công được ưu tiên cho các policy nó bao gồm.</p></div>
       <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="sched-open"><i data-lucide="calendar-cog"></i>Quản lý lịch thủ công</button></div></div></section>`;
   }
@@ -560,7 +560,7 @@ function bkScheduleEditor() {
     <td><input type="checkbox" data-sched="${i}" data-field="enabled" ${r.enabled ? 'checked' : ''}/></td>
     <td><button class="btn btn-ghost btn-sm" type="button" data-bk-action="sched-del" data-i="${i}">Xoá</button></td></tr>`).join('');
   return `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title">Lịch thủ công / import Excel</div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Lịch thủ công / import Excel</div>
       <p class="panel-sub">Cột “Policy”: tên policy NetBackup thuộc hệ thống, phân cách bằng dấu phẩy, dùng * cho mẫu tên. Import file theo mẫu HSC-Backup-Management (tên hệ thống, Monday…Sunday, Full Backup, Start time / End Time, Retention): hệ thống đã có giữ nguyên phần gán policy.</p></div>
       <div class="panel-toolbar">
         <label class="btn btn-secondary btn-sm"><i data-lucide="upload"></i>Import Excel<input type="file" accept=".xlsx" data-bk-action="sched-import" hidden/></label>
@@ -600,13 +600,13 @@ function bkStorage(s) {
     <td class="num">${bkPct(p.successRate)}</td><td>${bkPill(p.status, p.statusLabel)}</td></tr>`).join('');
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Disk pool</div><p class="panel-sub">Cảnh báo từ ${bkNum(s.thresholds.storage_warn_pct)}%, nghiêm trọng từ ${bkNum(s.thresholds.storage_crit_pct)}% hoặc khi dự kiến chạm ngưỡng high-water (HWM) trong ${s.thresholds.storage_days_warn} ngày theo xu hướng 30 ngày.</p></div></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Disk pool</div><p class="panel-sub">Cảnh báo từ ${bkNum(s.thresholds.storage_warn_pct)}%, nghiêm trọng từ ${bkNum(s.thresholds.storage_crit_pct)}% hoặc khi dự kiến chạm ngưỡng high-water (HWM) trong ${s.thresholds.storage_days_warn} ngày theo xu hướng 30 ngày.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Disk pool</th><th>Loại</th><th>Trạng thái</th><th>Tổng (TB)</th><th>Đã dùng</th><th>Còn trống</th><th>% dùng</th><th>TB/ngày</th><th>Ngày tới HWM</th><th>Đánh giá</th></tr></thead>
       <tbody>${pools || uiEmptyRow(10, 'Chưa có dữ liệu disk pool (cần quyền xem Storage).')}</tbody></table></div>
       <div class="chart-wrap" style="margin-top:var(--space-4);min-height:240px;"><canvas id="bkChartStorage"></canvas></div>
     </section>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Policy backup</div><p class="panel-sub">Policy đang bật mà không có job trong 48 giờ được đánh giá “Không chạy”. Số client của policy VMware lấy theo VM thực tế được backup.</p></div></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Policy backup</div><p class="panel-sub">Policy đang bật mà không có job trong 48 giờ được đánh giá “Không chạy”. Số client của policy VMware lấy theo VM thực tế được backup.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Policy</th><th>Loại</th><th>Hoạt động</th><th>Client</th><th>Storage</th><th>Lịch (retention)</th><th>Chạy gần nhất</th><th>Job</th><th>Lỗi</th><th>Tỷ lệ</th><th>Đánh giá</th></tr></thead>
       <tbody>${pols || uiEmptyRow(11, 'Chưa có dữ liệu policy (cần quyền xem Policy).')}</tbody></table></div>
     </section>`;
@@ -632,13 +632,13 @@ function bkConfig() {
   }).join('') : uiNote('Đang tải…');
   return `
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Máy chủ backup</div><p class="panel-sub">Thêm / sửa máy chủ, thông tin đăng nhập và API key ở <a href="#/settings/sources" data-nav-link="set-sources">Cài đặt → Kết nối nguồn dữ liệu</a> (cấu hình bằng biến <code>NETBACKUP_i_*</code> vẫn được hỗ trợ). Tự động đồng bộ cùng chu kỳ vCenter.</p></div></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Máy chủ backup</div><p class="panel-sub">Thêm / sửa máy chủ, thông tin đăng nhập và API key ở <a href="#/settings/sources" data-nav-link="set-sources">Cài đặt → Kết nối nguồn dữ liệu</a> (cấu hình bằng biến <code>NETBACKUP_i_*</code> vẫn được hỗ trợ). Tự động đồng bộ cùng chu kỳ vCenter.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Server</th><th>Địa chỉ</th><th>Xác thực</th><th>API</th><th>Đồng bộ gần nhất</th><th>Trạng thái</th><th></th></tr></thead>
       <tbody>${servers || uiEmptyRow(7, 'Chưa có máy chủ backup. Thêm ở Cài đặt → Kết nối nguồn dữ liệu (bật DEMO để chạy thử).')}</tbody></table></div>
       <div class="insight-box"><strong>Tài khoản chỉ đọc:</strong> tạo user dịch vụ trên NetBackup (ví dụ <code>svc_nbu_ro</code>), gán RBAC role tuỳ chỉnh chỉ có quyền <b>View</b> cho Jobs, Policies (NetBackup policies), Storage (disk pools / storage units) — không cấp quyền thao tác. Ưu tiên cấp <b>API key</b> cho user này (NetBackup 9.x trở lên) và khai báo ở <code>NETBACKUP_i_API_KEY</code>; app chỉ gọi các API GET. Chi tiết trong README.</div>
     </section>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Ngưỡng giám sát backup</div><p class="panel-sub">Áp dụng cho trang Backup, báo cáo PDF và Excel. Lưu trên server, dùng chung cho mọi người dùng.</p></div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Ngưỡng giám sát backup</div><p class="panel-sub">Áp dụng cho trang Backup, báo cáo PDF và Excel. Lưu trên server, dùng chung cho mọi người dùng.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-bk-action="th-reset">Về mặc định</button><button class="btn btn-primary btn-sm" type="button" data-bk-action="th-save">Lưu ngưỡng</button></div></div>
       <div class="bk-th-grid">${form}</div>
     </section>`;

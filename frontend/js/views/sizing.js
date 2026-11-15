@@ -491,7 +491,7 @@ function renderSizingResult(result, payload, scroll = true) {
   }
 
   area.innerHTML = `
-    <div class="panel-head"><div><div class="panel-title">Kết quả sizing${p.environment ? ` — ${esc(p.environment)}` : ''}</div><p class="panel-sub">Số host vật lý cần cho ${szNum(d.vmCount)} VM theo từng cấu hình ứng viên; phương án đề xuất: ít host nhất → không sát ngưỡng → chi phí thấp nhất → điểm tổng hợp cao nhất. Dòng in nghiêng là phương án tham khảo do hệ thống gợi ý.</p></div></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Kết quả sizing${p.environment ? ` — ${esc(p.environment)}` : ''}</div><p class="panel-sub">Số host vật lý cần cho ${szNum(d.vmCount)} VM theo từng cấu hình ứng viên; phương án đề xuất: ít host nhất → không sát ngưỡng → chi phí thấp nhất → điểm tổng hợp cao nhất. Dòng in nghiêng là phương án tham khảo do hệ thống gợi ý.</p></div></div>
     ${best ? `<div class="insight-box sz-headline"><strong>${esc(result.recommendation.headline)}</strong><div class="sz-detail">${esc(result.recommendation.detail)}</div>${result.recommendation.why ? `<div class="sz-detail"><b>${esc(result.recommendation.why)}</b></div>` : ''}</div>` : ''}
     ${tiles}
     <div class="sz-section-title">So sánh cấu hình host</div>

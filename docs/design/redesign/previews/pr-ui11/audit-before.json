@@ -1,0 +1,748 @@
+{
+ "home@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [
+   "hm-m: Hạn 05/11/2026 · Quá hạn 10 ngày (05/11/2026) · 11",
+   "hm-m: Hạn 05/11/2026 · Quá hạn 10 ngày (05/11/2026) · 93",
+   "hm-m: Hạn 05/11/2026 · Quá hạn 10 ngày (05/11/2026) · 14"
+  ],
+  "truncN": 24,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "exec@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [
+   "67x22 <button type=\"button\" class=\"ref-code\" data-code=\"OVP-B1519\" title=\"Mở",
+   "67x22 <button type=\"button\" class=\"ref-code\" data-code=\"OVP-8A935\" title=\"Mở",
+   "67x22 <button type=\"button\" class=\"ref-code\" data-code=\"OVP-AE519\" title=\"Mở"
+  ],
+  "smallN": 6,
+  "tiny": [
+   "11.04px ref-code"
+  ],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "cap@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option"
+  ],
+  "unlabeledN": 2,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "cp@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option",
+   "<input type=\"text\" id=\"complianceSearch\" placeholder=\"Tìm theo mã đối soát, tên, cluster, "
+  ],
+  "unlabeledN": 5,
+  "small": [],
+  "smallN": 0,
+  "tiny": [
+   "11.04px CODE"
+  ],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "trends@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option"
+  ],
+  "unlabeledN": 2,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "bk@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "bkc@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "bkj@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select data-bk-filter=\"jobOutcome\"><option value=\"all\">Mọi kết quả</option><option value=",
+   "<select data-bk-filter=\"jobCategory\"><option value=\"backup\" selected=\"\">Backup</option><op",
+   "<input type=\"text\" data-bk-filter=\"jobQ\" placeholder=\"Client, policy, job ID, mã lỗi\" valu"
+  ],
+  "unlabeledN": 3,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "agenda@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select data-ag=\"kind\"><option value=\"\" selected=\"\">Tất cả loại</option><option value=\"ope",
+   "<select data-ag=\"days\"><option value=\"30\">30 ngày tới</option><option value=\"60\">60 ngày t"
+  ],
+  "unlabeledN": 2,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "whatif@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"whatifClusterSelect\"><option value=\"DR-CLUSTER\">DR-CLUSTER</option><option val",
+   "<input class=\"rowName\" value=\"NEW-HOST-01\">",
+   "<input class=\"rowCores\" value=\"32\">"
+  ],
+  "unlabeledN": 4,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "sizing@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<input class=\"pName\" value=\"2×16C / 512 GB\" placeholder=\"VD: R760 2×24C\">",
+   "<input class=\"pSockets\" value=\"2\">",
+   "<input class=\"pCores\" value=\"16\">"
+  ],
+  "unlabeledN": 15,
+  "small": [
+   "246x22 <summary><h4>Ngưỡng tư vấn (nâng cao)</h4></summary>",
+   "77x14 <button class=\"btn btn-primary btn-sm\" id=\"btnSizingPdf\" type=\"button\""
+  ],
+  "smallN": 2,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "assets@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option",
+   "<input type=\"text\" id=\"hostSearch\" placeholder=\"Tìm host...\">"
+  ],
+  "unlabeledN": 5,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "lic@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"licEntProduct\"><option value=\"ws_std\">Windows Server Standard</option><option ",
+   "<select id=\"licEntKind\" data-lic-entkind=\"1\"><option value=\"owned\" selected=\"\">Đang sở hữu"
+  ],
+  "unlabeledN": 12,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "opex@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [
+   "103x14 <button class=\"btn btn-ghost btn-sm sp-link\" type=\"button\" data-ct-got",
+   "615x22 <summary>Lịch sử thay đổi</summary>"
+  ],
+  "smallN": 2,
+  "tiny": [],
+  "trunc": [
+   "sp-li-m: OPX-2025-0001 · Viễn thông Bắc Nam · 10/11/2026 · ",
+   "sp-li-m: OPX-2025-0002 · Hệ thống Sao Mai · 20/11/2026 · Hạ",
+   "sp-li-m: OPX-2025-0003 · Thiên Long · 12/12/2026 · Hạ tầng"
+  ],
+  "truncN": 7,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "capex@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "ct@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [
+   "113x14 <button class=\"btn btn-ghost btn-sm sp-link\" type=\"button\" data-sp-got"
+  ],
+  "smallN": 1,
+  "tiny": [],
+  "trunc": [
+   "sp-li-m: HD-2026-0001 · Cơ điện Hoà Bình · Opex OPX-2026-00",
+   "sp-li-m: HD-2025-0003 · Thiên Long · Opex OPX-2025-0003",
+   "sp-li-m: HD-2025-0002 · Hệ thống Sao Mai · Opex OPX-2025-00"
+  ],
+  "truncN": 4,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "pay@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [
+   "113x14 <button class=\"btn btn-ghost btn-sm sp-link\" type=\"button\" data-sp-got"
+  ],
+  "smallN": 1,
+  "tiny": [],
+  "trunc": [
+   "sp-li-m: HD-2025-0001 · Viễn thông Bắc Nam · hạn 05/11/2026",
+   "sp-li-m: HD-2025-0002 · Hệ thống Sao Mai · hạn 05/11/2026 ·",
+   "sp-li-m: HD-2025-0003 · Thiên Long · hạn 05/11/2026 · hồ sơ"
+  ],
+  "truncN": 7,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "qt@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "bom@1440": {
+  "hscroll": 1737,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "settings@1440": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "global": {
+  "viewport": "width=device-width, initial-scale=1.0",
+  "skip": true,
+  "lang": "vi",
+  "focusRule": true,
+  "reducedMotion": true
+ },
+ "home@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [
+   "hm-t: HD-2025-0001 — đợt 1: Tạm ứng khi ký",
+   "hm-m: Hạn 05/11/2026 · Quá hạn 10 ngày (05/11/2026) · 11",
+   "hm-t: HD-2025-0002 — đợt 1: Tạm ứng khi ký"
+  ],
+  "truncN": 48,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "exec@375": {
+  "hscroll": 537,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [
+   "67x22 <button type=\"button\" class=\"ref-code\" data-code=\"OVP-B1519\" title=\"Mở",
+   "67x22 <button type=\"button\" class=\"ref-code\" data-code=\"OVP-8A935\" title=\"Mở",
+   "67x22 <button type=\"button\" class=\"ref-code\" data-code=\"OVP-AE519\" title=\"Mở"
+  ],
+  "smallN": 6,
+  "tiny": [
+   "11.04px ref-code"
+  ],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "cap@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option"
+  ],
+  "unlabeledN": 2,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "cp@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option",
+   "<input type=\"text\" id=\"complianceSearch\" placeholder=\"Tìm theo mã đối soát, tên, cluster, "
+  ],
+  "unlabeledN": 5,
+  "small": [],
+  "smallN": 0,
+  "tiny": [
+   "11.04px CODE"
+  ],
+  "trunc": [
+   "hm-t: vc1-DR-CLUSTER-esx01",
+   "hm-m: Host RAM vượt ngưỡng · DR-CLUSTER · vc1",
+   "hm-m: VM over-provision (vCPU) · DR-CLUSTER · vc2"
+  ],
+  "truncN": 62,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "trends@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option"
+  ],
+  "unlabeledN": 2,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "bk@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "bkc@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [
+   "hm-m: Chưa backup được · LNX-APP-DAILY",
+   "hm-m: Lỗi liên tiếp · VM-PROD-DAILY",
+   "hm-t: prod-cluster-a-vm-007"
+  ],
+  "truncN": 205,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "bkj@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select data-bk-filter=\"jobOutcome\"><option value=\"all\">Mọi kết quả</option><option value=",
+   "<select data-bk-filter=\"jobCategory\"><option value=\"backup\" selected=\"\">Backup</option><op",
+   "<input type=\"text\" data-bk-filter=\"jobQ\" placeholder=\"Client, policy, job ID, mã lỗi\" valu"
+  ],
+  "unlabeledN": 3,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "agenda@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select data-ag=\"kind\"><option value=\"\" selected=\"\">Tất cả loại</option><option value=\"ope",
+   "<select data-ag=\"days\"><option value=\"30\">30 ngày tới</option><option value=\"60\">60 ngày t"
+  ],
+  "unlabeledN": 2,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "whatif@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"whatifClusterSelect\"><option value=\"DR-CLUSTER\">DR-CLUSTER</option><option val",
+   "<input class=\"rowName\" value=\"NEW-HOST-01\">",
+   "<input class=\"rowCores\" value=\"32\">"
+  ],
+  "unlabeledN": 4,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "sizing@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<input class=\"pName\" value=\"2×16C / 512 GB\" placeholder=\"VD: R760 2×24C\">",
+   "<input class=\"pSockets\" value=\"2\">",
+   "<input class=\"pCores\" value=\"16\">"
+  ],
+  "unlabeledN": 15,
+  "small": [
+   "309x22 <summary><h4>Ngưỡng tư vấn (nâng cao)</h4></summary>",
+   "77x14 <button class=\"btn btn-primary btn-sm\" id=\"btnSizingPdf\" type=\"button\""
+  ],
+  "smallN": 2,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "assets@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"filterHost\" data-scope=\"host\" class=\"\"><option value=\"all\">Tất cả host</option",
+   "<input type=\"text\" id=\"hostSearch\" placeholder=\"Tìm host...\">"
+  ],
+  "unlabeledN": 5,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "lic@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [
+   "<select id=\"filterCluster\" data-scope=\"cluster\" class=\"\"><option value=\"all\">Tất cả cluste",
+   "<select id=\"licEntProduct\"><option value=\"ws_std\">Windows Server Standard</option><option ",
+   "<select id=\"licEntKind\" data-lic-entkind=\"1\"><option value=\"owned\" selected=\"\">Đang sở hữu"
+  ],
+  "unlabeledN": 12,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 1,
+  "firstH": 1
+ },
+ "opex@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [
+   "sp-li-m: OPX-2025-0001 · Viễn thông Bắc Nam · 10/11/2026 · ",
+   "sp-li-t: Bảo hành SAN lưu trữ chính",
+   "sp-li-m: OPX-2025-0002 · Hệ thống Sao Mai · 20/11/2026 · Hạ"
+  ],
+  "truncN": 13,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "capex@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "ct@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [
+   "sp-li-t: Hợp đồng bảo trì điều hoà phòng máy",
+   "sp-li-m: HD-2026-0001 · Cơ điện Hoà Bình · Opex OPX-2026-00",
+   "sp-li-t: Hợp đồng license sao lưu 2027"
+  ],
+  "truncN": 8,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "pay@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [
+   "sp-li-m: HD-2025-0001 · Viễn thông Bắc Nam · hạn 05/11/2026",
+   "sp-li-m: HD-2025-0002 · Hệ thống Sao Mai · hạn 05/11/2026 ·",
+   "sp-li-m: HD-2025-0003 · Thiên Long · hạn 05/11/2026 · hồ sơ"
+  ],
+  "truncN": 10,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "qt@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [
+   "sp-li-t: Phòng họp trực tuyến tầng 8",
+   "sp-li-m: BG-2026-0003 · Video Conference",
+   "sp-li-t: Switch core văn phòng"
+  ],
+  "truncN": 5,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "bom@375": {
+  "hscroll": 424,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ },
+ "settings@375": {
+  "hscroll": 0,
+  "noName": [],
+  "noNameN": 0,
+  "unlabeled": [],
+  "unlabeledN": 0,
+  "small": [],
+  "smallN": 0,
+  "tiny": [],
+  "trunc": [],
+  "truncN": 0,
+  "h1": 1,
+  "hSkips": 0,
+  "firstH": 1
+ }
+}

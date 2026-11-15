@@ -52,6 +52,7 @@ function ctRender() {
       { label: 'Đã chốt, chờ ký', value: String(cnt('final')), sub: 'Cần upload bản ký (scan PDF)' },
       { label: 'Đã ký', value: String(cnt('signed')), sub: f.status || f.q ? 'Theo bộ lọc hiện tại' : 'Tất cả hợp đồng' },
     ])}</div>
+    <h2 class="sr-only">Danh sách hợp đồng</h2>
     <section class="hm-split panel sp-split" aria-label="Danh sách hợp đồng">
       <div class="hm-list">
         <div class="hm-toolbar">

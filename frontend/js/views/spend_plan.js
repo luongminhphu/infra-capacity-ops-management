@@ -44,7 +44,7 @@ function bpRender() {
     spOpt(x.id, `FY ${x.fiscalYear} · v${x.version} · ${x.statusLabel}`, bpState.planId)).join('')}</select></label>` : '';
   if (!p) {
     mount.innerHTML = `<section class="panel">
-      <div class="panel-head"><div><div class="panel-title">Kế hoạch ngân sách năm sau</div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Kế hoạch ngân sách năm sau</div>
         <p class="panel-sub">Hệ thống tự gợi ý từ dữ liệu đang có: Opex sẽ đến kỳ gia hạn (cộng % tăng giá), Opex đã ghi nhận cho năm sau, dự án Capex của năm sau. Bạn thêm đề xuất mới, đặt mức ưu tiên, trần ngân sách rồi gửi duyệt. Sau khi duyệt, kế hoạch là thước đo để theo dõi thực hiện trong năm.</p></div>
         <div class="panel-toolbar">${newBtn}</div></div>
       ${uiEmpty(spCan('editor') ? `Chưa có kế hoạch — bấm “Lập kế hoạch FY ${nextY}”.` : 'Chưa có kế hoạch nào.')}
@@ -97,14 +97,14 @@ function bpRender() {
   }).join('');
   const capTone = s.overCap ? 'tone-crit' : 'tone-ok';
   const unplanned = act && act.unplanned.length ? `<section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Phát sinh ngoài kế hoạch</div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Phát sinh ngoài kế hoạch</div>
         <p class="panel-sub">Opex / Capex của FY ${esc(p.fiscalYear)} không thuộc dòng nào của kế hoạch — tổng ${spMoney(act.unplannedTotal)}.</p></div></div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>Mã</th><th>Nội dung</th><th class="num">Sau VAT</th></tr></thead>
       <tbody>${act.unplanned.map(u => `<tr><td><b>${esc(u.code)}</b></td><td class="wrap">${esc(u.title)}</td><td class="num">${spMoney(u.amountGross)}</td></tr>`).join('')}</tbody></table></div></section>` : '';
   mount.innerHTML = `
     <section class="panel">
       <div class="panel-head">
-        <div><div class="panel-title">${esc(p.name)} ${spPill(...(BP_STATUS[p.status] || ['na', p.statusLabel]))}</div>
+        <div><div class="panel-title" role="heading" aria-level="2">${esc(p.name)} ${spPill(...(BP_STATUS[p.status] || ['na', p.statusLabel]))}</div>
           <p class="panel-sub">FY ${esc(p.fiscalYear)} (${spDate(p.fiscalRange[0])} – ${spDate(p.fiscalRange[1])}) · bản v${esc(p.version)} ·
             lập bởi ${esc(p.createdBy)}${p.approvedBy ? ` · duyệt bởi ${esc(p.approvedBy)} ${esc(spTimeSafe(p.approvedAt))}` : ''}</p></div>
         <div class="panel-toolbar">${picker}${newBtn}</div>
@@ -131,14 +131,14 @@ function bpRender() {
     </section>
     ${s.staleCount ? `<div class="insight-box src-warning"><strong>${esc(s.staleCount)} dòng có nguồn đã thay đổi</strong> (Opex đã gia hạn / ngừng, dự án bị xoá). Kiểm tra rồi bỏ khỏi kế hoạch hoặc xoá.</div>` : ''}
     <div class="sr-two">
-      <section class="panel"><div class="panel-title">Theo quý tài chính</div>
+      <section class="panel"><div class="panel-title" role="heading" aria-level="2">Theo quý tài chính</div>
         <p class="panel-sub">Theo ngày bắt đầu / thanh toán của từng dòng — dùng để lên dòng tiền. Dòng chưa có ngày tính vào Q1.</p>${quarters}</section>
-      <section class="panel"><div class="panel-title">Theo loại chi phí</div>
+      <section class="panel"><div class="panel-title" role="heading" aria-level="2">Theo loại chi phí</div>
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Loại</th><th class="num">FY ${esc(s.baseline.fiscalYear)}</th><th class="num">Kế hoạch</th><th class="num">Thay đổi</th></tr></thead>
         <tbody>${cats || uiEmptyRow(4, 'Chưa có dòng nào.')}</tbody></table></div></section>
     </div>
     <section class="table-card">
-      <div class="panel-head"><div><div class="panel-title">Các dòng kế hoạch</div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Các dòng kế hoạch</div>
         <p class="panel-sub">${editable ? 'Bấm một dòng để sửa % tăng, số tiền, ưu tiên, ghi chú. Bỏ chọn để loại khỏi kế hoạch (cần lý do).' : 'Bấm một dòng để xem chi tiết.'}
           Bỏ khỏi kế hoạch: ${spMoney(s.excludedTotal)} (${esc(s.excludedCount)} dòng).</p></div>
         <div class="panel-toolbar rpt-chips">${groups}</div></div>

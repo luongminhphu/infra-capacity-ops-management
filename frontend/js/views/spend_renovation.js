@@ -32,7 +32,7 @@ function rnRenderList() {
   $('#spendMount').innerHTML = `
     <section class="table-card">
       <div class="panel-head">
-        <div><div class="panel-title">Cải tạo văn phòng — chi phí IT</div>
+        <div><div class="panel-title" role="heading" aria-level="2">Cải tạo văn phòng — chi phí IT</div>
           <p class="panel-sub">Mỗi tầng một dự án: quy mô (node, nhân sự, phòng họp VC), cấu hình (10G / Wifi7…), 3 khối chi phí. So sánh với các tầng đã làm theo chi phí / node và / phòng họp; lịch sử dùng thực chi.</p></div>
         <div class="panel-toolbar">
           ${spCan('admin') ? '<button class="btn btn-ghost btn-sm" type="button" data-rn-act="groups"><i data-lucide="list"></i>Nhóm chi phí</button><button class="btn btn-ghost btn-sm" type="button" data-rn-act="import"><i data-lucide="upload"></i>Nhập lịch sử</button>' : ''}
@@ -95,7 +95,7 @@ function rnRenderDetail() {
     <section class="panel">
       <div class="panel-head">
         <div><button class="btn btn-ghost btn-sm" type="button" data-rn-act="back"><i data-lucide="arrow-left"></i>Danh sách dự án</button>
-          <div class="panel-title">${esc(d.floor)} (${esc(d.year)}) — ${esc(d.name)}</div>
+          <div class="panel-title" role="heading" aria-level="2">${esc(d.floor)} (${esc(d.year)}) — ${esc(d.name)}</div>
           <p class="panel-sub">${esc(d.code)} · ${spPill(...(RN_STATUS[d.status] || ['na', d.statusLabel]))}${d.isHistorical ? ' <span class="pill na">Lịch sử</span>' : ''}${d.configTags ? ` · cấu hình <b>${esc(d.configTags)}</b>` : ''}${d.capex ? ` · Capex ${esc(d.capex.code)}` : ''}</p></div>
         <div class="panel-toolbar">
           <button class="btn btn-ghost btn-sm" type="button" data-rn-act="xlsx"><i data-lucide="file-spreadsheet"></i>Excel (Summarize)</button>

@@ -331,7 +331,7 @@ function uiKpiStrip(items) {
 function uiSmallMultiples(rows, opts = {}) {
   if (!rows.length) return uiEmpty(opts.empty || 'Chưa có dữ liệu.');
   return `<div class="sm-grid">${rows.map(r => `<article class="sm-cell">
-      <h4><span class="sm-name">${r.nameHtml || esc(r.name)}</span>${r.status ? uiPill(r.status.cls, r.status.text) : ''}</h4>
+      <h3 class="sm-h"><span class="sm-name">${r.nameHtml || esc(r.name)}</span>${r.status ? uiPill(r.status.cls, r.status.text) : ''}</h3>
       ${r.metrics.map(m => `<div class="sm-row"><span>${esc(m.label)}</span>${uiBullet(m.pct, `${r.name} ${m.label}`)}<b class="num">${isFinite(m.pct) ? `${fmtNum(m.pct, 1)}%` : 'NA'}</b></div>`).join('')}
       ${r.sub ? `<p class="sm-sub">${esc(r.sub)}</p>` : ''}</article>`).join('')}</div>
     ${opts.legend === false ? '' : '<p class="sm-legend">% của ngưỡng overcommit. Vạch mảnh = 80 % (bắt đầu THEO DÕI), vạch đậm = 100 % (ngưỡng).</p>'}`;
@@ -344,3 +344,41 @@ function uiChartBase(colors, extra = {}) {
     scales: { x: { ticks: { color: colors.axis || colors.muted }, grid: { color: colors.grid || colors.divider } },
               y: { beginAtZero: true, ticks: { color: colors.axis || colors.muted }, grid: { color: colors.grid || colors.divider } } } }, extra);
 }
+
+
+/* ---------- Accessible names for generated form controls (ui-ux-pro-max review, WCAG 1.3.1 / 4.1.2) ----------
+   Many tables and toolbars are built from template strings with placeholder-only inputs. Give every visible
+   control without a label an aria-label from, in order: its column header, its placeholder, the short text just
+   before it. Runs after DOM changes (batched per frame); never overrides a real <label>, aria-label or title. */
+function uiAutoLabel(root) {
+  (root || document).querySelectorAll('input:not([type=hidden]):not([type=file]), select, textarea').forEach(el => {
+    if ((el.labels && el.labels.length) || el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby') || el.title) return;
+    let name = '';
+    const cell = el.closest('td');
+    if (cell) {
+      const table = cell.closest('table');
+      const head = table && table.tHead && table.tHead.rows[0];
+      let col = 0;
+      for (const c of cell.parentElement.cells) { if (c === cell) break; col += c.colSpan || 1; }
+      if (head) { let i = 0; for (const th of head.cells) { if (col >= i && col < i + (th.colSpan || 1)) { name = th.textContent; break; } i += th.colSpan || 1; } }
+    }
+    if (!name) {   // <div class="field"><label>Tên</label><input></div>: the label is not tied to the control
+      const field = el.closest('.field');
+      const lab = field && field.querySelector(':scope > label, :scope > span');
+      if (lab && !lab.contains(el)) name = lab.textContent;
+    }
+    if (!name) name = el.getAttribute('placeholder') || '';
+    if (!name) { const prev = el.previousElementSibling; if (prev && /^(SPAN|B|STRONG|SMALL|LABEL)$/.test(prev.tagName)) name = prev.textContent; }
+    name = name.replace(/\s+/g, ' ').trim();
+    if (name) el.setAttribute('aria-label', name.slice(0, 80));
+  });
+}
+(function () {
+  let queued = false;
+  const run = () => { queued = false; uiAutoLabel(document); };
+  const start = () => {
+    run();
+    new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(run); } }).observe(document.body, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

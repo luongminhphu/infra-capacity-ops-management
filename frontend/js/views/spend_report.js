@@ -54,7 +54,7 @@ function srFiltersHtml() {
   const years = Array.from(new Set([...m.fiscalYears, m.currentFiscalYear + 2])).sort();
   return `<section class="panel sr-filters">
     <div class="panel-head panel-head-tight">
-      <div><div class="panel-title">Bộ lọc</div><p class="panel-sub">Giữ Ctrl / ⌘ để chọn nhiều. Khoảng ngày hết hạn chỉ áp dụng cho Opex (Capex bị loại khi có khoảng ngày).</p></div>
+      <div><div class="panel-title" role="heading" aria-level="2">Bộ lọc</div><p class="panel-sub">Giữ Ctrl / ⌘ để chọn nhiều. Khoảng ngày hết hạn chỉ áp dụng cho Opex (Capex bị loại khi có khoảng ngày).</p></div>
       <div class="panel-toolbar">
         <select data-sr-saved aria-label="Bộ lọc đã lưu"><option value="">Bộ lọc đã lưu…</option>${srState.saved.map(s => `<option value="${esc(s.id)}">${esc(s.name)}${s.shared ? ' (dùng chung)' : ''}${s.mine ? '' : ` — ${esc(s.owner)}`}</option>`).join('')}</select>
         <button class="btn btn-ghost btn-sm" type="button" data-sr-del-saved>Xoá bộ lọc đã chọn</button>
@@ -143,23 +143,23 @@ function srBodyHtml() {
       <div class="kpi-card"><div class="label">Opex phát sinh từ Capex</div><div class="value">${srShort(r.fromCapex.total)}</div><div class="sub">${r.fromCapex.count} khoản gia hạn trong các năm đã lọc</div></div>
     </section>
     <section class="panel">
-      <div class="panel-title">${esc(r.headline)}</div>
+      <div class="panel-title" role="heading" aria-level="2">${esc(r.headline)}</div>
       <p class="panel-sub">${esc(r.scopeLabel)} · ${t.count} dòng · tổng ${spMoney(t.total)} (trước VAT ${spMoney(t.net)})</p>
       ${decisions ? `<ol class="sr-decisions">${decisions}</ol>` : '<p class="muted-sub">Không có khoản nào cần quyết định trong phạm vi lọc.</p>'}
     </section>
     <div class="sr-two">
-      <section class="panel"><div class="panel-title">Theo năm tài chính</div>
+      <section class="panel"><div class="panel-title" role="heading" aria-level="2">Theo năm tài chính</div>
         <div class="sr-legend"><span><i class="sr-dot sr-opex"></i>Opex</span><span><i class="sr-dot sr-capex"></i>Capex</span></div>
         ${years || '<p class="empty-note">Không có dữ liệu.</p>'}</section>
-      <section class="panel"><div class="panel-title">Nhà cung cấp lớn nhất</div>
+      <section class="panel"><div class="panel-title" role="heading" aria-level="2">Nhà cung cấp lớn nhất</div>
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>#</th><th>Nhà cung cấp</th><th class="num">Dòng</th><th class="num">Opex</th><th class="num">Capex</th><th class="num">Tổng</th><th>Tỷ trọng</th></tr></thead><tbody>${vendors || empty(7)}</tbody></table></div></section>
     </div>
-    <section class="panel"><div class="panel-title">Theo loại chi phí</div>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Theo loại chi phí</div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Loại</th><th class="num">Dòng</th><th class="num">Opex</th><th class="num">Capex</th><th class="num">Tổng</th><th>Tỷ trọng</th></tr></thead><tbody>${cats || empty(6)}</tbody></table></div></section>
-    <section class="panel"><div class="panel-title">Opex hết hạn theo quý tài chính</div>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Opex hết hạn theo quý tài chính</div>
       <p class="panel-sub">Khoản dự kiến / đang hiệu lực thuộc các năm tài chính đã lọc, hết hạn từ 90 ngày trước đến 12 tháng tới (hoặc theo khoảng ngày đã lọc). Bấm một dòng để mở khoản.</p>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mã</th><th>Dịch vụ</th><th>Hết hạn</th><th>Còn</th><th class="num">Sau VAT</th></tr></thead><tbody>${quarters || empty(5)}</tbody></table></div></section>
-    <section class="panel"><div class="panel-title">Opex phát sinh từ Capex</div>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Opex phát sinh từ Capex</div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mã Opex</th><th>Gia hạn</th><th>FY</th><th>Dự án</th><th>Trạng thái</th><th class="num">Sau VAT</th></tr></thead><tbody>${fromCapex || empty(6)}</tbody></table></div></section>
     ${r.rowsTotal > r.rows.length ? `<p class="muted-sub">Màn hình hiển thị số tổng hợp; danh sách đủ ${r.rowsTotal} dòng có trong file Excel.</p>` : ''}`;
 }
