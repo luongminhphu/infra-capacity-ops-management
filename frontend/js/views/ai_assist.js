@@ -64,19 +64,14 @@ const askLog = [];
 function askDialog() {
   let dlg = $('#askDlg');
   if (!dlg) {
-    dlg = document.createElement('dialog');
-    dlg.id = 'askDlg';
-    dlg.className = 'src-dialog ask-dlg';
-    dlg.setAttribute('aria-labelledby', 'askTitle');
-    dlg.innerHTML = `<div class="src-dialog-head"><h3 id="askTitle">Hỏi ICO</h3>
-        <button class="btn btn-ghost btn-sm" type="button" data-ask-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
+    const ui = uiDialog('askDlg', { title: 'Hỏi ICO', className: 'ask-dlg' });
+    dlg = ui.el;
+    ui.body.innerHTML = `
       <p class="muted-sub">Hỏi bằng tiếng Việt, vd “VM nào của cluster PRD chưa có backup 3 ngày?”, “Cluster nào sắp vượt ngưỡng RAM?”.
         ICO chỉ đọc dữ liệu bạn được xem; tên host / IP / VM được che trước khi gửi AI.</p>
       <div class="ask-log" id="askLog" aria-live="polite"></div>
       <form class="ask-form" id="askForm"><input type="text" id="askInput" maxlength="500" autocomplete="off" placeholder="Nhập câu hỏi…" aria-label="Câu hỏi">
         <button class="btn btn-primary btn-sm" type="submit" id="askSend">Hỏi</button></form>`;
-    document.body.appendChild(dlg);
-    dlg.querySelector('[data-ask-close]').onclick = () => dlg.close();
     $('#askForm', dlg).onsubmit = async (e) => {
       e.preventDefault();
       const input = $('#askInput', dlg), btn = $('#askSend', dlg);

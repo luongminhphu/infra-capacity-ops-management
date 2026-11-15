@@ -4,7 +4,7 @@
    Mọi kết quả là đề xuất: mức độ vẫn theo luật, ánh xạ / ghi đè chỉ áp dụng khi người dùng xác nhận.
    ========================================================= */
 
-const AI_LEVEL = { crit: ['crit', 'Vượt ngưỡng'], bad: ['bad', 'Cảnh báo'], warn: ['warn', 'Theo dõi'], ok: ['ok', 'Ổn'], info: ['na', 'Thông tin'] };
+const AI_LEVEL = UI_LEVELS;   // the 4 standard levels (+ info), same words as every page
 const AI_CONF = { high: ['ok', 'Cao'], medium: ['warn', 'Trung bình'], low: ['bad', 'Thấp'] };
 
 /* Show the AI buttons of `root` whose task is on (hidden by default, so nothing flashes when AI is off). */
@@ -144,17 +144,10 @@ async function importMapRows(rows, target, fileName) {
 }
 
 function importMapDialog(rows, target, headers, fields, fileName) {
-  let dlg = $('#importMapDlg');
-  if (!dlg) {
-    dlg = document.createElement('dialog');
-    dlg.id = 'importMapDlg';
-    dlg.className = 'src-dialog';
-    dlg.setAttribute('aria-labelledby', 'importMapTitle');
-    document.body.appendChild(dlg);
-  }
+  const ui = uiDialog('importMapDlg', { title: `Chọn cột cho file ${fileName || ''}` });
+  const dlg = ui.el;
   const opts = (sel) => `<option value="">— không có —</option>${headers.map(h => `<option value="${esc(h)}"${h === sel ? ' selected' : ''}>${esc(h)}</option>`).join('')}`;
-  dlg.innerHTML = `<form method="dialog">
-    <div class="src-dialog-head"><h3 id="importMapTitle">Chọn cột cho file ${esc(fileName || '')}</h3></div>
+  ui.body.innerHTML = `<form method="dialog">
     <p class="muted-sub">Không nhận ra cột ${target === 'hosts' ? 'tên host / số core' : 'tên VM / vCPU'} trong file. Chọn cột tương ứng cho từng trường (trường có * là bắt buộc).</p>
     <div class="settings-form ai-grid">${fields.map(f => `<label class="field"><span>${esc(f.label)}${f.required ? ' *' : ''}</span><select data-map-field="${esc(f.key)}">${opts('')}</select></label>`).join('')}</div>
     <label class="finding-filter-item"><input type="checkbox" id="importMapSave" checked><span>Nhớ cách ánh xạ này cho các file cùng bộ cột</span></label>

@@ -11,7 +11,7 @@ const RN_KIND = { estimate: 'Dự toán', awarded: 'Báo giá trúng', actual: '
 const RN_STATUS = { planning: ['na', 'Lập kế hoạch'], executing: ['warn', 'Đang thi công'], closed: ['ok', 'Đã chốt'] };
 const RN_KPI = { perNode: 'đ / node', perHead: 'đ / nhân sự', perAp: 'đ / AP', perRoom: 'đ / phòng VC' };
 const rnUrl = (code, ...parts) => ['/spend/renovations', encodeURIComponent(code), ...parts].join('/');
-const rnMoney = (v) => (v === null || v === undefined) ? '<span class="muted-sub sr-inline">không có số liệu</span>' : esc(Number(v).toLocaleString('vi-VN'));
+const rnMoney = (v) => (v === null || v === undefined) ? '<span class="muted-sub sr-inline">không có số liệu</span>' : esc(uiNumber(v, 3));
 const rnPct = (v) => (v === null || v === undefined) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
 
 async function renderRenovationsPage() {
@@ -77,7 +77,7 @@ async function rnOpen(code) {
   try {
     rnState.current = await apiRequest(rnUrl(code) + qs);
     rnState.mapping = rnState.current.quoteRequests.length ? await apiRequest(rnUrl(code, 'quote-mapping')) : null;
-  } catch (err) { alert(err.message); rnState.current = null; return; }
+  } catch (err) { uiAlert(err.message); rnState.current = null; return; }
   rnRenderDetail();
 }
 
@@ -164,8 +164,9 @@ function rnBlock(d, ws, ed) {
 
 function rnMsg(text, ok) {
   const el = $('#rnMsg');
-  if (!el) { if (text && !ok) alert(text); return; }
-  el.textContent = text || ''; el.className = 'src-result' + (text ? (ok ? ' ok' : ' err') : '');
+  if (!el) { if (text && !ok) uiAlert(text); return; }
+  el.classList.add('src-result');
+  uiSetStatus(el, text, text ? (ok ? 'ok' : 'error') : '');
 }
 
 async function rnAction(act, btn) {
@@ -274,7 +275,7 @@ async function rnOpenImport() {
 
 async function rnOpenGroups() {
   let g;
-  try { g = await apiRequest('/spend/renovation-groups'); } catch (err) { alert(err.message); return; }
+  try { g = await apiRequest('/spend/renovation-groups'); } catch (err) { uiAlert(err.message); return; }
   const row = (x = {}) => `<tr data-grp="${esc(x.id || '')}"><td><input class="rn-gname" maxlength="255" value="${esc(x.name || '')}"></td>
     <td><input class="rn-galias" value="${esc((x.aliases || []).join('; '))}" placeholder="từ khoá trên báo giá, cách nhau ;"></td>
     <td><input type="checkbox" class="rn-gactive"${x.active === false ? '' : ' checked'}></td></tr>`;

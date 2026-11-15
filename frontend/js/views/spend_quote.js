@@ -12,26 +12,14 @@ const QT_STATE = { pending: ['na', 'Chưa đọc'], extracted: ['warn', 'Chờ k
 const QT_WS = { cabling: 'Cabling (gồm Hub)', network: 'Network', vc: 'Video Conference', other: 'Khác' };
 const QT_LINE = { item: 'Hàng / dịch vụ', note: 'Tiêu đề nhóm', discount: 'Chiết khấu', subtotal: 'Cộng', vat: 'VAT', total: 'Tổng' };
 const VD_STATUS = { active: ['ok', 'Đang dùng'], paused: ['warn', 'Tạm ngừng'], blocked: ['bad', 'Không hợp tác'] };
-const qtNum = (v, d = 0) => (v === null || v === undefined || v === '') ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d });
+const qtNum = (v, d = 0) => uiNumber(v, d);
 const qtRaw = (v) => (v === null || v === undefined) ? '' : String(v);
 const qtUrl = (code, ...parts) => ['/spend/quotes', encodeURIComponent(code), ...parts.map(p => encodeURIComponent(p))].join('/');
 
 async function qtDownload(path, fallback, btn) {
   if (btn) btn.disabled = true;
-  try {
-    const res = await fetch(`/api${path}`, { credentials: 'include' });
-    if (!res.ok) {
-      let msg = `Lỗi tải file (${res.status})`;
-      try { msg = (await res.json()).detail || msg; } catch (err) { /* not JSON */ }
-      throw new Error(msg);
-    }
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (/filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '') || [])[1] || fallback;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  } catch (err) { alert(err.message); } finally { if (btn) btn.disabled = false; }
+  try { await uiDownload(`/api${path}`, {}, fallback); }
+  catch (err) { uiAlert(err.message); } finally { if (btn) btn.disabled = false; }
 }
 
 /* =================================================================== Nhà cung cấp */
@@ -94,7 +82,7 @@ function vdBind() {
 
 async function vdOpen(id) {
   let v;
-  try { v = await apiRequest(`/spend/vendor-profiles/${encodeURIComponent(id)}`); } catch (err) { alert(err.message); return; }
+  try { v = await apiRequest(`/spend/vendor-profiles/${encodeURIComponent(id)}`); } catch (err) { uiAlert(err.message); return; }
   const ro = !spCan('editor') ? ' disabled' : '';
   const hist = (title, rows, empty) => `<div class="sp-h">${title}</div>${rows.length ? `<ul class="sp-cc">${rows.join('')}</ul>` : `<p class="muted-sub">${empty}</p>`}`;
   const body = `<form id="vdForm" class="sp-form" novalidate><div class="src-grid">
@@ -214,7 +202,7 @@ async function qtOpen(code) {
   try {
     const [d, c] = await Promise.all([apiRequest(qtUrl(code)), apiRequest(qtUrl(code, 'comparison'))]);
     qtState.current = d; qtState.comparison = c;
-  } catch (err) { alert(err.message); qtState.current = null; return; }
+  } catch (err) { uiAlert(err.message); qtState.current = null; return; }
   qtRenderDetail();
 }
 
@@ -370,9 +358,9 @@ function qtTabDecide(d) {
 
 function qtMsg(text, ok) {
   const el = $('#qtMsg');
-  if (!el) { if (text && !ok) alert(text); return; }
-  el.textContent = text || '';
-  el.className = 'src-result' + (text ? (ok ? ' ok' : ' err') : '');
+  if (!el) { if (text && !ok) uiAlert(text); return; }
+  el.classList.add('src-result');
+  uiSetStatus(el, text, text ? (ok ? 'ok' : 'error') : '');
 }
 
 function qtReadEval() {
@@ -395,7 +383,7 @@ async function qtAction(act, qid, btn) {
   if (act === 'edit') return qtOpenForm(d);
   if (act === 'delete') {
     if (!await uiConfirm(`Xoá gói ${code} và mọi báo giá, file đính kèm?`)) return;
-    try { await apiRequest(qtUrl(code), { method: 'DELETE' }); qtState.current = null; renderQuotesPage(); } catch (err) { alert(err.message); }
+    try { await apiRequest(qtUrl(code), { method: 'DELETE' }); qtState.current = null; renderQuotesPage(); } catch (err) { uiAlert(err.message); }
     return;
   }
   if (act === 'upload') {
@@ -457,7 +445,7 @@ function qtLineRow(l = {}, ro = '') {
 async function qtOpenLines(qid) {
   const code = qtState.current.code;
   let q;
-  try { q = await apiRequest(qtUrl(code, 'quotations', qid)); } catch (err) { alert(err.message); return; }
+  try { q = await apiRequest(qtUrl(code, 'quotations', qid)); } catch (err) { uiAlert(err.message); return; }
   const ro = !(spCan('editor') && !qtLocked()) ? ' disabled' : '';
   const bad = new Set(q.findings.filter(f => f.lineId).map(f => f.lineId));
   const f = (name, label, val, attrs = '') => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(qtRaw(val))}"${attrs}${ro}></label>`;

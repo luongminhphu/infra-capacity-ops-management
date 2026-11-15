@@ -91,7 +91,6 @@ function entityVmHtml(d) {
     <section class="panel"><div class="panel-title">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
 }
 
-const spTimeSafe = (iso) => { const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleString('vi-VN', { hour12: false }); };
 
 /* ---------------------------------------------------------------- command palette (Ctrl + K) */
 const palState = { timer: null, seq: 0, items: [], active: 0 };

@@ -124,7 +124,7 @@ async function ctOpenCreate(prefill) {
 async function ctOpenDetail(code) {
   let c;
   try { await spLoadMeta(); c = await apiRequest(`/spend/contracts/${encodeURIComponent(code)}`); }
-  catch (err) { alert(err.message); return; }
+  catch (err) { uiAlert(err.message); return; }
   const open = ['draft', 'negotiating'].includes(c.status);
   const dl = (label, value) => `<div class="sp-dl-item"><dt>${label}</dt><dd>${value}</dd></div>`;
   const linkBtn = c.linkKind === 'opex'

@@ -90,54 +90,13 @@ const api = {
     if (hosts !== null && hosts !== undefined) params.hosts = hosts.join(',');
     if ((view === 'executive' || view === 'technical') && typeof reportAiOn === 'function' && reportAiOn()) params.ai = '1';
     const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${API_BASE}/reports/pdf?${qs}`, { credentials: 'include' });
-    if (res.status === 401) {
-      if (window.onApiUnauthorized) window.onApiUnauthorized();
-      throw new ApiError(401, 'Phiên đăng nhập đã hết hạn.');
-    }
-    if (!res.ok) {
-      let detail = `Lỗi API (${res.status})`;
-      try { const data = await res.json(); if (data && data.detail) detail = data.detail; } catch { /* body wasn't JSON */ }
-      throw new ApiError(res.status, detail);
-    }
-    const blob = await res.blob();
-    const cd = res.headers.get('Content-Disposition') || '';
-    const match = /filename="?([^";]+)"?/.exec(cd);
-    const filename = match ? match[1] : `ico_report_${view}_${Date.now()}.pdf`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await uiDownload(`${API_BASE}/reports/pdf?${qs}`, {}, `ico_report_${view}_${Date.now()}.pdf`);
   },
 
   // Excel export of the rows currently shown in an Inventory table.
   // payload: { filename, sheets: [{ name, columns: [{key,label,fmt}], rows }] }
-  downloadXlsx: async (payload) => {
-    const res = await fetch(`${API_BASE}/export/xlsx`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.status === 401) {
-      if (window.onApiUnauthorized) window.onApiUnauthorized();
-      throw new ApiError(401, 'Phiên đăng nhập đã hết hạn.');
-    }
-    if (!res.ok) {
-      let detail = `Lỗi API (${res.status})`;
-      try { const data = await res.json(); if (data && data.detail) detail = data.detail; } catch { /* not JSON */ }
-      throw new ApiError(res.status, detail);
-    }
-    const blob = await res.blob();
-    const cd = res.headers.get('Content-Disposition') || '';
-    const match = /filename="?([^";]+)"?/.exec(cd);
-    const filename = match ? match[1] : `${payload.filename || 'export'}.xlsx`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  },
+  downloadXlsx: (payload) => uiDownload(`${API_BASE}/export/xlsx`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, `${payload.filename || 'export'}.xlsx`),
 
   // `clusters`: null/undefined = every cluster; array = only those clusters (project-team scope).
   getResourceHistory: (vcenter, months, group, clusters) => {
@@ -165,27 +124,7 @@ const api = {
   downloadSizingPdf: (payload) => api._downloadBlob(`${API_BASE}/sizing/pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'ICO_De_xuat_cau_hinh_may_chu.pdf'),
   downloadSizingXlsx: (payload) => api._downloadBlob(`${API_BASE}/sizing/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'ICO_Sizing.xlsx'),
 
-  _downloadBlob: async (url, options, fallbackName) => {
-    const res = await fetch(url, { credentials: 'include', ...options });
-    if (res.status === 401) {
-      if (window.onApiUnauthorized) window.onApiUnauthorized();
-      throw new ApiError(401, 'Phiên đăng nhập đã hết hạn.');
-    }
-    if (!res.ok) {
-      let detail = `Lỗi API (${res.status})`;
-      try { const data = await res.json(); if (data && data.detail) detail = data.detail; } catch { /* not JSON */ }
-      throw new ApiError(res.status, detail);
-    }
-    const blob = await res.blob();
-    const cd = res.headers.get('Content-Disposition') || '';
-    const match = /filename="?([^";]+)"?/.exec(cd);
-    const filename = match ? match[1] : fallbackName;
-    const href = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = href; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(href), 1000);
-  },
+  _downloadBlob: (url, options, fallbackName) => uiDownload(url, options, fallbackName),   // old name kept for callers
 
 
   // ---- Inventory & License Assessment ----

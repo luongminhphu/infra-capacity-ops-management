@@ -25,9 +25,9 @@ function bkState() {
   return appState.backup;
 }
 
-const bkNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d, minimumFractionDigits: d });
+const bkNum = (v, d = 0) => uiNumber(v, d, d);
 const bkPct = (v, d = 1) => (v === null || v === undefined || !isFinite(v)) ? '—' : `${bkNum(v, d)}%`;
-const bkDate = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }); };
+const bkDate = (iso) => esc(uiDateTime(iso, 'short'));
 const bkPill = (cls, label) => uiPill(cls, label);
 const bkHours = (h) => (h === null || h === undefined) ? '—' : (h >= 48 ? `${bkNum(h / 24, 1)} ngày` : `${bkNum(h, 0)} giờ`);
 

@@ -143,8 +143,8 @@ const MENU = [
     { key: 'budget', label: 'Ngân sách & chi phí', icon: 'wallet', tabs: [
       ['spend-overview', '', 'Tổng quan ngân sách'], ['spend-opex', 'opex', 'Opex'], ['spend-capex', 'capex', 'Capex']] },
     { key: 'procure', label: 'Mua sắm', icon: 'shopping-cart', tabs: [
-      ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
-    { key: 'bom', label: 'Chuẩn hoá BOM', icon: 'list-tree', tabs: [['bom', '', 'Chuẩn hoá BOM']] },
+      ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['bom', 'bom', 'Chuẩn hoá BOM'],
+      ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
     { key: 'contracts', label: 'Hợp đồng & thanh toán', icon: 'scroll-text', tabs: [['spend-contracts', '', 'Hợp đồng'], ['spend-payments', 'payments', 'Đợt thanh toán']] },
     { key: 'docs', label: 'Tài liệu', icon: 'file-text', tabs: [['spend-proposals', '', 'Tờ trình'], ['reports', 'reports', 'Báo cáo'], ['report-archive', 'archive', 'Kho báo cáo']] },
   ] },

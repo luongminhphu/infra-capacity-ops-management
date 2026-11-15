@@ -39,7 +39,7 @@ window.addEventListener('hashchange', () => {
 
 const SP_RANK = { none: 0, viewer: 1, editor: 2, approver: 3, admin: 4 };
 const spCan = (min) => SP_RANK[(spState.meta && spState.meta.role) || 'none'] >= SP_RANK[min];
-const spMoney = (v) => (v === null || v === undefined || v === '') ? '—' : `${Number(v).toLocaleString('vi-VN')} đ`;
+const spMoney = (v) => uiMoney(v, 'VND', 3);
 const spDate = (iso) => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—';
 // API timestamps are UTC (offset attached); a bare one is UTC too. Shown in the viewer's local time.
 const spTime = (iso) => {
@@ -227,8 +227,8 @@ function spDialog(title, body, actions) {
 function spMsg(text, ok) {
   const el = $('#spDialogMsg');
   if (!el) return;
-  el.textContent = text || '';
-  el.className = 'src-result' + (text ? (ok ? ' ok' : ' err') : '');
+  el.classList.add('src-result');
+  uiSetStatus(el, text, text ? (ok ? 'ok' : 'error') : '');
 }
 function spOnce(selector, handler) {
   const el = $(selector);
@@ -241,7 +241,7 @@ async function spOpenDetail(code) {
   try {
     await spLoadMeta();
     it = await apiRequest(`/spend/opex/${encodeURIComponent(code)}`);
-  } catch (err) { alert(err.message); return; }
+  } catch (err) { uiAlert(err.message); return; }
   spState.current = it;
   const dl = (label, value) => `<div class="sp-dl-item"><dt>${label}</dt><dd>${value}</dd></div>`;
   const link = (c) => c ? `<button class="btn btn-ghost btn-sm sp-link" type="button" data-sp-goto="${esc(c)}">${esc(c)}</button>` : '—';

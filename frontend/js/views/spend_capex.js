@@ -113,7 +113,7 @@ function cpxPlanCell(it) {
 async function cpxOpenDetail(code) {
   let p;
   try { await spLoadMeta(); p = await apiRequest(`/spend/capex/${encodeURIComponent(code)}`); }
-  catch (err) { alert(err.message); return; }
+  catch (err) { uiAlert(err.message); return; }
   const canConfirm = spCan('approver');
   const itemRows = p.items.map(it => {
     const o = it.opex;
