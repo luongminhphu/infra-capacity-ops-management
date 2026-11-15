@@ -296,13 +296,11 @@ def update_opex(code: str, request: Request, data: Dict[str, Any] = Body(...),
         version = int(data.get("rowVersion"))
     except (TypeError, ValueError):
         raise HTTPException(400, "Thiếu rowVersion.")
-    if version != item.row_version:
-        raise HTTPException(409, "Khoản này vừa được người khác sửa — tải lại để xem bản mới nhất.")
+    service.bump_version(db, item, version)
     cfg = spend_settings.load(db)
     before = service.snapshot(item)
     service.apply_fields(db, item, data, cfg, user, request, creating=False)
     service.replace_assets(db, item, data.get("assets"))
-    item.row_version += 1
     item.updated_at, item.updated_by = dt.datetime.utcnow(), user.username
     if item.origin == "capex" and item.status == "planned":
         item.amount_mode = "manual"     # edited by hand: Capex changes no longer overwrite the amount

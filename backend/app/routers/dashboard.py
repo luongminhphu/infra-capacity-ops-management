@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .. import data_access, history
 from ..config import get_settings
 from ..database import get_db
-from ..models import ClusterAggregate, User
+from ..models import ClusterAggregate, SnapshotRun, User
 from ..security import get_current_user
 from ..timeutil import to_vn_date
 
@@ -29,15 +29,22 @@ def trend_history(
     Executive view is computed client-side from /api/data/latest, reusing the
     same calculation functions as the Technical view."""
     since = dt.datetime.utcnow() - dt.timedelta(days=days)
+    # Same rule as history.get_resource_history (audit DAT-03): only successful runs, and for each
+    # (VN day, vCenter, cluster) only the LAST snapshot of that day — several polls a day (schedule,
+    # manual sync, import) must not be summed, or the totals scale with the number of polls.
     history_rows = (
         db.query(ClusterAggregate)
-        .filter(ClusterAggregate.captured_at >= since)
-        .order_by(ClusterAggregate.captured_at.asc())
+        .join(SnapshotRun, SnapshotRun.id == ClusterAggregate.run_id)
+        .filter(ClusterAggregate.captured_at >= since, SnapshotRun.status == "ok")
+        .order_by(ClusterAggregate.captured_at.asc(), ClusterAggregate.run_id.asc())
         .all()
     )
-    daily = {}
+    latest = {}
     for row in history_rows:
         day_key = to_vn_date(row.captured_at).isoformat()  # bucket by VN calendar day, not UTC
+        latest[(day_key, row.vcenter_key or "import", row.cluster)] = row
+    daily = {}
+    for (day_key, _vc, _cl), row in latest.items():
         d = daily.setdefault(day_key, {"date": day_key, "usedVcpu": 0.0, "usedRamGB": 0.0, "totalLogicalCores": 0.0, "totalRamGB": 0.0})
         d["usedVcpu"] += row.used_vcpu or 0
         d["usedRamGB"] += row.used_ram_gb or 0

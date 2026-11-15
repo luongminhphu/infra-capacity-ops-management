@@ -399,7 +399,7 @@ function bkScopePanel(cov) {
     <section class="table-card bk-scope-card">
       <div class="panel-head panel-head-tight"><div><div class="panel-title">Phạm vi cần backup</div>
         <p class="panel-sub">Chỉ VM thuộc phạm vi này được tính độ phủ, đưa vào phát hiện và báo cáo PDF / Excel. Có thể chọn nhiều cluster trên nhiều vCenter.</p></div>
-        ${editing ? '' : `<div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="scope-edit"><i data-lucide="filter"></i>Chỉnh phạm vi</button></div>`}</div>
+        ${editing ? '' : uiIsAdmin() ? `<div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="scope-edit"><i data-lucide="filter"></i>Chỉnh phạm vi</button></div>` : `<span class="muted-sub">${ADMIN_ONLY_NOTE}</span>`}</div>
       ${editing ? `<div id="bkScopeEditor">${bkScopeEditorHtml()}</div>`
         : `<div class="bk-scope-summary">${cov.scopeActive ? bkPill('ok', 'Đang áp dụng') : bkPill('na', 'Chưa giới hạn')} <span>${label}</span>${cov.scopeActive ? `<span class="muted"> · ${bkNum(cov.outOfScope)} VM ngoài phạm vi không tính</span>` : ''}</div>`}
     </section>`;
@@ -497,7 +497,7 @@ function bkScheduleEditor() {
   if (!ed) {
     return `<section class="table-card"><div class="panel-head"><div><div class="panel-title">Lịch thủ công / import Excel</div>
       <p class="panel-sub">Mặc định lịch được đọc tự động từ schedule của từng policy NetBackup. Khai báo thủ công khi muốn gom nhiều policy thành một hệ thống, hoặc áp lịch đã duyệt khác với cấu hình NetBackup — lịch thủ công được ưu tiên cho các policy nó bao gồm.</p></div>
-      <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="sched-open"><i data-lucide="calendar-cog"></i>Quản lý lịch thủ công</button></div></div></section>`;
+      ${uiIsAdmin() ? `<div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="sched-open"><i data-lucide="calendar-cog"></i>Quản lý lịch thủ công</button></div>` : `<span class="muted-sub">${ADMIN_ONLY_NOTE}</span>`}</div></section>`;
   }
   const dayBoxes = (i, field, days) => BK_DAYS.map((d, k) => `<label class="bk-day"><input type="checkbox" data-sched="${i}" data-field="${field}" data-day="${k}" ${days.includes(k) ? 'checked' : ''}/>${d}</label>`).join('');
   const rows = ed.rules.map((r, i) => `<tr>
@@ -571,12 +571,14 @@ function bkConfig() {
     <td class="wrap">${s.lastStatus === 'error' ? bkPill('crit', 'Lỗi') + `<span class="muted-sub bk-wrap">${esc(s.lastError)}</span>` : s.lastStatus === 'ok' ? bkPill('ok', 'OK') + (s.warning ? `<span class="muted-sub bk-wrap">${esc(s.warning)}</span>` : '') : bkPill('na', 'Chưa đồng bộ')}</td>
     <td><button class="btn btn-secondary btn-sm" type="button" data-bk-sync="${esc(s.key)}">Đồng bộ</button></td></tr>`).join('');
   const t = st.thresholds;
+  const admin = uiIsAdmin();
+  const lock = admin ? '' : 'disabled';
   const form = t ? t.meta.map(m => {
     const v = t.values[m.key], d = t.defaults[m.key];
     const isText = typeof d === 'string';
     const input = m.key === 'schedule_mode'
-      ? `<select id="bkTh_${m.key}" data-bk-th="${m.key}"><option value="netbackup" ${v === 'netbackup' ? 'selected' : ''}>Đọc lịch từ policy NetBackup (khung cố định khi không có)</option><option value="fixed" ${v === 'fixed' ? 'selected' : ''}>Khung cố định cho mọi policy</option></select>`
-      : `<input id="bkTh_${m.key}" data-bk-th="${m.key}" type="${isText ? 'text' : 'number'}" ${isText ? '' : 'min="0" step="any"'} value="${esc(String(v))}"/>`;
+      ? `<select id="bkTh_${m.key}" data-bk-th="${m.key}" ${lock}><option value="netbackup" ${v === 'netbackup' ? 'selected' : ''}>Đọc lịch từ policy NetBackup (khung cố định khi không có)</option><option value="fixed" ${v === 'fixed' ? 'selected' : ''}>Khung cố định cho mọi policy</option></select>`
+      : `<input id="bkTh_${m.key}" data-bk-th="${m.key}" ${lock} type="${isText ? 'text' : 'number'}" ${isText ? '' : 'min="0" step="any"'} value="${esc(String(v))}"/>`;
     return `<div class="field"><label for="bkTh_${m.key}">${esc(m.label)}${m.unit ? ` (${esc(m.unit)})` : ''}</label>
       ${input}
       <span class="muted-sub">Mặc định: ${esc(String(d))}</span></div>`;
@@ -590,7 +592,7 @@ function bkConfig() {
     </section>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Ngưỡng giám sát backup</div><p class="panel-sub">Áp dụng cho trang Backup, báo cáo PDF và Excel. Lưu trên server, dùng chung cho mọi người dùng.</p></div>
-        <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-bk-action="th-reset">Về mặc định</button><button class="btn btn-primary btn-sm" type="button" data-bk-action="th-save">Lưu ngưỡng</button></div></div>
+        ${admin ? `<div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-bk-action="th-reset">Về mặc định</button><button class="btn btn-primary btn-sm" type="button" data-bk-action="th-save">Lưu ngưỡng</button></div>` : `<span class="muted-sub">${ADMIN_ONLY_NOTE}</span>`}</div>
       <div class="bk-th-grid">${form}</div>
     </section>`;
 }

@@ -28,7 +28,7 @@ from . import sizing_advisory
 from .report_view import customer_view
 
 from .excel_style import (  # noqa: E402  (shared Excel look; names kept for this module)
-    AMBER, BLUE, CRIT, CRIT_BG, FAINT, INK, LINE, MONEY, MUTED, NAVY, NUM, NUM1, OK, OK_BG, READY, SERIES, SEV, SURFACE2, TEAL, WARN, _fill, _fit_heights, _font, _gb, _money_short, _print_setup, _r, _section, _sheet_title, _table, _tile, _widths, _write_rows, thin,
+    AMBER, BLUE, CRIT, CRIT_BG, FAINT, INK, LINE, MONEY, MUTED, NAVY, NUM, NUM1, OK, OK_BG, READY, SERIES, SEV, SURFACE2, TEAL, WARN, _fill, _fit_heights, _font, _gb, _money_short, _print_setup, _r, _section, _sheet_title, _table, _tile, _widths, _write_rows, thin, Formula,
 )
 
 
@@ -758,7 +758,7 @@ def _vm_sheet(wb, vms: List[Dict[str, Any]], result, subtitle: str) -> None:
     rows = []
     for i, v in enumerate(vms):
         r = start + 1 + i
-        rows.append([v["name"], v["qty"], v["vcpu"], v["ramGB"], v["diskGB"], f"=B{r}*C{r}", f"=B{r}*D{r}", f"=B{r}*E{r}", v.get("note") or ""])
+        rows.append([v["name"], v["qty"], v["vcpu"], v["ramGB"], v["diskGB"], Formula(f"=B{r}*C{r}"), Formula(f"=B{r}*D{r}"), Formula(f"=B{r}*E{r}"), v.get("note") or ""])
     last = _write_rows(ws, start, header, rows, fmts={2: NUM, 3: NUM, 4: NUM, 5: NUM, 6: NUM, 7: NUM, 8: NUM}, wrap_cols=(9,))
     if rows:
         _table(ws, f"A{start}:I{last}", "DanhSachVM")

@@ -21,6 +21,7 @@ from .report_pdf import (  # noqa: F401
     fmt_num,
     fmt_pct,
     html_to_pdf_bytes,
+    safe_url_fetcher,
     status_pill,
     svg_bar_chart,
     svg_donut,

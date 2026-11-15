@@ -34,10 +34,14 @@ def _draft(p: BudgetPlan) -> None:
         raise HTTPException(409, f"Kế hoạch đang ở trạng thái “{bp.STATUS_LABELS[p.status]}” — chỉ sửa được bản nháp.")
 
 
+STALE = "Kế hoạch vừa được người khác thay đổi — tải lại rồi thử lại."
+
+
 def _check_version(p: BudgetPlan, data: Dict[str, Any]) -> None:
+    """Early, friendly check; the real guard is the conditional UPDATE in _touch."""
     rv = data.get("rowVersion")
     if rv is not None and int(rv) != p.row_version:
-        raise HTTPException(409, "Kế hoạch vừa được người khác thay đổi — tải lại rồi thử lại.")
+        raise HTTPException(409, STALE)
 
 
 def _commit(db: Session) -> None:
@@ -48,8 +52,8 @@ def _commit(db: Session) -> None:
         raise HTTPException(409, "Dữ liệu vừa bị thay đổi bởi thao tác khác — tải lại và thử lại.") from exc
 
 
-def _touch(p: BudgetPlan, user: User) -> None:
-    p.row_version += 1
+def _touch(db: Session, p: BudgetPlan, user: User, expected: Any = None) -> None:
+    service.bump_version(db, p, expected, STALE)
     p.updated_at, p.updated_by = dt.datetime.utcnow(), user.username
 
 
@@ -177,7 +181,7 @@ def update_plan(plan_id: int, request: Request, data: Dict[str, Any] = Body(...)
         p.uplift_pct = _pct(data["upliftPct"], "% tăng giá gia hạn")
         for l in _lines(db, p):
             bp.line_amounts(l, p)
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, "spend.plan.update", plan=bp.plan_label(p),
                   changes=service.diff(before, {"upliftPct": str(p.uplift_pct), "budgetCap": p.budget_cap, "name": p.name}))
     _commit(db)
@@ -189,7 +193,7 @@ def refresh_plan(plan_id: int, request: Request, user: User = Depends(require_sp
     p = _plan(db, plan_id)
     _draft(p)
     stats = bp.refresh(db, p, spend_settings.load(db), user)
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, "spend.plan.refresh", plan=bp.plan_label(p), lines=stats)
     _commit(db)
     return {**_detail(db, p, user), "refreshed": stats}
@@ -272,7 +276,7 @@ def add_line(plan_id: int, request: Request, data: Dict[str, Any] = Body(...), u
                        terms=1, vat_pct=Decimal(10), sort_order=order, updated_at=dt.datetime.utcnow(), updated_by=user.username)
     _apply_line(db, l, p, data, creating=True)
     db.add(l)
-    _touch(p, user)
+    _touch(db, p, user)
     db.flush()
     service.audit(db, user, request, "spend.plan.line.add", plan=bp.plan_label(p), line=l.id, title=l.title, amountGross=l.amount_gross)
     _commit(db)
@@ -290,7 +294,7 @@ def update_line(plan_id: int, line_id: int, request: Request, data: Dict[str, An
     before = {"amountGross": l.amount_gross, "included": l.included, "priority": l.priority, "note": l.note}
     _apply_line(db, l, p, data, creating=False)
     l.updated_at, l.updated_by = dt.datetime.utcnow(), user.username
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, "spend.plan.line.update", plan=bp.plan_label(p), line=l.id, title=l.title,
                   changes=service.diff(before, {"amountGross": l.amount_gross, "included": l.included, "priority": l.priority, "note": l.note}))
     _commit(db)
@@ -309,7 +313,7 @@ def delete_line(plan_id: int, line_id: int, request: Request, user: User = Depen
         raise HTTPException(409, "Dòng gợi ý từ dữ liệu không xoá được — bỏ khỏi kế hoạch (kèm lý do) thay vì xoá.")
     service.audit(db, user, request, "spend.plan.line.delete", plan=bp.plan_label(p), line=l.id, title=l.title, amountGross=l.amount_gross)
     db.delete(l)
-    _touch(p, user)
+    _touch(db, p, user)
     _commit(db)
     return _detail(db, p, user)
 
@@ -341,8 +345,12 @@ def move_plan(plan_id: int, command: str, request: Request, data: Dict[str, Any]
     if command == "apply":
         if not has_role(user, "approver"):
             raise HTTPException(403, "Cần quyền “Duyệt” trong module Chi phí & Hợp đồng.")
+        if p.status != "approved":
+            raise HTTPException(409, "Chỉ áp dụng được kế hoạch đã duyệt.")
+        # Claim the plan BEFORE creating anything: a double click / second approver sending the
+        # same rowVersion gets 0 rows here (on PostgreSQL it waits for the first to commit) -> 409.
+        _touch(db, p, user, (data or {}).get("rowVersion"))
         out = bp.apply(db, p, cfg, user, request)
-        _touch(p, user)
         _commit(db)
         return {**_detail(db, p, user), "applied": out}
     if command == "revise":
@@ -382,10 +390,10 @@ def move_plan(plan_id: int, command: str, request: Request, data: Dict[str, Any]
         for old in db.query(BudgetPlan).filter(BudgetPlan.fiscal_year == p.fiscal_year, BudgetPlan.status == "approved",
                                                BudgetPlan.id != p.id):
             old.status = "superseded"
-            old.row_version += 1
+            service.bump_version(db, old, None, STALE)
         p.approved_at, p.approved_by = now, user.username
     p.status = dst
-    _touch(p, user)
+    _touch(db, p, user)
     service.audit(db, user, request, f"spend.plan.{command}", plan=bp.plan_label(p), status=[src, dst],
                   reason=service._text((data or {}).get("reason"), "lý do", 500))
     _commit(db)

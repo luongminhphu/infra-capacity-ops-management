@@ -9,7 +9,7 @@ from ..config import get_settings
 from ..database import get_db
 from ..models import AppSetting, ReportLogo, User
 from ..schemas import LogoUpload, SettingsUpdate
-from ..security import get_current_user
+from ..security import get_current_user, require_admin
 from ..timeutil import to_iso_utc
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -26,7 +26,7 @@ def get_current_thresholds(db: Session = Depends(get_db), user: User = Depends(g
 
 
 @router.put("")
-def update_thresholds(payload: SettingsUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_thresholds(payload: SettingsUpdate, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     updates = payload.dict(exclude_none=True)
     for key, value in updates.items():
         # Booleans are stored as "true"/"false" so capacity.parse_bool reads
@@ -58,7 +58,7 @@ def get_logo(db: Session = Depends(get_db), user: User = Depends(get_current_use
 
 
 @router.put("/logo")
-def upload_logo(payload: LogoUpload, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def upload_logo(payload: LogoUpload, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     """Stores the company logo (sent as a data URL from FileReader) so it can be
     embedded on Executive/Technical PDF report covers."""
     match = DATA_URL_RE.match(payload.data_url.strip())
@@ -83,7 +83,7 @@ def upload_logo(payload: LogoUpload, db: Session = Depends(get_db), user: User =
 
 
 @router.delete("/logo")
-def delete_logo(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_logo(db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = db.query(ReportLogo).filter(ReportLogo.id == 1).first()
     if row:
         db.delete(row)

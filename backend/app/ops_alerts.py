@@ -1,12 +1,13 @@
 """Operations alerts pushed to Discord (decision 5 of docs/design/super-app.md): capacity and
-backup items at the 90 % level. Each alert is sent once while it stays active and re-armed
-when it clears, so a flapping metric does not spam the channel.
+backup items at the 90 % level. Each alert is sent once per channel while it stays active and
+re-armed when it clears, so a flapping metric does not spam the channel. Delivery state is kept
+per channel (`sent_channels`): a channel that failed is retried on the next run.
 
 Channels: Discord channels of Cài đặt → Chi phí & nhắc hạn ticked "Nhận cảnh báo vận hành"
 (webhook encrypted with secrets_box, Discord-only URL check against SSRF)."""
 import datetime as dt
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 from sqlalchemy.orm import Session
 
@@ -43,51 +44,103 @@ def _today():
     return today_vn()
 
 
+PUSH_SOURCES = ("capacity", "backup")
+_KEY_PREFIX_SOURCE = {"cap": "capacity", "bk": "backup", "bkf": "backup"}
+
+
+def _source_of(s: OpsAlertState) -> str:
+    """Provider of a stored alert (rows written before the `source` column: from the key prefix)."""
+    return s.source or _KEY_PREFIX_SOURCE.get(s.key.split("|", 1)[0], "")
+
+
+def _sent(s: OpsAlertState) -> Set[str]:
+    return {c for c in (s.sent_channels or "").split(",") if c}
+
+
+def _set_sent(s: OpsAlertState, ids: Set[str]) -> None:
+    s.sent_channels = ",".join(sorted(ids))
+
+
 def check_and_notify(db: Session, post=None) -> Dict[str, int]:
-    """Compare the current push items with the stored state; send one Discord message per
-    channel for the new ones (and the cleared ones). Returns counters."""
+    """Compare the current push items with the stored state and tell each channel what it has not
+    been told yet: the alerts it has not received, and "Đã hết" for the ones it received that have
+    cleared. Delivery is tracked per channel, so a channel that failed gets them on a later run.
+
+    Alerts of a provider that failed this run (DB blip, bug) are left exactly as they are:
+    a missing provider is "unknown", not "cleared" — no false "Đã hết" followed by a re-alert.
+    Returns counters."""
     from .shared.webhook import WebhookError as NotifyError, post_json as _post_json, validate_discord_url
     post = post or _post_json
     from .features import get_features
-    items, _ = inbox._compute(db, _today())
+    items, errors = inbox._compute(db, _today())
+    unknown = {e for e in errors if e in PUSH_SOURCES}
+    if unknown:
+        logger.warning("Ops alerts: provider(s) %s failed; their alerts are kept unchanged this run", ", ".join(sorted(unknown)))
     features = get_features(db)
-    current = {it["key"]: it for it in items if it.get("push") and it["source"] in ("capacity", "backup")
+    current = {it["key"]: it for it in items if it.get("push") and it["source"] in PUSH_SOURCES
                and not (it.get("feature") and features.get(it["feature"]) is False)}
     states = {s.key: s for s in db.query(OpsAlertState).all()}
-    now = dt.datetime.utcnow()
-    new = [it for k, it in current.items() if not (states.get(k) and states[k].active)]
-    resolved = [s for k, s in states.items() if s.active and k not in current]
-    rows = {}
-    for it in new:
-        s = states.get(it["key"]) or OpsAlertState(key=it["key"], first_at=now)
-        if not s.active:
-            s.first_at = now
-        s.title, s.active, s.resolved_at, s.last_error = it["title"][:500], True, None, None
-        db.add(s)
-        rows[it["key"]] = s
-    for s in resolved:
-        s.active, s.resolved_at = False, now
-    sent = failed = 0
     channels = _channels(db)
-    if (new or resolved) and channels:
-        for ch in channels:
-            try:
-                url = validate_discord_url(secrets_box.decrypt(ch.webhook_enc))
-                for text in messages(new, resolved):
-                    post(url, {"content": text, "allowed_mentions": {"parse": []}, "username": "ICO cảnh báo"})
-                sent += 1
-            except (NotifyError, secrets_box.SecretUnreadable, ValueError) as exc:
-                failed += 1
-                logger.warning("Ops alert to channel %s failed: %s", ch.id, exc)
-                for s in rows.values():
-                    s.last_error = str(exc)[:500]
-        if sent:
-            for s in rows.values():
-                s.last_sent_at = now
-        else:
-            # every channel failed: keep the new alerts un-armed so the next cycle retries them
-            for s in rows.values():
-                s.active = False
+    channel_ids = {str(ch.id) for ch in channels}
+    now = dt.datetime.utcnow()
+
+    for s in states.values():
+        if s.sent_channels is None:      # row from before per-channel tracking
+            _set_sent(s, set(channel_ids) if s.active and s.last_sent_at else set())
+
+    activated = []
+    for k, it in current.items():
+        s = states.get(k)
+        if s is None or not s.active:
+            s = s or OpsAlertState(key=k)
+            s.first_at, s.resolved_at, s.last_error, s.active = now, None, None, True
+            _set_sent(s, set())          # a re-armed alert is owed to every channel again
+            db.add(s)
+            states[k] = s
+            activated.append(k)
+        s.title, s.source = it["title"][:500], it["source"]
+    resolved = []
+    for k, s in states.items():
+        if s.active and k not in current and _source_of(s) not in unknown:
+            s.active, s.resolved_at = False, now
+            resolved.append(k)
+    # Channels deleted since: nothing owed to them any more.
+    for s in states.values():
+        if _sent(s) - channel_ids and not s.active:
+            _set_sent(s, _sent(s) & channel_ids)
+
+    pending = set(activated)
+    sent = failed = 0
+    for ch in channels:
+        cid = str(ch.id)
+        to_new = [current[k] for k in current if cid not in _sent(states[k])]
+        to_resolve = [s for s in states.values() if not s.active and cid in _sent(s)]
+        pending.update(it["key"] for it in to_new)
+        if not to_new and not to_resolve:
+            continue
+        try:
+            url = validate_discord_url(secrets_box.decrypt(ch.webhook_enc))
+            for text in messages(to_new, to_resolve):
+                post(url, {"content": text, "allowed_mentions": {"parse": []}, "username": "ICO cảnh báo"})
+        except (NotifyError, secrets_box.SecretUnreadable, ValueError) as exc:
+            failed += 1
+            logger.warning("Ops alert to channel %s failed: %s", ch.id, exc)
+            for it in to_new:
+                states[it["key"]].last_error = str(exc)[:500]
+            continue
+        except Exception as exc:  # noqa: BLE001 — a bug must not skip the commit of the other channels' state
+            failed += 1
+            logger.exception("Ops alert to channel %s failed unexpectedly", ch.id)
+            for it in to_new:
+                states[it["key"]].last_error = f"{type(exc).__name__}"[:500]
+            continue
+        sent += 1
+        for it in to_new:
+            s = states[it["key"]]
+            _set_sent(s, _sent(s) | {cid})
+            s.last_sent_at = now
+        for s in to_resolve:
+            _set_sent(s, _sent(s) - {cid})
     db.commit()
     inbox.invalidate()
-    return {"new": len(new), "resolved": len(resolved), "sent": sent, "failed": failed}
+    return {"new": len(pending), "resolved": len(resolved), "sent": sent, "failed": failed}
