@@ -17,7 +17,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import excel_quotes
+from .. import ai_platform, excel_quotes
 from ..database import get_db
 from ..features import require_feature
 from ..models import User
@@ -312,7 +312,8 @@ def _detail(db: Session, r: QuoteRequest) -> Dict[str, Any]:
         "selectedBy": r.selected_by, "selectedAt": to_iso_utc(r.selected_at),
         "quotations": [_quotation_out(db, q, vendors) for q in quotations],
         "evaluation": _evaluation_out(db, r, quotations, vendors), "warnings": warnings,
-        "aiEnabled": ai.enabled(db.get(SpendAiConfig, 1)),
+        "aiEnabled": ai_platform.enabled(db.get(SpendAiConfig, 1), "quote_extract"),
+        "aiCompareEnabled": ai_platform.enabled(db.get(SpendAiConfig, 1), "quote_compare"),
         "aiSummary": _ai_summary_out(r),
         "contracts": [{"code": c.code, "title": c.title} for c in db.query(Contract).filter_by(capex_project_id=r.capex_project_id)]
         if r.capex_project_id else [],
@@ -535,8 +536,8 @@ def extract_quotation(code: str, qid: int, request: Request, user: User = Depend
         ex, q.extraction_method = qm.read_docx(data), "docx"
     else:
         try:
-            raw = ai.extract_quotation(db.get(SpendAiConfig, 1), data)
-        except ai.AiError as exc:
+            raw, _ = ai_platform.run(db, user, "quote_extract", lambda: ai.extract_quotation(db.get(SpendAiConfig, 1), data))
+        except (ai.AiError, ai_platform.AiBlocked) as exc:
             q.state, q.extraction_message = "failed", str(exc)[:500]
             if ai.enabled(db.get(SpendAiConfig, 1)):
                 service.audit(db, user, request, "spend.quote.ai_extract", code=r.code, quotation=q.id, sha256=f.sha256, failed=True)
@@ -885,13 +886,17 @@ def ai_summary(code: str, request: Request, user: User = Depends(require_spend("
     if db.query(Quotation).filter_by(request_id=r.id).count() < 2:
         raise HTTPException(409, "Cần ít nhất 2 báo giá để so sánh.")
     cfg = db.get(SpendAiConfig, 1)
-    if not ai.enabled(cfg):
-        raise HTTPException(409, "AI chưa bật hoặc chưa cho phép gửi dữ liệu ra ngoài (Cài đặt → Tờ trình & AI).")
+    try:
+        ai_platform.check(db, "quote_compare", user)
+    except ai_platform.AiBlocked as exc:
+        raise HTTPException(409, str(exc)) from exc
     payload = ai_payload(db, r)
     service.audit(db, user, request, "spend.quote.ai_summary", code=r.code, vendors=[v["ncc"] for v in payload["bao_gia"]])
     db.commit()                                          # the outbound send is recorded even if the call fails
     try:
-        res = ai.compare_quotes(cfg, payload)
+        res, _ = ai_platform.run(db, user, "quote_compare", lambda: ai.compare_quotes(cfg, payload))
+    except ai_platform.AiBlocked as exc:
+        raise HTTPException(409, str(exc)) from exc
     except ai.AiError as exc:
         raise HTTPException(422, str(exc)) from exc
     r.ai_summary = json.dumps(res, ensure_ascii=False)

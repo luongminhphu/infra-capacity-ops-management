@@ -465,6 +465,13 @@ class SpendAiConfig(Base):
     effort = Column(String(8), nullable=False, default="medium")
     api_key_enc = Column(Text, nullable=True)
     allow_external = Column(Boolean, nullable=False, default=False)
+    # Platform settings (super app SA4) — the table is the app-wide AI configuration.
+    tasks_json = Column(Text, nullable=True)                    # {"home_brief": true, …}; missing = default
+    mask_names = Column(Boolean, nullable=True, default=True)   # hostname / IP / VM names masked before sending
+    budget_usd = Column(Integer, nullable=True, default=100)    # monthly hard limit
+    alert_usd = Column(Integer, nullable=True, default=50)      # admin alert threshold
+    alert_month = Column(String(7), nullable=True)              # "2026-11": alert already sent this month
+    rate_per_hour = Column(Integer, nullable=True, default=30)  # calls per user per hour
     updated_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(255), nullable=False)
 

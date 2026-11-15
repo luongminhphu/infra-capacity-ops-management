@@ -26,6 +26,15 @@ FALLBACK_MODELS = {"claude-fable-5-2", "claude-fable-5-1", "claude-opus-5-5", "c
 DEFAULT_MODEL = "claude-opus-5-5"
 
 
+def _note_usage(response) -> None:
+    """Tell the AI platform the model and tokens of this call (for ai_runs and the monthly budget)."""
+    try:
+        from ..ai_platform import note_usage
+        note_usage(response)
+    except Exception:  # noqa: BLE001 — accounting must never break a call
+        logger.exception("AI usage accounting failed")
+
+
 class AiError(Exception):
     """Generation failed; the message is safe to show (no key, no prompt)."""
 
@@ -163,6 +172,7 @@ def _call_anthropic(cfg: SpendAiConfig, api_key: str, messages: List[Dict[str, A
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối soạn nội dung này.")
     if response.stop_reason == "max_tokens":
@@ -274,6 +284,7 @@ def _call_anthropic_pdf(cfg: SpendAiConfig, api_key: str, pdf_bytes: bytes) -> s
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối đọc file này.")
     if response.stop_reason == "max_tokens":
@@ -367,6 +378,7 @@ def _call_anthropic_diff(cfg: SpendAiConfig, api_key: str, payload: Dict[str, An
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối phân tích nội dung này.")
     if response.stop_reason == "max_tokens":
@@ -378,3 +390,60 @@ def _call_anthropic_diff(cfg: SpendAiConfig, api_key: str, payload: Dict[str, An
 
 
 DIFF_CALL = _call_anthropic_diff
+
+
+
+# ---------------------------------------------------------------- generic structured call (platform tasks)
+def complete_json(cfg: SpendAiConfig, system: str, user_text: str, schema: Dict[str, Any], max_tokens: int = 4000) -> Dict[str, Any]:
+    """One structured-output call for platform tasks (bản tin, tổng kết…). Raises AiError."""
+    if not enabled(cfg):
+        raise AiError("AI chưa được bật hoặc chưa cho phép gửi dữ liệu ra ngoài.")
+    try:
+        api_key = secrets_box.decrypt(cfg.api_key_enc)
+    except secrets_box.SecretUnreadable:
+        raise AiError("API key đã lưu không giải mã được (SECRETS_KEY đổi) — nhập lại.") from None
+    raw = JSON_CALL(cfg, api_key, system, user_text, schema, max_tokens)
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        raise AiError("AI trả về nội dung không đọc được.") from None
+    if not isinstance(data, dict):
+        raise AiError("AI trả về nội dung không đúng cấu trúc.")
+    return data
+
+
+def _call_anthropic_json(cfg: SpendAiConfig, api_key: str, system: str, user_text: str, schema: Dict[str, Any], max_tokens: int) -> str:
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key, timeout=TIMEOUT_S, max_retries=1)
+    model = cfg.model or DEFAULT_MODEL
+    extra: Dict[str, Any] = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in FALLBACK_MODELS else {}
+    try:
+        response = client.beta.messages.create(
+            model=model, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user_text}],
+            output_config={"effort": cfg.effort or "medium", "format": {"type": "json_schema", "schema": schema}},
+            **extra,
+        )
+    except anthropic.AuthenticationError:
+        raise AiError("API key Anthropic không hợp lệ.") from None
+    except anthropic.RateLimitError:
+        raise AiError("Anthropic đang giới hạn tốc độ — thử lại sau ít phút.") from None
+    except anthropic.BadRequestError as exc:
+        logger.warning("Anthropic rejected the request: %s", getattr(exc, "message", type(exc).__name__))
+        raise AiError("Anthropic từ chối yêu cầu — xem log ứng dụng.") from None
+    except anthropic.APIStatusError as exc:
+        raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
+    except anthropic.APIConnectionError:
+        raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    _note_usage(response)   # billed even when refused / cut
+    if response.stop_reason == "refusal":
+        raise AiError("Model từ chối nội dung này.")
+    if response.stop_reason == "max_tokens":
+        raise AiError("Nội dung AI viết quá dài, bị cắt.")
+    text = next((b.text for b in response.content if getattr(b, "type", "") == "text"), None)
+    if text is None:
+        raise AiError("AI không trả về nội dung.")
+    return text
+
+
+JSON_CALL = _call_anthropic_json

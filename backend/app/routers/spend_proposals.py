@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import secrets_box
+from .. import ai_platform, secrets_box
 from ..database import get_db
 from ..features import require_feature
 from ..models import User
@@ -493,9 +493,9 @@ def generate(code: str, request: Request, data: Dict[str, Any] = Body(default={}
     content, warning, provider, model = None, None, "none", None
     if want_ai and ai.enabled(cfg_ai):
         try:
-            content = ai.generate(cfg_ai, p.kind, outline, payload)
+            content, _ = ai_platform.run(db, user, "proposal_draft", lambda: ai.generate(cfg_ai, p.kind, outline, payload))
             provider, model = "anthropic", cfg_ai.model
-        except ai.AiError as exc:
+        except (ai.AiError, ai_platform.AiBlocked) as exc:
             warning = f"{exc} Đã tạo file chỉ điền dữ liệu (không dùng AI)."
     elif want_ai:
         warning = "AI chưa bật hoặc chưa cho phép gửi dữ liệu ra ngoài — file chỉ điền dữ liệu."

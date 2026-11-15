@@ -78,6 +78,25 @@ và theo cluster (cùng engine với PDF).
 **Quy hoạch → Capex nháp**: ở bảng kết quả theo cluster, nút **Tạo Capex nháp** tạo dự án Capex gồm n node theo kịch bản
 cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi mở dự án vừa tạo.
 
+**AI dùng chung (Cài đặt → AI & MCP, admin)** — một cấu hình cho mọi tính năng AI:
+- **Kết nối**: nhà cung cấp (Anthropic), model (mặc định `claude-opus-5-5`), effort, API key (mã hoá, không trả về),
+  *Cho phép gửi dữ liệu ra ngoài*.
+- **Công tắc từng tác vụ**: soạn tờ trình, đọc báo giá PDF scan, tóm tắt khác biệt báo giá, **bản tin trang chủ**,
+  **tổng kết báo cáo PDF**.
+- **Che tên** host / IP / VM / client backup trước khi gửi (bật mặc định): thay bằng mã `<host:…>` / `<ip:…>`, rồi
+  khôi phục trong kết quả.
+- **Hạn mức 100 USD / tháng**: chạm hạn mức thì AI tạm dừng, các chức năng quay về văn bản theo luật.
+  **Cảnh báo ở 50 USD**: gửi Discord (kênh có tick *Nhận cả cảnh báo vận hành*) và hiện trong hộp việc của admin,
+  mỗi tháng một lần. Có giới hạn số lượt gọi mỗi người mỗi giờ.
+- **Nhật ký và thống kê**: mỗi lượt (tác vụ, người, model, token, chi phí, thời gian; không lưu nội dung) vào `ai_runs`.
+  Thống kê theo tác vụ và 30 lượt gần nhất.
+  - Chi phí tính theo giá niêm yết của model đã trả lời; model lạ tính theo giá cao nhất.
+  - Cùng dữ kiện thì dùng lại kết quả trong 6 giờ, không tính phí lần sau.
+- **Trang chủ → AI tóm tắt hôm nay**: tóm tắt hộp việc của chính người bấm (theo quyền) cùng bản tin capacity.
+- **Trung tâm báo cáo → Tổng kết bằng AI**: thêm hộp "Tổng kết (AI soạn)" vào PDF Vận hành / Kỹ thuật, Backup và Kế hoạch
+  ngân sách. AI chỉ viết từ số liệu đã tính. Phần tổng kết theo luật vẫn giữ nguyên bên dưới để đối chiếu; AI lỗi
+  hoặc tắt thì PDF ghi một dòng lý do.
+
 Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác
 nhận theo design system (thay `confirm()` của trình duyệt), trạng thái rỗng.

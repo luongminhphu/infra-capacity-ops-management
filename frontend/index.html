@@ -794,6 +794,11 @@
           </div>
 
           <aside class="reports-side">
+            <section class="side-card side-card-static" id="rptAiCard">
+              <h4>Tổng kết bằng AI</h4>
+              <label class="finding-filter-item"><input type="checkbox" id="rptAi"><span>Thêm hộp “Tổng kết (AI soạn)” vào PDF Vận hành / Kỹ thuật, Backup và Kế hoạch ngân sách</span></label>
+              <p class="side-hint">AI chỉ viết từ số liệu đã tính, tên host / IP / VM được che. Cần bật tác vụ “Tổng kết báo cáo PDF” ở Cài đặt → AI &amp; MCP; nếu AI tắt hoặc hết hạn mức, PDF vẫn xuất với phần tổng kết theo luật.</p>
+            </section>
             <section class="side-card side-card-static">
               <h4>Phạm vi báo cáo Capacity</h4>
               <p class="side-hint" id="scopeFilterSummary">Toàn bộ cluster</p>
@@ -1005,6 +1010,11 @@
             <div id="spendSettingsMount"></div>
           </section>
 
+          <section class="panel hidden" id="aiPanel" data-set-tab="ai">
+            <div class="panel-head"><div><div class="panel-title">AI dùng chung <span class="badge-admin">Admin</span></div>
+              <p class="panel-sub">Một cấu hình cho mọi tính năng AI: soạn tờ trình, đọc báo giá PDF, tóm tắt khác biệt báo giá, bản tin trang chủ, tổng kết báo cáo PDF. Số liệu luôn do hệ thống tính; AI chỉ viết / tóm tắt và mọi lượt gọi được ghi lại.</p></div></div>
+            <div id="aiSettingsMount"></div>
+          </section>
           <section class="panel hidden" id="mcpPanel" data-set-tab="ai">
             <div class="panel-head">
               <div><div class="panel-title">AI / MCP server <span class="badge-admin">Admin</span></div>
@@ -1068,6 +1078,7 @@
 <script src="js/views/spend_renovation.js?v=__ASSET_V__"></script>
 <script src="js/views/home.js?v=__ASSET_V__"></script>
 <script src="js/views/entity.js?v=__ASSET_V__"></script>
+<script src="js/views/ai.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

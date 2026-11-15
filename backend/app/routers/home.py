@@ -10,7 +10,7 @@ from .. import inbox, ops_alerts
 from ..database import get_db
 from ..features import get_features
 from ..models import InboxAck, User, UserPref
-from ..security import get_current_user, require_admin
+from ..security import get_current_user, is_admin, require_admin
 from ..spend.fiscal import today_vn
 from ..spend.roles import has_role
 
@@ -71,6 +71,8 @@ def get_inbox(show: str = Query(default="open", pattern="^(open|all|done)$"), fr
         sources.pop("license")
     if features.get("spend") is False or not has_role(user, "viewer"):
         sources.pop("spend")
+    if not is_admin(user):
+        sources.pop("system")
     return {"items": out[:300], "counts": counts, "sources": sources, "unavailable": errors}
 
 

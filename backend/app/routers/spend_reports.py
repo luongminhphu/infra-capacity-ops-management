@@ -73,6 +73,10 @@ def budget_json(data: Dict[str, Any] = Body(default={}), user: User = Depends(re
 def _pdf(db: Session, data: Dict[str, Any], request: Request, user: User) -> Response:
     f, r = _build(db, data)
     label = report.filter_summary(db, f)
+    if data.get("ai") or request.query_params.get("ai") in ("1", "true"):
+        from ..ai_tasks import budget_facts
+        from .ai_admin import pdf_ai_box
+        pdf_ai_box(db, user, "budget", lambda: {"pham_vi": label, **budget_facts(r)})
     pdf = report_spend.build_budget_pdf(r, label, _logo(db))
     service.audit(db, user, request, "spend.report.pdf", filters=report.public_filters(f))
     db.commit()
