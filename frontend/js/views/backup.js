@@ -17,7 +17,7 @@ function bkState() {
     appState.backup = {
       sub: 'overview', server: 'all', days: 7, servers: null, summary: null, jobs: null, thresholds: null,
       loading: false, error: null, bound: false, charts: {},
-      clientFilter: { status: 'all', q: '' }, jobFilter: { outcome: 'failed', category: 'backup', q: '' }, covFilter: { state: 'unprotected', q: '', vc: 'all', cl: 'all' },
+      clientFilter: { status: 'all', q: '' }, clientSel: null, jobFilter: { outcome: 'failed', category: 'backup', q: '' }, covFilter: { state: 'unprotected', q: '', vc: 'all', cl: 'all' },
       scope: null, scopeEdit: null, sched: null, schedMsg: '',
       lastKey: null, loadedAt: 0,
     };
@@ -211,28 +211,77 @@ function bkOverview(s) {
     </section>`;
 }
 
+/* Client & RPO as list → detail (pages/danh-sach.md): grouped by assessment, worst first; the detail pane
+   holds what the 11-column table spread across a row. Same rows / filters / thresholds as before. */
+const BK_CL_ORDER = { crit: 0, warn: 1, ok: 2, na: 3 };
 function bkClients(s) {
-  const f = bkState().clientFilter;
+  const st = bkState(), f = st.clientFilter;
   const q = f.q.trim().toLowerCase();
-  const list = (s.clients || []).filter(c => (f.status === 'all' || c.status === f.status) && (!q || `${c.client} ${c.policies.join(' ')}`.toLowerCase().includes(q)));
-  const cnt = (k) => (s.clients || []).filter(c => k === 'all' || c.status === k).length;
-  const rows = list.map(c => `<tr>
-    <td><b>${esc(c.client)}</b><span class="muted-sub">${esc(c.policyTypes.join(', '))}</span></td><td class="wrap">${esc(c.policies.join(', '))}</td>
-    <td>${bkDate(c.lastJobAt)}</td><td class="wrap">${c.lastStatus !== null && c.lastStatus !== undefined ? `<b>${c.lastStatus}</b> · ` : ''}${esc(c.lastStatusText)}</td>
-    <td>${bkDate(c.lastSuccessAt)}</td><td class="num">${bkHours(c.hoursSinceSuccess)}</td><td class="num">${c.consecutiveFail || '—'}</td>
-    <td class="num">${bkNum(c.jobs)}</td><td class="num">${c.failed ? `<b class="tone-crit">${c.failed}</b>` : '0'}</td><td class="num">${bkNum(c.tb, 2)}</td>
-    <td>${bkPill(c.status, c.statusLabel)}${c.note ? `<span class="muted-sub bk-wrap">${esc(c.note)}</span>` : ''}</td></tr>`).join('');
+  const all = (s.clients || []).map((c, i) => ({ ...c, _i: i }));
+  const list = all.filter(c => (f.status === 'all' || c.status === f.status) && (!q || `${c.client} ${c.policies.join(' ')}`.toLowerCase().includes(q)))
+    .sort((a, b) => (BK_CL_ORDER[a.status] ?? 9) - (BK_CL_ORDER[b.status] ?? 9));   // stable: keeps server order inside a group
+  const cnt = (k) => all.filter(c => k === 'all' || c.status === k).length;
+  if (!list.some(c => c._i === st.clientSel)) st.clientSel = list.length ? list[0]._i : null;
+  const groups = ['crit', 'warn', 'ok', 'na'].map(k => {
+    const g = list.filter(c => c.status === k);
+    if (!g.length) return '';
+    return `<li class="hm-group" role="presentation"><span>${esc(BK_STATUS[k])}</span><span>${g.length}</span></li>` + g.map(c => `
+      <li class="hm-row" role="option" id="bkc-${c._i}" data-bk-client="${c._i}" aria-selected="${c._i === st.clientSel}">
+        <span class="hm-lv lv-${esc(c.status)}" aria-hidden="true"></span>
+        <span class="hm-t">${esc(c.client)}</span>
+        <span class="hm-r"><b>${bkHours(c.hoursSinceSuccess)}</b>${c.consecutiveFail ? `${c.consecutiveFail} lần lỗi liền` : 'từ lần thành công'}</span>
+        <span class="hm-m">${esc(c.statusLabel)} · ${esc(c.policies.join(', ') || '—')}</span>
+        <span class="sr-only">${esc(BK_STATUS[c.status] || '')}</span></li>`).join('');
+  }).join('');
+  const sel = list.find(c => c._i === st.clientSel);
   return `
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Client &amp; RPO</div><p class="panel-sub">RPO = thời gian từ bản backup thành công gần nhất (status 0 hoặc 1). Cảnh báo khi quá ${bkNum(s.thresholds.rpo_hours)} giờ; nghiêm trọng khi quá ${bkNum(s.thresholds.rpo_crit_hours)} giờ hoặc lỗi liên tiếp từ ${s.thresholds.consecutive_fail} lần.</p></div>
         <div class="panel-toolbar">
-          <select data-bk-filter="clientStatus">${['all', 'crit', 'warn', 'ok'].map(k => `<option value="${k}" ${f.status === k ? 'selected' : ''}>${k === 'all' ? 'Tất cả' : BK_STATUS[k]} (${cnt(k)})</option>`).join('')}</select>
-          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="clientQ" placeholder="Tìm client / policy" value="${esc(f.q)}"/></span>
+          <select data-bk-filter="clientStatus" aria-label="Lọc theo đánh giá">${['all', 'crit', 'warn', 'ok'].map(k => `<option value="${k}" ${f.status === k ? 'selected' : ''}>${k === 'all' ? 'Tất cả' : BK_STATUS[k]} (${cnt(k)})</option>`).join('')}</select>
+          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="clientQ" placeholder="Tìm client / policy" aria-label="Tìm client hoặc policy" value="${esc(f.q)}"/></span>
         </div></div>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>Client</th><th>Policy</th><th>Job gần nhất</th><th>Kết quả</th><th>Thành công gần nhất</th><th>Đã qua</th><th>Lỗi liên tiếp</th><th>Job</th><th>Lỗi</th><th>TB</th><th>Đánh giá</th></tr></thead>
-      <tbody>${rows || uiEmptyRow(11, 'Không có client phù hợp.')}</tbody></table></div>
-      <div class="row-count">${list.length} / ${(s.clients || []).length} client</div>
+      <div class="hm-split cp-split">
+        <div class="hm-list"><ul class="hm-rows" id="bkClientList" role="listbox" tabindex="0" aria-label="Client backup, nhóm theo đánh giá"${sel ? ` aria-activedescendant="bkc-${sel._i}"` : ''}>${groups || `<li role="presentation">${uiEmpty('Không có client phù hợp.')}</li>`}</ul>
+          <p class="hm-hint"><span><kbd>J</kbd> <kbd>K</kbd> chuyển</span><span>${list.length} / ${all.length} client</span></p></div>
+        <div class="hm-detail" id="bkClientDetail" aria-live="polite">${bkClientDetail(sel)}</div>
+      </div>
     </section>`;
+}
+
+function bkClientDetail(c) {
+  if (!c) return uiEmpty('Chọn một client ở danh sách bên trái.');
+  const code = c.lastStatus !== null && c.lastStatus !== undefined ? `<code>${esc(String(c.lastStatus))}</code> · ` : '';
+  const fact = (l, v) => `<div><dt>${l}</dt><dd>${v}</dd></div>`;
+  return `
+    <div class="hm-d-top">${bkPill(c.status, c.statusLabel)}<h3>${esc(c.client)}</h3></div>
+    <div class="hm-d-meta"><span>${esc(c.policyTypes.join(', ') || '—')}</span><span>${esc(c.policies.join(', ') || '—')}</span></div>
+    ${c.note ? `<div class="hm-d-sec"><h4>Tình trạng</h4><p>${esc(c.note)}</p></div>` : ''}
+    <div class="hm-d-sec"><h4>Kết quả job gần nhất</h4><p>${code}${esc(c.lastStatusText || '—')}</p></div>
+    <dl class="bk-facts">
+      ${fact('Job gần nhất', bkDate(c.lastJobAt))}
+      ${fact('Thành công gần nhất', bkDate(c.lastSuccessAt))}
+      ${fact('Đã qua (RPO)', bkHours(c.hoursSinceSuccess))}
+      ${fact('Lỗi liên tiếp', c.consecutiveFail ? String(c.consecutiveFail) : '—')}
+      ${fact('Job trong kỳ', `${bkNum(c.jobs)} · lỗi ${bkNum(c.failed)}`)}
+      ${fact('Dung lượng', `${bkNum(c.tb, 2)} TB`)}
+    </dl>
+    <div class="hm-d-actions"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="client-jobs" data-client="${esc(c.client)}"><i data-lucide="list-checks"></i>Xem job của client</button></div>`;
+}
+
+function bkClientSelect(i, focus) {
+  const st = bkState();
+  st.clientSel = i;
+  const list = $('#bkClientList');
+  if (!list) return;
+  list.querySelectorAll('[role="option"]').forEach(o => o.setAttribute('aria-selected', String(Number(o.dataset.bkClient) === i)));
+  const o = list.querySelector(`[data-bk-client="${i}"]`);
+  if (o) { list.setAttribute('aria-activedescendant', o.id); o.scrollIntoView({ block: 'nearest' }); }
+  const c = (st.summary.clients || [])[i];
+  $('#bkClientDetail').innerHTML = bkClientDetail(c ? { ...c, _i: i } : null);
+  refreshIcons();
+  if (focus) list.focus();
+  else if (matchMedia('(max-width:1023px)').matches) $('#bkClientDetail').scrollIntoView({ block: 'start' });
 }
 
 function bkJobs() {
@@ -288,7 +337,7 @@ function bkCoverage(s) {
           <select data-bk-filter="covCl"><option value="all">Mọi cluster</option>${clOpts.map(x => `<option value="${esc(x)}" ${f.cl === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
   return `
     ${bkScopePanel(cov)}
-    <div class="kpi-grid">${k.map(([l, v, sub]) => `<div class="kpi-card"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${sub}</div></div>`).join('')}</div>
+    <div class="kpi-strip-wrap">${uiKpiStrip(k.map(([label, valueHtml, sub]) => ({ label, valueHtml, sub })))}</div>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Độ phủ theo cluster</div><p class="panel-sub">Đối chiếu VM ${cov.scopeActive ? 'trong phạm vi cần backup' : 'trong inventory vCenter'} với client NetBackup theo tên VM, hostname guest hoặc IP.</p></div>
         <div class="panel-toolbar">${filt}</div></div>
@@ -459,7 +508,7 @@ function bkSchedule(s) {
       const tip = `${c.date} · ${c.expected === 'full' ? 'Full' : c.expected === 'any' ? 'Khung cố định' : 'Incremental'} · ${m.label}${c.detail ? ' — ' + c.detail : ''}`;
       return `<td class="bk-night" title="${esc(tip)}"><span class="bk-cell ${m.cls} ${c.expected === 'full' ? 'is-full' : ''}">${m.sym}</span></td>`;
     }).join('');
-    const src = r.source === 'netbackup' ? bkPill('na', 'Từ policy') : r.source === 'fixed' ? bkPill('warn', 'Khung cố định') : bkPill('ok', 'Thủ công');
+    const src = `<span class="tag">${r.source === 'netbackup' ? 'Từ policy' : r.source === 'fixed' ? 'Khung cố định' : 'Thủ công'}</span>`;   // a category, not a status
     const pols = (r.source === 'netbackup' || r.source === 'fixed' ? '' : `<span class="muted-sub bk-wrap">${r.policies.length ? esc(r.policies.join(', ')) : '<b class="tone-warn">Chưa gán policy</b>'}</span>`)
       + (r.scheduleNotes || []).map(n => `<span class="muted-sub bk-wrap tone-warn">${esc(n)}</span>`).join('')
       + (r.calendar && Object.keys(r.calendar).length ? `<span class="muted-sub">Lịch theo ngày trong tháng: ${Object.entries(r.calendar).map(([k, c]) => `${k === 'full' ? 'Full' : 'Incr'} ngày ${[...(c.monthDays || []), ...(c.lastDayOfMonth ? ['cuối tháng'] : [])].join(', ') || (c.dates || []).join(', ')}`).join(' · ')}</span>` : '');
@@ -474,12 +523,12 @@ function bkSchedule(s) {
     + '<span class="bk-legend-item"><span class="bk-cell ok is-full">✓</span>Đêm Full (viền đậm)</span>';
   const unm = (sc.unmappedPolicies || []);
   return `
-    <div class="kpi-grid">
-      <div class="kpi-card"><div class="label">Tuân thủ lịch</div><div class="value ${sc.compliancePct === null ? '' : sc.compliancePct >= 95 ? 'tone-ok' : sc.compliancePct >= 80 ? 'tone-warn' : 'tone-crit'}">${bkPct(sc.compliancePct)}</div><div class="sub">${counts.ok || 0} / ${sc.evaluated || 0} đêm đạt trong ${nights.length} đêm gần nhất</div></div>
-      <div class="kpi-card"><div class="label">Lỗi / thiếu</div><div class="value ${(counts.failed || 0) + (counts.missing || 0) ? 'tone-crit' : 'tone-ok'}">${bkNum((counts.failed || 0) + (counts.missing || 0))}</div><div class="sub">${counts.failed || 0} đêm có client lỗi · ${counts.missing || 0} đêm không chạy</div></div>
-      <div class="kpi-card"><div class="label">Trễ / sai loại</div><div class="value ${(counts.late || 0) + (counts.wrongtype || 0) ? 'tone-warn' : 'tone-ok'}">${bkNum((counts.late || 0) + (counts.wrongtype || 0))}</div><div class="sub">Kết thúc sau giờ kết thúc + ${sc.graceMinutes} phút · đêm Full không chạy Full</div></div>
-      <div class="kpi-card"><div class="label">Nguồn lịch</div><div class="value">${bkNum((sc.rules || []).length)}</div><div class="sub">${sc.mode === 'fixed' ? 'Chế độ khung cố định' : 'Chế độ đọc từ NetBackup'} · ${nbN} theo NetBackup · ${fxN} theo khung ${esc(sc.fixedWindow || '')} · ${manN} thủ công / Excel</div></div>
-    </div>
+    <div class="kpi-strip-wrap">${uiKpiStrip([
+      { label: 'Tuân thủ lịch', valueHtml: `<span class="${sc.compliancePct === null ? '' : sc.compliancePct >= 95 ? '' : sc.compliancePct >= 80 ? 'tone-warn' : 'tone-crit'}">${bkPct(sc.compliancePct)}</span>`, sub: `${counts.ok || 0} / ${sc.evaluated || 0} đêm đạt trong ${nights.length} đêm gần nhất` },
+      { label: 'Lỗi / thiếu', valueHtml: `<span class="${(counts.failed || 0) + (counts.missing || 0) ? 'tone-crit' : ''}">${bkNum((counts.failed || 0) + (counts.missing || 0))}</span>`, sub: `${counts.failed || 0} đêm có client lỗi · ${counts.missing || 0} đêm không chạy` },
+      { label: 'Trễ / sai loại', valueHtml: `<span class="${(counts.late || 0) + (counts.wrongtype || 0) ? 'tone-warn' : ''}">${bkNum((counts.late || 0) + (counts.wrongtype || 0))}</span>`, sub: `Kết thúc sau giờ kết thúc + ${sc.graceMinutes} phút · đêm Full không chạy Full` },
+      { label: 'Nguồn lịch', value: bkNum((sc.rules || []).length), sub: `${sc.mode === 'fixed' ? 'Chế độ khung cố định' : 'Chế độ đọc từ NetBackup'} · ${nbN} theo NetBackup · ${fxN} theo khung ${sc.fixedWindow || ''} · ${manN} thủ công / Excel` },
+    ])}</div>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Tuân thủ lịch theo từng đêm</div>
         <p class="panel-sub">Mỗi đêm backup tính từ ${sc.cutoffHour}:00 hôm đó đến trước ${sc.cutoffHour}:00 hôm sau — job chạy qua nửa đêm (20:00 → 04:00) thuộc đêm bắt đầu. Đạt = mọi client có bản backup thành công, đúng loại (Full / Incremental), xong trước giờ kết thúc + ${sc.graceMinutes} phút. Di chuột lên ô để xem chi tiết.</p></div></div>
@@ -542,7 +591,7 @@ function bkScheduleCollect() {
 function bkStorage(s) {
   const pools = (s.storage || []).map(p => `<tr><td><b>${esc(p.name)}</b><span class="muted-sub">${esc(p.nbuKey)}</span></td><td>${esc(p.type || '—')}</td><td>${esc(p.state || '—')}</td>
     <td class="num">${bkNum(p.totalTB, 1)}</td><td class="num">${bkNum(p.usedTB, 1)}</td><td class="num">${bkNum(p.freeTB, 1)}</td>
-    <td style="min-width:120px;"><div class="bar"><span style="width:${Math.min(100, p.usedPct || 0)}%;background:var(--${p.status === 'crit' ? 'crit' : p.status === 'warn' ? 'warn' : 'ok'})"></span></div><div class="bar-label"><span>${bkPct(p.usedPct)}</span><span>HWM ${bkNum(p.highWaterPct)}%</span></div></td>
+    <td style="min-width:120px;"><div class="bar"><span style="width:${Math.min(100, p.usedPct || 0)}%;background:var(--chart-s1)"></span></div><div class="bar-label"><span>${bkPct(p.usedPct)}</span><span>HWM ${bkNum(p.highWaterPct)}%</span></div></td>
     <td class="num">${p.growthTBPerDay !== null && p.growthTBPerDay !== undefined ? (p.growthTBPerDay >= 0 ? '+' : '') + bkNum(p.growthTBPerDay, 2) : '—'}</td>
     <td class="num">${p.daysToFull === null || p.daysToFull === undefined ? '—' : (p.daysToFull > 365 ? '> 1 năm' : bkNum(p.daysToFull))}</td><td>${bkPill(p.status, p.statusLabel)}</td></tr>`).join('');
   const pols = (s.policies || []).map(p => `<tr><td><b>${esc(p.name)}</b><span class="muted-sub">${esc(p.nbuKey)}</span></td><td>${esc(p.policyType || '—')}</td>
@@ -727,7 +776,14 @@ function bindBackupBody() {
     else if (k === 'jobOutcome') { st.jobFilter.outcome = e.target.value; bkLoadJobs(); }
     else if (k === 'jobCategory') { st.jobFilter.category = e.target.value; bkLoadJobs(); }
   });
-  body.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.bkFilter === 'jobQ') { st.jobFilter.q = e.target.value; bkLoadJobs(); } });
+  body.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.dataset.bkFilter === 'jobQ') { st.jobFilter.q = e.target.value; bkLoadJobs(); return; }
+    if (e.target.id !== 'bkClientList') return;
+    const ids = [...e.target.querySelectorAll('[data-bk-client]')].map(o => Number(o.dataset.bkClient));
+    const i = ids.indexOf(st.clientSel), k = e.key.toLowerCase();
+    if ((k === 'arrowdown' || k === 'j') && ids.length) { e.preventDefault(); bkClientSelect(ids[Math.min(i + 1, ids.length - 1)], true); }
+    else if ((k === 'arrowup' || k === 'k') && ids.length) { e.preventDefault(); bkClientSelect(ids[Math.max(i - 1, 0)], true); }
+  });
   body.addEventListener('click', async e => {
     const tg = e.target.closest('[data-sc-toggle]');
     if (tg && st.scopeEdit) {
@@ -736,6 +792,8 @@ function bindBackupBody() {
       bkScopeRerender();
       return;
     }
+    const cl = e.target.closest('[data-bk-client]');
+    if (cl) { bkClientSelect(Number(cl.dataset.bkClient)); return; }
     const a = e.target.closest('[data-bk-action]');
     const syncBtn = e.target.closest('[data-bk-sync]');
     if (syncBtn) {
@@ -785,6 +843,12 @@ function bindBackupBody() {
         await bkLoad(true);
         renderBackupBody();
       } catch (err) { bkSetStatus(`Không lưu được phạm vi: ${err.message}`, true); a.disabled = false; }
+      return;
+    }
+    if (act === 'client-jobs') {
+      st.jobFilter = { outcome: 'all', category: 'all', q: a.dataset.client || '' };
+      st.jobs = null;
+      location.hash = '#/backup/jobs';
       return;
     }
     if (a.dataset.bkAction === 'jobs-search') { const inp = body.querySelector('[data-bk-filter="jobQ"]'); st.jobFilter.q = inp ? inp.value : ''; bkLoadJobs(); }
