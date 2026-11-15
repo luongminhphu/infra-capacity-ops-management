@@ -1400,3 +1400,7 @@ code,.code,.ref-code,td.code-cell{font-family:var(--font-mono);font-size:max(12p
 /* UI 11 (ui-ux-pro-max review): disclosure targets ≥ 24 px, file input kept inside its dropzone */
 summary{min-height:24px;}
 .dropzone input[type="file"].sr-only{inset:0 auto auto 0;}
+
+/* VM change cards: grid items may shrink; their inner tables scroll inside the card, not the page (375 px) */
+.history-vm-grid > *{min-width:0;}
+.history-vm-card{overflow-x:auto;}
