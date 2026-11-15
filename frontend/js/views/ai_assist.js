@@ -107,9 +107,6 @@ function askRender() {
 }
 
 /* ---------------------------------------------------------------- Kho báo cáo */
-function reportArchiveOn() {
-  try { return localStorage.getItem('vco.reportArchive') === '1'; } catch (err) { return false; }
-}
 
 (function bindArchiveToggle() {
   const cb = $('#rptArchive');
@@ -117,19 +114,7 @@ function reportArchiveOn() {
     cb.checked = reportArchiveOn();
     cb.addEventListener('change', () => { try { localStorage.setItem('vco.reportArchive', cb.checked ? '1' : '0'); } catch (err) { /* per browser */ } });
   }
-  // Every PDF export goes through fetch: add the opt-in header so the server keeps a copy.
-  const orig = window.fetch.bind(window);
-  window.fetch = (input, init = {}) => {
-    try {
-      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
-      if (reportArchiveOn() && url.origin === location.origin && /^\/api\/[^?]*pdf$/i.test(url.pathname)) {
-        const h = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
-        h.set('X-ICO-Archive', '1');
-        init = { ...init, headers: h };
-      }
-    } catch (err) { /* never block a request */ }
-    return orig(input, init);
-  };
+  // The header itself is added by uiDownload (ui.js); the server keeps only exports its registry marks archivable.
 }());
 
 const archState = { kind: '', mine: false };

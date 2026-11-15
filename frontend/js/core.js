@@ -1794,18 +1794,13 @@ function populateFilterSelects() {
 
 function syncViewSections() {
   $$('.view-section').forEach(sec => sec.classList.add('hidden'));
-  const map = {
-    home:'#viewHome', entity:'#viewEntity', agenda:'#viewAgenda', archive:'#viewArchive', bom:'#viewBom', executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
-    inventory:'#viewInventory', whatif:'#viewWhatif', sizing:'#viewSizing', planning:'#viewPlanning',
-    licensing:'#viewLicensing', backup:'#viewBackup', reports:'#viewReports', settings:'#viewSettings', spend:'#viewSpend',
-  };
-  const target = $(map[appState.view] || map.dashboard);
+  const view = VIEWS[appState.view] || VIEWS.dashboard;
+  const target = $(view.section);
   if (target) target.classList.remove('hidden');
   // Settings: one tab of panels at a time (Cài đặt → Tiêu chí & ngưỡng / Nguồn dữ liệu / …).
   const sub = appState.settingsSub || 'criteria';
   $$('#viewSettings [data-set-tab]').forEach(el => el.classList.toggle('set-off', el.dataset.setTab !== sub));
-  if (appState.view === 'settings' && sub === 'ai' && typeof renderAiSettings === 'function') renderAiSettings();
-  if (appState.view === 'settings' && sub === 'auth' && typeof renderAuthSettings === 'function') renderAuthSettings();
+  if (appState.view === 'settings' && VIEWS.settings.tabRender[sub]) VIEWS.settings.tabRender[sub]();
   document.body.dataset.view = appState.view;
   if (typeof syncNavState === 'function') syncNavState();
   // AI buttons outside page renderers (Hỏi ICO in the top bar, Sizing): show when their task is on.
@@ -1813,28 +1808,8 @@ function syncViewSections() {
 }
 
 function renderActiveView() {
-  if (appState.view === 'dashboard') {
-    renderCapacityKpis(); renderDashboardCharts(); renderClusterTable(); bindSortableHeaders('clusterTable','clusterTable',renderClusterTable); highlightSortHeaders('clusterTable','clusterTable');
-  }
-  else if (appState.view === 'executive' && typeof renderExecutiveView === 'function') renderExecutiveView();
-  else if (appState.view === 'home' && typeof renderHomeView === 'function') renderHomeView();
-  else if (appState.view === 'agenda' && typeof renderAgendaView === 'function') renderAgendaView();
-  else if (appState.view === 'archive' && typeof renderArchiveView === 'function') renderArchiveView();
-  else if (appState.view === 'bom' && typeof renderBomView === 'function') renderBomView();
-  else if (appState.view === 'entity' && typeof renderEntityView === 'function') renderEntityView();
-  else if (appState.view === 'history') {
-    // Snapshot-history page (needs the backend; skipped silently in static mode).
-    if (typeof renderHistoryPanel === 'function' && typeof api !== 'undefined') renderHistoryPanel('techHistoryMount', { showVmChanges: true, followClusterFilter: true });
-  }
-  else if (appState.view === 'compliance') renderComplianceView();
-  else if (appState.view === 'inventory') renderInventoryView();
-  else if (appState.view === 'whatif') renderWhatifView();
-  else if (appState.view === 'sizing' && typeof renderSizingView === 'function') renderSizingView();
-  else if (appState.view === 'licensing' && typeof renderLicensingView === 'function') renderLicensingView();
-  else if (appState.view === 'backup' && typeof renderBackupView === 'function') renderBackupView();
-  else if (appState.view === 'reports' && typeof renderReportsView === 'function') renderReportsView();
-  else if (appState.view === 'spend' && typeof renderSpendView === 'function') renderSpendView();
-  // reports / planning / settings are static forms bound once in app.js.
+  const v = VIEWS[appState.view];          // routes.js says how each view renders
+  if (v && v.render) v.render();
 }
 
 function refreshAll() {

@@ -145,9 +145,17 @@ function uiSaveBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(href), 2000);
 }
 
+/* "Lưu vào kho" (Trung tâm báo cáo): every export asks the server to keep a copy; the server archives
+   only what backend/app/exports.py marks archivable. */
+function reportArchiveOn() {
+  try { return localStorage.getItem('vco.reportArchive') === '1'; } catch (err) { return false; }
+}
+
 /* Download what an API endpoint returns (PDF / Excel / CSV). Throws ApiError with the server's detail. */
 async function uiDownload(url, options = {}, fallbackName = 'download') {
-  const res = await fetch(url, { credentials: 'include', ...options });
+  const headers = new Headers(options.headers || undefined);
+  if (reportArchiveOn()) headers.set('X-ICO-Archive', '1');
+  const res = await fetch(url, { credentials: 'include', ...options, headers });
   if (res.status === 401) {
     if (window.onApiUnauthorized) window.onApiUnauthorized();
     throw new ApiError(401, 'Phiên đăng nhập đã hết hạn.');
