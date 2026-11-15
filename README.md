@@ -21,7 +21,7 @@ mà trang đó dùng (vCenter / cluster / host).
 | Quy hoạch | **What-if capacity**, **Sizing máy chủ**, **Quy hoạch tài nguyên** | What-if simulation; sizing host vật lý; form giả định + PDF quy hoạch (trước là dropdown trong header). |
 | License | **Đánh giá license**, **What-if license**, **Snapshot license** | Ba tab còn lại của License & Inventory cũ, kèm thanh chọn phạm vi cluster cho đợt mua. |
 | Backup | **Tổng quan backup**, **Client & RPO**, **Job backup**, **Độ phủ VM**, **Storage & policy**, **Nguồn & ngưỡng** | Giám sát Veritas NetBackup qua REST API chỉ đọc — xem mục *Backup* bên dưới. |
-| Chi phí & Hợp đồng | **Opex**, **Capex** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
+| Chi phí & Hợp đồng | **Tổng quan chi phí**, **Opex**, **Capex** | Chi phí vận hành IT theo năm tài chính (bảo hành, license, bảo trì DC, thuê ngoài), hạn hết hiệu lực, gia hạn / ngừng, nhắc hạn qua email & Discord — xem mục *Chi phí & Hợp đồng IT*. Chỉ hiện với người có vai trò Chi phí. |
 | Báo cáo & cài đặt | **Trung tâm báo cáo** | Mọi báo cáo xuất tập trung, nhóm theo chức năng (lọc nhanh bằng chip): **Capacity & vận hành** (PDF Vận hành / Kỹ thuật, Excel host & VM, CSV tổng hợp), **Quy hoạch & Sizing** (PDF quy hoạch, Sizing PDF đầy đủ / rút gọn / Excel, mẫu nhập liệu), **License & Inventory** (PDF tổng quan — hiện tại hoặc từ snapshot, Excel đánh giá / ESXi / hệ điều hành), **Backup** (PDF hiện trạng — có / không phụ lục, Excel thống kê; chọn server và kỳ). Mỗi báo cáo có “Tuỳ chọn” riêng (Storage, cửa sổ xu hướng, giả định quy hoạch, hướng đề xuất sizing…) được ghi nhớ; “Chọn nhiều” để xuất nhiều báo cáo một lần. Khung bên phải: phạm vi cluster / host, loại finding, logo. Nút xuất ở từng trang vẫn giữ. |
 | | **Cài đặt** | Tiêu chí đánh giá (Storage), ngưỡng (idle, overcommit, HT) có nút **Lưu ngưỡng** lên server, trạng thái vCenter, import CSV/JSON, sample data, reset. |
 
@@ -531,8 +531,23 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   “Lệch kế hoạch” khi kế hoạch đổi. Xoá hạng mục thì xoá khoản còn “Theo Capex”, giữ khoản đã xác nhận.
   Người có quyền Duyệt xác nhận hàng loạt ở chi tiết dự án. Nút **Xem trước Opex** trong form không lưu gì.
 
-**Các giai đoạn sau**: GĐ3 báo cáo ngân sách PDF / Excel ·
-GĐ4 hợp đồng có version, so sánh, tự xoá version cũ sau khi chốt · GĐ5 AI soạn tờ trình từ mẫu .docx tải lên.
+**Giai đoạn 3 — Báo cáo kế hoạch ngân sách (đã có)**
+
+- Trang **Tổng quan chi phí** và báo cáo **Kế hoạch ngân sách IT** (PDF / Excel, cũng có ở Trung tâm báo cáo →
+  nhóm *Chi phí & ngân sách*) dùng **cùng một hàm tính** (`backend/app/spend/report.py`), nên số trên web,
+  PDF và Excel luôn khớp.
+- **Bộ lọc**: năm tài chính (mặc định năm nay + năm sau), Opex / Capex, loại chi phí, nhà cung cấp, cost center,
+  trạng thái Opex (mặc định bỏ “Ngừng”), trạng thái Capex (mặc định bỏ “Nháp” — đề xuất chưa duyệt), khoảng ngày
+  hết hạn (chỉ áp cho Opex; khi có khoảng ngày thì không tính Capex), khoảng số tiền sau VAT. Lưu bộ lọc hay dùng
+  (riêng tư hoặc dùng chung).
+- **Nội dung**: tổng theo năm tài chính và theo loại, so sánh năm nay / năm sau, Opex hết hạn theo **quý tài chính**
+  (từ 90 ngày trước đến 12 tháng tới), Opex phát sinh từ Capex, 10 nhà cung cấp lớn nhất, danh sách **quyết định
+  cần duyệt** (khoản quá hạn, khoản hết hạn trong mốc nhắc lớn nhất, Opex dự kiến của năm sau).
+- **PDF** theo khung báo cáo Vận hành (2 trang, mở bằng hộp “Tổng kết — vấn đề & quyết định đề nghị”).
+  **Excel** đủ từng dòng: Tổng quan, Chi tiết, Hết hạn theo quý, Từ Capex, Nhà cung cấp, Bộ lọc. Ô chữ do người
+  dùng nhập luôn ghi dạng văn bản (không thành công thức Excel).
+
+**Các giai đoạn sau**: GĐ4 hợp đồng có version, so sánh, tự xoá version cũ sau khi chốt · GĐ5 AI soạn tờ trình từ mẫu .docx tải lên.
 
 ## Kiến trúc
 

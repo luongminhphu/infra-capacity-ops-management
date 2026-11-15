@@ -11,7 +11,7 @@ from app.models import AppSetting, AuditLog, User
 from app.security import hash_password
 from app.spend import files
 from app.spend.models import (
-    CapexItem, CapexProject,
+    CapexItem, CapexProject, SpendSavedFilter,
     OpexAsset, OpexAttachment, OpexItem, SpendCategory, SpendCostCenter, SpendFile, SpendNotifyChannel,
     SpendReminderLog, SpendSequence, SpendSmtpConfig, SpendVendor,
 )
@@ -22,7 +22,7 @@ PW = "User12345!"
 
 def _wipe():
     db = SessionLocal()
-    for model in (SpendReminderLog, OpexAttachment, OpexAsset, SpendFile, SpendNotifyChannel, SpendSmtpConfig):
+    for model in (SpendReminderLog, OpexAttachment, OpexAsset, SpendFile, SpendNotifyChannel, SpendSmtpConfig, SpendSavedFilter):
         db.query(model).delete()
     db.query(OpexItem).update({OpexItem.renewed_from_id: None})
     for model in (OpexItem, CapexItem, CapexProject, SpendVendor, SpendCostCenter, SpendSequence):

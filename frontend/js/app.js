@@ -67,6 +67,8 @@ const NAV_GROUPS = [
       desc: 'Trạng thái kết nối máy chủ backup, hướng dẫn tài khoản chỉ đọc và ngưỡng giám sát backup.', scope: [] },
   ] },
   { label: 'Chi phí & Hợp đồng', items: [
+    { id: 'spend-overview', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'overview', icon: 'landmark', label: 'Tổng quan chi phí', title: 'Kế hoạch ngân sách IT',
+      desc: 'Tổng hợp Opex và Capex theo năm tài chính, loại, nhà cung cấp; hết hạn theo quý; xuất PDF / Excel theo bộ lọc.', scope: [] },
     { id: 'spend-opex', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'opex', icon: 'wallet', label: 'Opex', title: 'Chi phí vận hành (Opex)',
       desc: 'Bảo hành, license, bảo trì, dịch vụ thuê ngoài theo năm tài chính; hạn hết hiệu lực và nhắc gia hạn.', scope: [] },
     { id: 'spend-capex', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'capex', icon: 'package-plus', label: 'Capex', title: 'Dự án đầu tư (Capex)',
@@ -96,7 +98,8 @@ function applyFeatures(features) {
   appFeatures = features || {};
   renderSidebarNav();
   // Report centre: hide groups whose modules are all off.
-  const groupOn = { backup: featureOn('backup'), planning: featureOn('sizing') || featureOn('planning') };
+  const groupOn = { backup: featureOn('backup'), planning: featureOn('sizing') || featureOn('planning'),
+    spend: featureOn('spend') && spendRoleOk('viewer') && !!currentUser };
   Object.entries(groupOn).forEach(([g, on]) => {
     $$(`[data-rpt-group="${g}"]`).forEach(el => el.classList.toggle('feature-off', !on));
   });

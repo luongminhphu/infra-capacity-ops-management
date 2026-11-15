@@ -75,6 +75,7 @@ async function renderSpendView() {
     return;
   }
   if (spState.sub === 'capex' && typeof renderCapexPage === 'function') { await renderCapexPage(); return; }
+  if (spState.sub === 'overview' && typeof renderSpendOverview === 'function') { await renderSpendOverview(); return; }
   await spLoadList();
   spRenderPage();
   spBindPage();
