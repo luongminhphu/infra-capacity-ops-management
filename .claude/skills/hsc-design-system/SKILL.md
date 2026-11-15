@@ -54,7 +54,7 @@ và với người mù màu.
 - Mỗi trang có route `#/<trang>` (giữ khi F5 / chia sẻ link). Thanh **Phạm vi** chỉ hiện bộ lọc
   trang đó dùng (vCenter / cluster / host).
 - Trang mới: thêm vào nhóm điều hướng phù hợp (Tổng quan, Giám sát, Inventory, Quy hoạch,
-  License, Backup, Báo cáo & cài đặt) và cập nhật bảng "Cấu trúc giao diện" trong README.
+  License, Backup, Báo cáo & cài đặt) và cập nhật bảng "Thành phần chính" trong README và "Cấu trúc giao diện" trong docs/huong-dan-chi-tiet.md.
 
 ## Biểu đồ
 

@@ -21,7 +21,7 @@ spec:
         app: ico-app
     spec:
       # Package GHCR private: kéo image bằng Secret ghcr-pull-secret (PAT classic, quyền read:packages),
-      # tạo theo README. Package Public thì Secret không có cũng không sao — kubelet kéo ẩn danh.
+      # tạo theo docs/huong-dan-chi-tiet.md. Package Public thì Secret không có cũng không sao — kubelet kéo ẩn danh.
       imagePullSecrets:
         - name: ghcr-pull-secret
       # Đợi Postgres sẵn sàng trước khi app khởi động (tránh crash-loop lúc cụm vừa lên).

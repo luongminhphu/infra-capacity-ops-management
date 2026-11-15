@@ -13,7 +13,7 @@ description: Dùng khi sửa module Backup / Veritas NetBackup — backend/app/b
   - `GET /netbackup/config/policies` và `/netbackup/config/policies/{name}`
   - `GET /netbackup/storage/disk-pools`
   Thêm endpoint mới → chỉ GET, ghi vào docstring đầu `backup/client.py` và mục
-  "Tài khoản read-only cho NetBackup" trong README (quyền RBAC cần cấp).
+  "Tài khoản read-only cho NetBackup" trong docs/huong-dan-chi-tiet.md (quyền RBAC cần cấp).
 - Header media type theo `NETBACKUP_n_API_VERSION` (8.0 cho NBU 10.0, 12.0 cho 10.4). Lỗi **406**
   nghĩa là sai version → thông báo rõ cho vận hành.
 - Lỗi kết nối / xác thực / quyền ném `NetBackupError` với thông báo tiếng Việt có hướng xử lý.

@@ -20,7 +20,7 @@ data:
   # AUTH_MODE: "local" (chỉ user/mật khẩu) · "both" (cả hai — dùng khi chuyển đổi) · "entra" (chỉ
   # Microsoft; tài khoản cục bộ trong AUTH_BREAKGLASS_USERS vẫn đăng nhập được để cứu hộ).
   # Khi bật Entra qua App Proxy (HTTPS) đặt COOKIE_SECURE: "true" ở trên.
-  # ENTRA_CLIENT_SECRET nằm trong Secret ico-secrets. Xem README mục "Đăng nhập Microsoft Entra ID".
+  # ENTRA_CLIENT_SECRET nằm trong Secret ico-secrets. Xem docs/huong-dan-chi-tiet.md mục "Đăng nhập Microsoft Entra ID".
   AUTH_MODE: "local"
   AUTH_BREAKGLASS_USERS: "admin"
   ENTRA_TENANT_ID: ""                 # Directory (tenant) ID — GUID
