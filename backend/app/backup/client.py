@@ -339,6 +339,8 @@ class NetBackupClient:
         self.token: Optional[str] = cfg.api_key or None
         self._login_token = False
         self.ctx = nbu_ssl_context(cfg)
+        # Paths whose last paginate() stopped at max_pages with more data left (REL-04).
+        self.truncated: List[str] = []
 
     # -- low level -------------------------------------------------------
     def _request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
@@ -421,6 +423,11 @@ class NetBackupClient:
             if len(data) < PAGE_LIMIT or (pag.get("next") is None and pag):
                 return
             offset += PAGE_LIMIT
+        # Safety cap reached with pages left: the newest items were read, the oldest are missing.
+        # Never silent — the caller turns it into a warning on the sync run.
+        logger.warning("NetBackup %s: %s stopped at the %d-page limit (%d items); older items not read",
+                       self.cfg.key, path, max_pages, max_pages * PAGE_LIMIT)
+        self.truncated.append(path)
 
     # -- collection ------------------------------------------------------
     def fetch_jobs(self, since: dt.datetime) -> List[Dict[str, Any]]:
@@ -478,4 +485,7 @@ def collect(cfg: NetBackupConfig, since: dt.datetime) -> Tuple[List[Dict[str, An
             warnings.append(f"Storage: {exc}")
     finally:
         c.logout()
+    if "/admin/jobs" in c.truncated:
+        warnings.insert(0, f"Job: chỉ đọc {MAX_JOB_PAGES * PAGE_LIMIT} job mới nhất (giới hạn {MAX_JOB_PAGES} trang); "
+                           "các job cũ hơn trong khoảng đồng bộ chưa được đọc, RPO / tỉ lệ lỗi có thể thiếu.")
     return jobs, policies, pools, warnings

@@ -17,6 +17,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from weasyprint import HTML
+from weasyprint.urls import URLFetcher
 
 from . import capacity
 from .timeutil import now_vn_str, parse_iso_to_vn_str
@@ -2313,8 +2314,28 @@ def _inject_ai_box(html_str: str) -> str:
     return html_str
 
 
+class DataOnlyURLFetcher(URLFetcher):
+    """WeasyPrint URL fetcher that only serves inline `data:` URLs.
+
+    Reports embed every image (logo, charts) as `data:`; anything else — http(s), file, ftp,
+    or a relative path — comes from untrusted content (e.g. an uploaded SVG logo with
+    `<image href="http://169.254.169.254/...">`) and would make the server fetch it (SSRF).
+    WeasyPrint catches the ValueError and simply skips the resource."""
+
+    def fetch(self, url, headers=None):
+        scheme = url.split(":", 1)[0].strip().lower() if ":" in url else ""
+        if scheme != "data":
+            raise ValueError("Blocked non-data URL in PDF render")
+        return super().fetch(url, headers)
+
+
+def safe_url_fetcher() -> DataOnlyURLFetcher:
+    """New fetcher per render (URLFetcher keeps per-request state). Use for every HTML(string=...)."""
+    return DataOnlyURLFetcher(allowed_protocols={"data"}, allow_redirects=False)
+
+
 def html_to_pdf_bytes(html_str: str) -> bytes:
-    return HTML(string=_inject_ai_box(html_str)).write_pdf()
+    return HTML(string=_inject_ai_box(html_str), url_fetcher=safe_url_fetcher()).write_pdf()
 
 
 def build_report_pdf(view: str, hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]], policy: capacity.Policy,

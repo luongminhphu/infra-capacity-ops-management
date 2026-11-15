@@ -16,6 +16,11 @@ function uiPill(tone, label) {
   return `<span class="pill ${t}">${esc(label)}</span>`;
 }
 
+/* Shared configuration (capacity thresholds, report logo, backup scope / schedules / thresholds,
+   license rules and entitlements) is admin-only; the API enforces it, the UI only hides the controls. */
+const ADMIN_ONLY_NOTE = 'Chỉ quản trị viên được sửa.';
+function uiIsAdmin() { return !!(typeof currentUser !== 'undefined' && currentUser && currentUser.isAdmin); }
+
 /* Inline status line under a form / toolbar. kind: '' | 'ok' | 'error'. Empty message hides it. */
 function uiSetStatus(target, msg, kind, opts = {}) {
   const el = typeof target === 'string' ? $(target) : target;

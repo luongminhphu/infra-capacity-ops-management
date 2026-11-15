@@ -40,10 +40,13 @@ spec:
           envFrom:
             - configMapRef: { name: ico-config }
             - secretRef: { name: ico-secrets }
+          # Readiness: DB trả lời SELECT 1 và vòng poll còn chạy (503 khi DB lỗi / scheduler treo).
+          # Liveness giữ /api/health (không I/O) để sự cố DB không làm pod bị restart oan.
           readinessProbe:
-            httpGet: { path: /api/health, port: 8000 }
+            httpGet: { path: /api/health/ready, port: 8000 }
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet: { path: /api/health, port: 8000 }
             initialDelaySeconds: 20

@@ -11,7 +11,9 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, Iterable, List, Optional
 
 from fastapi import HTTPException, Request
+from sqlalchemy import update
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from ..models import AuditLog, User
 from ..timeutil import to_iso_utc
@@ -25,6 +27,7 @@ STATUS_LABELS = {"planned": "Dự kiến", "active": "Đang hiệu lực", "expi
                  "renewed": "Đã gia hạn", "stopped": "Ngừng"}
 CYCLE_LABELS = {"one_time": "Một lần", "monthly": "Hằng tháng", "quarterly": "Hằng quý", "yearly": "Hằng năm"}
 ORIGIN_LABELS = {"manual": "Nhập tay", "capex": "Sinh từ Capex", "renewal": "Gia hạn"}
+STALE_MESSAGE = "Dữ liệu đã được người khác sửa, tải lại rồi thử lại."
 EMAIL_RE = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
 
 DEFAULT_CATEGORIES = [
@@ -359,6 +362,27 @@ TRANSITIONS = {
     "stop": ({"planned", "active"}, "stopped"),
     "reactivate": ({"stopped"}, "active"),
 }
+
+
+def bump_version(db: Session, obj: Any, expected: Any = None, message: str = STALE_MESSAGE) -> None:
+    """Optimistic lock enforced by the database, not by a Python comparison:
+    UPDATE <table> SET row_version = expected + 1 WHERE id = :id AND row_version = :expected.
+    0 rows -> someone else changed the row since `expected` was read -> 409 (the caller's
+    transaction is rolled back with the session). On PostgreSQL the UPDATE also takes the row
+    lock, so a concurrent writer waits for this transaction and then sees 0 rows.
+
+    `expected` is the client's rowVersion; None means "the version this request loaded".
+    Callers must not also do `obj.row_version += 1`."""
+    try:
+        exp = obj.row_version if expected is None else int(expected)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "rowVersion không hợp lệ.")
+    model = type(obj)
+    res = db.execute(update(model).where(model.id == obj.id, model.row_version == exp)
+                     .values(row_version=exp + 1).execution_options(synchronize_session=False))
+    if res.rowcount != 1:
+        raise HTTPException(409, message)
+    set_committed_value(obj, "row_version", exp + 1)
 
 
 def transition(db: Session, item: OpexItem, command: str, user: User, request: Optional[Request],

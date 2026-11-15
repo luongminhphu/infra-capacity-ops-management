@@ -21,13 +21,14 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from ..models import User
 from ..shared.text import norm_text, parse_number, to_int
 from ..shared.xlsx_io import XlsxError, read_rows
 from . import fiscal, service
-from .models import CapexProject, OpexItem, SpendCategory, SpendCostCenter, SpendVendor
+from .models import CapexProject, OpexItem, SpendCategory, SpendCostCenter, SpendSequence, SpendVendor
 from .settings import SpendSettings
 
 MAX_ROWS = 2000
@@ -531,8 +532,28 @@ def preview(db: Session, kind: str, data: bytes, cfg: SpendSettings, user: User,
     raise ImportError_("Loại nhập phải là opex hoặc capex.")
 
 
+IMPORT_LOCK_KEYS = {"opex": "IMP-OPX", "capex": "IMP-CPX"}
+
+
+def _claim_import_lock(db: Session, kind: str) -> None:
+    """Serialize commits of the same kind on a lock row in spend_sequences (year 0 is never a
+    code year). The UPDATE takes a row lock on PostgreSQL (SQLite locks the whole database), so
+    a second concurrent "Ghi" waits here until the first commits, and its duplicate check below
+    then sees the rows the first one wrote. First use creates the row; if two first uses race,
+    the loser's INSERT hits the primary key and the router returns 409 with nothing written."""
+    key = IMPORT_LOCK_KEYS.get(kind)
+    if key is None:
+        return          # preview() rejects unknown kinds
+    res = db.execute(update(SpendSequence).where(SpendSequence.kind == key, SpendSequence.year == 0)
+                     .values(last_no=SpendSequence.last_no + 1))
+    if res.rowcount == 0:
+        db.add(SpendSequence(kind=key, year=0, last_no=1))
+        db.flush()
+
+
 def commit(db: Session, kind: str, data: bytes, cfg: SpendSettings, user: User, request: Optional[Request],
            skip_errors: bool) -> Dict[str, Any]:
+    _claim_import_lock(db, kind)      # before the duplicate check, so it runs on committed data
     pv = preview(db, kind, data, cfg, user)
     if pv["summary"]["error"] and not skip_errors:
         raise HTTPException(400, f"Còn {pv['summary']['error']} dòng lỗi — sửa file hoặc chọn “Chỉ nhập dòng hợp lệ”.")
