@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import hashlib
 
 from .collectors.scheduler import scheduler_loop
-from .config import get_settings
+from .config import get_settings, jwt_secret_problem
 from .database import SessionLocal, engine, ensure_schema
 from . import mcp_server, observability
 from .routers import admin, ai_admin, ai_data as ai_data_router, report_archive as report_archive_router, users_admin as users_admin_router, bom as bom_router, exports as exports_router, appconfig, entities, home, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, spend_capex, spend_contracts, spend_import, spend_plans, spend_payments, spend_proposals, spend_quotes, spend_renovations, spend_reports, vcenters
@@ -26,9 +26,23 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 _scheduler_task = None
 
 
+def check_startup_secrets(settings) -> None:
+    """Refuse to start with a guessable JWT_SECRET (forged admin cookies, readable stored
+    secrets); warn when SECRETS_KEY is unset (stored secrets then derive from JWT_SECRET)."""
+    problem = jwt_secret_problem(settings.jwt_secret)
+    if problem:
+        logger.critical("Từ chối khởi động: JWT_SECRET không an toàn — đặt chuỗi ngẫu nhiên dài "
+                        "(openssl rand -hex 32). / Refusing to start: %s.", problem)
+        raise RuntimeError(f"Unsafe JWT_SECRET: {problem}. Set a long random value (openssl rand -hex 32).")
+    if not (settings.secrets_key or "").strip():
+        logger.warning("Chưa đặt SECRETS_KEY: mật khẩu nguồn lưu trong DB đang mã hoá bằng khoá suy ra từ "
+                       "JWT_SECRET. / SECRETS_KEY is not set; stored secrets use a key derived from JWT_SECRET.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    check_startup_secrets(settings)
     ensure_schema()
 
     db = SessionLocal()
@@ -63,13 +77,23 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Infra Capacity Ops Management API", lifespan=lifespan)
 
 settings = get_settings()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+
+def cors_options(origins):
+    """CORS kwargs. Same-origin frontend needs none; a wildcard never goes with credentials
+    (Starlette would echo any Origin with Allow-Credentials, exposing the session cookie)."""
+    allow_credentials = True
+    if "*" in origins:
+        logger.warning("CORS_ORIGINS='*': tắt allow_credentials — hãy khai báo danh sách origin cụ thể. "
+                       "/ Wildcard CORS origin configured; credentials disabled.")
+        allow_credentials = False
+    return {"allow_origins": origins, "allow_credentials": allow_credentials,
+            "allow_methods": ["*"], "allow_headers": ["*"]}
+
+
+_cors_origins = settings.cors_origin_list()
+if _cors_origins:
+    app.add_middleware(CORSMiddleware, **cors_options(_cors_origins))
 
 app.include_router(auth.router)
 app.include_router(vcenters.router)
