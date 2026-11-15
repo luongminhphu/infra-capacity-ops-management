@@ -9,10 +9,15 @@ Output rows use the SAME camelCase field names as the frontend's
 appState.hosts / appState.vms so they can be persisted and served back to the
 UI with zero translation layer (see app/capacity.py docstring).
 """
+import http.client
 import logging
+import socket
 import ssl
+import threading
+import types
 from typing import Any, Dict, List, Optional, Tuple
 
+from pyVim import connect as _pyvim_connect
 from pyVim.connect import Disconnect, SmartConnect
 from pyVmomi import vim, vmodl
 
@@ -26,7 +31,63 @@ class VCenterConnectionError(RuntimeError):
     pass
 
 
+# PropertyCollector faults that mean "this vCenter does not support the bulk request as built"
+# (old version, unknown property path / type). Only these switch to per-object reads: a network
+# error, a timeout or an expired session would only get worse with tens of thousands more calls.
+FALLBACK_FAULTS = (vmodl.fault.InvalidArgument, vmodl.fault.InvalidType, vmodl.fault.NotSupported,
+                   vmodl.fault.InvalidRequest, vmodl.fault.MethodNotFound)
+
+
+def timeout_for(cfg: VCenterConfig) -> int:
+    """Seconds allowed for one SOAP call to this vCenter (per source, else VCENTER_TIMEOUT_SECONDS)."""
+    t = getattr(cfg, "timeout", None)
+    if not t:
+        from ..config import get_settings
+        t = get_settings().vcenter_timeout_seconds
+    return max(5, int(t))
+
+
+def _timeout_error(cfg: VCenterConfig, timeout: int, exc: BaseException) -> VCenterConnectionError:
+    return VCenterConnectionError(
+        f"vCenter '{cfg.name}' ({cfg.host}) không phản hồi trong {timeout} giây "
+        f"(VCENTER_TIMEOUT_SECONDS). Kiểm tra mạng / tải vCenter. Chi tiết: {type(exc).__name__}: {exc}"
+    )
+
+
+# SmartConnect first discovers the API version (GET /sdk/vimServiceVersions.xml) through
+# `pyVim.connect.http_client.HTTPSConnection(...)` WITHOUT any timeout (pyVmomi 8.0.3), so
+# httpConnectionTimeout alone does not stop a vCenter that accepts TCP and never answers.
+# pyVim.connect gets this thin stand-in for http.client: identical except that connections built
+# without a timeout use the one of the current _connect() call (thread-local, so parallel syncs
+# of different vCenters each keep their own value). Everything else is the real module.
+_tls = threading.local()
+
+
+class _HttpClientWithTimeout(types.ModuleType):
+    def __getattr__(self, name):
+        return getattr(http.client, name)
+
+    @staticmethod
+    def HTTPSConnection(*args, **kwargs):
+        kwargs.setdefault("timeout", getattr(_tls, "timeout", None) or socket.getdefaulttimeout())
+        return http.client.HTTPSConnection(*args, **kwargs)
+
+    @staticmethod
+    def HTTPConnection(*args, **kwargs):
+        kwargs.setdefault("timeout", getattr(_tls, "timeout", None) or socket.getdefaulttimeout())
+        return http.client.HTTPConnection(*args, **kwargs)
+
+
+if getattr(_pyvim_connect, "http_client", None) is http.client:
+    _pyvim_connect.http_client = _HttpClientWithTimeout("http_client")
+
+
 def _connect(cfg: VCenterConfig, timeout: Optional[int] = None):
+    # httpConnectionTimeout becomes the socket timeout of the SOAP stub: it bounds the login AND
+    # every later call on this connection. None (the old value) means wait forever. The version
+    # discovery before the login gets the same value through _HttpClientWithTimeout.
+    timeout = timeout or timeout_for(cfg)
+    _tls.timeout = timeout
     context = None
     if not cfg.verify_ssl:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -43,10 +104,14 @@ def _connect(cfg: VCenterConfig, timeout: Optional[int] = None):
             sslContext=context,
             httpConnectionTimeout=timeout,
         )
+    except (socket.timeout, TimeoutError) as exc:
+        raise _timeout_error(cfg, timeout, exc) from exc
     except Exception as exc:  # noqa: BLE001 - surface a friendly, actionable error
         raise VCenterConnectionError(
             f"Không kết nối được vCenter '{cfg.name}' ({cfg.host}): {exc}"
         ) from exc
+    finally:
+        _tls.timeout = None
     return si
 
 
@@ -236,11 +301,15 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
                  (vim.VirtualMachine, VM_PROPS), (vim.Datastore, DATASTORE_PROPS)]
         try:
             fetched = [_retrieve(content, t, p) for t, p in specs]
-        except Exception as exc:  # noqa: BLE001 — e.g. an old vCenter rejecting a property path
-            logger.warning("Bulk property retrieval failed on %s (%s) — falling back to per-object reads",
-                           cfg.key, type(exc).__name__)
+        except FALLBACK_FAULTS as exc:      # an old vCenter rejecting the bulk request / a property path
+            logger.warning("Bulk property retrieval not supported on %s (%s) — falling back to per-object reads",
+                           cfg.key, type(exc).__name__, exc_info=True)
             fetched = [_retrieve_lazy(content, t, p) for t, p in specs]
         return build_rows(*fetched)
+    except (socket.timeout, TimeoutError) as exc:
+        raise _timeout_error(cfg, timeout_for(cfg), exc) from exc
+    except (ConnectionError, OSError) as exc:
+        raise VCenterConnectionError(f"Mất kết nối tới vCenter '{cfg.name}' ({cfg.host}) khi đang đọc dữ liệu: {exc}") from exc
     finally:
         try:
             Disconnect(si)

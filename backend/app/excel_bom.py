@@ -130,7 +130,7 @@ def build_bom_xlsx(data: Dict[str, Any]) -> bytes:
                 _t(ws, row, 3, str(it.get("desc") or "")[:1000], font=_font(9.5, bold), alignment=Alignment(vertical="top", wrap_text=True), border=BOX)
                 _t(ws, row, 4, str(it.get("unit") or "")[:20], font=_font(9.5), alignment=Alignment(horizontal="center", vertical="top"), border=BOX)
                 q, pr, tot = _n(it.get("qty")), _n(it.get("price")), _n(it.get("total"))
-                _t(ws, row, 5, q, font=_font(9.5), number_format="#,##0.##", alignment=Alignment(horizontal="center", vertical="top"), border=BOX)
+                _t(ws, row, 5, q, font=_font(9.5), number_format=_qty_fmt(q), alignment=Alignment(horizontal="center", vertical="top"), border=BOX)
                 _t(ws, row, 6, pr, font=_font(9.5), number_format=money, alignment=Alignment(vertical="top"), border=BOX)
                 cell = ws.cell(row=row, column=7)
                 cell.value = f"=IF(AND(ISNUMBER(E{row}),ISNUMBER(F{row})),E{row}*F{row},{tot if tot is not None else 0})" if pr is not None else tot
@@ -250,6 +250,14 @@ def build_bom_xlsx(data: Dict[str, Any]) -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def _qty_fmt(q: Optional[float]) -> str:
+    """Whole quantities show without a decimal point. Excel renders "#,##0.##" on 2 as "2." (trailing
+    separator), so that format is only used when the quantity really has a fraction."""
+    if q is not None and float(q).is_integer():
+        return "#,##0"
+    return "#,##0.##"
 
 
 def _n(v: Any) -> Optional[float]:
