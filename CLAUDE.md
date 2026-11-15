@@ -4,7 +4,8 @@
 Veritas NetBackup. Đọc dữ liệu **chỉ đọc** từ các vCenter và NetBackup primary server (khai báo ở
 Cài đặt → Kết nối nguồn dữ liệu, hoặc bằng biến `VCENTER_i_*` / `NETBACKUP_i_*`),
 lưu lịch sử vào PostgreSQL, hiển thị dashboard Điều hành / Kỹ thuật và xuất báo cáo PDF / Excel.
-Chi tiết nghiệp vụ nằm trong `README.md` (viết bằng tiếng Việt).
+Tổng quan + triển khai trong `README.md`; chi tiết nghiệp vụ từng tính năng và vận hành trong
+`docs/huong-dan-chi-tiet.md` (viết bằng tiếng Việt). README giữ ngắn — mục mới viết vào hướng dẫn chi tiết.
 
 ## Stack
 

@@ -60,4 +60,4 @@ ngắn, nêu thẳng vấn đề → quyết định đề nghị → thời đi
       kiểm tra số trang, ngắt trang, không tràn bảng, dấu tiếng Việt hiển thị đúng.
 - [ ] Số liệu trên PDF khớp số trên web cho cùng phạm vi.
 - [ ] Mọi chuỗi ngoài đã qua `esc()`; không có URL ngoài trong HTML.
-- [ ] Cập nhật mục báo cáo tương ứng trong `README.md` nếu đổi bố cục / tham số.
+- [ ] Cập nhật mục báo cáo tương ứng trong `docs/huong-dan-chi-tiet.md` nếu đổi bố cục / tham số.
