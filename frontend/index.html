@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="css/styles.css?v=__ASSET_V__" />
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="vendor/chart-4.6.1.umd.min.js"></script>
+<script src="vendor/lucide-1.73.0.min.js"></script>
 </head>
 <body data-view="dashboard">
 <a href="#mainContent" class="skip-link">Bỏ qua đến nội dung chính</a>
@@ -1029,6 +1029,12 @@
             <div id="spendSettingsMount"></div>
           </section>
 
+          <section class="panel panel-wide hidden" id="usersPanel" data-set-tab="users">
+            <div class="panel-head"><div><div class="panel-title">Người dùng &amp; quyền <span class="badge-admin">Admin</span></div>
+              <p class="panel-sub">Mọi tài khoản ở một chỗ: nguồn đăng nhập (Entra ID / cục bộ), passkey, link mời và vai trò từng module.</p></div></div>
+            <div id="usersSettingsMount"></div>
+          </section>
+
           <section class="panel hidden" id="authPanel" data-set-tab="auth">
             <div class="panel-head"><div><div class="panel-title">Đăng nhập & bảo mật <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">SSO Microsoft Entra ID cho tài khoản công ty; tài khoản cục bộ đăng nhập bằng Passkey (Face ID / Touch ID, không mật khẩu). Chạy sau Microsoft Entra Application Proxy để không phải mở app ra Internet.</p></div></div>
@@ -1086,6 +1092,8 @@
 <script src="js/core.js?v=__ASSET_V__"></script>
 <script src="js/ui.js?v=__ASSET_V__"></script>
 <script src="js/routes.js?v=__ASSET_V__"></script>
+<script src="js/views/capacity.js?v=__ASSET_V__"></script>
+<script src="js/views/whatif.js?v=__ASSET_V__"></script>
 <script src="js/views/history.js?v=__ASSET_V__"></script>
 <script src="js/views/executive.js?v=__ASSET_V__"></script>
 <script src="js/views/sizing.js?v=__ASSET_V__"></script>
@@ -1094,20 +1102,11 @@
 <script src="js/views/reports.js?v=__ASSET_V__"></script>
 <script src="js/views/admin.js?v=__ASSET_V__"></script>
 <script src="js/views/sources.js?v=__ASSET_V__"></script>
-<script src="js/views/spend.js?v=__ASSET_V__"></script>
-<script src="js/views/spend_capex.js?v=__ASSET_V__"></script>
-<script src="js/views/spend_report.js?v=__ASSET_V__"></script>
-<script src="js/views/spend_contract.js?v=__ASSET_V__"></script>
-<script src="js/views/spend_proposal.js?v=__ASSET_V__"></script>
-<script src="js/views/spend_payment.js?v=__ASSET_V__"></script>
-<script src="js/views/spend_quote.js?v=__ASSET_V__"></script>
-<script src="js/views/spend_renovation.js?v=__ASSET_V__"></script>
 <script src="js/views/home.js?v=__ASSET_V__"></script>
 <script src="js/views/entity.js?v=__ASSET_V__"></script>
 <script src="js/views/ai.js?v=__ASSET_V__"></script>
 <script src="js/views/ai_data.js?v=__ASSET_V__"></script>
 <script src="js/views/ai_assist.js?v=__ASSET_V__"></script>
-<script src="js/views/bom.js?v=__ASSET_V__"></script>
 <script src="js/views/passkey.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>

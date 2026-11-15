@@ -21,7 +21,7 @@ async function homeLoadPrefs() {
   if (homeState.prefsLoaded) return;
   homeState.prefsLoaded = true;
   try {
-    const p = await apiRequest('/me/prefs');
+    const p = await uiLoadPrefs();
     if (p.inboxFilter && typeof p.inboxFilter === 'object') {
       homeState.level = p.inboxFilter.level || '';
       homeState.source = p.inboxFilter.source || '';
@@ -40,7 +40,7 @@ async function renderHomeView(fresh) {
   if (!mount) return;
   homeBind();
   await homeLoadPrefs();
-  if (!homeState.data) mount.innerHTML = '<div class="empty-note">Đang tải…</div>';
+  if (!homeState.data) mount.innerHTML = uiNote('Đang tải…');
   const [inbox, brief, ai] = await Promise.allSettled([apiRequest(`/inbox?show=${homeState.show}${fresh ? '&fresh=true' : ''}`), apiRequest('/reports/brief'),
     typeof aiStatus === 'function' ? aiStatus() : Promise.resolve({ tasks: {} })]);
   homeState.aiOn = ai.status === 'fulfilled' && !!(ai.value.tasks || {}).home_brief;
@@ -171,10 +171,10 @@ async function renderPaymentsPage() {
     <div class="panel-head"><div><div class="panel-title">Đợt thanh toán</div>
       <p class="panel-sub">Mọi đợt thanh toán của mọi hợp đồng, sớm nhất trước. Mở hợp đồng để tick hồ sơ, nộp hồ sơ, ghi nhận thanh toán.</p></div>
       <div class="panel-toolbar"><div class="view-toggle">${[['open', 'Chưa thanh toán'], ['paid', 'Đã thanh toán'], ['all', 'Tất cả']].map(([k, t]) => `<button type="button" class="${payListState.status === k ? 'active' : ''}" data-paylist="${k}">${t}</button>`).join('')}</div></div></div>
-    ${payListState.status !== 'paid' ? `<p class="panel-sub">Tổng chưa thanh toán: <b>${spMoney(d.openTotal)}</b></p>` : ''}
+    ${payListState.status !== 'paid' ? `<p class="panel-sub">Tổng chưa thanh toán: <b>${uiMoney(d.openTotal, 'VND', 3)}</b></p>` : ''}
     <div class="table-scroll"><table class="data-table sp-table"><thead><tr><th>Hợp đồng</th><th>Đợt</th><th>Nhà cung cấp</th><th class="num">Số tiền</th><th>Hạn</th><th>Hồ sơ</th><th>Trạng thái</th></tr></thead><tbody>
     ${d.items.map(p => `<tr class="sp-row" data-ct-goto="${esc(p.contractCode)}" tabindex="0"><td><b>${esc(p.contractCode)}</b><span class="muted-sub">${esc(p.contractTitle)}</span></td>
-      <td class="wrap">${esc(p.seq)}. ${esc(p.title)}</td><td>${esc(p.vendor || '—')}</td><td class="num">${spMoney(p.amount)}</td>
+      <td class="wrap">${esc(p.seq)}. ${esc(p.title)}</td><td>${esc(p.vendor || '—')}</td><td class="num">${uiMoney(p.amount, 'VND', 3)}</td>
       <td>${uiPill(p.tone, p.dueLabel)}${p.dueDate ? `<span class="muted-sub">${esc(spDateSafe(p.dueDate))}</span>` : ''}</td>
       <td>${esc(p.docsDone)}/${esc(p.docsTotal)}${p.requiredMissing.length ? `<span class="muted-sub">thiếu: ${esc(p.requiredMissing.join(', '))}</span>` : ''}</td>
       <td>${esc(p.statusLabel)}</td></tr>`).join('') || `<tr><td colspan="7">${uiEmpty('Không có đợt thanh toán nào.')}</td></tr>`}
@@ -183,7 +183,7 @@ async function renderPaymentsPage() {
     const f = e.target.closest('[data-paylist]');
     if (f) { payListState.status = f.dataset.paylist; return renderPaymentsPage(); }
     const row = e.target.closest('[data-ct-goto]');
-    if (row && typeof ctOpenDetail === 'function') ctOpenDetail(row.dataset.ctGoto);
+    if (row) uiRequire('spend').then(() => ctOpenDetail(row.dataset.ctGoto), (err) => uiAlert(err.message));
   };
 }
 
@@ -196,7 +196,7 @@ async function runPlanningPreview(btn) {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== null && v !== '').map(([k, v]) => [k, String(v)]));
   if (typeof currentVcenterFilter !== 'undefined' && currentVcenterFilter) qs.set('vcenter', currentVcenterFilter);
   if (btn) btn.disabled = true;
-  out.innerHTML = '<div class="empty-note">Đang tính…</div>';
+  out.innerHTML = uiNote('Đang tính…');
   try {
     const d = await apiRequest(`/reports/planning?${qs}`);
     const recs = (d.recommendations && d.recommendations.recommendations) || [];
@@ -230,7 +230,7 @@ const planState = { result: null };
 async function planOpenCapex(c) {
   if (!c) return;
   let meta;
-  try { meta = await spLoadMeta(); meta = spState.meta; } catch (err) { uiAlert(err.message); return; }
+  try { await uiRequire('spend'); meta = await spLoadMeta(); meta = spState.meta; } catch (err) { uiAlert(err.message); return; }
   const year = Number((/(\d{4})/.exec(c.orderByLabel || '') || [])[1]) || meta.currentFiscalYear;
   const cats = meta.categories.filter(x => x.active);
   const body = `<form id="pcForm" class="sp-form" novalidate><div class="src-grid">

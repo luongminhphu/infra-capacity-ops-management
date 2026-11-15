@@ -92,7 +92,7 @@ async function renderSpendView() {
 async function spRenderSpendSub() {
   const mount = $('#spendMount');
   if (!mount) return;
-  if (!spState.meta) mount.innerHTML = '<div class="empty-note">Đang tải…</div>';
+  if (!spState.meta) mount.innerHTML = uiNote('Đang tải…');
   try {
     await spLoadMeta();
   } catch (err) {
@@ -603,12 +603,13 @@ async function spRenderAdmin() {
         <div class="sim-actions"><button class="btn btn-primary btn-sm" type="button" id="spSmtpSave">Lưu SMTP</button></div>
         <h4 class="sp-h">Vai trò người dùng</h4>
         <p class="panel-sub">Xem: đọc dữ liệu. Biên tập: tạo / sửa / gia hạn / ngừng. Duyệt: thêm xác nhận khoản dự kiến, kích hoạt lại. Tài khoản Entra lấy vai trò từ app role ICO.Spend.Viewer / Editor / Approver.</p>
-        <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Người dùng</th><th>Nguồn</th><th>Vai trò Chi phí</th></tr></thead><tbody>${userRows}</tbody></table></div>
+        ${currentUser && currentUser.isAdmin ? '<p class="panel-sub">Quản lý cùng tài khoản và passkey ở <a href="#/settings/users" data-nav-link="set-users">Cài đặt → Người dùng &amp; quyền</a>.</p>'
+          : `<div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Người dùng</th><th>Nguồn</th><th>Vai trò Chi phí</th></tr></thead><tbody>${userRows}</tbody></table></div>`}
       </div>
       <div>
         <h4 class="sp-h">Kênh nhắc hạn <span class="badge-admin">Admin</span></h4>
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Kênh</th><th>Gửi tới</th><th>Thử gần nhất</th><th>Bật</th><th></th></tr></thead>
-          <tbody>${chRows || '<tr><td colspan="5" class="empty-note">Chưa có kênh — thêm email hoặc Discord để bắt đầu nhắc hạn.</td></tr>'}</tbody></table></div>
+          <tbody>${chRows || uiEmptyRow(5, 'Chưa có kênh — thêm email hoặc Discord để bắt đầu nhắc hạn.')}</tbody></table></div>
         <div class="sim-actions"><button class="btn btn-secondary btn-sm" type="button" data-ch-add="email"><i data-lucide="plus"></i>Email</button>
           <button class="btn btn-secondary btn-sm" type="button" data-ch-add="discord"><i data-lucide="plus"></i>Discord</button></div>
         <h4 class="sp-h">Nhật ký nhắc hạn</h4>
@@ -616,7 +617,7 @@ async function spRenderAdmin() {
           ${st.at ? ` · gửi ${esc(st.sent)} · lỗi ${esc(st.failed)} · bỏ qua ${esc(st.skipped)}` : ''} · volume file: ${esc(free)}</p>
         <div class="sim-actions"><button class="btn btn-secondary btn-sm" type="button" id="spRunNow">Chạy nhắc hạn ngay</button></div>
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Thời gian</th><th>Khoản</th><th>Mốc</th><th>Kênh</th><th>Kết quả</th><th></th></tr></thead>
-          <tbody>${logRows || '<tr><td colspan="6" class="empty-note">Chưa có lượt nhắc nào.</td></tr>'}</tbody></table></div>
+          <tbody>${logRows || uiEmptyRow(6, 'Chưa có lượt nhắc nào.')}</tbody></table></div>
       </div>
     </div>
     <div id="ppAdminMount"></div>

@@ -149,7 +149,7 @@ async function cpxOpenDetail(code) {
     <h4 class="sp-h">Hạng mục và Opex gia hạn</h4>
     <div class="table-scroll table-scroll-flat"><table class="data-table">
       <thead><tr><th></th><th>Hạng mục</th><th class="num">Giá trị sau VAT</th><th class="num">Thời hạn đi kèm</th><th>Gia hạn dự kiến</th><th>Opex</th></tr></thead>
-      <tbody>${itemRows || '<tr><td colspan="6" class="empty-note">Chưa có hạng mục.</td></tr>'}</tbody></table></div>
+      <tbody>${itemRows || uiEmptyRow(6, 'Chưa có hạng mục.')}</tbody></table></div>
     <p class="panel-sub">“Theo Capex”: khoản tự cập nhật khi sửa dự án. Đã xác nhận hoặc sửa tay thì không bị ghi đè — nếu kế hoạch đổi sẽ hiện “Lệch kế hoạch”.</p>
     ${orphans}`;
   const btn = (attr, label, cls = 'btn-secondary') => `<button class="btn ${cls} btn-sm" type="button" ${attr}>${label}</button>`;

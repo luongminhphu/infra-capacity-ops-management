@@ -1,5 +1,6 @@
-"""Cài đặt → Đăng nhập & bảo mật (admin): local accounts without a password (passkey invite link),
-passkeys of every account, and the sign-in / App Proxy configuration as the server sees it."""
+"""Cài đặt → Người dùng & quyền (admin): every account with its sign-in source, passkeys and module roles,
+local accounts without a password (passkey invite link); Cài đặt → Đăng nhập & bảo mật: the sign-in /
+App Proxy configuration as the server sees it."""
 import datetime as dt
 import os
 import re
@@ -14,7 +15,9 @@ from ..config import get_settings
 from ..database import get_db
 from ..models import PasskeyInvite, User, UserPasskey
 from ..security import is_admin, require_admin
+from ..features import get_features, is_on
 from ..spend import service
+from ..spend.roles import LABELS as SPEND_ROLE_LABELS, ROLES as SPEND_ROLES
 from ..timeutil import to_iso_utc
 
 router = APIRouter(prefix="/api/admin", tags=["admin-users"])
@@ -32,7 +35,9 @@ def _user_out(u: User, n_keys: int, invite) -> Dict[str, Any]:
     return {"id": u.id, "username": u.username, "displayName": u.display_name, "source": u.auth_source or "local",
             "hasPassword": (u.password_hash or "").startswith("$2"), "passkeys": n_keys, "isAdmin": is_admin(u),
             "lastLoginAt": to_iso_utc(u.last_login_at) if u.last_login_at else None,
-            "inviteExpiresAt": to_iso_utc(invite.expires_at) if invite else None}
+            "inviteExpiresAt": to_iso_utc(invite.expires_at) if invite else None,
+            # Module roles on the same page (changed through /api/spend/admin/users/{id}/role, audited there).
+            "spendRole": u.spend_role or "none", "spendRoleSource": u.spend_role_source}
 
 
 @router.get("/users")
@@ -41,7 +46,8 @@ def list_users(user: User = Depends(require_admin), db: Session = Depends(get_db
     now = dt.datetime.utcnow()
     invites = {i.user_id: i for i in db.query(PasskeyInvite).filter(PasskeyInvite.used_at.is_(None), PasskeyInvite.expires_at > now)}
     rows = db.query(User).order_by(User.auth_source, User.username).limit(2000).all()
-    return {"items": [_user_out(u, counts.get(u.id, 0), invites.get(u.id)) for u in rows]}
+    return {"items": [_user_out(u, counts.get(u.id, 0), invites.get(u.id)) for u in rows],
+            "spend": {"on": is_on(get_features(db), "spend"), "roles": [{"value": r, "label": SPEND_ROLE_LABELS[r]} for r in SPEND_ROLES]}}
 
 
 @router.post("/users")

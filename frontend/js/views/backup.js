@@ -161,7 +161,7 @@ function bkFindingsTable(findings, limit) {
     <td class="wrap"><b>${esc(f.title)}</b>${f.detail ? `<span class="muted-sub bk-wrap">${esc(f.detail)}</span>` : ''}</td>
     <td class="wrap">${esc(f.action)}</td></tr>`).join('');
   return `<div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mức độ</th><th>Hạng mục</th><th>Phát hiện</th><th>Khuyến nghị</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="4" class="empty-note">Không có phát hiện nào.</td></tr>'}</tbody></table></div>`;
+    <tbody>${rows || uiEmptyRow(4, 'Không có phát hiện nào.')}</tbody></table></div>`;
 }
 
 function bkOverview(s) {
@@ -181,7 +181,7 @@ function bkOverview(s) {
         <div class="panel-head panel-head-tight"><div><div class="panel-title">Nguyên nhân lỗi</div><p class="panel-sub">Gom theo đầu mối xử lý.</p></div>
           <div class="panel-toolbar"><button class="btn btn-secondary btn-sm hidden" type="button" data-ai-act="backup" data-ai-gate="backup_analysis">AI phân tích lỗi</button></div></div>
         <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Nhóm</th><th>Job</th><th>Client</th></tr></thead>
-        <tbody>${groups || '<tr><td colspan="3" class="empty-note">Không có job lỗi trong kỳ.</td></tr>'}</tbody></table></div>
+        <tbody>${groups || uiEmptyRow(3, 'Không có job lỗi trong kỳ.')}</tbody></table></div>
       </article>
     </section>
     <section class="table-card ai-out" id="bkAiOut" aria-live="polite"></section>
@@ -189,7 +189,7 @@ function bkOverview(s) {
       <div class="panel-head"><div><div class="panel-title">Client cần xử lý</div><p class="panel-sub">Lỗi liên tiếp, quá RPO hoặc lần gần nhất không thành công.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-clients">Xem tất cả client</button></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Client</th><th>Thành công gần nhất</th><th>Kết quả lần cuối</th><th>Đánh giá</th></tr></thead>
-      <tbody>${crit || '<tr><td colspan="4" class="empty-note">Mọi client đều đạt.</td></tr>'}</tbody></table></div>
+      <tbody>${crit || uiEmptyRow(4, 'Mọi client đều đạt.')}</tbody></table></div>
     </section>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Phát hiện &amp; khuyến nghị</div><p class="panel-sub">Theo các ngưỡng tại trang Nguồn &amp; ngưỡng.</p></div></div>
@@ -216,7 +216,7 @@ function bkClients(s) {
           <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="clientQ" placeholder="Tìm client / policy" value="${esc(f.q)}"/></span>
         </div></div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>Client</th><th>Policy</th><th>Job gần nhất</th><th>Kết quả</th><th>Thành công gần nhất</th><th>Đã qua</th><th>Lỗi liên tiếp</th><th>Job</th><th>Lỗi</th><th>TB</th><th>Đánh giá</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="11" class="empty-note">Không có client phù hợp.</td></tr>'}</tbody></table></div>
+      <tbody>${rows || uiEmptyRow(11, 'Không có client phù hợp.')}</tbody></table></div>
       <div class="row-count">${list.length} / ${(s.clients || []).length} client</div>
     </section>`;
 }
@@ -225,7 +225,7 @@ function bkJobs() {
   const st = bkState();
   const f = st.jobFilter, j = st.jobs;
   let body;
-  if (!j || j.loading) body = '<div class="empty-note">Đang tải job…</div>';
+  if (!j || j.loading) body = uiNote('Đang tải job…');
   else if (j.error) body = `<div class="empty-note tone-crit">${esc(j.error)}</div>`;
   else {
     const rows = j.rows.map(r => `<tr>
@@ -235,7 +235,7 @@ function bkJobs() {
       <td>${bkPill(BK_OUTCOME[r.outcome].cls, BK_OUTCOME[r.outcome].label)}</td>
       <td class="wrap">${r.status !== null && r.status !== undefined ? `<b>${r.status}</b> · ` : ''}${esc(r.statusText)}${r.group ? `<span class="muted-sub">${esc(r.group)}</span>` : ''}</td></tr>`).join('');
     body = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Job ID</th><th>Loại</th><th>Client</th><th>Policy / lịch</th><th>Bắt đầu</th><th>Thời lượng</th><th>GB</th><th>Kết quả</th><th>Mã · mô tả</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="9" class="empty-note">Không có job phù hợp.</td></tr>'}</tbody></table></div>
+      <tbody>${rows || uiEmptyRow(9, 'Không có job phù hợp.')}</tbody></table></div>
       <div class="row-count">${j.rows.length < j.total ? `Hiển thị ${j.rows.length} / ` : ''}${bkNum(j.total)} job — danh sách đầy đủ trong file Excel.</div>`;
   }
   return `
@@ -288,7 +288,7 @@ function bkCoverage(s) {
           <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="covQ" placeholder="Tìm VM / host / IP" value="${esc(f.q)}"/></span>
         </div></div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>VM</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>IP</th><th>vCPU</th><th>RAM (GB)</th><th>Disk (GB)</th><th>Tình trạng</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="9" class="empty-note">Không có VM nào.</td></tr>'}</tbody></table></div>
+      <tbody>${rows || uiEmptyRow(9, 'Không có VM nào.')}</tbody></table></div>
       <div class="row-count">${vms.length} VM</div>
     </section>`;
 }
@@ -368,7 +368,7 @@ function bkScopeEditorHtml() {
       <button class="btn btn-secondary btn-sm" type="button" data-bk-action="scope-select-visible" ${dis}>Chọn các cluster đang hiện</button>
       <button class="btn btn-ghost btn-sm" type="button" data-bk-action="scope-clear" ${dis}>Bỏ chọn tất cả</button>
     </div>
-    <div class="bk-sc-tree ${ed.mode === 'all' ? 'is-disabled' : ''}">${tree || '<div class="empty-note">Không có cluster khớp bộ lọc.</div>'}</div>
+    <div class="bk-sc-tree ${ed.mode === 'all' ? 'is-disabled' : ''}">${tree || uiNote('Không có cluster khớp bộ lọc.')}</div>
     <div class="bk-sc-foot">
       <span class="muted">${ed.mode === 'all' ? 'Mọi VM đang chạy đều được yêu cầu có backup.' : `${rules.length} mục phạm vi · khoảng ${bkNum(nVm)} VM đang chạy cần backup.`}
         Nên chọn theo cluster: chọn theo host sẽ bỏ sót VM khi DRS / vMotion chuyển VM sang host khác.</span>
@@ -507,7 +507,7 @@ function bkScheduleEditor() {
       </div></div>
     ${st.schedMsg ? `<p class="logo-upload-hint">${esc(st.schedMsg)}</p>` : ''}
     <div class="table-scroll"><table class="data-table bk-sched-edit"><thead><tr><th>Hệ thống</th><th>Policy</th><th>Ngày Full</th><th>Ngày Incremental</th><th>Bắt đầu</th><th>Kết thúc</th><th>Giữ Full (ngày)</th><th>Bật</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="9" class="empty-note">Chưa có lịch thủ công — đang dùng lịch đọc từ NetBackup.</td></tr>'}</tbody></table></div>
+    <tbody>${rows || uiEmptyRow(9, 'Chưa có lịch thủ công — đang dùng lịch đọc từ NetBackup.')}</tbody></table></div>
     ${ed.unmappedPolicies && ed.unmappedPolicies.length ? `<div class="row-count">Policy chưa thuộc lịch thủ công nào: ${esc(ed.unmappedPolicies.slice(0, 30).join(', '))}</div>` : ''}
   </section>`;
 }
@@ -539,13 +539,13 @@ function bkStorage(s) {
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Disk pool</div><p class="panel-sub">Cảnh báo từ ${bkNum(s.thresholds.storage_warn_pct)}%, nghiêm trọng từ ${bkNum(s.thresholds.storage_crit_pct)}% hoặc khi dự kiến chạm ngưỡng high-water (HWM) trong ${s.thresholds.storage_days_warn} ngày theo xu hướng 30 ngày.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Disk pool</th><th>Loại</th><th>Trạng thái</th><th>Tổng (TB)</th><th>Đã dùng</th><th>Còn trống</th><th>% dùng</th><th>TB/ngày</th><th>Ngày tới HWM</th><th>Đánh giá</th></tr></thead>
-      <tbody>${pools || '<tr><td colspan="10" class="empty-note">Chưa có dữ liệu disk pool (cần quyền xem Storage).</td></tr>'}</tbody></table></div>
+      <tbody>${pools || uiEmptyRow(10, 'Chưa có dữ liệu disk pool (cần quyền xem Storage).')}</tbody></table></div>
       <div class="chart-wrap" style="margin-top:var(--space-4);min-height:240px;"><canvas id="bkChartStorage"></canvas></div>
     </section>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Policy backup</div><p class="panel-sub">Policy đang bật mà không có job trong 48 giờ được đánh giá “Không chạy”. Số client của policy VMware lấy theo VM thực tế được backup.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Policy</th><th>Loại</th><th>Hoạt động</th><th>Client</th><th>Storage</th><th>Lịch (retention)</th><th>Chạy gần nhất</th><th>Job</th><th>Lỗi</th><th>Tỷ lệ</th><th>Đánh giá</th></tr></thead>
-      <tbody>${pols || '<tr><td colspan="11" class="empty-note">Chưa có dữ liệu policy (cần quyền xem Policy).</td></tr>'}</tbody></table></div>
+      <tbody>${pols || uiEmptyRow(11, 'Chưa có dữ liệu policy (cần quyền xem Policy).')}</tbody></table></div>
     </section>`;
 }
 
@@ -566,12 +566,12 @@ function bkConfig() {
     return `<div class="field"><label for="bkTh_${m.key}">${esc(m.label)}${m.unit ? ` (${esc(m.unit)})` : ''}</label>
       ${input}
       <span class="muted-sub">Mặc định: ${esc(String(d))}</span></div>`;
-  }).join('') : '<div class="empty-note">Đang tải…</div>';
+  }).join('') : uiNote('Đang tải…');
   return `
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Máy chủ backup</div><p class="panel-sub">Thêm / sửa máy chủ, thông tin đăng nhập và API key ở <a href="#/settings/sources" data-nav-link="set-sources">Cài đặt → Kết nối nguồn dữ liệu</a> (cấu hình bằng biến <code>NETBACKUP_i_*</code> vẫn được hỗ trợ). Tự động đồng bộ cùng chu kỳ vCenter.</p></div></div>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Server</th><th>Địa chỉ</th><th>Xác thực</th><th>API</th><th>Đồng bộ gần nhất</th><th>Trạng thái</th><th></th></tr></thead>
-      <tbody>${servers || '<tr><td colspan="7" class="empty-note">Chưa có máy chủ backup. Thêm ở Cài đặt → Kết nối nguồn dữ liệu (bật DEMO để chạy thử).</td></tr>'}</tbody></table></div>
+      <tbody>${servers || uiEmptyRow(7, 'Chưa có máy chủ backup. Thêm ở Cài đặt → Kết nối nguồn dữ liệu (bật DEMO để chạy thử).')}</tbody></table></div>
       <div class="insight-box"><strong>Tài khoản chỉ đọc:</strong> tạo user dịch vụ trên NetBackup (ví dụ <code>svc_nbu_ro</code>), gán RBAC role tuỳ chỉnh chỉ có quyền <b>View</b> cho Jobs, Policies (NetBackup policies), Storage (disk pools / storage units) — không cấp quyền thao tác. Ưu tiên cấp <b>API key</b> cho user này (NetBackup 9.x trở lên) và khai báo ở <code>NETBACKUP_i_API_KEY</code>; app chỉ gọi các API GET. Chi tiết trong README.</div>
     </section>
     <section class="table-card">
@@ -587,10 +587,10 @@ function renderBackupBody() {
   if (!body) return;
   bkDestroyCharts();
   if (st.sub === 'config') { body.innerHTML = bkConfig(); refreshIcons(); return; }
-  if (st.loading && !st.summary) { body.innerHTML = '<div class="empty-note">Đang tải dữ liệu backup…</div>'; return; }
+  if (st.loading && !st.summary) { body.innerHTML = uiNote('Đang tải dữ liệu backup…'); return; }
   if (st.error) { body.innerHTML = `<section class="table-card"><div class="empty-note tone-crit">Không tải được dữ liệu backup: ${esc(st.error)}</div></section>`; return; }
   const s = st.summary;
-  if (!s) { body.innerHTML = '<div class="empty-note">Đang tải dữ liệu backup…</div>'; return; }
+  if (!s) { body.innerHTML = uiNote('Đang tải dữ liệu backup…'); return; }
   if (!(st.servers || []).length) {
     body.innerHTML = `<section class="table-card"><div class="empty-state">Chưa có máy chủ backup. Thêm máy chủ ở <a href="#/settings/sources" data-nav-link="set-sources">Cài đặt → Kết nối nguồn dữ liệu</a> (bật DEMO để chạy thử).</div></section>`;
     return;
@@ -630,7 +630,7 @@ function bkChartStorage(s) {
   const el = $('#bkChartStorage'); const tr = s.storageTrend;
   if (!el || !tr || tr.dates.length < 2) return;
   const c = chartPalette();
-  const colors = [c.primary, c.accent, '#7c3aed', '#ca8a04', '#db2777', c.muted];
+  const colors = [c.primary, c.accent, c.series[2], c.series[3], c.series[4], c.muted];
   bkState().charts.storage = new Chart(el, {
     type: 'line',
     data: { labels: tr.dates.map(d => `${d.slice(8, 10)}/${d.slice(5, 7)}`), datasets: tr.series.map((x, i) => ({ label: x.name, data: x.values, borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length], pointRadius: 0, tension: .2, spanGaps: true }))

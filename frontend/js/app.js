@@ -191,6 +191,15 @@ function initTheme() {
   document.documentElement.setAttribute('data-theme', theme);
 }
 
+/* Server copy of the user's preferences (ui.js uiLoadPrefs): theme, history range, report toggles. */
+async function applyUserPrefs() {
+  await uiLoadPrefs();
+  const theme = uiPref('theme');
+  if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+  if (typeof historyApplyPrefs === 'function') historyApplyPrefs();
+  ['rptAi', 'rptArchive'].forEach((id) => { const cb = document.getElementById(id); if (cb) cb.checked = uiPref(id === 'rptAi' ? 'reportAi' : 'reportArchive', false) === true; });
+}
+
 /* ---------- Screen switching ---------- */
 function showLoginScreen() {
   $('#loginScreen').classList.remove('hidden');
@@ -230,6 +239,8 @@ async function handleLoginSubmit(e) {
 }
 
 async function handleLogout() {
+  uiFlushPrefs();
+  uiResetPrefs();
   try { sessionStorage.setItem('ico.noAuto', '1'); } catch (err) { /* stay on the login page after sign-out */ }
   let res = null;
   try { res = await api.logout(); } catch (err) { /* ignore */ }
@@ -765,7 +776,7 @@ async function persistImportIfReady() {
 /* ---------- Bootstrap ---------- */
 async function initAppData() {
   applyInitialRoute();
-  await loadFeatures();
+  await Promise.all([loadFeatures(), applyUserPrefs()]);
   if (typeof initAdminSettings === 'function') initAdminSettings(currentUser);
   try {
     const policy = await api.getSettings();

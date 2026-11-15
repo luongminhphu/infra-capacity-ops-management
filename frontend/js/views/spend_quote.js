@@ -53,7 +53,7 @@ function vdRender() {
       ${vdState.error ? `<p class="criteria-status error">${esc(vdState.error)}</p>` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
         <thead><tr><th>Tên viết tắt</th><th>Tên đầy đủ</th><th>Lĩnh vực</th><th>Trạng thái</th><th class="num">Báo giá</th><th class="num">Hợp đồng</th><th class="num">Opex + Capex</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" class="empty-note">Chưa có nhà cung cấp — NCC được tạo khi nhập Opex, Capex hoặc upload báo giá.</td></tr>'}</tbody>
+        <tbody>${rows || uiEmptyRow(7, 'Chưa có nhà cung cấp — NCC được tạo khi nhập Opex, Capex hoặc upload báo giá.')}</tbody>
       </table></div>
     </section>`;
   refreshIcons();
@@ -144,7 +144,7 @@ function qtRenderList() {
       ${qtState.error ? `<p class="criteria-status error">${esc(qtState.error)}</p>` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
         <thead><tr><th>Mã</th><th>Gói</th><th>Khối</th><th>Trạng thái</th><th class="num">Báo giá</th><th>NCC được chọn</th><th>Cập nhật</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" class="empty-note">Chưa có gói báo giá.</td></tr>'}</tbody>
+        <tbody>${rows || uiEmptyRow(7, 'Chưa có gói báo giá.')}</tbody>
       </table></div>
     </section>`;
   refreshIcons();
@@ -518,7 +518,7 @@ async function qtOpenPrices() {
         <div class="sp-h">Chi tiết (${esc(r.items.length)}${r.truncated ? '+' : ''} dòng)</div>
         <div class="table-scroll"><table class="data-table"><thead><tr><th>Ngày</th><th>NCC</th><th>Gói</th><th>Hàng</th><th class="num">SL</th><th class="num">Đơn giá (VND)</th></tr></thead><tbody>
         ${r.items.map(i => `<tr><td>${esc(spDate(i.date))}</td><td>${esc(i.vendor)}${i.selected ? ' <span class="pill ok">chọn</span>' : ''}</td><td>${esc(i.request)}<span class="muted-sub">${esc(i.requestTitle)}</span></td>
-          <td class="wrap">${esc(i.description)}${i.model ? `<span class="muted-sub">${esc(i.model)}</span>` : ''}</td><td class="num">${esc(qtNum(i.qty, 3))} ${esc(i.unit || '')}</td><td class="num">${esc(qtNum(i.unitPriceVnd))}</td></tr>`).join('') || '<tr><td colspan="6" class="empty-note">Không có dòng nào.</td></tr>'}
+          <td class="wrap">${esc(i.description)}${i.model ? `<span class="muted-sub">${esc(i.model)}</span>` : ''}</td><td class="num">${esc(qtNum(i.qty, 3))} ${esc(i.unit || '')}</td><td class="num">${esc(qtNum(i.unitPriceVnd))}</td></tr>`).join('') || uiEmptyRow(6, 'Không có dòng nào.')}
         </tbody></table></div>`;
       spMsg('');
     } catch (err) { spMsg(err.message); }

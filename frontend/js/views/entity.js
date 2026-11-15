@@ -19,7 +19,7 @@ async function renderEntityView() {
   if (!mount) return;
   const p = entityParams();
   if (!p.name) { mount.innerHTML = uiEmpty('Chưa chọn đối tượng — tìm bằng Ctrl + K.'); return; }
-  mount.innerHTML = '<div class="empty-note">Đang tải…</div>';
+  mount.innerHTML = uiNote('Đang tải…');
   let d;
   try { d = await apiRequest(`/entities/${p.type}?${new URLSearchParams({ name: p.name, vcenter: p.vc })}`); }
   catch (err) { mount.innerHTML = `<section class="panel">${uiEmpty(err.message)}</section>`; return; }
@@ -97,9 +97,9 @@ const palState = { timer: null, seq: 0, items: [], active: 0 };
 const PAL_TYPE = { page: 'Trang', action: 'Thao tác', host: 'Host', vm: 'VM', client: 'Client backup', opex: 'Opex', capex: 'Capex',
   contract: 'Hợp đồng', quote: 'Báo giá', renovation: 'Cải tạo', proposal: 'Tờ trình', vendor: 'NCC' };
 const PAL_ACTIONS = [
-  { label: 'Tạo khoản Opex', page: 'spend-opex', run: () => typeof spOpenForm === 'function' && spOpenForm(), role: 'editor', feature: 'spend' },
-  { label: 'Tạo gói báo giá', page: 'spend-quotes', run: () => typeof qtOpenForm === 'function' && qtOpenForm(), role: 'editor', feature: 'spend' },
-  { label: 'Tạo dự án cải tạo văn phòng', page: 'spend-renovations', run: () => typeof rnOpenForm === 'function' && rnOpenForm(), role: 'editor', feature: 'spend' },
+  { label: 'Tạo khoản Opex', page: 'spend-opex', run: () => uiRequire('spend').then(() => spOpenForm()), role: 'editor', feature: 'spend' },
+  { label: 'Tạo gói báo giá', page: 'spend-quotes', run: () => uiRequire('spend').then(() => qtOpenForm()), role: 'editor', feature: 'spend' },
+  { label: 'Tạo dự án cải tạo văn phòng', page: 'spend-renovations', run: () => uiRequire('spend').then(() => rnOpenForm()), role: 'editor', feature: 'spend' },
   { label: 'Xem kết quả quy hoạch tài nguyên', page: 'planning', run: () => typeof runPlanningPreview === 'function' && runPlanningPreview() },
   { label: 'Đồng bộ dữ liệu ngay', run: () => { const b = $('#btnSyncNow'); if (b) b.click(); } },
 ];

@@ -169,35 +169,21 @@ async function renderAuthSettings(force) {
   panel.classList.remove('hidden');
   if (!force && Date.now() - authSettingsAt < 15000 && mount.childElementCount) return;
   authSettingsAt = Date.now();
-  let st, users;
-  try { [st, users] = await Promise.all([apiRequest('/admin/auth-status'), apiRequest('/admin/users')]); }
+  let st;
+  try { st = await apiRequest('/admin/auth-status'); }
   catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
   const kv = (k, v) => `<div class="sp-dl-item"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
-  const src = { local: 'Cục bộ', entra: 'Microsoft Entra ID' };
   mount.innerHTML = `
     <dl class="sp-dl">
       ${kv('Chế độ đăng nhập (AUTH_MODE)', esc(st.authMode))}${kv('Tài khoản cục bộ (AUTH_LOCAL_METHOD)', esc(st.localMethod))}
       ${kv('Entra ID', uiPill(st.entraEnabled ? 'ok' : 'na', st.entraEnabled ? 'Đang bật' : 'Tắt'))}
       ${kv('URL ngoài (PUBLIC_URL)', esc(st.publicUrl || '—'))}${kv('Redirect URI', esc(st.redirectUri || '—'))}
       ${kv('Tên miền passkey (RP ID)', esc(st.rpId || '—'))}${kv('Tài khoản break-glass', esc((st.breakglass || []).join(', ') || '—'))}
+      ${kv('Tài khoản & quyền', '<a href="#/settings/users" data-nav-link="set-users">Cài đặt → Người dùng &amp; quyền</a>')}
       ${kv('Request vừa rồi', esc(`${st.request.scheme}://${st.request.host || ''} · IP ${st.request.clientIp || '—'}${st.request.forwardedHost ? ' · X-Forwarded-Host ' + st.request.forwardedHost : ''}`))}
     </dl>
     <div class="sp-h">Kiểm tra cấu hình</div>
     <ul class="home-list">${st.checks.map(c => `<li class="home-item"><div class="home-item-main">${uiPill(c.ok ? 'ok' : 'warn', c.ok ? 'Đạt' : 'Cần xem')} ${esc(c.text)}${c.fix ? `<span class="muted-sub">${esc(c.fix)}</span>` : ''}</div></li>`).join('')}</ul>
-    <div class="sp-h">Tài khoản</div>
-    <div class="sim-actions"><input id="auNewUser" maxlength="64" placeholder="tên đăng nhập (vd phu.luong)" aria-label="Tên đăng nhập mới">
-      <input id="auNewName" maxlength="128" placeholder="Họ tên" aria-label="Họ tên">
-      <button class="btn btn-primary btn-sm" type="button" id="auCreate"><i data-lucide="user-plus"></i>Tạo tài khoản cục bộ (passkey)</button></div>
-    <p class="criteria-status" id="auMsg" role="status"></p>
-    <div id="auInvite"></div>
-    <div class="table-scroll"><table class="data-table"><thead><tr><th>Tài khoản</th><th>Nguồn</th><th>Mật khẩu</th><th class="num">Passkey</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
-      ${users.items.map(u => `<tr><td><b>${esc(u.username)}</b>${u.displayName ? `<span class="muted-sub">${esc(u.displayName)}</span>` : ''}${u.isAdmin ? ' <span class="badge-admin">Admin</span>' : ''}</td>
-        <td>${esc(src[u.source] || u.source)}</td><td>${u.source === 'local' ? (u.hasPassword ? 'Có' : 'Không') : '—'}</td>
-        <td class="num">${u.source === 'local' ? esc(u.passkeys) : '—'}${u.inviteExpiresAt ? `<span class="muted-sub">link mời hạn ${esc(spTimeSafe(u.inviteExpiresAt))}</span>` : ''}</td>
-        <td>${esc(u.lastLoginAt ? spTimeSafe(u.lastLoginAt) : '—')}</td>
-        <td>${u.source === 'local' ? `<button class="btn btn-ghost btn-sm" type="button" data-au-invite="${esc(u.id)}">Link mời passkey</button>
-          ${u.passkeys ? `<button class="btn btn-ghost btn-sm" type="button" data-au-keys="${esc(u.id)}" data-au-name="${esc(u.username)}">Passkey…</button>` : ''}` : ''}</td></tr>`).join('')}
-    </tbody></table></div>
     <details class="sp-history"><summary>Cấu hình Microsoft Entra Application Proxy</summary><div class="ap-guide">
       <ol>
         <li>Entra admin center → <b>Enterprise applications → New application → On-premises application</b>. Internal URL: địa chỉ nội bộ của ICO (vd <code>http://ico.internal:8000/</code>); External URL: <code>https://ico-&lt;tenant&gt;.msappproxy.net/</code> hoặc tên miền riêng + chứng chỉ.</li>
@@ -206,6 +192,47 @@ async function renderAuthSettings(force) {
         <li>Đặt <code>PUBLIC_URL</code> = External URL. Thêm <code>PUBLIC_URL/api/auth/oidc/callback</code> vào Redirect URI (Web) của app registration. Đặt <code>FORWARDED_ALLOW_IPS</code> = IP máy chủ connector (hoặc ingress).</li>
         <li>Connector chỉ cần đi ra Internet (443) — không mở cổng vào. Người dùng tạo passkey <b>sau khi</b> đã đặt PUBLIC_URL: passkey gắn với tên miền ngoài.</li>
       </ol></div></details>`;
+  refreshIcons();
+}
+
+let usersSettingsAt = 0;
+/* Một vai trò module: chọn được, trừ tài khoản admin (toàn quyền) và vai trò lấy từ app role Entra. */
+function usersRoleCell(u, roles) {
+  if (u.isAdmin) return uiPill('ok', 'Quản trị — toàn quyền');
+  const locked = u.spendRoleSource === 'entra';
+  const opts = roles.map(r => `<option value="${esc(r.value)}" ${r.value === u.spendRole ? 'selected' : ''}>${esc(r.label)}</option>`).join('');
+  return `<select data-au-role="${esc(u.id)}" ${locked ? 'disabled' : ''} aria-label="Vai trò Chi phí của ${esc(u.username)}">${opts}</select>${locked ? '<span class="muted-sub">Từ app role Entra</span>' : ''}`;
+}
+
+/* Cài đặt → Người dùng & quyền (admin): every account, how it signs in, its passkeys and module roles. */
+async function renderUsersSettings(force) {
+  const mount = $('#usersSettingsMount'), panel = $('#usersPanel');
+  if (!mount || !panel) return;
+  if (!(currentUser && currentUser.isAdmin)) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+  if (!force && Date.now() - usersSettingsAt < 15000 && mount.childElementCount) return;
+  usersSettingsAt = Date.now();
+  let users;
+  try { users = await apiRequest('/admin/users'); }
+  catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  const src = { local: 'Cục bộ', entra: 'Microsoft Entra ID' };
+  const spendCol = !!(users.spend && users.spend.on);
+  mount.innerHTML = `
+    <div class="sim-actions"><input id="auNewUser" maxlength="64" placeholder="tên đăng nhập (vd phu.luong)" aria-label="Tên đăng nhập mới">
+      <input id="auNewName" maxlength="128" placeholder="Họ tên" aria-label="Họ tên">
+      <button class="btn btn-primary btn-sm" type="button" id="auCreate"><i data-lucide="user-plus"></i>Tạo tài khoản cục bộ (passkey)</button></div>
+    <p class="criteria-status" id="auMsg" role="status"></p>
+    <div id="auInvite"></div>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>Tài khoản</th><th>Nguồn</th><th>Mật khẩu</th><th class="num">Passkey</th>${spendCol ? '<th>Chi phí &amp; HĐ</th>' : ''}<th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
+      ${users.items.map(u => `<tr><td><b>${esc(u.username)}</b>${u.displayName ? `<span class="muted-sub">${esc(u.displayName)}</span>` : ''}${u.isAdmin ? ' <span class="badge-admin">Admin</span>' : ''}</td>
+        <td>${esc(src[u.source] || u.source)}</td><td>${u.source === 'local' ? (u.hasPassword ? 'Có' : 'Không') : '—'}</td>
+        <td class="num">${u.source === 'local' ? esc(u.passkeys) : '—'}${u.inviteExpiresAt ? `<span class="muted-sub">link mời hạn ${esc(spTimeSafe(u.inviteExpiresAt))}</span>` : ''}</td>
+        ${spendCol ? `<td>${usersRoleCell(u, users.spend.roles)}</td>` : ''}
+        <td>${esc(u.lastLoginAt ? spTimeSafe(u.lastLoginAt) : '—')}</td>
+        <td>${u.source === 'local' ? `<button class="btn btn-ghost btn-sm" type="button" data-au-invite="${esc(u.id)}">Link mời passkey</button>
+          ${u.passkeys ? `<button class="btn btn-ghost btn-sm" type="button" data-au-keys="${esc(u.id)}" data-au-name="${esc(u.username)}">Passkey…</button>` : ''}` : ''}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="panel-sub">${spendCol ? 'Vai trò Chi phí: Xem — đọc dữ liệu; Biên tập — tạo / sửa / gia hạn; Duyệt — xác nhận khoản dự kiến. Tài khoản Entra lấy vai trò từ app role ICO.Spend.*. ' : ''}Đổi vai trò có hiệu lực ở lần tải trang kế tiếp của người dùng đó; mọi thay đổi được ghi nhật ký.</p>`;
   refreshIcons();
   const msg = (t, tone) => uiSetStatus('#auMsg', t, tone || 'ok');
   const showInvite = (r, who) => {
@@ -217,7 +244,7 @@ async function renderAuthSettings(force) {
     const b = e.currentTarget; b.disabled = true;
     try {
       const r = await apiRequest('/admin/users', { method: 'POST', body: JSON.stringify({ username: $('#auNewUser').value, displayName: $('#auNewName').value }) });
-      await renderAuthSettings(true); showInvite(r, r.user.username); msg('Đã tạo tài khoản (không mật khẩu).');
+      await renderUsersSettings(true); showInvite(r, r.user.username); msg('Đã tạo tài khoản (không mật khẩu).');
     } catch (err) { msg(err.message, 'error'); b.disabled = false; }
   };
   mount.querySelectorAll('[data-au-invite]').forEach(b => { b.onclick = async () => {
@@ -234,10 +261,18 @@ async function renderAuthSettings(force) {
       $('#auInvite').querySelectorAll('[data-au-revoke]').forEach(x => { x.onclick = async () => {
         if (!(await uiConfirm('Thu hồi passkey này? Thiết bị đó không đăng nhập được nữa.'))) return;
         try { await apiRequest(`/admin/users/${encodeURIComponent(id)}/passkeys/${encodeURIComponent(x.dataset.auRevoke)}`, { method: 'DELETE' });
-          await renderAuthSettings(true); msg('Đã thu hồi passkey.'); } catch (err) { msg(err.message, 'error'); }
+          await renderUsersSettings(true); msg('Đã thu hồi passkey.'); } catch (err) { msg(err.message, 'error'); }
       }; });
     } catch (err) { msg(err.message, 'error'); }
   }; });
+  mount.onchange = async (e) => {
+    const sel = e.target.closest('[data-au-role]');
+    if (!sel) return;
+    try {
+      await apiRequest(`/spend/admin/users/${encodeURIComponent(sel.dataset.auRole)}/role`, { method: 'PUT', body: JSON.stringify({ role: sel.value }) });
+      msg('Đã đổi vai trò Chi phí.');
+    } catch (err) { msg(err.message, 'error'); renderUsersSettings(true); }
+  };
 }
 
 (function bindPasskeyUi() {

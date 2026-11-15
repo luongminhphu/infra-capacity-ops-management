@@ -172,5 +172,5 @@ function initAdminSettings(user) {
   $('#mcpNewToken').classList.add('hidden');
   if (isAdmin) { bindMcpPanel(); loadMcpPanel(); }
   if (typeof initSourcesSettings === 'function') initSourcesSettings(isAdmin);
-  if (typeof initSpendSettings === 'function') initSpendSettings(user);
+  // Cài đặt → Chi phí & nhắc hạn: built when its tab opens (routes.js VIEWS.settings.tabRender.spend).
 }

@@ -110,6 +110,12 @@ def test_prefs_are_per_user_and_bounded(app_, editor):
     assert editor.put("/api/me/prefs", json={"theme": "light", "evil": "x"}).json() == {"theme": "light"}
     assert editor.get("/api/me/prefs").json() == {"theme": "light"} and viewer.get("/api/me/prefs").json() == {}
     assert editor.put("/api/me/prefs", json={"inboxFilter": "x" * 5000}).status_code == 413
+    # Merge, not replace: each screen sends only its own keys; booleans / enums are validated.
+    got = editor.put("/api/me/prefs", json={"historyMonths": 6, "historyGroup": "vcenter", "reportAi": True,
+                                            "reportArchive": "yes", "agendaDays": 60}).json()
+    assert got == {"theme": "light", "historyMonths": 6, "historyGroup": "vcenter", "reportAi": True, "agendaDays": 60}
+    assert editor.put("/api/me/prefs", json={"theme": "dark", "historyMonths": 7}).json()["historyMonths"] == 6
+    assert editor.get("/api/me/prefs").json()["theme"] == "dark" and viewer.get("/api/me/prefs").json() == {}
 
 
 def test_ops_alerts_sent_once_and_rearmed(monkeypatch):

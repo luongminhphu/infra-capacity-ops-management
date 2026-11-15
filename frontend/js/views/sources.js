@@ -52,7 +52,7 @@ async function loadSources() {
     $('#srcKeyWarning').classList.toggle('hidden', !!r.secretsKeyConfigured);
     $('#btnSrcImportEnv').classList.toggle('hidden', !r.items.some(i => i.origin === 'env' && !i.replacedByUi));
     $('#srcTable tbody').innerHTML = r.items.length ? r.items.map(srcRow).join('')
-      : '<tr><td colspan="7" class="empty-note">Chưa có nguồn dữ liệu — bấm “+ vCenter” hoặc “+ Máy chủ backup”.</td></tr>';
+      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter” hoặc “+ Máy chủ backup”.');
   } catch (err) { srcSetStatus(err.message, true); }
 }
 

@@ -222,6 +222,30 @@ Không đổi: luật chỉ đọc vCenter / NetBackup, chế độ DEMO, `capac
 
 SA1–SA3 không cần AI và làm được ngay. SA4 là nền cho SA5–SA6.
 
+### 7.1 Rà soát kiến trúc sau SA6 + BOM + xác thực — lộ trình refactor (đã làm hết)
+
+Mục tiêu: module chỉ gọi **dịch vụ dùng chung**, không import chéo router của nhau; giao diện có một khung.
+
+| Mức | Việc | Trạng thái |
+|---|---|---|
+| P1-3 | `shared/xlsx_io.py`: mọi chỗ đọc .xlsx upload chống zip-bomb, chỉ đọc, giới hạn dòng / cột | Xong |
+| P1-4 | Bật / tắt tính năng nhất quán: `features.is_on` / `ensure_feature`, License tách khỏi Tài sản, gate Quy hoạch (cả PDF) | Xong |
+| P1-1 | `ui.js`: `uiDownload`, `uiDialog`, `uiAlert` / `uiPrompt` thay `alert()` / `prompt()`, định dạng tiền / ngày chung; BOM vào tab Mua sắm; nhãn "An toàn" | Xong |
+| P1-2 | `app/shared/` (AI transport, Discord webhook, nhận dạng file, số / chữ) — tách khỏi `spend/` | Xong |
+| P2-5 | `routes.js`: **một bảng route** (`PAGES`, `MENU`, `VIEWS`) thay 4 nơi khai báo và chuỗi if/else | Xong |
+| P2-6 | `scope.py`: một mô hình phạm vi vCenter → cluster → host cho Capacity / License / Báo cáo | Xong |
+| P2-7 | `exports.py`: registry mọi file xuất + `GET /api/exports`; Kho báo cáo lấy danh sách được lưu từ đây; header lưu kho gắn trong `uiDownload` (bỏ ghi đè `window.fetch`) | Xong |
+| P2-8 | Lớp service: `services/entities.py`, `backup/service.py`, `licensing/inventory.py` — router chỉ còn kiểm quyền + giới hạn đầu vào | Xong |
+| P2-9 | `excel_style.py` / `pdf_kit.py`: một giao diện Excel / PDF | Xong |
+| P3-10 | Tách `core.js` (1 873 → ~800 dòng): `core.js` chỉ còn mô hình capacity (khớp `capacity.py`) + trạng thái + nạp dữ liệu; `views/capacity.js` (Dashboard, Compliance, Inventory), `views/whatif.js`; helper biểu đồ / bảng sắp xếp vào `ui.js` | Xong |
+| P3-11 | Nạp module khi mở trang: Chi phí (8 file) và BOM qua `uiRequire()`; Chart.js 4.6.1 và lucide 1.73.0 **đóng gói trong image** (`frontend/vendor/`, ghim phiên bản) — chạy được sau App Proxy / mạng không ra Internet | Xong |
+| P3-12 | Tuỳ chọn người dùng phía máy chủ (`/api/me/prefs`, ghi gộp): giao diện sáng / tối, khoảng & cách nhóm Xu hướng, bật tổng kết AI, lưu vào kho — theo người dùng trên mọi trình duyệt | Xong |
+| P3-13 | Cài đặt → **Người dùng & quyền**: tài khoản, nguồn đăng nhập, passkey, link mời và vai trò Chi phí trên một bảng; "Đăng nhập & bảo mật" chỉ còn cấu hình SSO / App Proxy | Xong |
+| P3-14 | Trạng thái rỗng / đang tải chung (`uiEmpty`, `uiNote`, `uiEmptyRow`); màu biểu đồ lấy từ token `--chart-s1…8`, `--chart-seq-1…5`, `--chart-deep` (`chartPalette()`), không còn mã màu trong JS | Xong |
+
+Chưa làm (cố ý): menu Xuất chung dạng dropdown — nhiều export cần dữ liệu riêng của trang (payload Sizing, BOM,
+bảng đang xem); registry `/api/exports` đã sẵn sàng khi cần.
+
 ---
 
 ## 8. Đo kết quả

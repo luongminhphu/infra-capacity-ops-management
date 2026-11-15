@@ -74,3 +74,32 @@ def test_views_use_the_shared_ui_helpers():
     # Known exceptions: the Ctrl+K palette (entity.js) and the spend editor dialog (spend.js) are their own UX.
     bad = [b for b in bad if not (b.startswith("views/entity.js") or b.startswith("views/spend.js")) or "dialog" not in b]
     assert bad == [], "\n".join(bad)
+
+
+def test_no_cdn_scripts_and_lazy_modules_exist():
+    """Chart.js / lucide ship in frontend/vendor (pinned, works behind App Proxy without Internet);
+    every file of a lazy module (routes.js MODULES) exists and is not also loaded eagerly."""
+    import re
+    root = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
+    html = open(INDEX, encoding="utf-8").read()
+    srcs = re.findall(r'<script src="([^"]+)"', html)
+    assert not [s for s in srcs if s.startswith("http")], srcs
+    for s in srcs:
+        assert os.path.exists(os.path.join(root, s.split("?")[0])), s
+    routes = open(os.path.join(root, "js", "routes.js"), encoding="utf-8").read()
+    block = routes[routes.index("const MODULES = {"):routes.index("};", routes.index("const MODULES = {"))]
+    lazy = re.findall(r"'([a-z_]+)'", block)
+    assert "spend" in lazy and "bom" in lazy
+    for name in lazy:
+        assert os.path.exists(os.path.join(root, "js", "views", name + ".js")), name
+        assert f"js/views/{name}.js" not in html, name
+
+
+def test_chart_colours_come_from_tokens():
+    """Chart colours are CSS tokens read by chartPalette() — no hex literals in the chart code."""
+    import re
+    js = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js")
+    for name in ("views/sizing.js", "views/history.js", "views/backup.js", "views/executive.js", "views/capacity.js"):
+        src = open(os.path.join(js, name), encoding="utf-8").read()
+        assert not re.findall(r"'#[0-9a-fA-F]{6}'", src), name
+
