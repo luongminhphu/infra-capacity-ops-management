@@ -232,17 +232,17 @@
 
         <section class="panel">
           <div class="panel-head">
-            <div><div class="panel-title">Compliance findings</div><p class="panel-sub">Host CPU/RAM vượt ngưỡng, overcommit ratio cluster, VM idle/tắt lâu/over-provision vCPU.</p></div>
+            <div><div class="panel-title">Phát hiện compliance</div><p class="panel-sub">Host CPU / RAM vượt ngưỡng, overcommit cluster, VM idle / tắt lâu / cấp dư vCPU. Mỗi phát hiện có mã đối soát dùng chung với báo cáo PDF.</p></div>
             <div class="panel-toolbar">
               <div class="search-box">
                 <i data-lucide="search"></i>
                 <input type="text" id="complianceSearch" placeholder="Tìm theo mã đối soát, tên, cluster, host...">
               </div>
               <select id="complianceSeverityFilter">
-                <option value="all">Mọi severity</option>
-                <option value="critical">Critical</option>
-                <option value="warning">Warning</option>
-                <option value="info">Info</option>
+                <option value="all">Mọi mức độ</option>
+                <option value="critical">Nghiêm trọng</option>
+                <option value="warning">Cảnh báo</option>
+                <option value="info">Thông tin</option>
               </select>
               <select id="complianceTypeFilter">
                 <option value="all">Mọi loại kiểm tra</option>
@@ -257,16 +257,12 @@
               <button class="btn btn-secondary btn-sm" type="button" data-nav-link="settings" title="Ngưỡng đánh giá nằm trong Cài đặt"><i data-lucide="settings-2"></i>Ngưỡng</button>
             </div>
           </div>
-          <div class="table-scroll">
-            <table class="data-table" id="complianceTable">
-              <thead><tr>
-                <th data-key="code">Mã</th><th data-key="severity">Severity</th><th data-key="type">Loại</th><th data-key="entity">Đối tượng</th>
-                <th data-key="cluster">Cluster</th><th data-key="metric">Chỉ số</th><th data-key="recommendation">Khuyến nghị</th>
-              </tr></thead>
-              <tbody></tbody>
-            </table>
+          <!-- pages/danh-sach.md: findings list → detail (was a 7-column table) -->
+          <div class="hm-split cp-split" id="complianceSplit">
+            <div class="hm-list"><ul class="hm-rows" id="complianceList" role="listbox" tabindex="0" aria-label="Phát hiện compliance, nhóm theo mức độ"></ul>
+              <p class="hm-hint"><span><kbd>J</kbd> <kbd>K</kbd> chuyển</span><span id="complianceRowCount"></span></p></div>
+            <div class="hm-detail" id="complianceDetail" aria-live="polite"></div>
           </div>
-          <div class="row-count" id="complianceRowCount"></div>
         </section>
       </section>
 
@@ -286,9 +282,9 @@
           <div class="table-scroll">
             <table class="data-table" id="hostTable">
               <thead><tr>
-                <th data-key="cluster">Cluster</th><th data-key="host">Host</th><th data-key="cores">CPU cores</th>
+                <th data-key="cluster">Cluster</th><th data-key="host">Host</th><th data-key="status">Trạng thái</th><th data-key="cores">CPU cores</th>
                 <th data-key="ramGB">RAM GB</th><th data-key="vcpuUsed">vCPU dùng</th><th data-key="cpuPct" title="% ngưỡng overcommit CPU đã dùng = (vCPU dùng / pCPU logic) ÷ ngưỡng overcommit CPU × 100, pCPU logic = CPU Cores vật lý × hệ số Hyperthreading. Vượt 100% nghĩa là overcommit thực tế của host đã vượt ngưỡng cấu hình">CPU % (theo overcommit)</th>
-                <th data-key="ramUsedGB">RAM dùng</th><th data-key="ramPct" title="% ngưỡng overcommit RAM đã dùng = (RAM dùng / RAM vật lý) ÷ ngưỡng overcommit RAM × 100. Vượt 100% nghĩa là overcommit thực tế của host đã vượt ngưỡng cấu hình">RAM % (theo overcommit)</th><th data-key="vmCount">Số VM</th><th data-key="status">Status</th>
+                <th data-key="ramUsedGB">RAM dùng</th><th data-key="ramPct" title="% ngưỡng overcommit RAM đã dùng = (RAM dùng / RAM vật lý) ÷ ngưỡng overcommit RAM × 100. Vượt 100% nghĩa là overcommit thực tế của host đã vượt ngưỡng cấu hình">RAM % (theo overcommit)</th><th data-key="vmCount">Số VM</th>
               </tr></thead>
               <tbody></tbody>
             </table>

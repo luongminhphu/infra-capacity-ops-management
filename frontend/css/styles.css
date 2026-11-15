@@ -1172,7 +1172,8 @@ kbd{font:inherit;font-size:var(--fs-caption);padding:0 5px;border:1px solid var(
 .hm-domain-name{grid-area:name;font-weight:var(--fw-semibold);}
 .hm-domain-n{grid-area:n;font-size:var(--fs-caption);color:var(--text-secondary);}
 .hm-domain .pill{grid-area:st;}
-.hm-split.panel{display:grid;grid-template-columns:minmax(340px,44%) minmax(0,1fr);padding:0;overflow:hidden;min-height:520px;}
+.hm-split.panel,.hm-split.cp-split{display:grid;grid-template-columns:minmax(340px,44%) minmax(0,1fr);padding:0;overflow:hidden;min-height:520px;}
+.hm-split.cp-split{border:1px solid var(--border);border-radius:var(--radius-md);margin-top:var(--space-3);min-height:420px;}
 .hm-list{display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0;max-height:calc(100dvh - 180px);}
 .hm-toolbar{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border);}
 .hm-views{display:flex;gap:2px;flex-wrap:wrap;flex:1;}
@@ -1221,7 +1222,8 @@ kbd{font:inherit;font-size:var(--fs-caption);padding:0 5px;border:1px solid var(
 @keyframes hm-out{to{opacity:0;transform:translateY(-4px);}}
 @keyframes hm-in{from{opacity:0;transform:translateY(6px);}}
 @media (max-width:1023px){
-  .hm-split.panel{grid-template-columns:1fr;}
+  .hm-split.panel,.hm-split.cp-split{grid-template-columns:1fr;}
+  .cp-split .hm-list{max-height:60dvh;}
   .hm-list{border-right:0;max-height:none;}
   .hm-detail{border-top:1px solid var(--border);max-height:none;padding:var(--space-4);}
   .hm-domain{border-right:0;border-bottom:1px solid var(--border);}
@@ -1303,6 +1305,7 @@ kbd{font:inherit;font-size:var(--fs-caption);padding:0 5px;border:1px solid var(
 
 /* ── Backup & License (PR 3/6) ─ */
 /* Neutral fact tag (HA, DRS, SA, edition): not a status, so no glyph and no status color */
+.tag.tag-on{border-color:var(--brand);}
 .tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);font-size:var(--fs-caption);font-weight:var(--fw-medium);color:var(--text-primary);white-space:nowrap;}
 .note-line{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:0 0 var(--space-4);color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);}
 .chart-wrap-split{min-height:220px;}
