@@ -471,7 +471,7 @@ def _capex_rows(db: Session, data: bytes, cfg: SpendSettings, user: User, today:
         if bad_rows:
             p["errors"].append(f"{len(bad_rows)} hạng mục lỗi")
         if fy and (norm_text(p["name"]), fy) in existing:
-            p["action"], p["skipReason"] = "skip", f"Đã có dự án cùng tên trong NTC {fy}"
+            p["action"], p["skipReason"] = "skip", f"Đã có dự án cùng tên trong FY {fy}"
         else:
             p["action"] = "error" if p["errors"] else "create"
         if p["status"] != "draft" and any(r.get("coverageYears") for r in p["rows"]):

@@ -61,7 +61,7 @@ function srFiltersHtml() {
       </div>
     </div>
     <div class="sr-grid">
-      ${srMulti('fiscalYears', years.map(y => [y, `NTC ${y}`]), f.fiscalYears, 'Năm tài chính')}
+      ${srMulti('fiscalYears', years.map(y => [y, `FY ${y}`]), f.fiscalYears, 'Năm tài chính')}
       <label class="field"><span>Phạm vi</span><select data-sr="kind">${spOpt('all', 'Opex + Capex', f.kind)}${spOpt('opex', 'Chỉ Opex', f.kind)}${spOpt('capex', 'Chỉ Capex', f.kind)}</select></label>
       ${srMulti('categoryIds', m.categories.map(c => [c.id, c.name]), f.categoryIds, 'Loại chi phí')}
       ${srMulti('vendorIds', m.vendors.map(v => [v.id, v.name]), f.vendorIds, 'Nhà cung cấp')}
@@ -122,7 +122,7 @@ function srBodyHtml() {
   const decisions = r.decisions.map((d, i) => `<li>${spPill(d.cls, ['Ngay', 'Cao', 'Kế hoạch'][['crit', 'bad', 'warn'].indexOf(d.cls)] || '')}
       <b>${esc(d.title)}</b> (${spMoney(d.amount)}) → ${esc(d.decision)} <span class="muted-sub sr-inline">· ${esc(d.timeframe)}</span></li>`).join('');
   const years = r.byYear.map(y => `<div class="sr-year">
-      <div class="sr-year-label">NTC ${esc(y.fiscalYear)}</div>
+      <div class="sr-year-label">FY ${esc(y.fiscalYear)}</div>
       <div class="sr-year-bars">
         <span class="sr-seg sr-opex" style="width:${(y.opex / maxYear * 100).toFixed(2)}%" title="Opex ${esc(spMoney(y.opex))}"></span><span class="sr-seg sr-capex" style="width:${(y.capex / maxYear * 100).toFixed(2)}%" title="Capex ${esc(spMoney(y.capex))}"></span>
       </div>
@@ -132,13 +132,13 @@ function srBodyHtml() {
     g.items.map(i => `<tr data-sp-goto-row="${esc(i.code)}" class="sp-row" tabindex="0"><td><b>${esc(i.code)}</b></td><td class="wrap">${esc(i.title)}<span class="muted-sub">${esc(i.vendor)}</span></td>
       <td>${spDate(i.endDate)}</td><td>${spPill(i.daysLeft < 0 ? 'crit' : i.daysLeft <= 30 ? 'bad' : i.daysLeft <= 90 ? 'warn' : 'ok', i.daysLeft < 0 ? `Quá ${-i.daysLeft} ngày` : `${i.daysLeft} ngày`)}</td>
       <td class="num">${spMoney(i.amountGross)}</td></tr>`).join('')).join('');
-  const fromCapex = r.fromCapex.items.map(i => `<tr data-sp-goto-row="${esc(i.code)}" class="sp-row" tabindex="0"><td><b>${esc(i.code)}</b></td><td class="wrap">${esc(i.title)}</td><td>NTC ${esc(i.fiscalYear)}</td><td>${esc(i.capexCode || '—')}</td><td>${spPill(i.status === 'planned' ? 'na' : 'ok', i.statusLabel)}</td><td class="num">${spMoney(i.amountGross)}</td></tr>`).join('');
+  const fromCapex = r.fromCapex.items.map(i => `<tr data-sp-goto-row="${esc(i.code)}" class="sp-row" tabindex="0"><td><b>${esc(i.code)}</b></td><td class="wrap">${esc(i.title)}</td><td>FY ${esc(i.fiscalYear)}</td><td>${esc(i.capexCode || '—')}</td><td>${spPill(i.status === 'planned' ? 'na' : 'ok', i.statusLabel)}</td><td class="num">${spMoney(i.amountGross)}</td></tr>`).join('');
   const vendors = r.topVendors.map((v, i) => `<tr><td>${i + 1}</td><td>${esc(v.vendor)}</td><td class="num">${esc(v.count)}</td><td class="num">${spMoney(v.opex)}</td><td class="num">${spMoney(v.capex)}</td><td class="num"><b>${spMoney(v.total)}</b></td><td>${srBar(v.sharePct)}</td></tr>`).join('');
   const empty = (n) => `<tr><td colspan="${n}" class="empty-note">Không có dòng nào theo bộ lọc.</td></tr>`;
   return `
     <section class="kpi-grid">
-      <div class="kpi-card"><div class="label">NTC ${esc(c.current.fiscalYear)}</div><div class="value">${srShort(c.current.total)}</div><div class="sub">Opex ${srShort(c.current.opex)} · Capex ${srShort(c.current.capex)}</div></div>
-      <div class="kpi-card"><div class="label">NTC ${esc(c.next.fiscalYear)}</div><div class="value">${srShort(c.next.total)}</div><div class="sub">So với năm nay: <b class="${(c.deltaPct || 0) > 10 ? 'tone-warn' : ''}">${esc(delta)}</b>${c.inFilter ? '' : ' (năm không nằm trong bộ lọc)'}</div></div>
+      <div class="kpi-card"><div class="label">FY ${esc(c.current.fiscalYear)}</div><div class="value">${srShort(c.current.total)}</div><div class="sub">Opex ${srShort(c.current.opex)} · Capex ${srShort(c.current.capex)}</div></div>
+      <div class="kpi-card"><div class="label">FY ${esc(c.next.fiscalYear)}</div><div class="value">${srShort(c.next.total)}</div><div class="sub">So với năm nay: <b class="${(c.deltaPct || 0) > 10 ? 'tone-warn' : ''}">${esc(delta)}</b>${c.inFilter ? '' : ' (năm không nằm trong bộ lọc)'}</div></div>
       <div class="kpi-card"><div class="label">Opex hết hạn trong 12 tháng</div><div class="value ${soon ? 'tone-bad' : 'tone-ok'}">${srShort(soon)}</div><div class="sub">${soonN} khoản cần quyết định gia hạn / ngừng</div></div>
       <div class="kpi-card"><div class="label">Opex phát sinh từ Capex</div><div class="value">${srShort(r.fromCapex.total)}</div><div class="sub">${r.fromCapex.count} khoản gia hạn trong các năm đã lọc</div></div>
     </section>
@@ -160,7 +160,7 @@ function srBodyHtml() {
       <p class="panel-sub">Khoản dự kiến / đang hiệu lực thuộc các năm tài chính đã lọc, hết hạn từ 90 ngày trước đến 12 tháng tới (hoặc theo khoảng ngày đã lọc). Bấm một dòng để mở khoản.</p>
       <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mã</th><th>Dịch vụ</th><th>Hết hạn</th><th>Còn</th><th class="num">Sau VAT</th></tr></thead><tbody>${quarters || empty(5)}</tbody></table></div></section>
     <section class="panel"><div class="panel-title">Opex phát sinh từ Capex</div>
-      <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mã Opex</th><th>Gia hạn</th><th>NTC</th><th>Dự án</th><th>Trạng thái</th><th class="num">Sau VAT</th></tr></thead><tbody>${fromCapex || empty(6)}</tbody></table></div></section>
+      <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mã Opex</th><th>Gia hạn</th><th>FY</th><th>Dự án</th><th>Trạng thái</th><th class="num">Sau VAT</th></tr></thead><tbody>${fromCapex || empty(6)}</tbody></table></div></section>
     ${r.rowsTotal > r.rows.length ? `<p class="muted-sub">Màn hình hiển thị số tổng hợp; danh sách đủ ${r.rowsTotal} dòng có trong file Excel.</p>` : ''}`;
 }
 

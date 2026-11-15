@@ -119,7 +119,7 @@ function spRenderPage() {
   const maxDays = Math.max(...m.settings.reminderDays);
   const rows = l.items.map(it => `
     <tr data-sp-code="${esc(it.code)}" tabindex="0" class="sp-row">
-      <td><b>${esc(it.code)}</b><span class="muted-sub">NTC ${esc(it.fiscalYear)} · ${esc(it.originLabel || '')}</span></td>
+      <td><b>${esc(it.code)}</b><span class="muted-sub">FY ${esc(it.fiscalYear)} · ${esc(it.originLabel || '')}</span></td>
       <td class="wrap">${esc(it.title)}<span class="muted-sub">${esc(it.categoryName || '')}</span></td>
       <td class="wrap">${esc(it.vendorName || '—')}</td>
       <td>${spDate(it.startDate)} – ${spDate(it.endDate)}<span class="muted-sub">${esc(it.billingCycleLabel || '')}</span></td>
@@ -144,7 +144,7 @@ function spRenderPage() {
         </div>
       </div>
       <div class="sp-filters">
-        <label class="field"><span>Năm tài chính</span><select data-sp-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `NTC ${y}`, f.fy)).join('')}</select></label>
+        <label class="field"><span>Năm tài chính</span><select data-sp-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `FY ${y}`, f.fy)).join('')}</select></label>
         <label class="field"><span>Trạng thái</span><select data-sp-filter="status">${SP_STATUS_FILTER.map(([v, t]) => spOpt(v, t, f.status)).join('')}</select></label>
         <label class="field"><span>Loại chi phí</span><select data-sp-filter="category">${spOpt('', 'Tất cả', f.category)}${m.categories.map(x => spOpt(x.id, x.name, f.category)).join('')}</select></label>
         <label class="field"><span>Nhà cung cấp</span><select data-sp-filter="vendor">${spOpt('', 'Tất cả', f.vendor)}${m.vendors.map(x => spOpt(x.id, x.name, f.vendor)).join('')}</select></label>
@@ -261,7 +261,7 @@ async function spOpenDetail(code) {
       ${dl('Loại chi phí', esc(it.categoryName || '—'))}
       ${dl('Nhà cung cấp', esc(it.vendorName || '—'))}
       ${dl('Hiệu lực', `${spDate(it.startDate)} – ${spDate(it.endDate)}`)}
-      ${dl('Chu kỳ / NTC', `${esc(it.billingCycleLabel)} · NTC ${esc(it.fiscalYear)}`)}
+      ${dl('Chu kỳ / FY', `${esc(it.billingCycleLabel)} · FY ${esc(it.fiscalYear)}`)}
       ${dl('Trước VAT', spMoney(it.amountNet))}
       ${dl('Sau VAT', `<b>${spMoney(it.amountGross)}</b> <span class="muted-sub">VAT ${esc(it.vatPct)}%</span>`)}
       ${dl('Mã hợp đồng / PO', `${esc(it.contractRef || '—')} / ${esc(it.poRef || '—')}`)}
@@ -514,7 +514,7 @@ async function spRenderSettings() {
           <label class="field"><span>Đơn vị đề xuất mặc định (tờ trình)</span><input type="text" id="spSetDept" maxlength="128" value="${esc(s.proposalDepartment || '')}" ${dis} placeholder="Phòng Hạ tầng IT"></label>
           <label class="field"><span>Chờ xoá version hợp đồng cũ (ngày)</span><input type="number" id="spSetPurge" min="1" max="365" value="${esc(s.purgeDays)}" ${dis}></label>
         </div>
-        <p class="panel-sub">Năm tài chính đặt tên theo năm bắt đầu (tháng 4: 04/2026–03/2027 = NTC 2026). Đổi tháng bắt đầu không làm thay đổi năm tài chính của các khoản đã lưu.</p>
+        <p class="panel-sub">Năm tài chính đặt tên theo năm bắt đầu (tháng 4: 04/2026–03/2027 = FY 2026). Đổi tháng bắt đầu không làm thay đổi năm tài chính của các khoản đã lưu.</p>
         ${admin ? '<div class="sim-actions"><button class="btn btn-primary btn-sm" type="button" id="spSetSave">Lưu cài đặt</button><span class="criteria-status" id="spSetStatus"></span></div>' : ''}
         <h4 class="sp-h">Cost center</h4>
         <ul class="sp-cc">${ccs}</ul>

@@ -39,15 +39,15 @@ function bpRender() {
   const nextY = list.nextFiscalYear;
   const hasOpenNext = list.items.some(x => x.fiscalYear === nextY && x.status !== 'superseded');   // approved: use “Sửa đổi”
   const newBtn = spCan('editor') && !hasOpenNext
-    ? `<button class="btn btn-primary btn-sm" type="button" data-bp-create="${esc(nextY)}"><i data-lucide="plus"></i>Lập kế hoạch NTC ${esc(nextY)}</button>` : '';
+    ? `<button class="btn btn-primary btn-sm" type="button" data-bp-create="${esc(nextY)}"><i data-lucide="plus"></i>Lập kế hoạch FY ${esc(nextY)}</button>` : '';
   const picker = list.items.length ? `<label class="field"><span>Kế hoạch</span><select data-bp-pick>${list.items.map(x =>
-    spOpt(x.id, `NTC ${x.fiscalYear} · v${x.version} · ${x.statusLabel}`, bpState.planId)).join('')}</select></label>` : '';
+    spOpt(x.id, `FY ${x.fiscalYear} · v${x.version} · ${x.statusLabel}`, bpState.planId)).join('')}</select></label>` : '';
   if (!p) {
     mount.innerHTML = `<section class="panel">
       <div class="panel-head"><div><div class="panel-title">Kế hoạch ngân sách năm sau</div>
         <p class="panel-sub">Hệ thống tự gợi ý từ dữ liệu đang có: Opex sẽ đến kỳ gia hạn (cộng % tăng giá), Opex đã ghi nhận cho năm sau, dự án Capex của năm sau. Bạn thêm đề xuất mới, đặt mức ưu tiên, trần ngân sách rồi gửi duyệt. Sau khi duyệt, kế hoạch là thước đo để theo dõi thực hiện trong năm.</p></div>
         <div class="panel-toolbar">${newBtn}</div></div>
-      ${uiEmpty(spCan('editor') ? `Chưa có kế hoạch — bấm “Lập kế hoạch NTC ${nextY}”.` : 'Chưa có kế hoạch nào.')}
+      ${uiEmpty(spCan('editor') ? `Chưa có kế hoạch — bấm “Lập kế hoạch FY ${nextY}”.` : 'Chưa có kế hoạch nào.')}
     </section>`;
     refreshIcons();
     return;
@@ -98,14 +98,14 @@ function bpRender() {
   const capTone = s.overCap ? 'tone-crit' : 'tone-ok';
   const unplanned = act && act.unplanned.length ? `<section class="table-card">
       <div class="panel-head"><div><div class="panel-title">Phát sinh ngoài kế hoạch</div>
-        <p class="panel-sub">Opex / Capex của NTC ${esc(p.fiscalYear)} không thuộc dòng nào của kế hoạch — tổng ${spMoney(act.unplannedTotal)}.</p></div></div>
+        <p class="panel-sub">Opex / Capex của FY ${esc(p.fiscalYear)} không thuộc dòng nào của kế hoạch — tổng ${spMoney(act.unplannedTotal)}.</p></div></div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>Mã</th><th>Nội dung</th><th class="num">Sau VAT</th></tr></thead>
       <tbody>${act.unplanned.map(u => `<tr><td><b>${esc(u.code)}</b></td><td class="wrap">${esc(u.title)}</td><td class="num">${spMoney(u.amountGross)}</td></tr>`).join('')}</tbody></table></div></section>` : '';
   mount.innerHTML = `
     <section class="panel">
       <div class="panel-head">
         <div><div class="panel-title">${esc(p.name)} ${spPill(...(BP_STATUS[p.status] || ['na', p.statusLabel]))}</div>
-          <p class="panel-sub">NTC ${esc(p.fiscalYear)} (${spDate(p.fiscalRange[0])} – ${spDate(p.fiscalRange[1])}) · bản v${esc(p.version)} ·
+          <p class="panel-sub">FY ${esc(p.fiscalYear)} (${spDate(p.fiscalRange[0])} – ${spDate(p.fiscalRange[1])}) · bản v${esc(p.version)} ·
             lập bởi ${esc(p.createdBy)}${p.approvedBy ? ` · duyệt bởi ${esc(p.approvedBy)} ${esc(spTimeSafe(p.approvedAt))}` : ''}</p></div>
         <div class="panel-toolbar">${picker}${newBtn}</div>
       </div>
@@ -118,9 +118,9 @@ function bpRender() {
       <p class="criteria-status" id="bpMsg" role="status"></p>
     </section>
     <section class="kpi-grid">
-      <div class="kpi-card"><div class="label">Kế hoạch NTC ${esc(p.fiscalYear)}</div><div class="value">${spMoney(s.total)}</div>
-        <div class="sub">${esc(s.count)} dòng · so với NTC ${esc(s.baseline.fiscalYear)}: <b>${bpPct(s.deltaPct)}</b></div></div>
-      <div class="kpi-card"><div class="label">Thực tế NTC ${esc(s.baseline.fiscalYear)}</div><div class="value">${spMoney(s.baseline.total)}</div>
+      <div class="kpi-card"><div class="label">Kế hoạch FY ${esc(p.fiscalYear)}</div><div class="value">${spMoney(s.total)}</div>
+        <div class="sub">${esc(s.count)} dòng · so với FY ${esc(s.baseline.fiscalYear)}: <b>${bpPct(s.deltaPct)}</b></div></div>
+      <div class="kpi-card"><div class="label">Thực tế FY ${esc(s.baseline.fiscalYear)}</div><div class="value">${spMoney(s.baseline.total)}</div>
         <div class="sub">Opex ${spMoney(s.baseline.opex)} · Capex ${spMoney(s.baseline.capex)}</div></div>
       <div class="kpi-card"><div class="label">Opex kế hoạch</div><div class="value">${spMoney(s.byKind.opex)}</div>
         <div class="sub">Capex ${spMoney(s.byKind.capex)} · tăng giá gia hạn ${spMoney(s.renewalUplift)} (trước VAT)</div></div>
@@ -134,7 +134,7 @@ function bpRender() {
       <section class="panel"><div class="panel-title">Theo quý tài chính</div>
         <p class="panel-sub">Theo ngày bắt đầu / thanh toán của từng dòng — dùng để lên dòng tiền. Dòng chưa có ngày tính vào Q1.</p>${quarters}</section>
       <section class="panel"><div class="panel-title">Theo loại chi phí</div>
-        <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Loại</th><th class="num">NTC ${esc(s.baseline.fiscalYear)}</th><th class="num">Kế hoạch</th><th class="num">Thay đổi</th></tr></thead>
+        <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Loại</th><th class="num">FY ${esc(s.baseline.fiscalYear)}</th><th class="num">Kế hoạch</th><th class="num">Thay đổi</th></tr></thead>
         <tbody>${cats || uiEmptyRow(4, 'Chưa có dòng nào.')}</tbody></table></div></section>
     </div>
     <section class="table-card">
@@ -246,7 +246,7 @@ function bpBind() {
     if (create) {
       const y = create.dataset.bpCreate;
       await bpCall('/spend/plans', { method: 'POST', body: JSON.stringify({ fiscalYear: Number(y) }) },
-        (r) => `Đã lập kế hoạch NTC ${y}: ${r.lines.length} dòng gợi ý từ Opex / Capex hiện có.`);
+        (r) => `Đã lập kế hoạch FY ${y}: ${r.lines.length} dòng gợi ý từ Opex / Capex hiện có.`);
       return;
     }
     const grp = e.target.closest('[data-bp-group]');

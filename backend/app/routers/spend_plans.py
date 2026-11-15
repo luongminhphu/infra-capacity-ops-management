@@ -136,14 +136,14 @@ def create_plan(request: Request, data: Dict[str, Any] = Body(...), user: User =
     except (TypeError, ValueError):
         raise HTTPException(400, "Năm tài chính không hợp lệ.")
     if not cur - 1 <= year <= cur + 5:
-        raise HTTPException(400, f"Lập kế hoạch cho NTC {cur - 1} đến {cur + 5}.")
+        raise HTTPException(400, f"Lập kế hoạch cho FY {cur - 1} đến {cur + 5}.")
     if db.query(BudgetPlan.id).filter(BudgetPlan.fiscal_year == year, BudgetPlan.status.in_(("draft", "submitted"))).first():
-        raise HTTPException(409, f"NTC {year} đã có kế hoạch đang soạn / chờ duyệt — mở bản đó để tiếp tục.")
+        raise HTTPException(409, f"FY {year} đã có kế hoạch đang soạn / chờ duyệt — mở bản đó để tiếp tục.")
     if db.query(BudgetPlan.id).filter(BudgetPlan.fiscal_year == year, BudgetPlan.status == "approved").first():
-        raise HTTPException(409, f"NTC {year} đã có kế hoạch được duyệt — dùng “Sửa đổi” để lập bản mới từ bản đó.")
+        raise HTTPException(409, f"FY {year} đã có kế hoạch được duyệt — dùng “Sửa đổi” để lập bản mới từ bản đó.")
     version = (db.query(BudgetPlan.version).filter(BudgetPlan.fiscal_year == year).order_by(BudgetPlan.version.desc()).limit(1).scalar() or 0) + 1
     p = BudgetPlan(fiscal_year=year, version=version, status="draft", created_by=user.username, row_version=1,
-                   name=service._text(data.get("name"), "tên kế hoạch", 255) or f"Kế hoạch ngân sách IT NTC {year}",
+                   name=service._text(data.get("name"), "tên kế hoạch", 255) or f"Kế hoạch ngân sách IT FY {year}",
                    uplift_pct=_pct(data.get("upliftPct", 5), "% tăng giá gia hạn"),
                    budget_cap=service._money(data["budgetCap"], "Trần ngân sách") if data.get("budgetCap") not in (None, "") else None,
                    notes=service._text(data.get("notes"), "ghi chú", 5000))
@@ -236,7 +236,7 @@ def _apply_line(db: Session, l: BudgetPlanLine, p: BudgetPlan, data: Dict[str, A
         if l.start_date:
             ys, ye = fiscal.fiscal_range(p.fiscal_year, spend_settings.load(db).fiscal_start_month)
             if not ys <= l.start_date <= ye:
-                raise HTTPException(400, f"Ngày bắt đầu phải nằm trong NTC {p.fiscal_year}.")
+                raise HTTPException(400, f"Ngày bắt đầu phải nằm trong FY {p.fiscal_year}.")
     if "vatPct" in data:
         l.vat_pct = _pct(data["vatPct"], "VAT")
     if "upliftPct" in data:

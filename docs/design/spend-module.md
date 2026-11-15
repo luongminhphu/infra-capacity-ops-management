@@ -237,7 +237,7 @@ ngày, trạng thái. Ghi trong **cùng transaction** với thay đổi (không 
 fiscal_year(d, start_month) = d.year      nếu d.month >= start_month
                             = d.year - 1  nếu ngược lại
 ```
-Năm tài chính được **đặt tên theo năm bắt đầu** (start_month=4: 01/04/2026–31/03/2027 = "NTC 2026").
+Năm tài chính được **đặt tên theo năm bắt đầu** (start_month=4: 01/04/2026–31/03/2027 = "FY 2026").
 Với start_month=1 trùng năm dương lịch. `fiscal_year` được lưu trên dòng (gợi ý tự động từ ngày bắt đầu,
 sửa được) → đổi `start_month` sau này không làm dịch chuyển dữ liệu cũ một cách âm thầm.
 
@@ -256,7 +256,7 @@ amount_net   = item.renewal_amount                         nếu nhập tay
              (cả hai NULL → không sinh)
 ```
 Ví dụ kiểm thử (start_month=1, trừ khi ghi khác):
-| start | N | renewal_date | NTC |
+| start | N | renewal_date | FY |
 |---|---|---|---|
 | 15/06/2026 | 1 | 15/06/2027 | 2027 |
 | 15/06/2026 | 3 | 15/06/2029 | 2029 (năm thứ 4) |
@@ -454,7 +454,7 @@ quá hạn = VƯỢT NGƯỠNG (map theo cấu hình mốc).
 | GĐ | Phạm vi | Test bắt buộc (số liệu cụ thể) |
 |---|---|---|
 | **1. Opex + nhắc hạn** | feature `spend`; `spend_role` + Entra mapping; danh mục/NCC/cost center; sinh mã; Opex CRUD + lệnh trạng thái + thiết bị + file đính kèm (hạ tầng file, PVC); audit; Cài đặt năm TC; SMTP + kênh Discord/email + Gửi thử; job nhắc hằng ngày; trang Opex; README | `fiscal_year` các tháng biên; mã OPX liên tiếp & không trùng; chọn mốc (95/90/58/30/0/-1 ngày, catch-up, đổi end_date); nhắc đúng một lần khi chạy job 2 lần; gia hạn dừng nhắc; escape Discord/HTML; quyền 403 theo vai trò; secret không xuất hiện trong response; upload file sai định dạng/macro/quá lớn |
-| **2. Capex + mapping** | Capex/hạng mục, xem trước + sinh Opex dự kiến, reconcile, xác nhận hàng loạt, trang Capex | Bảng §2.2 (1/3/5 năm, 29/02, biên NTC start_month=4), làm tròn tiền, sửa Capex không đè khoản đã xác nhận, xoá hạng mục |
+| **2. Capex + mapping** | Capex/hạng mục, xem trước + sinh Opex dự kiến, reconcile, xác nhận hàng loạt, trang Capex | Bảng §2.2 (1/3/5 năm, 29/02, biên FY start_month=4), làm tròn tiền, sửa Capex không đè khoản đã xác nhận, xoá hạng mục |
 | **3. Báo cáo** | hàm `build_budget_report(filters)` dùng chung; dashboard; PDF (helper `report_pdf.py`); Excel (openpyxl); bộ lọc lưu được; Trung tâm báo cáo | Cùng bộ dữ liệu → tổng web = tổng Excel = tổng PDF; so sánh năm nay/năm sau; nhóm theo quý hết hạn; top NCC |
 | **4. Hợp đồng & version** | contracts/versions, upload với baseVersion, trích text, diff + tô màu theo bên, timeline, Final/Ký, job xoá file + huỷ, nhật ký xoá | 409 khi upload trên bản cũ; CK gắn đúng một Opex/Capex; chuyển trạng thái sai → 409; purge chỉ xoá version không phải Final, giữ metadata, tôn trọng huỷ; diff đánh dấu đúng version/bên |
 | **5. AI tờ trình** | upload mẫu A/B (.docx tự do, trích outline), người nhận, provider (none/anthropic/azure_openai), sinh .docx, lưu tờ trình, gắn hợp đồng | Chế độ none điền đủ placeholder; provider giả lập trả JSON hỏng → fallback; `allow_external=false` → không có request ra ngoài; key không bị trả về |
@@ -465,7 +465,7 @@ Mỗi GĐ cũng cập nhật `README.md` (mục mới) và `CLAUDE.md` (bản đ
 
 ## 12. Câu hỏi cần anh/chị quyết (đã có đề xuất mặc định)
 
-1. **Tên năm tài chính**: đặt theo năm bắt đầu (04/2026–03/2027 = NTC 2026)? *Đề xuất: có.*
+1. **Tên năm tài chính**: đặt theo năm bắt đầu (04/2026–03/2027 = FY 2026)? *Đề xuất: có.*
 2. **Opex nhiều năm trả một lần** (vd. license 3 năm): ghi toàn bộ số tiền vào năm tài chính của ngày bắt đầu,
    không phân bổ? *Đề xuất: có (ngân sách theo dòng tiền chi); phân bổ để sau nếu Finance cần.*
 3. **Quyền mặc định**: user chưa được gán vai trò Chi phí **không thấy** module (dữ liệu tài chính)?

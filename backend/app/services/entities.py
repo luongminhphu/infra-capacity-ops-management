@@ -108,7 +108,7 @@ def _spend_hits(db: Session, t: str) -> List[Dict[str, Any]]:
         "opex", "spend-opex", lambda r: f"{r.code} — {r.title}", lambda r: f"Opex · hết hạn {service.date_vn(r.end_date)}",
         lambda r: f"code={r.code}")
     add(db.query(CapexProject).filter(or_(func.lower(CapexProject.code).like(like), func.lower(CapexProject.name).like(like))).limit(PER_TYPE),
-        "capex", "spend-capex", lambda r: f"{r.code} — {r.name}", lambda r: f"Capex · NTC {r.fiscal_year}", lambda r: f"code={r.code}")
+        "capex", "spend-capex", lambda r: f"{r.code} — {r.name}", lambda r: f"Capex · FY {r.fiscal_year}", lambda r: f"code={r.code}")
     add(db.query(Contract).filter(or_(func.lower(Contract.code).like(like), func.lower(Contract.title).like(like))).limit(PER_TYPE),
         "contract", "spend-contracts", lambda r: f"{r.code} — {r.title}", lambda r: "Hợp đồng", lambda r: f"code={r.code}")
     add(db.query(QuoteRequest).filter(or_(func.lower(QuoteRequest.code).like(like), func.lower(QuoteRequest.title).like(like))).limit(PER_TYPE),

@@ -611,7 +611,7 @@ Bật / tắt ở **Cài đặt → Tính năng** (khi tắt, API trả 404).
   dừng nhắc; mỗi khoản chỉ gia hạn được một lần), **Ngừng** (cần lý do), **Xác nhận** / **Kích hoạt lại**
   (quyền Duyệt). Mọi thay đổi số tiền / ngày / trạng thái / file được ghi `audit_log` (xem “Lịch sử thay đổi”).
 - **Năm tài chính**: tháng bắt đầu cấu hình trong Cài đặt; đặt tên theo năm bắt đầu
-  (tháng 4: 01/04/2026 – 31/03/2027 = NTC 2026).
+  (tháng 4: 01/04/2026 – 31/03/2027 = FY 2026).
 - **Nhắc hạn**: chạy hằng ngày sau giờ cấu hình (mặc định 08:00 giờ VN) trong tiến trình app, mốc mặc định
   90 / 60 / 30 ngày. Mỗi mốc của mỗi khoản gửi **một lần** cho mỗi kênh (bảng `spend_reminder_log`, khoá
   UNIQUE). App tắt qua nhiều mốc thì chỉ gửi mốc nhỏ nhất đã tới; gửi lỗi tự thử lại tối đa 5 lần; tiến trình
@@ -650,7 +650,7 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   Dự án **nháp chỉ xem trước** Opex, không đưa vào ngân sách; Opex dự kiến được sinh khi dự án được duyệt.
 - **Quy tắc sinh Opex**: thời hạn đi kèm N năm hết vào ngày cuối kỳ, kỳ gia hạn (1 năm) **bắt đầu ngày hôm
   sau** và thuộc năm tài chính của ngày đó. Ví dụ go-live 15/06/2026: bảo hành 1 năm → gia hạn 15/06/2027
-  (NTC 2027); 3 năm → 15/06/2029 (NTC 2029, năm thứ 4). Mua ngày 29/02/2028, 1 năm → hết 28/02/2029,
+  (FY 2027); 3 năm → 15/06/2029 (FY 2029, năm thứ 4). Mua ngày 29/02/2028, 1 năm → hết 28/02/2029,
   gia hạn từ 01/03/2029. Số tiền = % gia hạn × giá trị trước VAT, làm tròn đến đồng (ví dụ 15% của
   1.234.567.891 đ = 185.185.184 đ).
 - Opex sinh ra có trạng thái **Dự kiến**, liên kết ngược về dự án. Sửa Capex chỉ cập nhật các khoản còn
@@ -691,7 +691,7 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
 **Kế hoạch ngân sách năm sau (đã có)** — Ngân sách & chi phí → *Kế hoạch năm sau*. Thiết kế:
 [`docs/design/spend-budget-plan.md`](design/spend-budget-plan.md).
 
-- **Lập kế hoạch NTC sau** (Biên tập). Hệ thống tự gợi ý các dòng:
+- **Lập kế hoạch FY sau** (Biên tập). Hệ thống tự gợi ý các dòng:
   - *Gia hạn*: Opex có kỳ kế tiếp bắt đầu trong năm, tính theo số kỳ × (1 + % tăng giá mặc định, vd 5%);
   - *Đã ghi nhận*: Opex đã thuộc năm sau, gồm cả Opex sinh từ Capex;
   - *Dự án Capex*: dự án của năm sau.

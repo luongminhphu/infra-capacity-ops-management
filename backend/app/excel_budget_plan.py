@@ -36,7 +36,7 @@ def _rows_table(ws, start: int, name: str, header: List[str], rows: List[List[An
 
 def build_plan_xlsx(d: Dict[str, Any]) -> bytes:
     s = d["summary"]
-    subtitle = f"NTC {d['fiscalYear']} · {d['label']} · {d['statusLabel']}   ·   VND   ·   Lập {dt.datetime.now(VN_TZ):%d/%m/%Y %H:%M}"
+    subtitle = f"FY {d['fiscalYear']} · {d['label']} · {d['statusLabel']}   ·   VND   ·   Lập {dt.datetime.now(VN_TZ):%d/%m/%Y %H:%M}"
     wb = Workbook()
 
     ws = wb.active
@@ -44,8 +44,8 @@ def build_plan_xlsx(d: Dict[str, Any]) -> bytes:
     _sheet_title(ws, d["name"], subtitle, 8)
     _widths(ws, {c: 17 for c in "ABCDEFGH"})
     base = s["baseline"]
-    _tile(ws, 4, 1, 2, f"Kế hoạch NTC {d['fiscalYear']}", _m(s["total"]), f"{s['count']} dòng · sau VAT")
-    _tile(ws, 4, 3, 2, f"Thực tế NTC {base['fiscalYear']}", _m(base["total"]),
+    _tile(ws, 4, 1, 2, f"Kế hoạch FY {d['fiscalYear']}", _m(s["total"]), f"{s['count']} dòng · sau VAT")
+    _tile(ws, 4, 3, 2, f"Thực tế FY {base['fiscalYear']}", _m(base["total"]),
           "thay đổi: " + (f"{s['deltaPct']:+.1f}%" if s["deltaPct"] is not None else "—"))
     _tile(ws, 4, 5, 2, "Opex / Capex", f"{_m(s['byKind']['opex'])} / {_m(s['byKind']['capex'])}", "sau VAT")
     cap = s["cap"]
@@ -80,7 +80,7 @@ def build_plan_xlsx(d: Dict[str, Any]) -> bytes:
     _sheet_title(ws, "So sánh theo loại chi phí", subtitle, 5)
     _widths(ws, {"A": 32, "B": 18, "C": 18, "D": 18, "E": 12})
     rows = [[c["category"], c["baseline"], c["plan"], c["delta"], c["deltaPct"]] for c in s["byCategory"]]
-    _rows_table(ws, 4, "TheoLoai", ["Loại chi phí", f"Thực tế NTC {base['fiscalYear']}", f"Kế hoạch NTC {d['fiscalYear']}",
+    _rows_table(ws, 4, "TheoLoai", ["Loại chi phí", f"Thực tế FY {base['fiscalYear']}", f"Kế hoạch FY {d['fiscalYear']}",
                                     "Chênh lệch", "%"], rows, {2: MONEY, 3: MONEY, 4: MONEY, 5: PCT})
     _print_setup(ws, landscape=False)
 

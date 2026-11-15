@@ -66,13 +66,13 @@ def test_totals_by_year_category_vendor(data):
 def test_expiring_by_fiscal_quarter_and_decisions(data):
     r = _report()
     assert [(g["label"], g["count"], g["total"]) for g in r["expiringByQuarter"]] == [
-        ("Q4/NTC 2026", 1, 110_000_000), ("Q1/NTC 2027", 1, 220_000_000)]
+        ("Q4/FY 2026", 1, 110_000_000), ("Q1/FY 2027", 1, 220_000_000)]
     assert r["expiringByQuarter"][0]["items"][0]["daysLeft"] == 47
     assert [(d["cls"], d["amount"]) for d in r["decisions"]] == [("bad", 110_000_000), ("warn", 330_000_000)]
     # Fiscal year starting in April: 31/12/2026 is Q3 of FY 2026, 28/02/2027 Q4 of FY 2026.
     q = report.fiscal_quarter
-    assert q(dt.date(2026, 12, 31), 4)["label"] == "Q3/NTC 2026" and q(dt.date(2027, 2, 28), 4)["label"] == "Q4/NTC 2026"
-    assert q(dt.date(2027, 4, 1), 4)["label"] == "Q1/NTC 2027"
+    assert q(dt.date(2026, 12, 31), 4)["label"] == "Q3/FY 2026" and q(dt.date(2027, 2, 28), 4)["label"] == "Q4/FY 2026"
+    assert q(dt.date(2027, 4, 1), 4)["label"] == "Q1/FY 2027"
 
 
 def test_filters(data):
@@ -107,7 +107,7 @@ def test_web_excel_pdf_show_the_same_numbers(data, editor):
     years = {ws.cell(row=r, column=1).value: ws.cell(row=r, column=4).value for r in range(1, wb["Tổng quan"].max_row + 1)
              for ws in [wb["Tổng quan"]] if isinstance(ws.cell(row=r, column=1).value, int)}
     assert years == {y["fiscalYear"]: y["total"] for y in j["byYear"]}
-    html = report_spend.render_budget_html(_report(body), "NTC 2026, 2027, 2028")
+    html = report_spend.render_budget_html(_report(body), "FY 2026, 2027, 2028")
     assert report_spend.money_vn(j["totals"]["total"]) in html
     for y in j["byYear"]:
         assert report_spend.money_vn(y["total"]) in html

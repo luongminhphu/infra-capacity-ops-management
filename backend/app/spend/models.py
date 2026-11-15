@@ -549,7 +549,7 @@ LINE_TYPES = ("item", "discount", "subtotal", "vat", "total", "note")
 
 
 class QuoteRequest(_Audited, Base):
-    """Gói so sánh báo giá (BG-<NTC>-<số>): several vendor quotations for the same scope."""
+    """Gói so sánh báo giá (BG-<FY>-<số>): several vendor quotations for the same scope."""
     __tablename__ = "quote_requests"
     __table_args__ = (
         CheckConstraint(_in("status", QUOTE_STATUSES), name="ck_quote_status"),

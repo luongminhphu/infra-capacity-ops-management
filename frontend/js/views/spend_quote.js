@@ -102,7 +102,7 @@ async function vdOpen(id) {
     </div></form>
     ${hist('Báo giá', v.quotes.map(q => `<li><b>${esc(q.code)}</b> — ${esc(q.title)} · ${spMoney(q.total)}${q.won ? ' · <span class="pill ok">Được chọn</span>' : ''}${q.evalTotal !== null ? ` · điểm ${esc(qtNum(q.evalTotal, 2))} (${esc(q.evalClass)})` : ''}</li>`), 'Chưa có báo giá.')}
     ${hist('Hợp đồng', v.contracts.map(c => `<li><b>${esc(c.code)}</b> — ${esc(c.title)}</li>`), 'Chưa có hợp đồng.')}
-    ${hist('Opex', v.opex.map(o => `<li><b>${esc(o.code)}</b> — ${esc(o.title)} · NTC ${esc(o.fiscalYear)} · ${spMoney(o.amountGross)}</li>`), 'Chưa có khoản Opex.')}
+    ${hist('Opex', v.opex.map(o => `<li><b>${esc(o.code)}</b> — ${esc(o.title)} · FY ${esc(o.fiscalYear)} · ${spMoney(o.amountGross)}</li>`), 'Chưa có khoản Opex.')}
     ${hist('Hạng mục Capex', v.capexItems.map(i => `<li><b>${esc(i.projectCode)}</b> — ${esc(i.description)} · ${spMoney(i.amountGross)}</li>`), 'Chưa có hạng mục Capex.')}`;
   spDialog(`Nhà cung cấp — ${esc(v.label)}`, body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
     ${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" id="vdSave">Lưu</button>' : ''}`);

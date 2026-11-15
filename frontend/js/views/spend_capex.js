@@ -34,7 +34,7 @@ function cpxRender() {
   const total = list.reduce((s, p) => s + p.amountGross, 0), opex = list.reduce((s, p) => s + p.opexGross, 0);
   const drafts = list.filter(p => p.status === 'draft').length;
   const rows = list.map(p => `<tr data-cpx-code="${esc(p.code)}" tabindex="0" class="sp-row">
-      <td><b>${esc(p.code)}</b><span class="muted-sub">NTC ${esc(p.fiscalYear)}</span></td>
+      <td><b>${esc(p.code)}</b><span class="muted-sub">FY ${esc(p.fiscalYear)}</span></td>
       <td class="wrap">${esc(p.name)}<span class="muted-sub">${esc(p.ownerName || '')}</span></td>
       <td>${spDate(p.goLiveDate)}</td>
       <td class="num">${esc(p.itemCount)}</td>
@@ -54,7 +54,7 @@ function cpxRender() {
         <div class="panel-toolbar">${spCan('editor') ? '<button class="btn btn-secondary btn-sm" type="button" data-sp-import="capex" title="Đổ dữ liệu từ file Excel đang quản lý"><i data-lucide="upload"></i>Nhập Excel</button><button class="btn btn-primary btn-sm" type="button" data-cpx-new><i data-lucide="plus"></i>Thêm dự án</button>' : ''}</div>
       </div>
       <div class="sp-filters">
-        <label class="field"><span>Năm tài chính</span><select data-cpx-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `NTC ${y}`, f.fy)).join('')}</select></label>
+        <label class="field"><span>Năm tài chính</span><select data-cpx-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `FY ${y}`, f.fy)).join('')}</select></label>
         <label class="field"><span>Trạng thái</span><select data-cpx-filter="status">${spOpt('', 'Tất cả', f.status)}${Object.entries(CPX_STATUS).map(([k, [, t]]) => spOpt(k, t, f.status)).join('')}</select></label>
         <label class="field sp-search"><span>Tìm</span><input type="text" data-cpx-filter="q" value="${esc(f.q)}" placeholder="Mã hoặc tên dự án"></label>
       </div>
@@ -106,7 +106,7 @@ async function cpxRefresh() {
 
 function cpxPlanCell(it) {
   if (!it.plan) return `<span class="muted-sub bk-wrap">${esc(it.noPlanReason || '—')}</span>`;
-  return `${spDate(it.plan.startDate)} · NTC ${esc(it.plan.fiscalYear)}<span class="muted-sub">${spMoney(it.plan.amountGross)}${it.effectivePct !== null ? ` (${esc(it.effectivePct)}% giá trị)` : ' (nhập tay)'}</span>`;
+  return `${spDate(it.plan.startDate)} · FY ${esc(it.plan.fiscalYear)}<span class="muted-sub">${spMoney(it.plan.amountGross)}${it.effectivePct !== null ? ` (${esc(it.effectivePct)}% giá trị)` : ' (nhập tay)'}</span>`;
 }
 
 /* ---------- Detail ---------- */
@@ -119,7 +119,7 @@ async function cpxOpenDetail(code) {
     const o = it.opex;
     const st = o ? CPX_OPEX_STATE[o.state] : null;
     const opexCell = o ? `<button class="btn btn-ghost btn-sm sp-link" type="button" data-sp-goto="${esc(o.code)}">${esc(o.code)}</button>
-        ${spPill(st[0], st[1])}${o.differsFromPlan ? ` ${spPill('bad', 'Lệch kế hoạch')}` : ''}<span class="muted-sub">${spMoney(o.amountGross)} · NTC ${esc(o.fiscalYear)}</span>`
+        ${spPill(st[0], st[1])}${o.differsFromPlan ? ` ${spPill('bad', 'Lệch kế hoạch')}` : ''}<span class="muted-sub">${spMoney(o.amountGross)} · FY ${esc(o.fiscalYear)}</span>`
       : (p.generating && it.plan ? '<span class="muted-sub">Chưa sinh</span>' : '—');
     const box = canConfirm && o && o.state === 'managed'
       ? `<input type="checkbox" data-cpx-pick="${esc(o.code)}" aria-label="Chọn ${esc(o.code)} để xác nhận">` : '';
@@ -131,13 +131,13 @@ async function cpxOpenDetail(code) {
   }).join('');
   const orphans = p.orphanOpex.length ? `<h4 class="sp-h">Opex của dự án không còn gắn hạng mục</h4>
     <p class="panel-sub">Hạng mục đã bị xoá sau khi khoản Opex được xác nhận hoặc sửa tay — xem lại và ngừng nếu không còn cần.</p>
-    <ul class="sp-files">${p.orphanOpex.map(o => `<li><button class="btn btn-ghost btn-sm sp-link" type="button" data-sp-goto="${esc(o.code)}">${esc(o.code)}</button> ${esc(o.title)} <span class="muted-sub">NTC ${esc(o.fiscalYear)} · ${spMoney(o.amountGross)}</span></li>`).join('')}</ul>` : '';
+    <ul class="sp-files">${p.orphanOpex.map(o => `<li><button class="btn btn-ghost btn-sm sp-link" type="button" data-sp-goto="${esc(o.code)}">${esc(o.code)}</button> ${esc(o.title)} <span class="muted-sub">FY ${esc(o.fiscalYear)} · ${spMoney(o.amountGross)}</span></li>`).join('')}</ul>` : '';
   const dl = (label, value) => `<div class="sp-dl-item"><dt>${label}</dt><dd>${value}</dd></div>`;
   const body = `
     <div class="sp-detail-head">${spPill(...(CPX_STATUS[p.status] || ['na', p.statusLabel]))}</div>
     ${p.generating ? '' : '<div class="insight-box"><strong>Dự án nháp.</strong> Cột “Gia hạn dự kiến” là bản xem trước; Opex chỉ được sinh khi người có quyền Duyệt duyệt dự án.</div>'}
     <dl class="sp-dl">
-      ${dl('Năm tài chính', `NTC ${esc(p.fiscalYear)}`)}
+      ${dl('Năm tài chính', `FY ${esc(p.fiscalYear)}`)}
       ${dl('Go-live', spDate(p.goLiveDate))}
       ${dl('Giá trị trước VAT', spMoney(p.amountNet))}
       ${dl('Giá trị sau VAT', `<b>${spMoney(p.amountGross)}</b>`)}
@@ -273,7 +273,7 @@ async function cpxOpenForm(p) {
         const el = rows[x.index] && rows[x.index].querySelector('[data-i-preview]');
         if (!el) return;
         el.textContent = x.plan
-          ? `→ Opex gia hạn từ ${spDate(x.plan.startDate)} đến ${spDate(x.plan.endDate)}, NTC ${x.plan.fiscalYear}: ${spMoney(x.plan.amountNet)} trước VAT, ${spMoney(x.plan.amountGross)} sau VAT${x.effectivePct !== null ? ` (${x.effectivePct}%)` : ''}`
+          ? `→ Opex gia hạn từ ${spDate(x.plan.startDate)} đến ${spDate(x.plan.endDate)}, FY ${x.plan.fiscalYear}: ${spMoney(x.plan.amountNet)} trước VAT, ${spMoney(x.plan.amountGross)} sau VAT${x.effectivePct !== null ? ` (${x.effectivePct}%)` : ''}`
           : `→ Không sinh Opex: ${x.noPlanReason}`;
       });
       spMsg('');

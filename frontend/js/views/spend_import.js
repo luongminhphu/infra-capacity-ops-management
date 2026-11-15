@@ -76,7 +76,7 @@ function spImpRender(body) {
         <td>${esc(SP_IMP_STATUS[r.status] || '—')}${r.predecessorRow ? `<span class="muted-sub">tiếp nối dòng ${esc(r.predecessorRow)}</span>` : ''}</td>
         <td class="wrap">${spImpIssues(r)}</td></tr>`).join('')}</tbody></table>`;
   } else {
-    table = `<table class="data-table"><thead><tr><th></th><th>Dự án</th><th>NTC</th><th>Trạng thái</th><th class="num">Hạng mục</th><th class="num">Trước VAT</th><th>Ghi chú</th></tr></thead><tbody>
+    table = `<table class="data-table"><thead><tr><th></th><th>Dự án</th><th>FY</th><th>Trạng thái</th><th class="num">Hạng mục</th><th class="num">Trước VAT</th><th>Ghi chú</th></tr></thead><tbody>
       ${pv.projects.map(p => `<tr><td>${spPill(...SP_IMP_ACTION[p.action])}</td><td class="wrap">${esc(p.name)}<span class="muted-sub">dòng ${esc(p.rows.map(r => r.row).join(', '))}</span></td>
         <td>${esc(p.fiscalYear || '—')}</td><td>${esc(SP_IMP_STATUS[p.status] || '—')}</td><td class="num">${esc(p.rows.length)}</td><td class="num">${spMoney(p.amountNet)}</td>
         <td class="wrap">${spImpIssues(p)}${p.rows.filter(r => r.errors.length).map(r => `<br><span class="tone-crit">Dòng ${esc(r.row)}: ${esc(r.errors.join('; '))}</span>`).join('')}</td></tr>`).join('')}</tbody></table>`;
