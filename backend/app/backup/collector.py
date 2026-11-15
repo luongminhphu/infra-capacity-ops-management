@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import data_access
@@ -84,8 +85,41 @@ def _upsert_jobs(db: Session, key: str, jobs: List[Dict[str, Any]]) -> int:
                 setattr(row, k, v)
             row.updated_at = now
     if new_rows:
-        db.execute(insert(BackupJob), new_rows)
+        _insert_new_jobs(db, key, new_rows)
     return len(by_id)
+
+
+def _insert_new_jobs(db: Session, key: str, new_rows: List[Dict[str, Any]]) -> None:
+    """Bulk INSERT inside a savepoint. If another writer inserted some of these jobs meanwhile
+    (uq_backup_job — normally prevented by the per-source lock, kept as a safety net), roll back
+    only the savepoint and write the batch again as insert-or-update, so the sync goes on."""
+    try:
+        with db.begin_nested():
+            db.execute(insert(BackupJob), new_rows)
+        return
+    except IntegrityError:
+        logger.warning("NetBackup %s: %d new jobs collided with rows written by another sync; retrying as updates",
+                       key, len(new_rows))
+    ids = [r["job_id"] for r in new_rows]
+    present: Dict[int, BackupJob] = {}
+    for i in range(0, len(ids), 500):
+        for row in db.query(BackupJob).filter(BackupJob.nbu_key == key, BackupJob.job_id.in_(ids[i:i + 500])).all():
+            present[row.job_id] = row
+    missing = []
+    for r in new_rows:
+        row = present.get(r["job_id"])
+        if row is None:
+            missing.append(r)
+            continue
+        for k, v in r.items():
+            if k not in ("nbu_key", "job_id") and getattr(row, k) != v:
+                setattr(row, k, v)
+    for r in missing:                     # one savepoint per row: a second collision is just skipped
+        try:
+            with db.begin_nested():
+                db.execute(insert(BackupJob), [r])
+        except IntegrityError:
+            logger.warning("NetBackup %s: job %s written concurrently; kept the other writer's row", key, r["job_id"])
 
 
 def _store_snapshot(db: Session, run: BackupSyncRun, key: str, policies: List[Dict[str, Any]], pools: List[Dict[str, Any]],
@@ -130,11 +164,12 @@ def sync_netbackup(db: Session, cfg: NetBackupConfig, settings: Optional[Setting
                    now: Optional[dt.datetime] = None) -> BackupSyncRun:
     """Poll one primary server; raises client.NetBackupError on failure (the run
     is still persisted with status='error')."""
-    settings = settings or get_settings()
-    now = now or dt.datetime.utcnow()
-    run = BackupSyncRun(nbu_key=cfg.key, source="demo" if cfg.demo else "live", status="ok", started_at=now)
-    db.add(run)
-    db.flush()
+    from ..collectors.locks import source_lock
+    with source_lock("netbackup", cfg.key):          # raises SourceBusy while another sync runs
+        return _sync_netbackup_locked(db, cfg, settings or get_settings(), now or dt.datetime.utcnow())
+
+
+def _sync_netbackup_locked(db: Session, cfg: NetBackupConfig, settings: Settings, now: dt.datetime) -> BackupSyncRun:
     try:
         since = _since(db, cfg, settings, now)
         if cfg.demo:
@@ -143,9 +178,15 @@ def sync_netbackup(db: Session, cfg: NetBackupConfig, settings: Optional[Setting
             policies = [p for p in (nbu_client.parse_policy(x) for x in demo_generator.policies_payload(cfg, vm_names)) if p]
             pools = [p for p in (nbu_client.parse_disk_pool(x) for x in demo_generator.pools_payload(cfg, now)) if p]
             warnings: List[str] = []
-            _demo_backfill_storage(db, cfg, now)
         else:
             jobs, policies, pools, warnings = nbu_client.collect(cfg, since)
+        # The run row is written only once NetBackup has answered: no DB transaction (and, on
+        # SQLite, no database write lock) stays open while waiting on the network.
+        run = BackupSyncRun(nbu_key=cfg.key, source="demo" if cfg.demo else "live", status="ok", started_at=now)
+        db.add(run)
+        db.flush()
+        if cfg.demo:
+            _demo_backfill_storage(db, cfg, now)
         run.jobs_fetched = _upsert_jobs(db, cfg.key, jobs)
         _store_snapshot(db, run, cfg.key, policies, pools, now)
         run.policy_count, run.pool_count = len(policies), len(pools)
@@ -156,11 +197,19 @@ def sync_netbackup(db: Session, cfg: NetBackupConfig, settings: Optional[Setting
         db.commit()
         logger.info("Synced NetBackup %s: %d jobs, %d policies, %d pools", cfg.key, run.jobs_fetched, len(policies), len(pools))
         return run
-    except Exception as exc:  # noqa: BLE001
-        db.rollback()
-        run = BackupSyncRun(nbu_key=cfg.key, source="demo" if cfg.demo else "live", status="error",
-                            error_message=str(exc), started_at=now, finished_at=dt.datetime.utcnow())
-        db.add(run)
-        db.commit()
+    except Exception as exc:  # noqa: BLE001 — logged, recorded as an error run, re-raised
+        # Log the original error first: if the database is down, recording the run fails too.
         logger.exception("NetBackup sync failed for %s", cfg.key)
+        try:
+            db.rollback()
+            failed = BackupSyncRun(nbu_key=cfg.key, source="demo" if cfg.demo else "live", status="error",
+                                   error_message=str(exc), started_at=now, finished_at=dt.datetime.utcnow())
+            db.add(failed)
+            db.commit()
+        except Exception:  # noqa: BLE001 — keep the original error as the one raised
+            logger.exception("Could not record the failed sync run of NetBackup %s", cfg.key)
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
         raise

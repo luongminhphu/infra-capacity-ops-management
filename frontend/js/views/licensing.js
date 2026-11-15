@@ -480,7 +480,8 @@ function renderLicEntitlements() {
   const e = st.entEditing || {};
   const kinds = st.entMeta?.kinds || LIC_KIND_LABEL;
   const isNone = (e.id ? (e.kind || 'owned') : (st.entKindDraft || 'owned')) === 'none';
-  const form = `<div class="planning-panel lic-editor">
+  const admin = uiIsAdmin();
+  const form = !admin ? `<p class="muted-sub">${ADMIN_ONLY_NOTE}</p>` : `<div class="planning-panel lic-editor">
     <div class="planning-panel-title">${e.id ? `Sửa entitlement #${e.id}` : 'Thêm entitlement / báo giá'}</div>
     <div class="sim-form-grid lic-form-6">
       <div class="field"><label>Sản phẩm</label><select id="licEntProduct">${Object.entries(products).map(([k, l]) => `<option value="${k}"${(e.product || 'ws_dc') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
@@ -503,7 +504,7 @@ function renderLicEntitlements() {
     <td><b>${esc(x.label)}</b>${x.kind === 'none' ? ' <span class="pill crit">Chưa có</span>' : ''}${x.hasSa && x.kind !== 'none' ? ' <span class="tag">SA</span>' : ''}</td><td>${esc(metrics[x.metric] || x.metric)}</td><td class="num">${x.kind === 'none' ? '0' : licNum(x.quantity)}</td>
     <td class="num">${x.unitPrice != null ? licMoney(x.unitPrice, x.currency) : '—'}</td>
     <td>${esc(x.scopeVcenter || 'Tất cả')} / ${esc(x.scopeCluster || 'Tất cả')}</td><td>${x.validTo ? licDate(x.validTo).split(' ')[0] : '—'}</td><td class="lic-note">${esc(x.note || '')}</td>
-    <td><button class="btn btn-secondary btn-sm" data-lic-action="ent-edit" data-id="${x.id}" type="button">Sửa</button> <button class="btn btn-secondary btn-sm btn-danger" data-lic-action="ent-delete" data-id="${x.id}" type="button">Xoá</button></td>
+    <td>${admin ? `<button class="btn btn-secondary btn-sm" data-lic-action="ent-edit" data-id="${x.id}" type="button">Sửa</button> <button class="btn btn-secondary btn-sm btn-danger" data-lic-action="ent-delete" data-id="${x.id}" type="button">Xoá</button>` : ''}</td>
   </tr>`).join('');
   return `<section class="table-card">
     <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Entitlement hiện có &amp; đơn giá</div><p class="panel-sub">Nhập license đang sở hữu, hoặc chọn tình trạng <b>Chưa có</b> để xác nhận chưa mua license sản phẩm đó (toàn bộ nhu cầu được tính là thiếu hụt; có thể kèm báo giá để ước chi phí). Số lượng pack được quy đổi sang core; đơn giá là giá mỗi đơn vị đã chọn (pack/core/CPU). Không có giá mặc định — thiếu giá thì không hiển thị chi phí.</p></div></div>
@@ -514,20 +515,24 @@ function renderLicEntitlements() {
 }
 
 /* ---------- Rules ---------- */
+/* A rule's source link is shown only for http(s) URLs (never javascript: / data:); the API validates too. */
+const licSafeUrl = (u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim());
+
 function renderLicRules() {
   const st = licState();
   const rules = st.rules || [];
   const ed = st.ruleEditing;
+  const admin = uiIsAdmin();
   const rows = rules.map(r => `<tr class="${r.isActive ? 'lic-rule-active' : ''}">
     <td><b>${esc(r.name)}</b><div class="muted-sub">${esc(r.product)} · ${esc(r.key)}</div></td>
     <td class="num">v${r.version}</td>
     <td>${licRulePill(r.status)}${r.isActive ? ' <span class="pill ok">đang dùng</span>' : ''}</td>
-    <td>${r.sourceUrl ? `<a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">Nguồn</a>` : '—'}<div class="muted-sub lic-note" title="${esc(r.sourceNote || '')}">${esc((r.sourceNote || '').split('\n')[0]).slice(0, 140)}</div></td>
+    <td>${licSafeUrl(r.sourceUrl) ? `<a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Nguồn</a>` : '—'}<div class="muted-sub lic-note" title="${esc(r.sourceNote || '')}">${esc((r.sourceNote || '').split('\n')[0]).slice(0, 140)}</div></td>
     <td>${r.verifiedAt ? `${licDate(r.verifiedAt)}<div class="muted-sub">${esc(r.verifiedBy || '')}</div>` : '<span class="muted-sub">chưa</span>'}</td>
     <td class="lic-actions">
-      <button class="btn btn-secondary btn-sm" data-lic-action="rule-edit" data-id="${r.id}" type="button">Xem / tạo version</button>
+      <button class="btn btn-secondary btn-sm" data-lic-action="rule-edit" data-id="${r.id}" type="button">${admin ? 'Xem / tạo version' : 'Xem'}</button>
       ${r.status !== 'verified' ? `<button class="btn btn-secondary btn-sm" data-lic-action="rule-verify" data-id="${r.id}" type="button">Xác minh</button>` : ''}
-      ${r.isActive ? `<button class="btn btn-secondary btn-sm" data-lic-action="rule-deactivate" data-id="${r.id}" type="button">Tắt</button>` : `<button class="btn btn-secondary btn-sm" data-lic-action="rule-activate" data-id="${r.id}" type="button">Kích hoạt</button>`}
+      ${!admin ? '' : r.isActive ? `<button class="btn btn-secondary btn-sm" data-lic-action="rule-deactivate" data-id="${r.id}" type="button">Tắt</button>` : `<button class="btn btn-secondary btn-sm" data-lic-action="rule-activate" data-id="${r.id}" type="button">Kích hoạt</button>`}
     </td></tr>`).join('');
   const editor = ed ? `<div class="planning-panel lic-editor">
     <div class="planning-panel-title">Rule ${esc(ed.name)} v${ed.version} — tạo version mới (rule không sửa đè để assessment cũ tái lập được)</div>
@@ -538,8 +543,8 @@ function renderLicRules() {
     <div class="field"><label>Tham số (JSON)</label><textarea id="licRuleParams" rows="10" class="lic-json">${esc(JSON.stringify(ed.params, null, 2))}</textarea></div>
     <div class="field"><label>Ghi chú nguồn / lý do thay đổi</label><input id="licRuleNote" value="${esc(ed.sourceNote || '')}"></div>
     <div class="sim-actions">
-      <button class="btn btn-primary btn-sm" data-lic-action="rule-save" data-id="${ed.id}" data-activate="1" type="button">Lưu version mới &amp; kích hoạt</button>
-      <button class="btn btn-secondary btn-sm" data-lic-action="rule-save" data-id="${ed.id}" type="button">Chỉ lưu version mới</button>
+      ${admin ? `<button class="btn btn-primary btn-sm" data-lic-action="rule-save" data-id="${ed.id}" data-activate="1" type="button">Lưu version mới &amp; kích hoạt</button>
+      <button class="btn btn-secondary btn-sm" data-lic-action="rule-save" data-id="${ed.id}" type="button">Chỉ lưu version mới</button>` : `<span class="muted-sub">${ADMIN_ONLY_NOTE}</span>`}
       <button class="btn btn-secondary btn-sm" data-lic-action="rule-cancel" type="button">Đóng</button>
     </div>
     <p class="logo-upload-hint hidden" id="licRuleErr"></p></div>` : '';

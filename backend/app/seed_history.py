@@ -13,8 +13,7 @@ import argparse
 import datetime as dt
 import random
 
-from . import capacity
-from .collectors.scheduler import _policy_from_settings
+from . import capacity, data_access
 from .config import get_settings
 from .database import Base, SessionLocal, engine
 from .models import ClusterAggregate, HostSnapshot, SnapshotRun, VmSnapshot
@@ -59,12 +58,12 @@ def main():
     args = ap.parse_args()
 
     settings = get_settings()
-    policy = _policy_from_settings(settings)
     Base.metadata.create_all(bind=engine)
     rng = random.Random(args.seed)
     now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     total_days = round(args.months * 30.44)
     db = SessionLocal()
+    policy = data_access.get_effective_policy(db, settings)
     try:
         for cfg in settings.vcenters():
             if not cfg.demo:
