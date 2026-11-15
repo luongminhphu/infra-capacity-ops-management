@@ -48,7 +48,7 @@ async function aiInvoiceRead(btn) {
   await aiRunInto(btn, document.getElementById(btn.dataset.aiOut), async () => {
     const r = await apiRequest(btn.dataset.aiUrl, { method: 'POST' });
     const inv = r.invoice;
-    const val = (v) => (typeof v === 'number' ? spMoney(v) : esc(v ?? '—'));
+    const val = (v) => (typeof v === 'number' ? uiMoney(v, 'VND', 3) : esc(v ?? '—'));
     return `<div class="home-ai">
       <div class="home-brief-head"><span class="eyebrow">Đối chiếu hoá đơn ${esc(inv.invoiceSerial || '')} ${esc(inv.invoiceNo || '')}</span>
         <span class="muted-sub sr-inline">AI đọc hoá đơn${inv.cached ? ' · dùng lại' : ''}; hệ thống đối chiếu — tick hồ sơ sau khi kiểm tra</span></div>
@@ -112,7 +112,7 @@ function askRender() {
   const cb = $('#rptArchive');
   if (cb) {
     cb.checked = reportArchiveOn();
-    cb.addEventListener('change', () => { try { localStorage.setItem('vco.reportArchive', cb.checked ? '1' : '0'); } catch (err) { /* per browser */ } });
+    cb.addEventListener('change', () => uiSetPref('reportArchive', cb.checked));
   }
   // The header itself is added by uiDownload (ui.js); the server keeps only exports its registry marks archivable.
 }());

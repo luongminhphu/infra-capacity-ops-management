@@ -30,7 +30,7 @@ function aiSummaryHtml(s, title) {
 async function aiRunInto(btn, out, fn) {
   if (!out) return;
   btn.disabled = true;
-  out.innerHTML = '<div class="empty-note">AI đang phân tích…</div>';
+  out.innerHTML = uiNote('AI đang phân tích…');
   try { out.innerHTML = await fn(); } catch (err) { out.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; }
   finally { btn.disabled = false; }
 }

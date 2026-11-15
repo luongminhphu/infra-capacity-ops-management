@@ -36,7 +36,7 @@ async function renderProposalsPage() {
       ${ppState.error ? `<p class="criteria-status error">${esc(ppState.error)}</p>` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
         <thead><tr><th>Mã</th><th>Về việc</th><th>Gắn với</th><th>Trạng thái</th><th>File</th><th>Cập nhật</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" class="empty-note">Chưa có tờ trình.</td></tr>'}</tbody>
+        <tbody>${rows || uiEmptyRow(6, 'Chưa có tờ trình.')}</tbody>
       </table></div>
     </section>`;
   refreshIcons();
@@ -228,7 +228,7 @@ async function ppRenderAdmin(mount) {
       </div>
     </div>
     <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mẫu</th><th>Các mục nhận diện được</th><th>File</th><th>Dùng</th><th></th></tr></thead>
-      <tbody>${tplRows || '<tr><td colspan="5" class="empty-note">Chưa có mẫu.</td></tr>'}</tbody></table></div>
+      <tbody>${tplRows || uiEmptyRow(5, 'Chưa có mẫu.')}</tbody></table></div>
     <h5 class="pp-rec-title">Người ký / người nhận theo loại mẫu</h5>
     <p class="panel-sub">Điền vào bảng ký theo đúng thứ tự vai trò trong mẫu; người “Phê duyệt” đầu tiên được ghi vào “Trình đến” và “Kính gửi”. Để trống thì giữ nguyên tên trong mẫu.</p>
     <div class="sp-settings-grid">${recEditor('A')}${recEditor('B')}</div>`;

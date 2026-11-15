@@ -29,7 +29,23 @@ def _clean_prefs(data: Dict[str, Any]) -> Dict[str, Any]:
                               "source": f.get("source") if f.get("source") in ("", *inbox.SOURCE_LABELS) else ""}
     if data.get("agendaDays") in (30, 60, 120, 180, 365):
         out["agendaDays"] = data["agendaDays"]
+    # Per-user view options that used to live in one browser's localStorage (ui.js uiPref).
+    if data.get("historyMonths") in (3, 6, 12):
+        out["historyMonths"] = data["historyMonths"]
+    if data.get("historyGroup") in ("cluster", "vcenter"):
+        out["historyGroup"] = data["historyGroup"]
+    for key in ("reportAi", "reportArchive"):
+        if isinstance(data.get(key), bool):
+            out[key] = data[key]
     return out
+
+
+def _stored_prefs(row: Optional[UserPref]) -> Dict[str, Any]:
+    try:
+        data = json.loads(row.data) if row and row.data else {}
+    except ValueError:
+        return {}
+    return _clean_prefs(data) if isinstance(data, dict) else {}
 
 
 def _iso(d: Optional[dt.date]) -> Optional[str]:
@@ -158,21 +174,17 @@ def agenda(days: int = Query(default=120, ge=7, le=400), user: User = Depends(ge
 
 @router.get("/me/prefs")
 def get_prefs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = db.get(UserPref, user.username)
-    try:
-        return json.loads(row.data) if row else {}
-    except ValueError:
-        return {}
+    return _stored_prefs(db.get(UserPref, user.username))
 
 
 @router.put("/me/prefs")
 def put_prefs(data: Dict[str, Any] = Body(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if len(json.dumps(data, ensure_ascii=False, default=str).encode()) > MAX_PREFS_BYTES:
         raise HTTPException(413, "Tuỳ chọn quá lớn.")
-    clean = _clean_prefs(data)
-    raw = json.dumps(clean, ensure_ascii=False)
+    # Merge: each screen sends only its own keys (home: inbox / agenda, ui.js: theme, history, reports).
     row = db.get(UserPref, user.username) or UserPref(username=user.username)
-    row.data, row.updated_at = raw, dt.datetime.utcnow()
+    clean = {**_stored_prefs(row), **_clean_prefs(data)}
+    row.data, row.updated_at = json.dumps(clean, ensure_ascii=False), dt.datetime.utcnow()
     db.add(row)
     db.commit()
     return clean

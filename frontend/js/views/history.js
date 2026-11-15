@@ -11,7 +11,7 @@
    ========================================================= */
 
 const HISTORY_MONTH_OPTIONS = [3, 6, 12];
-const HISTORY_SERIES_COLORS = ['#2563eb', '#0891b2', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#ca8a04', '#64748b'];
+// Series colours come from the --chart-s1…8 tokens (chartPalette().series).
 
 const historyState = {
   months: 12,
@@ -20,14 +20,17 @@ const historyState = {
 };
 
 (function restoreHistoryPrefs() {
-  try {
-    const m = parseInt(localStorage.getItem('vco.historyMonths') || '', 10);
-    if (HISTORY_MONTH_OPTIONS.includes(m)) historyState.months = m;
-    const g = localStorage.getItem('vco.historyGroupV2');
-    if (g === 'vcenter' || g === 'cluster') historyState.group = g;
-  } catch (e) { /* ignore */ }
+  historyApplyPrefs();
   historyState.loaded = true;
 })();
+
+/* Also called after sign-in, once the server copy of the preferences is in (app.js). */
+function historyApplyPrefs() {
+  const m = uiPref('historyMonths');
+  if (HISTORY_MONTH_OPTIONS.includes(m)) historyState.months = m;
+  const g = uiPref('historyGroup');
+  if (g === 'vcenter' || g === 'cluster') historyState.group = g;
+}
 
 function historyVcenterParam() {
   if (typeof currentVcenterFilter === 'undefined') return 'all';
@@ -166,8 +169,8 @@ function renderHistoryCharts(mountId, data) {
     const datasets = data.groups.map((g, i) => ({
       label: g.label,
       data: byDate(g.series, field),
-      borderColor: HISTORY_SERIES_COLORS[i % HISTORY_SERIES_COLORS.length],
-      backgroundColor: HISTORY_SERIES_COLORS[i % HISTORY_SERIES_COLORS.length] + '22',
+      borderColor: colors.series[i % colors.series.length],
+      backgroundColor: colors.series[i % colors.series.length] + '22',
       borderWidth: 2, pointRadius: dates.length > 40 ? 0 : 2.5, pointHoverRadius: 4,
       tension: 0.25, spanGaps: true, fill: false,
     }));
@@ -222,11 +225,11 @@ const historyThresholdPlugin = {
     const yPx = y.getPixelForValue(opts.value);
     ctx.save();
     ctx.setLineDash([5, 4]);
-    ctx.strokeStyle = opts.color || '#b91c1c';
+    ctx.strokeStyle = opts.color || chartPalette().crit;
     ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(chart.chartArea.left, yPx); ctx.lineTo(chart.chartArea.right, yPx); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = opts.color || '#b91c1c';
+    ctx.fillStyle = opts.color || chartPalette().crit;
     ctx.font = '600 10px sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(opts.label || '', chart.chartArea.right - 4, yPx - 4);
@@ -400,10 +403,8 @@ function bindHistoryControls(mountId, opts) {
     if (!mBtn && !gBtn) return;
     if (mBtn) historyState.months = parseInt(mBtn.dataset.historyMonths, 10);
     if (gBtn) historyState.group = gBtn.dataset.historyGroup;
-    try {
-      localStorage.setItem('vco.historyMonths', String(historyState.months));
-      localStorage.setItem('vco.historyGroupV2', historyState.group);
-    } catch (err) { /* ignore */ }
+    uiSetPref('historyMonths', historyState.months);
+    uiSetPref('historyGroup', historyState.group);
     // Re-render every mounted panel so Executive and Technical stay in sync.
     await Promise.all(Object.keys(historyMounts).map(id => renderHistoryPanel(id, historyMounts[id])));
   });

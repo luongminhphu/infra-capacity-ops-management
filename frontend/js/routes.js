@@ -89,6 +89,8 @@ const PAGES = [
       desc: 'Năm tài chính, loại chi phí, mốc nhắc, kênh email / Discord, mẫu tờ trình và AI soạn tờ trình.', scope: [], spendRole: 'viewer', feature: 'spend' },
     { id: 'set-ai', view: 'settings', sub: 'ai', icon: 'bot', label: 'AI & MCP', title: 'Cài đặt — AI & MCP',
       desc: 'MCP server chỉ đọc cho AI phân tích log / hiệu suất của app (admin).', scope: [] },
+    { id: 'set-users', view: 'settings', sub: 'users', icon: 'users', label: 'Người dùng & quyền', title: 'Cài đặt — người dùng & quyền',
+      desc: 'Tài khoản, cách đăng nhập, passkey và vai trò từng module (admin).', scope: [] },
     { id: 'set-auth', view: 'settings', sub: 'auth', icon: 'shield-check', label: 'Đăng nhập & bảo mật', title: 'Cài đặt — đăng nhập & bảo mật',
       desc: 'SSO Entra ID, passkey cho tài khoản cục bộ, App Proxy (admin).', scope: [] },
     { id: 'set-brand', view: 'settings', sub: 'brand', icon: 'image', label: 'Thương hiệu', title: 'Cài đặt — thương hiệu',
@@ -131,11 +133,37 @@ const MENU = [
     { key: 'settings', label: 'Cài đặt', icon: 'settings', tabs: [
       ['settings', '', 'Tiêu chí & ngưỡng'], ['set-sources', 'sources', 'Nguồn dữ liệu'], ['bk-config', 'backup', 'Backup'],
       ['set-features', 'features', 'Tính năng'], ['set-spend', 'spend', 'Chi phí & nhắc hạn'], ['set-ai', 'ai', 'AI & MCP'],
-      ['set-auth', 'auth', 'Đăng nhập & bảo mật'], ['set-brand', 'brand', 'Thương hiệu']] },
+      ['set-users', 'users', 'Người dùng & quyền'], ['set-auth', 'auth', 'Đăng nhập & bảo mật'], ['set-brand', 'brand', 'Thương hiệu']] },
   ] },
 ];
 
 const callIf = (name, ...args) => { if (typeof window[name] === 'function') window[name](...args); };
+
+/* Lazy modules: scripts fetched the first time a page of the module is opened (or a function of it is
+   needed — uiRequire('spend').then(...)). Same ?v= fingerprint as index.html, same origin only. */
+const ASSET_V = (() => { try { return new URL(document.currentScript.src).searchParams.get('v') || ''; } catch (e) { return ''; } })();
+const MODULES = {
+  spend: ['spend', 'spend_capex', 'spend_report', 'spend_contract', 'spend_proposal', 'spend_payment', 'spend_quote', 'spend_renovation'],
+  bom: ['bom'],
+};
+const moduleLoads = {};
+const modulesReady = new Set();
+function uiRequire(name) {
+  if (moduleLoads[name]) return moduleLoads[name];
+  const files = MODULES[name];
+  if (!files) return Promise.reject(new Error(`Không có module ${name}`));
+  // Sequential: later files of a module use top-level consts of the first one.
+  moduleLoads[name] = files.reduce((p, f) => p.then(() => new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = `js/views/${f}.js?v=${encodeURIComponent(ASSET_V)}`;
+    el.onload = resolve;
+    el.onerror = () => reject(new Error('Không tải được giao diện, hãy tải lại trang.'));
+    document.body.appendChild(el);
+  })), Promise.resolve());
+  moduleLoads[name].then(() => { modulesReady.add(name); }, () => { delete moduleLoads[name]; });   // failed: allow a retry
+  return moduleLoads[name];
+}
+
 const VIEWS = {
   home: { section: '#viewHome', render: () => callIf('renderHomeView') },
   agenda: { section: '#viewAgenda', render: () => callIf('renderAgendaView') },
@@ -160,14 +188,40 @@ const VIEWS = {
   backup: { section: '#viewBackup', render: () => callIf('renderBackupView'),
     sub: { get: () => (typeof bkState === 'function' && bkState().sub) || 'overview',
            set: (s) => { if (typeof bkState === 'function') bkState().sub = s || 'overview'; }, fallback: 'bk-overview' } },
-  spend: { section: '#viewSpend', render: () => callIf('renderSpendView'),
-    sub: { get: () => (typeof spState !== 'undefined' && spState.sub) || 'opex',
-           set: (s) => { if (typeof spState !== 'undefined') spState.sub = s || 'opex'; }, fallback: 'spend-opex' } },
+  spend: { section: '#viewSpend', module: 'spend', render: () => callIf('renderSpendView'),
+    // Before spend.js is loaded the wanted tab waits in `pending` (applied once the module is in).
+    sub: { pending: null,
+           get: () => (typeof spState !== 'undefined' ? spState.sub : VIEWS.spend.sub.pending) || 'opex',
+           set: (s) => { if (typeof spState !== 'undefined') spState.sub = s || 'opex'; else VIEWS.spend.sub.pending = s || 'opex'; },
+           fallback: 'spend-opex' } },
   reports: { section: '#viewReports', render: () => callIf('renderReportsView') },
   archive: { section: '#viewArchive', render: () => callIf('renderArchiveView') },
-  bom: { section: '#viewBom', render: () => callIf('renderBomView') },
+  bom: { section: '#viewBom', module: 'bom', render: () => callIf('renderBomView') },
   settings: { section: '#viewSettings',
     sub: { get: () => appState.settingsSub || 'criteria', set: (s) => { appState.settingsSub = s || 'criteria'; }, fallback: 'settings' },
     // Settings tabs whose panel is built by a view module when shown.
-    tabRender: { ai: () => callIf('renderAiSettings'), auth: () => callIf('renderAuthSettings') } },
+    tabRender: { ai: () => callIf('renderAiSettings'), auth: () => callIf('renderAuthSettings'), users: () => callIf('renderUsersSettings'),
+      spend: () => { if (currentUser && currentUser.spendRole && currentUser.spendRole !== 'none') uiRequire('spend').then(() => callIf('initSpendSettings', currentUser), (e) => uiAlert(e.message)); } } },
 };
+
+/* Render a view, loading its lazy module first. A page left before the load finished is not drawn. */
+function renderView(name) {
+  const v = VIEWS[name];
+  if (!v || !v.render) return;
+  if (!v.module || modulesReady.has(v.module)) { v.render(); return; }
+  const mount = document.querySelector(v.section);
+  if (mount && !mount.querySelector('[data-lazy-note]')) mount.insertAdjacentHTML('afterbegin', '<div class="empty-note" data-lazy-note>Đang tải…</div>');
+  uiRequire(v.module).then(() => {
+    if (mount) mount.querySelectorAll('[data-lazy-note]').forEach(el => el.remove());
+    if (v.sub && v.sub.pending) { v.sub.set(v.sub.pending); v.sub.pending = null; }
+    if (appState.view === name) v.render();
+  }, (e) => { if (mount) mount.querySelectorAll('[data-lazy-note]').forEach(el => { el.textContent = e.message; el.classList.add('tone-crit'); }); });
+}
+
+/* Spend exports on the Reports page work before the module is loaded. */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-spend-export]');
+  if (!b) return;
+  e.preventDefault();
+  uiRequire('spend').then(() => spendExport(b.dataset.spendExport, b), (err) => uiAlert(err.message));
+});

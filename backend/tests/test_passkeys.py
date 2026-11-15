@@ -181,6 +181,13 @@ def test_admin_user_rules_and_app_proxy_status(app_, admin, _settings):
     assert nobody.get("/api/admin/users").status_code == 403 and nobody.post("/api/admin/users", json={"username": "x.y.z"}).status_code == 403
     row = next(u for u in admin.get("/api/admin/users").json()["items"] if u["username"] == "phu.iphone")
     assert row["hasPassword"] is False and row["passkeys"] == 0 and row["inviteExpiresAt"]
+    # Người dùng & quyền: the same table carries the module role; changing it goes through the audited spend API
+    users = admin.get("/api/admin/users").json()
+    assert row["spendRole"] == "none" and row["spendRoleSource"] is None
+    assert users["spend"]["on"] is True and [r["value"] for r in users["spend"]["roles"]] == ["none", "viewer", "editor", "approver"]
+    assert admin.put(f"/api/spend/admin/users/{row['id']}/role", json={"role": "editor"}).status_code == 200
+    row = next(u for u in admin.get("/api/admin/users").json()["items"] if u["username"] == "phu.iphone")
+    assert row["spendRole"] == "editor" and row["spendRoleSource"] == "ui"
     # behind App Proxy: PUBLIC_URL decides the redirect URI, passkey domain, secure cookies and invite links
     _settings.public_url = "https://ico-contoso.msappproxy.net/"
     st = admin.get("/api/admin/auth-status").json()

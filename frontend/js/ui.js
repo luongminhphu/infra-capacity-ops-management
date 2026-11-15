@@ -147,9 +147,60 @@ function uiSaveBlob(blob, filename) {
 
 /* "Lưu vào kho" (Trung tâm báo cáo): every export asks the server to keep a copy; the server archives
    only what backend/app/exports.py marks archivable. */
-function reportArchiveOn() {
-  try { return localStorage.getItem('vco.reportArchive') === '1'; } catch (err) { return false; }
+function reportArchiveOn() { return uiPref('reportArchive', false) === true; }
+
+/* ---------- Per-user preferences, kept on the server (/api/me/prefs) ----------
+   Theme, history range / grouping, AI summary and archive toggles follow the user across browsers.
+   localStorage mirrors them (theme is applied before sign-in, no flash) and holds the old values once,
+   which are sent up the first time the server has none. */
+const UI_PREF_KEYS = { theme: 'vco.theme', historyMonths: 'vco.historyMonths', historyGroup: 'vco.historyGroupV2',
+  reportAi: 'vco.reportAi', reportArchive: 'vco.reportArchive' };
+const uiPrefs = { data: {}, loaded: false, loading: null, timer: null, pending: {} };
+function uiPrefLocal(key) {
+  try {
+    const raw = localStorage.getItem(UI_PREF_KEYS[key]);
+    if (raw === null) return undefined;
+    if (key === 'reportAi' || key === 'reportArchive') return raw === '1';
+    if (key === 'historyMonths') return parseInt(raw, 10);
+    return raw;
+  } catch (err) { return undefined; }
 }
+function uiPref(key, fallback) {
+  const v = key in uiPrefs.data ? uiPrefs.data[key] : uiPrefLocal(key);
+  return v === undefined || v === null || Number.isNaN(v) ? fallback : v;
+}
+function uiSetPref(key, value) {
+  uiPrefs.data[key] = value;
+  try { localStorage.setItem(UI_PREF_KEYS[key], typeof value === 'boolean' ? (value ? '1' : '0') : String(value)); } catch (err) { /* private mode */ }
+  uiPrefs.pending[key] = value;
+  clearTimeout(uiPrefs.timer);
+  uiPrefs.timer = setTimeout(uiFlushPrefs, 400);
+}
+function uiFlushPrefs() {
+  const body = uiPrefs.pending;
+  uiPrefs.pending = {};
+  if (!Object.keys(body).length || typeof apiRequest !== 'function') return;
+  apiRequest('/me/prefs', { method: 'PUT', body: JSON.stringify(body) }).catch(() => { /* preference only */ });
+}
+/* After sign-in: read the server copy; values only this browser knows are sent up once. */
+function uiLoadPrefs() {
+  if (!uiPrefs.loading) uiPrefs.loading = uiReadPrefs().finally(() => { if (!uiPrefs.loaded) uiPrefs.loading = null; });
+  return uiPrefs.loading;
+}
+async function uiReadPrefs() {
+  let got;
+  try { got = (await apiRequest('/me/prefs')) || {}; } catch (err) { return uiPrefs.data; }
+  uiPrefs.data = { ...got, ...uiPrefs.data };   // a toggle clicked while loading wins
+  uiPrefs.loaded = true;
+  Object.keys(UI_PREF_KEYS).forEach((k) => {
+    if (!(k in uiPrefs.data)) { const v = uiPrefLocal(k); if (v !== undefined && !Number.isNaN(v)) uiPrefs.pending[k] = v; }
+    else { try { const v = uiPrefs.data[k]; localStorage.setItem(UI_PREF_KEYS[k], typeof v === 'boolean' ? (v ? '1' : '0') : String(v)); } catch (err) { /* ignore */ } }
+  });
+  if (Object.keys(uiPrefs.pending).length) { Object.assign(uiPrefs.data, uiPrefs.pending); uiFlushPrefs(); }
+  return uiPrefs.data;
+}
+/* Sign-out: the next user starts from their own server copy. */
+function uiResetPrefs() { uiPrefs.data = {}; uiPrefs.loaded = false; uiPrefs.loading = null; }
 
 /* Download what an API endpoint returns (PDF / Excel / CSV). Throws ApiError with the server's detail. */
 async function uiDownload(url, options = {}, fallbackName = 'download') {
@@ -174,9 +225,17 @@ async function uiDownload(url, options = {}, fallbackName = 'download') {
   return name;
 }
 
-/* Empty state block. */
+/* Empty / loading states — one look everywhere (text is escaped; `action` is trusted HTML). */
 function uiEmpty(text, action) {
   return `<div class="empty-state">${esc(text)}${action ? ` ${action}` : ''}</div>`;
+}
+/* One-line note inside a panel (đang tải, chưa có dữ liệu…); tone = crit / warn for errors. */
+function uiNote(text, tone) {
+  return `<div class="empty-note${tone ? ` tone-${tone}` : ''}">${esc(text)}</div>`;
+}
+/* Empty table body: one full-width row. */
+function uiEmptyRow(colspan, text) {
+  return `<tr><td colspan="${Number(colspan) || 1}" class="empty-note">${esc(text)}</td></tr>`;
 }
 
 /* Link to the page of one object (thẻ Host / VM). */
@@ -189,4 +248,52 @@ function uiEntityLink(type, name, vcenterKey, strong = true) {
   if (!name) return '—';
   const label = strong ? `<strong>${esc(name)}</strong>` : esc(name);
   return `<a class="entity-link" href="${esc(uiEntityHref(type, name, vcenterKey))}" title="Mở trang ${type === 'host' ? 'host' : 'VM'}">${label}</a>`;
+}
+
+/* ---------- Charts: colours from the HSC tokens (styles.css), one Chart instance per key ---------- */
+function chartPalette() {
+  const cs = getComputedStyle(document.documentElement);
+  const g = (name) => cs.getPropertyValue(name).trim();
+  return { text:g('--text'), muted:g('--muted'), divider:g('--divider'), primary:g('--primary'), accent:g('--accent'), ok:g('--ok'), warn:g('--warn'), bad:g('--bad'), crit:g('--crit'), faint:g('--faint'),
+    // Series / sequential colours for multi-line or stacked charts.
+    series: [1, 2, 3, 4, 5, 6, 7, 8].map(i => g(`--chart-s${i}`)), deep: g('--chart-deep'), amber: g('--chart-index'),
+    seq: [1, 2, 3, 4, 5].map(i => g(`--chart-seq-${i}`)) };
+}
+
+function destroyChart(key) {
+  if (appState.charts[key]) { appState.charts[key].destroy(); appState.charts[key] = null; }
+}
+
+/* ---------- Sortable tables (state in appState.sort.table) ---------- */
+function applySort(rows, tableKey, valueFn) {
+  const s = appState.sort.table[tableKey];
+  if (!s) return rows;
+  const sorted = [...rows].sort((a, b) => {
+    const av = valueFn(a, s.key), bv = valueFn(b, s.key);
+    if (typeof av === 'string' || typeof bv === 'string') return String(av).localeCompare(String(bv)) * (s.dir === 'asc' ? 1 : -1);
+    const an = isFinite(av) ? av : -Infinity, bn = isFinite(bv) ? bv : -Infinity;
+    return (an - bn) * (s.dir === 'asc' ? 1 : -1);
+  });
+  return sorted;
+}
+
+function bindSortableHeaders(tableId, tableKey, renderFn) {
+  $$(`#${tableId} th[data-key]`).forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.key;
+      const current = appState.sort.table[tableKey];
+      let dir = 'desc';
+      if (current && current.key === key) dir = current.dir === 'desc' ? 'asc' : 'desc';
+      appState.sort.table[tableKey] = { key, dir };
+      renderFn();
+    };
+  });
+}
+
+function highlightSortHeaders(tableId, tableKey) {
+  const s = appState.sort.table[tableKey];
+  $$(`#${tableId} th[data-key]`).forEach(th => {
+    th.classList.remove('sorted', 'sorted-asc');
+    if (s && th.dataset.key === s.key) th.classList.add(s.dir === 'desc' ? 'sorted' : 'sorted-asc');
+  });
 }

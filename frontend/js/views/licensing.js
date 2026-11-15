@@ -239,7 +239,7 @@ function renderLicHardware() {
       ${distChips(inv.distribution.model, 'Model')}${distChips(inv.distribution.esxiVersion, 'ESXi')}
       <div class="table-scroll"><table class="data-table lic-table">
         <thead><tr><th>Cluster / Host</th><th>Model</th><th>ESXi</th><th class="num">Host</th><th class="num">Socket</th><th class="num">Physical core</th><th class="num">Logical thread</th><th class="num">RAM GB</th><th class="num">VM</th><th>HA / DRS · license core</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="10" class="empty-note">Không có host trong phạm vi.</td></tr>'}</tbody>
+        <tbody>${rows || uiEmptyRow(10, 'Không có host trong phạm vi.')}</tbody>
       </table></div>
       <div class="row-count">${inv.hosts.length} host · ${Object.keys(groups).length} cluster</div>
     </section>`;
@@ -319,7 +319,7 @@ function renderLicOsTable() {
       <td class="lic-note">${esc(o.note || '')}</td>
       <td><button class="btn btn-secondary btn-sm" data-lic-action="override" data-idx="${st_idx(v)}" type="button">Override</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="13" class="empty-note">Không có VM khớp bộ lọc.</td></tr>';
+  }).join('') || uiEmptyRow(13, 'Không có VM khớp bộ lọc.');
   $('#licOsFoot').textContent = `${rows.length} / ${licState().inv.vms.length} VM${rows.length > 1500 ? ' (hiển thị 1500 dòng đầu — thu hẹp bộ lọc hoặc xuất Excel)' : ''}`;
 }
 function st_idx(v) { return licState().inv.vms.indexOf(v); }
@@ -416,7 +416,7 @@ function renderLicAssess() {
       </div>
       <div class="table-scroll"><table class="data-table lic-table">
         <thead><tr><th>Cluster</th><th class="num">Host</th><th class="num">Socket</th><th class="num">Physical core</th><th class="num">Core licensable (WS)</th><th>HA / DRS</th><th class="num">VM Windows Server</th><th class="num">VM chưa rõ</th><th class="num">WS Standard core</th><th class="num">WS Datacenter core</th><th class="num">VMware core</th><th>Edition ít core hơn</th></tr></thead>
-        <tbody>${clusterRows || '<tr><td colspan="12" class="empty-note">Không có cluster.</td></tr>'}</tbody>
+        <tbody>${clusterRows || uiEmptyRow(12, 'Không có cluster.')}</tbody>
       </table></div>
     </section>
 
@@ -487,7 +487,7 @@ function renderLicEntitlements() {
     <div class="panel-head"><div><div class="panel-title">Entitlement hiện có &amp; đơn giá</div><p class="panel-sub">Nhập license đang sở hữu, hoặc chọn tình trạng <b>Chưa có</b> để xác nhận chưa mua license sản phẩm đó (toàn bộ nhu cầu được tính là thiếu hụt; có thể kèm báo giá để ước chi phí). Số lượng pack được quy đổi sang core; đơn giá là giá mỗi đơn vị đã chọn (pack/core/CPU). Không có giá mặc định — thiếu giá thì không hiển thị chi phí.</p></div></div>
     ${form}
     <div class="table-scroll"><table class="data-table lic-table"><thead><tr><th>Sản phẩm</th><th>Đơn vị</th><th class="num">Số lượng</th><th class="num">Đơn giá</th><th>Phạm vi</th><th>Hết hạn</th><th>Ghi chú</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="8" class="empty-note">Chưa có entitlement nào.</td></tr>'}</tbody></table></div>
+    <tbody>${rows || uiEmptyRow(8, 'Chưa có entitlement nào.')}</tbody></table></div>
   </section>`;
 }
 
@@ -621,7 +621,7 @@ function renderLicSnapshots() {
     <div class="panel-head"><div><div class="panel-title">Snapshot assessment</div><p class="panel-sub">Mỗi snapshot lưu toàn bộ đầu vào (inventory, override, version rule và tham số, entitlement) cùng kết quả và hash. "Tái lập" chạy lại engine trên đầu vào đã lưu và so hash để chứng minh kết quả tái lập được, độc lập với inventory hiện tại.</p></div>
       <div class="panel-toolbar"><input id="licSnapTitle" placeholder="Tiêu đề snapshot (tuỳ chọn)"><button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot phạm vi hiện tại</button></div></div>
     <div class="table-scroll"><table class="data-table lic-table"><thead><tr><th class="num">#</th><th>Thời điểm</th><th>Tiêu đề</th><th>Phạm vi</th><th>Kết luận</th><th class="num">VMware core</th><th class="num">Windows Server core</th><th>Hash</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="9" class="empty-note">Chưa có snapshot.</td></tr>'}</tbody></table></div>
+    <tbody>${rows || uiEmptyRow(9, 'Chưa có snapshot.')}</tbody></table></div>
   </section>`;
 }
 

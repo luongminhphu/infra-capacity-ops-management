@@ -114,7 +114,7 @@ function srBar(pct) {
 function srBodyHtml() {
   const r = srState.report;
   if (srState.error) return `<p class="criteria-status error">${esc(srState.error)}</p>`;
-  if (!r) return '<div class="empty-note">Đang tải…</div>';
+  if (!r) return uiNote('Đang tải…');
   const c = r.compare, t = r.totals;
   const soon = r.expiringByQuarter.reduce((s, g) => s + g.total, 0), soonN = r.expiringByQuarter.reduce((s, g) => s + g.count, 0);
   const delta = c.deltaPct === null ? '—' : `${c.deltaPct > 0 ? '+' : ''}${c.deltaPct.toLocaleString('vi-VN')}%`;
@@ -188,10 +188,7 @@ async function spendExport(kind, btn) {
     if ($('#srMsg')) srMsg(err.message); else uiAlert(err.message);
   } finally { if (btn) btn.disabled = false; }
 }
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-spend-export]');
-  if (b) { e.preventDefault(); spendExport(b.dataset.spendExport, b); }
-});
+// [data-spend-export] clicks are delegated in routes.js (the Reports page works before this file loads).
 
 function srBind() {
   if (srState.bound) return;

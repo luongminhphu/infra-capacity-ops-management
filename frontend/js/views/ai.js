@@ -93,7 +93,7 @@ async function homeAiBrief(btn) {
   const out = $('#homeAiBrief');
   if (!out) return;
   btn.disabled = true;
-  out.innerHTML = '<div class="empty-note">AI đang tóm tắt…</div>';
+  out.innerHTML = uiNote('AI đang tóm tắt…');
   try {
     const s = await apiRequest('/ai/home-brief', { method: 'POST' });
     out.innerHTML = `<div class="home-ai">
@@ -107,7 +107,7 @@ async function homeAiBrief(btn) {
 
 /* ---------------------------------------------------------------- Tổng kết PDF bằng AI (Trung tâm báo cáo) */
 function reportAiOn() {
-  try { return localStorage.getItem('vco.reportAi') === '1'; } catch (err) { return false; }
+  return uiPref('reportAi', false) === true;
 }
 function reportAiParam(prefix = '&') { return reportAiOn() ? `${prefix}ai=1` : ''; }
 
@@ -115,5 +115,5 @@ function reportAiParam(prefix = '&') { return reportAiOn() ? `${prefix}ai=1` : '
   const cb = $('#rptAi');
   if (!cb) return;
   cb.checked = reportAiOn();
-  cb.addEventListener('change', () => { try { localStorage.setItem('vco.reportAi', cb.checked ? '1' : '0'); } catch (err) { /* per-browser option */ } });
+  cb.addEventListener('change', () => uiSetPref('reportAi', cb.checked));
 }());

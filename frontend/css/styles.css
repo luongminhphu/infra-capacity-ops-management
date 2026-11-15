@@ -62,6 +62,11 @@
   --btn-ghost-bg:transparent;--btn-ghost-bg-hover:var(--overlay-hover);--btn-ghost-fg:var(--text-primary);
   --field-bg:var(--bg-elevated);--field-border:var(--border-strong);--field-border-focus:var(--brand);--field-fg:var(--text-primary);--field-placeholder:var(--text-tertiary);
   --chart-portfolio:#C552FF;--chart-optimized:#2681FF;--chart-index:#FFB020;
+  /* chart series (chartPalette().series) + deep / sequential blues — never hard-code chart hexes in JS */
+  --chart-s1:var(--sb50);--chart-s2:var(--sc40);--chart-s3:var(--chart-portfolio);--chart-s4:var(--chart-index);
+  --chart-s5:var(--sr80);--chart-s6:var(--sg60);--chart-s7:var(--sy60);--chart-s8:var(--n100);
+  --chart-deep:var(--logo-blue);
+  --chart-seq-1:var(--sb90);--chart-seq-2:var(--sb70);--chart-seq-3:var(--sb50);--chart-seq-4:var(--sb40);--chart-seq-5:var(--logo-blue);
 
   /* status tones used by the app (ok / warn / bad / crit) */
   --tone-bad:var(--sr70);
