@@ -1193,6 +1193,9 @@ bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job
   số ngày idle, tính storage). Đổi ngưỡng chỉ ảnh hưởng snapshot **từ lần poll sau**, lịch sử cũ giữ
   nguyên số đã chốt. Bản trước 15/11/2026 bỏ qua giá trị đã lưu khi poll, nên nếu đã đổi `ht_factor`
   thì có thể thấy bước nhảy trên biểu đồ Xu hướng tại mốc nâng cấp.
+- Biểu đồ xu hướng và dự báo "còn bao lâu thì hết công suất" (`/api/dashboard/trend`) lấy **một snapshot mỗi
+  ngày cho mỗi cluster** (lần poll thành công cuối ngày), giống trang Xu hướng & biến động. Bản trước 16/11/2026
+  cộng mọi lần poll trong ngày (cả đồng bộ tay, import, run lỗi), nên tổng bị phóng to theo số lần poll và dự báo lệch.
 - `lastActivityDays`/`powerOffDays` của VM được tính dựa trên **lịch sử polling của chính ứng
   dụng** (vCenter API không trả trực tiếp "đã tắt bao lâu") — nghĩa là ngay sau khi triển khai lần
   đầu, các chỉ số này sẽ cần vài chu kỳ polling để chính xác dần theo thời gian thực tế.
