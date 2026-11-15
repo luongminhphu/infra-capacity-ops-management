@@ -187,16 +187,7 @@ def lines_from_rows(rows: Sequence[Sequence[Any]]) -> Extracted:
     return out
 
 
-MAX_PART = 15 * 1024 * 1024        # one XML part (sharedStrings.xml, document.xml) once unzipped
-MAX_TOTAL = 60 * 1024 * 1024
-
-
-def _guard_zip(data: bytes) -> None:
-    """Quotations are small: refuse Office files whose XML parts would blow up memory when parsed."""
-    import zipfile
-    infos = zipfile.ZipFile(io.BytesIO(data)).infolist()
-    if sum(i.file_size for i in infos) > MAX_TOTAL or any(i.file_size > MAX_PART for i in infos):
-        raise ValueError("file quá lớn khi giải nén")
+from ..platform.xlsx_io import MAX_PART, MAX_TOTAL, guard_zip as _guard_zip  # noqa: E402,F401  (shared guard; old name kept)
 
 
 def read_xlsx(data: bytes) -> Extracted:
@@ -214,12 +205,9 @@ def read_docx(data: bytes) -> Extracted:
 
 
 def _read_xlsx(data: bytes) -> Extracted:
-    from openpyxl import load_workbook
-    _guard_zip(data)
-    wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+    from ..platform import xlsx_io
     best: Optional[Extracted] = None
-    for ws in wb.worksheets[:10]:
-        rows = [list(r) for r in ws.iter_rows(max_row=2000, max_col=40, values_only=True)]
+    for _title, rows in xlsx_io.read_rows(data, max_sheets=10, max_rows=2000, max_cols=40):
         ex = lines_from_rows(rows)
         if best is None or sum(l.line_type == "item" for l in ex.lines) > sum(l.line_type == "item" for l in best.lines):
             best = ex

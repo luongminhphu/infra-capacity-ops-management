@@ -284,10 +284,11 @@ async def sizing_import(file: UploadFile = File(...), user: User = Depends(get_c
     content = await file.read()
     if len(content) > MAX_UPLOAD:
         raise HTTPException(status_code=413, detail="File vượt quá 5 MB.")
+    from starlette.concurrency import run_in_threadpool
     try:
-        parsed = sizing.parse_vm_file(file.filename or "", content)
-    except Exception as exc:  # noqa: BLE001 — surface a readable message to the UI
-        raise HTTPException(status_code=400, detail=f"Không đọc được file: {exc}")
+        parsed = await run_in_threadpool(sizing.parse_vm_file, file.filename or "", content)   # CPU-bound parsing
+    except Exception as exc:  # noqa: BLE001 — readable message, no internal detail
+        raise HTTPException(status_code=400, detail=f"Không đọc được file ({type(exc).__name__}).") from None
     return parsed
 
 
