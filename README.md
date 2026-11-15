@@ -62,6 +62,22 @@ và theo cluster (cùng engine với PDF).
 - Gửi tới các kênh Discord (Cài đặt → Chi phí & nhắc hạn) có tick *Nhận cả cảnh báo vận hành*.
 - Admin chạy thử bằng `POST /api/admin/ops-alerts/run`.
 
+**Tìm kiếm chung (Ctrl + K hoặc nút *Tìm* trên thanh trên cùng)**:
+- Tìm được: host, VM (theo tên, IP, hostname guest), client backup, mọi mã nghiệp vụ (OPX / CPX / HD / BG / CTVP / TT,
+  theo mã hoặc tên), nhà cung cấp (tên, tên viết tắt, tên gọi khác), mọi trang.
+- Có sẵn thao tác nhanh: tạo Opex, tạo gói báo giá, tạo dự án cải tạo, xem kết quả quy hoạch, đồng bộ.
+- Kết quả lọc theo quyền: người không có vai trò Chi phí không thấy mã chi phí.
+- Mở mã nào là vào đúng chi tiết của mã đó.
+
+**Trang đối tượng (một đối tượng — một trang)**, mở từ bảng Host & VM, Compliance, Độ phủ backup và từ tìm kiếm:
+- **Host**: capacity, phần cứng & ESXi, trạng thái cluster (HA / DRS), phát hiện compliance, VM trên host, và
+  bảo hành / hợp đồng Opex có khai báo thiết bị này (nếu có vai trò Chi phí).
+- **VM**: cấu hình, host, hệ điều hành (gồm ghi đè), backup (độ phủ, client, policy, lần thành công gần nhất, RPO),
+  phát hiện compliance.
+
+**Quy hoạch → Capex nháp**: ở bảng kết quả theo cluster, nút **Tạo Capex nháp** tạo dự án Capex gồm n node theo kịch bản
+cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi mở dự án vừa tạo.
+
 Mục và tab của module đang tắt (Cài đặt → Tính năng) hoặc không đủ quyền (vai trò Chi phí) sẽ tự ẩn.
 Các thành phần dùng chung (`frontend/js/ui.js`) giúp mọi trang thống nhất: pill 4 trạng thái, dòng trạng thái, hộp xác
 nhận theo design system (thay `confirm()` của trình duyệt), trạng thái rỗng.

@@ -19,6 +19,8 @@ const NAV_GROUPS = [
       desc: 'Hôm nay cần làm: bản tin, trạng thái từng miền và hộp việc gom từ mọi module theo quyền của bạn.', scope: [] },
     { id: 'agenda', view: 'agenda', icon: 'calendar-clock', label: 'Lịch việc & nhắc hạn', title: 'Lịch việc & nhắc hạn',
       desc: 'Mọi mốc có ngày: Opex hết hạn, đợt thanh toán, license hết hạn, báo giá hết hiệu lực.', scope: [] },
+    { id: 'entity', view: 'entity', icon: 'box', label: 'Đối tượng', title: 'Đối tượng',
+      desc: 'Mọi thông tin về một host / VM từ các module: capacity, phần cứng, hệ điều hành, backup, compliance, bảo hành.', scope: [] },
     { id: 'spend-payments', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'payments', icon: 'banknote', label: 'Đợt thanh toán', title: 'Đợt thanh toán',
       desc: 'Mọi đợt thanh toán của mọi hợp đồng, sớm nhất trước, kèm tình trạng hồ sơ.', scope: [] },
     { id: 'executive', view: 'executive', icon: 'briefcase', label: 'Điều hành', title: 'Tổng quan điều hành',
@@ -325,7 +327,7 @@ function bindNavigation() {
   });
   window.addEventListener('hashchange', () => {
     const id = navIdFromHash();
-    if (id && id !== activeNavId) navigateTo(id);
+    if (id && (id !== activeNavId || id === 'entity')) navigateTo(id);   // entity: same page, other object
     else if (!id) syncNavState();   // unknown or switched-off page: restore the current one
   });
   const open = $('#btnSidebarOpen'), close = $('#btnSidebarClose'), scrim = $('#sidebarScrim');
@@ -927,6 +929,7 @@ function bindTopBarInteractions() {
   $('#loginForm').addEventListener('submit', handleLoginSubmit);
   $('#btnLogout').addEventListener('click', handleLogout);
   $('#btnSyncNow').addEventListener('click', handleSyncNow);
+  const searchBtn = $('#btnSearch'); if (searchBtn) searchBtn.addEventListener('click', () => openPalette());
   [['#btnExportPdfExec', 'executive'], ['#btnExportPdfTech', 'technical'], ['#btnExportPdfPlan', 'planning']].forEach(([sel, view]) => {
     const b = $(sel); if (b) b.addEventListener('click', e => handleExportPdf(view, e.currentTarget));
   });

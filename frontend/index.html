@@ -95,6 +95,7 @@
         <span class="pill na" id="dataFootprint" data-scope="footprint">Hosts: 0 | VMs: 0</span>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm topbar-search" id="btnSearch" type="button" title="Tìm kiếm (Ctrl + K)"><i data-lucide="search"></i><span>Tìm</span><kbd>Ctrl K</kbd></button>
         <span class="vcenter-status-row" id="vcenterStatusRow"></span>
         <button class="btn btn-secondary btn-sm" id="btnSyncNow" type="button"><i data-lucide="refresh-cw"></i>Đồng bộ ngay</button>
       </div>
@@ -109,6 +110,7 @@
       <!-- ================= TRANG CHỦ · LỊCH VIỆC (super app SA2) ================= -->
       <section id="viewHome" class="view-section hidden"><div id="homeMount"></div></section>
       <section id="viewAgenda" class="view-section hidden"><div id="agendaMount"></div></section>
+      <section id="viewEntity" class="view-section hidden"><div id="entityMount" class="entity-mount"></div></section>
 
       <!-- ================= TỔNG QUAN · ĐIỀU HÀNH ================= -->
       <section id="viewExecutive" class="view-section hidden">
@@ -1065,6 +1067,7 @@
 <script src="js/views/spend_quote.js?v=__ASSET_V__"></script>
 <script src="js/views/spend_renovation.js?v=__ASSET_V__"></script>
 <script src="js/views/home.js?v=__ASSET_V__"></script>
+<script src="js/views/entity.js?v=__ASSET_V__"></script>
 <script src="js/app.js?v=__ASSET_V__"></script>
 </body>
 </html>

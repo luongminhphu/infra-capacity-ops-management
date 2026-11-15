@@ -261,7 +261,7 @@ function bkCoverage(s) {
   const clOpts = [...new Set(cov.byCluster.filter(c => f.vc === 'all' || c.vcenterKey === f.vc).map(c => c.cluster))].sort();
   const byCl = cov.byCluster.filter(c => pass({ vcenterKey: c.vcenterKey, cluster: c.cluster })).map(c => `<tr><td>${esc(c.vcenterKey)}</td><td><b>${esc(c.cluster)}</b></td><td class="num">${c.total}</td><td class="num">${c.protected}</td>
     <td class="num">${c.failing || 0}</td><td class="num">${c.unprotected ? `<b class="tone-crit">${c.unprotected}</b>` : 0}</td><td class="num">${bkPct(c.pct)}</td></tr>`).join('');
-  const rows = vms.map(v => `<tr><td><b>${esc(v.vm)}</b></td><td>${esc(v.vcenterKey || '')}</td><td>${esc(v.cluster || '')}</td><td>${esc(v.host || '—')}</td><td>${esc(v.ip || '—')}</td>
+  const rows = vms.map(v => `<tr><td>${uiEntityLink('vm', v.vm, v.vcenterKey)}</td><td>${esc(v.vcenterKey || '')}</td><td>${esc(v.cluster || '')}</td><td>${esc(v.host || '—')}</td><td>${esc(v.ip || '—')}</td>
     <td class="num">${bkNum(v.vcpu)}</td><td class="num">${bkNum(v.ramGB)}</td><td class="num">${bkNum(v.diskGB)}</td>
     <td>${v.state === 'unprotected' ? bkPill('crit', 'Chưa backup') : bkPill('warn', 'Có job nhưng lỗi')}</td></tr>`).join('');
   const k = [['VM đang chạy' + (cov.scopeActive ? ' (trong phạm vi)' : ''), bkNum(cov.total), `Không tính ${cov.poweredOff} VM tắt · ${cov.excluded} VM loại trừ theo tên${cov.scopeActive ? ` · ${cov.outOfScope} VM ngoài phạm vi` : ''}`],

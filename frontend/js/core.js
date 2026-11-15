@@ -889,7 +889,7 @@ function renderComplianceTable() {
       <td class="mono finding-code">${esc(f.code)}</td>
       <td><span class="pill ${SEVERITY_PILL[f.severity]}"><span class="pill-dot"></span>${SEVERITY_LABEL[f.severity]}</span></td>
       <td>${esc(f.typeLabel)}</td>
-      <td><strong>${esc(f.entity)}</strong></td>
+      <td>${/^host_/.test(f.type) ? uiEntityLink('host', f.entity, f.vcenterKey) : /^vm_/.test(f.type) ? uiEntityLink('vm', f.entity, f.vcenterKey) : `<strong>${esc(f.entity)}</strong>`}</td>
       <td>${esc(f.cluster)}</td>
       <td class="mono">${esc(f.metric)}</td>
       <td class="wrap"><div class="recommendation">${esc(f.recommendation)}</div></td>
@@ -929,7 +929,7 @@ function renderHostTable() {
   tbody.innerHTML = rows.map(h => `
     <tr>
       <td>${esc(h.cluster)}</td>
-      <td><strong>${esc(h.host)}</strong></td>
+      <td>${uiEntityLink('host', h.host, h.vcenterKey)}</td>
       <td class="mono">${fmtInt(h.cores)}</td>
       <td class="mono">${fmtNum(h.ramGB,0)}</td>
       <td class="mono">${fmtInt(h.vcpuUsed)}</td>
@@ -979,7 +979,7 @@ function renderVmTable() {
     <tr>
       <td>${esc(v.cluster)}</td>
       <td>${esc(v.host || '-')}</td>
-      <td><strong>${esc(v.vm)}</strong></td>
+      <td>${uiEntityLink('vm', v.vm, v.vcenterKey)}</td>
       <td><span class="pill ${v.isPoweredOn ? 'ok' : 'na'}">${esc(v.powerState)}</span></td>
       <td class="mono">${esc(v.ipAddress || '-')}</td>
       <td class="mono">${fmtInt(v.vcpu)}</td>
@@ -1317,7 +1317,7 @@ function buildUpgradeExtra(cluster, hosts, upgradeHosts, addHosts) {
   const rows = changed.map(h => {
     const u = byName.get(h.host);
     const cc = u.cores !== h.cores, rc = u.ramGB !== h.ramGB;
-    return `<tr><td><strong>${esc(h.host)}</strong></td>
+    return `<tr><td>${uiEntityLink('host', h.host, h.vcenterKey)}</td>
       <td class="mono">${fmtInt(h.cores)} → ${cc ? `<strong>${fmtInt(u.cores)}</strong>` : fmtInt(u.cores)}</td>
       <td class="mono">${fmtNum(h.ramGB, 0)} → ${rc ? `<strong>${fmtNum(u.ramGB, 0)}</strong>` : fmtNum(u.ramGB, 0)} GB</td>
       <td class="mono">${cc ? (u.cores > h.cores ? '+' : '') + fmtInt(u.cores - h.cores) : '—'}</td>
@@ -1353,7 +1353,7 @@ function renderUpgradeHostForm(cluster, area, opts) {
     const after = sel ? applyUpgradeRule(h, u) : { cores: h.cores, ramGB: h.ramGB };
     return `<tr>
       <td><input type="checkbox" class="upgHostChk" data-host="${esc(h.host)}" ${sel ? 'checked' : ''}></td>
-      <td><strong>${esc(h.host)}</strong></td>
+      <td>${uiEntityLink('host', h.host, h.vcenterKey)}</td>
       <td class="mono">${fmtInt(h.cores)}${sel && after.cores !== h.cores ? ` → <strong>${fmtInt(after.cores)}</strong>` : ''}</td>
       <td class="mono">${fmtNum(h.ramGB, 0)}${sel && after.ramGB !== h.ramGB ? ` → <strong>${fmtNum(after.ramGB, 0)}</strong>` : ''} GB</td>
       <td class="mono">${fmtInt(appState.vms.filter(v => v.cluster === cluster && v.host === h.host && v.isPoweredOn).length)}</td>
@@ -1798,7 +1798,7 @@ function populateFilterSelects() {
 function syncViewSections() {
   $$('.view-section').forEach(sec => sec.classList.add('hidden'));
   const map = {
-    home:'#viewHome', agenda:'#viewAgenda', executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
+    home:'#viewHome', entity:'#viewEntity', agenda:'#viewAgenda', executive:'#viewExecutive', dashboard:'#viewDashboard', history:'#viewHistory', compliance:'#viewCompliance',
     inventory:'#viewInventory', whatif:'#viewWhatif', sizing:'#viewSizing', planning:'#viewPlanning',
     licensing:'#viewLicensing', backup:'#viewBackup', reports:'#viewReports', settings:'#viewSettings', spend:'#viewSpend',
   };
@@ -1818,6 +1818,7 @@ function renderActiveView() {
   else if (appState.view === 'executive' && typeof renderExecutiveView === 'function') renderExecutiveView();
   else if (appState.view === 'home' && typeof renderHomeView === 'function') renderHomeView();
   else if (appState.view === 'agenda' && typeof renderAgendaView === 'function') renderAgendaView();
+  else if (appState.view === 'entity' && typeof renderEntityView === 'function') renderEntityView();
   else if (appState.view === 'history') {
     // Snapshot-history page (needs the backend; skipped silently in static mode).
     if (typeof renderHistoryPanel === 'function' && typeof api !== 'undefined') renderHistoryPanel('techHistoryMount', { showVmChanges: true, followClusterFilter: true });

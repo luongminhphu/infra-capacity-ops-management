@@ -1038,3 +1038,21 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .home-item-actions{display:flex;align-items:center;gap:var(--space-1);flex-shrink:0;}
 .planning-result{margin-top:var(--space-4);}
 @media (max-width:760px){.home-item{flex-direction:column;}.home-item-actions{flex-wrap:wrap;}}
+
+/* ---------- Tìm kiếm Ctrl + K, thẻ đối tượng (SA3) ---------- */
+.topbar-search kbd{margin-left:var(--space-2);padding:0 var(--space-1);border:1px solid var(--border);border-radius:var(--radius-xs);font-size:var(--fs-micro);color:var(--text-secondary);font-family:inherit;}
+.pal-dialog{width:min(680px,96vw);padding:var(--space-3);top:12vh;margin-top:0;}
+.pal-dialog input{width:100%;height:40px;font-size:var(--fs-body);}
+.pal-list{list-style:none;margin:var(--space-2) 0 0;padding:0;max-height:56vh;overflow:auto;}
+.pal-item{display:grid;grid-template-columns:96px minmax(0,1fr);gap:0 var(--space-2);padding:var(--space-2);border-radius:var(--radius-xs);cursor:pointer;}
+.pal-item.active,.pal-item:hover{background:var(--overlay-hover);box-shadow:inset 2px 0 0 var(--brand);}
+.pal-type{grid-row:span 2;font-size:var(--fs-caption);color:var(--text-secondary);align-self:center;}
+.pal-label{font-size:var(--fs-body-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pal-sub{font-size:var(--fs-caption);color:var(--text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pal-empty{padding:var(--space-3);color:var(--text-secondary);font-size:var(--fs-body-sm);}
+.pal-hint{margin:var(--space-2) 0 0;font-size:var(--fs-caption);color:var(--text-tertiary);}
+.entity-mount{display:flex;flex-direction:column;gap:var(--space-4);}
+.en-dl{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}
+.entity-link{color:inherit;text-decoration:none;border-bottom:1px dotted var(--text-tertiary);}
+.entity-link:hover{color:var(--text-brand);border-bottom-color:var(--text-brand);}
+@media (max-width:760px){.topbar-search span,.topbar-search kbd{display:none;}}

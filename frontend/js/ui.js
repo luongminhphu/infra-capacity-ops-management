@@ -52,3 +52,15 @@ function uiConfirm(message, opts = {}) {
 function uiEmpty(text, action) {
   return `<div class="empty-state">${esc(text)}${action ? ` ${action}` : ''}</div>`;
 }
+
+/* Link to the page of one object (thẻ Host / VM). */
+function uiEntityHref(type, name, vcenterKey) {
+  const q = new URLSearchParams({ type, name: name || '' });
+  if (vcenterKey) q.set('vc', vcenterKey);
+  return `#/entity?${q}`;
+}
+function uiEntityLink(type, name, vcenterKey, strong = true) {
+  if (!name) return '—';
+  const label = strong ? `<strong>${esc(name)}</strong>` : esc(name);
+  return `<a class="entity-link" href="${esc(uiEntityHref(type, name, vcenterKey))}" title="Mở trang ${type === 'host' ? 'host' : 'VM'}">${label}</a>`;
+}

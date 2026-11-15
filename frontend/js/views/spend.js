@@ -10,12 +10,31 @@ const spState = {
   filter: { fy: '', status: 'open', category: '', vendor: '', costCenter: '', q: '', page: 1 },
   hosts: null, current: null, settings: {},
 };
-// Link from a reminder: #/spend-opex?code=OPX-2026-0001 (kept before the router rewrites the hash).
-let spPendingCode = (/[?&]code=([A-Za-z0-9-]{3,30})/.exec(location.hash || '') || [])[1] || null;
+// Deep links: #/budget/opex?code=OPX-2026-0001 (reminder e-mails, inbox, search), ?vendor=<id>.
+// The code prefix decides which detail opens; kept before the router rewrites the hash.
+const SP_LINK_RE = /[?&](code|vendor)=([A-Za-z0-9-]{1,30})/;
+let spPendingLink = (() => { const m = SP_LINK_RE.exec(location.hash || ''); return m ? { kind: m[1], value: m[2] } : null; })();
+let spPendingCode = null;   // kept for older callers
+function spOpenLink(link) {
+  if (!link) return;
+  const v = link.value;
+  if (link.kind === 'vendor') { if (typeof vdOpen === 'function') vdOpen(v); return; }
+  if (/^CPX-/.test(v) && typeof cpxOpenDetail === 'function') return cpxOpenDetail(v);
+  if (/^HD-/.test(v) && typeof ctOpenDetail === 'function') return ctOpenDetail(v);
+  if (/^TT-/.test(v) && typeof ppOpenDetail === 'function') return ppOpenDetail(v);
+  if (/^BG-/.test(v) && typeof qtOpen === 'function') { qtState.tab = 'quotes'; return qtOpen(v); }
+  if (/^CTVP-/.test(v) && typeof rnOpen === 'function') return rnOpen(v);
+  return spOpenDetail(v);
+}
+const SP_ROUTE_RE = /^#\/(spend-|budget|procure|contracts|docs)/;
+if (!SP_ROUTE_RE.test(location.hash || '')) spPendingLink = null;
 window.addEventListener('hashchange', () => {
-  const m = /[?&]code=([A-Za-z0-9-]{3,30})/.exec(location.hash || '');
-  if (m && spState.meta) spOpenDetail(m[1]);
-  else if (m) spPendingCode = m[1];
+  const m = SP_ROUTE_RE.test(location.hash || '') ? SP_LINK_RE.exec(location.hash || '') : null;
+  if (!m) { spPendingLink = null; return; }
+  const link = { kind: m[1], value: m[2] };
+  // Same page already shown: open now; otherwise after the page renders (renderSpendView).
+  if (spState.meta && appState.view === 'spend' && !spState.rendering) spOpenLink(link);
+  else spPendingLink = link;
 });
 
 const SP_RANK = { none: 0, viewer: 1, editor: 2, approver: 3, admin: 4 };
@@ -65,6 +84,12 @@ async function spLoadList() {
 }
 
 async function renderSpendView() {
+  spState.rendering = true;
+  try { await spRenderSpendSub(); } finally { spState.rendering = false; }
+  if (spPendingLink && spState.meta) { const l = spPendingLink; spPendingLink = null; spOpenLink(l); }
+}
+
+async function spRenderSpendSub() {
   const mount = $('#spendMount');
   if (!mount) return;
   if (!spState.meta) mount.innerHTML = '<div class="empty-note">Đang tải…</div>';
@@ -85,7 +110,7 @@ async function renderSpendView() {
   await spLoadList();
   spRenderPage();
   spBindPage();
-  if (spPendingCode) { const c = spPendingCode; spPendingCode = null; spOpenDetail(c); }
+
 }
 
 function spRenderPage() {
