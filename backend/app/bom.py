@@ -19,6 +19,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .spend.quotes import _guard_zip, norm_text, parse_number
 
+class BomError(ValueError):
+    """A problem with the uploaded file; the message is written by us and safe to show."""
+
+
 MAX_ROWS = 5000
 MAX_COLS = 40
 MAX_CONFIGS = 200
@@ -167,7 +171,7 @@ def parse(data: bytes) -> Dict[str, Any]:
     try:
         sheets = read_rows(data)
     except Exception as exc:  # noqa: BLE001 — malformed file
-        raise ValueError(f"Không đọc được file Excel ({type(exc).__name__}).") from None
+        raise BomError(f"Không đọc được file Excel ({type(exc).__name__}).") from None
     for name, rows in sheets:
         conf = _dell_configurator(name, rows) or _line_quote(name, rows)
         if conf is not None:
@@ -181,7 +185,7 @@ def parse(data: bytes) -> Dict[str, Any]:
         if best is None or n > best[0]:
             best = (n, name, h, m, body)
     if not best or best[0] == 0:
-        raise ValueError("Không tìm thấy bảng BOM: cần dòng tiêu đề có cột Mô tả (Description) và Số lượng (Qty).")
+        raise BomError("Không tìm thấy bảng BOM: cần dòng tiêu đề có cột Mô tả (Description) và Số lượng (Qty).")
     _, sheet, h, m, body = best
     configs, warnings, currency = _split(body, m)
     out_configs = [config_out(c, i) for i, c in enumerate(configs[:MAX_CONFIGS])]

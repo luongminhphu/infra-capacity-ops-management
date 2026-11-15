@@ -209,3 +209,16 @@ def test_hpe_iris_merges_identical_devices():
     assert s["Tốc độ"].startswith("1/2.5/5/10GbE") and s["Giá 1 thiết bị"] == "21.900"
     assert sub["category"] == "software" and dict(sub["summary"])["Thành tiền"] == "6.000"
     assert dac["category"] == "accessory" and dac["qty"] == 4
+
+
+def test_api_rejects_bad_shapes_and_odd_numbers(app_, editor):
+    d = editor.post("/api/bom/parse", files={"file": ("bom.xlsx", dell_configurator())}).json()
+    cfg = d["configs"][0]
+    assert editor.post("/api/bom/summary", json={**cfg, "items": 5, "summary": {}}).status_code == 200      # ignored, no 500
+    assert editor.post("/api/bom/export", json={"configs": [{**cfg, "items": "x"}]}).status_code == 400   # nothing left to export
+    h = ["", "Group Name", "Group ID", "Product Name", "Product Qty", "Unit Price (List)", "Extended Price (List)", "Module Name",
+         "Option ID", "Option Name", "Option List Price", "SKUs", "Qty"]
+    odd = _xlsx([h, ["", "G", "1", "PowerEdge R770 - [X]", 1, 1, 1],
+                 ["", "", "", "", "", "", "", "Memory Capacity", "X", "32GB RDIMM", "99999999999999", "370-A", "0.00000000000000000001"],
+                 ["", "", "", "", "", "", "", "Base", "X", "PowerEdge R770 Server", 1, "210-A", 1]])
+    assert editor.post("/api/bom/parse", files={"file": ("odd.xlsx", odd)}).status_code in (200, 422)
