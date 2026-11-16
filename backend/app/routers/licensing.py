@@ -44,11 +44,8 @@ license_router = APIRouter(prefix="/api/licensing", tags=["licensing"], dependen
 
 
 def _ent_minor(e: LicenseEntitlement) -> Optional[int]:
-    """DAT-10 release 2: the integer column is the source of truth. A row saved by an old pod
-    (Float only, not yet backfilled) is converted the same way ensure_schema() backfills it."""
-    if e.unit_price_minor is not None:
-        return int(e.unit_price_minor)
-    return to_minor(e.unit_price, e.currency)
+    """DAT-10: the price is stored only as integer minor units."""
+    return int(e.unit_price_minor) if e.unit_price_minor is not None else None
 
 
 def _ent_dict(e: LicenseEntitlement) -> Dict[str, Any]:
@@ -328,8 +325,7 @@ def _apply_ent(row: LicenseEntitlement, p: EntitlementIn, user: User):
     row.kind = p.kind
     row.product, row.metric, row.quantity = p.product, p.metric, (0.0 if p.kind == "none" else p.quantity)
     row.currency, row.has_sa = (p.currency or "VND").upper()[:8], p.hasSa
-    row.unit_price_minor = to_minor(p.unitPrice, row.currency)          # DAT-10: source of truth
-    row.unit_price = from_minor(row.unit_price_minor, row.currency)     # still written for release-1 pods during rollout
+    row.unit_price_minor = to_minor(p.unitPrice, row.currency)          # DAT-10: integer minor units only
     row.scope_vcenter = p.scopeVcenter or None
     row.scope_cluster = p.scopeCluster or None
     row.valid_to = datetime.fromisoformat(p.validTo[:10]) if p.validTo else None

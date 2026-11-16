@@ -214,6 +214,9 @@ class Settings(BaseSettings):
     # /api/health/ready fails (503) when the scheduler heartbeat is stale. Set false when several
     # replicas run (the scheduler state is per pod): the scheduler is then reported but not gating.
     readiness_require_scheduler: bool = Field(default=True)
+    # DAT-10 release 3: drop the legacy Float money columns (license_entitlements.unit_price, ai_runs.cost_usd).
+    # Turn on only once no pod of an older release is running (rule 4: never drop a column old pods still use).
+    drop_legacy_money_columns: bool = Field(default=False)
     # Socket timeout of every vCenter SOAP call (login, each PropertyCollector page). Per source:
     # VCENTER_i_TIMEOUT. pyVmomi waits forever without it (one hung vCenter froze every poll).
     vcenter_timeout_seconds: int = Field(default=120)

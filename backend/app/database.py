@@ -90,15 +90,29 @@ def ensure_schema() -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {'IF NOT EXISTS ' if pg else ''}{name} {ddl}"))
                     if name in indexed:
                         conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_{name} ON {table} ({name})"))
-        # DAT-10 release 1: copy the Float money columns into their integer twins (idempotent: only rows
-        # not copied yet). Writers fill both from now on; reads switch in release 2.
-        if "license_entitlements" in insp.get_table_names() and "unit_price_minor" in {c["name"] for c in insp.get_columns("license_entitlements")}:
+        # DAT-10 (money as integers). Release 1 added the integer twins and dual-wrote, release 2 switched
+        # reads, release 3 (this code) no longer maps the Float columns at all. While they still exist:
+        # copy any row an older pod wrote with only the Float (idempotent), and let rows be inserted without
+        # them (ai_runs.cost_usd was NOT NULL). The columns are dropped when DROP_LEGACY_MONEY_COLUMNS=true —
+        # set it on the deploy after this release, once no older pod runs (rule 4). SQLite (dev / tests,
+        # one process) drops them right away.
+        def _cols(t):
+            return {c["name"]: c for c in insp.get_columns(t)} if t in insp.get_table_names() else {}
+        lic, air = _cols("license_entitlements"), _cols("ai_runs")
+        if "unit_price" in lic and "unit_price_minor" in lic:
             conn.execute(text("UPDATE license_entitlements SET unit_price_minor = "
                               "CASE WHEN upper(currency) IN ('VND', 'JPY', 'KRW') THEN ROUND(unit_price) ELSE ROUND(unit_price * 100) END "
                               "WHERE unit_price IS NOT NULL AND unit_price_minor IS NULL"))
-        if "ai_runs" in insp.get_table_names() and "cost_usd_micros" in {c["name"] for c in insp.get_columns("ai_runs")}:
+        if "cost_usd" in air and "cost_usd_micros" in air:
             conn.execute(text("UPDATE ai_runs SET cost_usd_micros = ROUND(cost_usd * 1000000) "
                               "WHERE cost_usd IS NOT NULL AND cost_usd_micros IS NULL"))
+            if pg and not air["cost_usd"].get("nullable", True):
+                conn.execute(text("ALTER TABLE ai_runs ALTER COLUMN cost_usd DROP NOT NULL"))
+        if not pg or get_settings().drop_legacy_money_columns:
+            for t, c, have in (("license_entitlements", "unit_price", lic), ("ai_runs", "cost_usd", air)):
+                if c in have:
+                    conn.execute(text(f"ALTER TABLE {t} DROP COLUMN {'IF EXISTS ' if pg else ''}{c}"))
+                    logging.getLogger("vco.database").info("DAT-10: dropped legacy Float column %s.%s", t, c)
         # NULL in a flag that has a safe default is read as that default by the code, but backfill it so
         # every reader agrees (SCH-08). Idempotent; matches no row after the first run.
         for table, col, val in (("spend_ai_config", "mask_names", "TRUE"), ("spend_notify_channels", "ops_alerts", "FALSE"),

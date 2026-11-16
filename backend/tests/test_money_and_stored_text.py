@@ -50,8 +50,8 @@ def ai_clean(app_):
 def test_ai_month_cost_is_an_integer_sum(ai_clean):
     db = ai_clean
     now = dt.datetime.utcnow()
-    for _ in range(3):                                             # what record() writes: both columns
-        db.add(AiRun(task="home_brief", status="ok", cost_usd=0.0123456, cost_usd_micros=money.usd_to_micros(0.0123456), created_at=now))
+    for _ in range(3):                                             # what record() writes: integer micro-USD only
+        db.add(AiRun(task="home_brief", status="ok", cost_usd_micros=money.usd_to_micros(0.0123456), created_at=now))
     db.commit()
     # each run is 12 346 micro-USD (rounded once when written) → 37 038, never a float accumulation
     assert ai_platform.month_cost_micros(db) == 37038
@@ -62,27 +62,45 @@ def test_ai_month_cost_is_an_integer_sum(ai_clean):
     assert f"{ai_platform.month_cost(db):.2f}".replace(".", ",") == "0,04"
 
 
-def test_ai_row_from_old_pod_counts(ai_clean):
-    """A release-1 pod writing after ensure_schema() ran leaves cost_usd_micros NULL: still summed exactly."""
+def _add_legacy_column(table, col):
+    """Recreate the pre-release-3 Float column so a test can play an older pod writing to it."""
+    from sqlalchemy import inspect
+    with engine.begin() as conn:
+        if col not in {c["name"] for c in inspect(conn).get_columns(table)}:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} FLOAT"))
+
+
+def _has_column(table, col):
+    from sqlalchemy import inspect
+    with engine.connect() as conn:
+        return col in {c["name"] for c in inspect(conn).get_columns(table)}
+
+
+def test_ai_row_from_old_pod_counts_after_backfill(ai_clean):
+    """A release-2 pod still running during the rollout writes cost_usd (+ micros); a release-1 pod only
+    cost_usd. ensure_schema() copies the Float into micros, then (SQLite / DROP_LEGACY_MONEY_COLUMNS) drops it."""
     db = ai_clean
     now = dt.datetime.utcnow()
-    db.add(AiRun(task="home_brief", status="ok", cost_usd=0.25, cost_usd_micros=250000, created_at=now))
-    db.add(AiRun(task="home_brief", status="ok", cost_usd=0.1234564, created_at=now))   # old pod: Float only
-    db.add(AiRun(task="home_brief", status="ok", cost_usd=9.0, cost_usd_micros=9_000_000,
-                 created_at=now - dt.timedelta(days=40)))                                 # last month: not counted
-    db.commit()
-    assert ai_platform.month_cost_micros(db) == 250000 + 123456
-    assert ai_platform.usage_report(db)["recent"][1]["costUsd"] == 0.123456
+    _add_legacy_column("ai_runs", "cost_usd")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO ai_runs (task, status, cost_usd, cost_usd_micros, created_at) VALUES "
+                          "('home_brief', 'ok', 0.25, 250000, :t), ('home_brief', 'ok', 0.1234564, NULL, :t), "
+                          "('home_brief', 'ok', 9.0, 9000000, :old)"), {"t": now, "old": now - dt.timedelta(days=40)})
+    ensure_schema()
+    db.expire_all()
+    assert not _has_column("ai_runs", "cost_usd")                  # legacy Float column gone
+    assert ai_platform.month_cost_micros(db) == 250000 + 123456     # last month's row not counted
+    assert sorted(r["costUsd"] for r in ai_platform.usage_report(db)["recent"]) == [0.123456, 0.25, 9.0]
 
 
 def test_ai_budget_compares_micros(ai_clean, admin):
     db = ai_clean
     assert admin.put("/api/admin/ai", json={"provider": "anthropic", "apiKey": "sk-ant-x-0000", "allowExternal": True,
                                             "budgetUsd": 1, "alertUsd": 1}).status_code == 200
-    db.add(AiRun(task="home_brief", status="ok", cost_usd=0.999999, cost_usd_micros=999999, created_at=dt.datetime.utcnow()))
+    db.add(AiRun(task="home_brief", status="ok", cost_usd_micros=999999, created_at=dt.datetime.utcnow()))
     db.commit()
     ai_platform.check(db, "home_brief", None)                       # 999 999 < 1 000 000 micro-USD: allowed
-    db.add(AiRun(task="home_brief", status="ok", cost_usd=0.000001, cost_usd_micros=1, created_at=dt.datetime.utcnow()))
+    db.add(AiRun(task="home_brief", status="ok", cost_usd_micros=1, created_at=dt.datetime.utcnow()))
     db.commit()
     with pytest.raises(ai_platform.AiBlocked) as exc:
         ai_platform.check(db, "home_brief", None)
@@ -104,42 +122,43 @@ def ent_clean(app_):
     db.close()
 
 
-def test_entitlement_written_as_integer_and_float(admin, ent_clean):
+def test_entitlement_written_as_integer_only(admin, ent_clean):
     r = admin.post("/api/licensing/entitlements", json={"product": "ws_dc", "metric": "pack16", "quantity": 3,
                                                          "unitPrice": 1234.55, "currency": "usd"})
     assert r.status_code == 200, r.text
     row = ent_clean.query(LicenseEntitlement).one()
-    assert (row.unit_price_minor, row.unit_price, row.currency) == (123455, 1234.55, "USD")   # Float still written
+    assert (row.unit_price_minor, row.currency) == (123455, "USD")
+    assert not hasattr(row, "unit_price")                         # release 3: no Float column mapped
     [item] = admin.get("/api/licensing/entitlements").json()["items"]
     assert (item["unitPrice"], item["unitPriceMinor"]) == (1234.55, 123455)
     ws = admin.get("/api/licensing/assess").json()["windowsServer"]["datacenter"]["entitlement"]
     assert ws["totalCost"] == 3703.65                            # 3 × 123 455 cents, not 3703.6499999999996
 
 
-def test_entitlement_from_old_pod_reads_correctly_before_and_after_backfill(ent_clean):
-    with engine.begin() as conn:
+def test_entitlement_from_old_pod_backfilled_then_column_dropped(ent_clean):
+    _add_legacy_column("license_entitlements", "unit_price")
+    with engine.begin() as conn:                                  # what a release-1 pod leaves behind: Float only
         conn.execute(text("INSERT INTO license_entitlements (product, metric, quantity, kind, unit_price, currency, has_sa) "
                           "VALUES ('vvf', 'core', 32, 'owned', 1234.5, 'USD', false), "
                           "('ws_std', 'pack2', 3, 'owned', 1234567.6, 'VND', false)"))
-    rows = {r.product: r for r in ent_clean.query(LicenseEntitlement)}
-    assert rows["vvf"].unit_price_minor is None                  # what a release-1 pod leaves behind
-    before = {e["product"]: e for e in lic_router._entitlements(ent_clean)}
-    assert (before["vvf"]["unitPriceMinor"], before["vvf"]["unitPrice"]) == (123450, 1234.5)
-    assert (before["ws_std"]["unitPriceMinor"], before["ws_std"]["unitPrice"]) == (1234568, 1234568.0)
-    ensure_schema()                                               # backfill on the next start
-    ent_clean.expire_all()
-    rows = {r.product: r for r in ent_clean.query(LicenseEntitlement)}
-    assert (rows["vvf"].unit_price_minor, rows["ws_std"].unit_price_minor) == (123450, 1234568)
-    assert {e["product"]: e for e in lic_router._entitlements(ent_clean)} == before
-
-
-def test_ai_backfill_after_old_pod_write(ai_clean):
-    with engine.begin() as conn:
-        conn.execute(text("INSERT INTO ai_runs (task, status, cost_usd, created_at) VALUES ('home_brief', 'ok', 0.0123456, :t)"),
-                     {"t": dt.datetime.utcnow()})
     ensure_schema()
-    ai_clean.expire_all()
-    assert [r.cost_usd_micros for r in ai_clean.query(AiRun)] == [12346]
+    ent_clean.expire_all()
+    assert not _has_column("license_entitlements", "unit_price")
+    items = {e["product"]: e for e in lic_router._entitlements(ent_clean)}
+    assert (items["vvf"]["unitPriceMinor"], items["vvf"]["unitPrice"]) == (123450, 1234.5)
+    assert (items["ws_std"]["unitPriceMinor"], items["ws_std"]["unitPrice"]) == (1234568, 1234568.0)
+    ensure_schema()                                               # idempotent once the column is gone
+
+
+def test_postgres_keeps_legacy_columns_unless_asked(monkeypatch):
+    """Rule 4: on PostgreSQL the drop waits for DROP_LEGACY_MONEY_COLUMNS (older pods may still read the column)."""
+    import inspect as pyinspect
+    from app import database
+    src = pyinspect.getsource(database.ensure_schema)
+    assert "if not pg or get_settings().drop_legacy_money_columns:" in src
+    assert "ALTER TABLE ai_runs ALTER COLUMN cost_usd DROP NOT NULL" in src
+    from app.config import Settings
+    assert Settings.model_fields["drop_legacy_money_columns"].default is False
 
 
 # ---------------------------------------------------------------------------
