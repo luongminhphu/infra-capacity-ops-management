@@ -7,6 +7,7 @@ from .pdf_kit import status_pill as _status_mark  # one status mark for every re
 from typing import Any, Dict, List, Optional
 
 from . import planning
+from .shared.text import vn_num
 from .capacity import Policy, _finite
 from .pdf_kit import (COLORS, PRIORITY_LABEL_VI, STATUS_COLOR, _base_css, _exec_visual_css, _now_str,
                          _stat_tiles_html, esc, fmt_int, fmt_num, fmt_pct, html_to_pdf_bytes, status_pill,
@@ -95,7 +96,7 @@ def _pair_rows(cards: List[str]) -> str:
 
 def _legend(scenarios: List[Dict[str, Any]]) -> str:
     items = "".join(
-        f'<span><span class="dot" style="background:{_sc_color(i, sc)}"></span>{esc(sc["label"])} (+{sc["growthPct"]:.1f}%/quý)</span>'
+        f'<span><span class="dot" style="background:{_sc_color(i, sc)}"></span>{esc(sc["label"])} (+{vn_num(sc["growthPct"], 1)}%/quý)</span>'
         for i, sc in enumerate(scenarios))
     return f'<div class="legend">{items}</div>'
 
@@ -167,7 +168,7 @@ def _assumptions_html(plan: Dict[str, Any]) -> str:
     p, pol, tr = plan["params"], plan["policy"], plan["trend"]
     node_txt = (f"{p['nodeCores']} cores / {p['nodeRamGB']} GB (do người lập chỉ định)" if p["nodeCores"] and p["nodeRamGB"]
                 else "theo host lớn nhất của từng cluster")
-    sc_txt = " · ".join(f"{sc['label']} +{sc['growthPct']:.1f}%/quý" for sc in plan["scenarios"] if sc["source"] == "assumed")
+    sc_txt = " · ".join(f"{sc['label']} +{vn_num(sc['growthPct'], 1)}%/quý" for sc in plan["scenarios"] if sc["source"] == "assumed")
     trend_txt = (f"Xu hướng thực tế {tr['months']} tháng: vCPU +{fmt_num(tr['cpu'], 1, '%')}/quý · RAM +{fmt_num(tr['ram'], 1, '%')}/quý (dùng làm kịch bản tham chiếu)."
                  if tr else "Chưa có lịch sử snapshot đủ dài để tính xu hướng thực tế.")
     return f"""<div class="chart-card soft" style="font-size:8.6px;line-height:1.55;">
@@ -230,7 +231,7 @@ def _roadmap_section(plan: Dict[str, Any]) -> str:
                 for cp in r["checkpoints"])
             first_td = (f'<td>{esc(c["name"])}</td>' if i == 0 else "<td></td>")
             base_mark = ' style="background:#DFE9F6;"' if sc.get("base") else ""
-            rows += (f'<tr{base_mark}>{first_td}<td><span class="dot" style="display:inline-block;width:7px;height:7px;border-radius:2px;background:{_sc_color(i, sc)};margin-right:4px;"></span>{esc(sc["label"])} +{sc["growthPct"]:.1f}%</td>'
+            rows += (f'<tr{base_mark}>{first_td}<td><span class="dot" style="display:inline-block;width:7px;height:7px;border-radius:2px;background:{_sc_color(i, sc)};margin-right:4px;"></span>{esc(sc["label"])} +{vn_num(sc["growthPct"], 1)}%</td>'
                      f'{cells}<td>{esc(r["final"]["binding"])}</td><td>{esc(r["firstNeedLabel"] or "—")}</td><td><b>{esc(r["orderByLabel"] or "—")}</b></td></tr>')
     # totals
     for i, sc in enumerate(scs):

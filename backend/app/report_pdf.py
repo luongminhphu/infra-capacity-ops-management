@@ -20,6 +20,7 @@ from weasyprint import HTML
 from weasyprint.urls import URLFetcher
 
 from . import capacity
+from .shared.text import vn_num
 from .timeutil import now_vn_str, parse_iso_to_vn_str
 
 _SVG_UID = itertools.count()
@@ -91,7 +92,7 @@ def fmt_num(v, decimals: int = 1, suffix: str = "") -> str:
     if not _finite(v):
         return "—"
     try:
-        return f"{v:,.{decimals}f}{suffix}"
+        return f"{vn_num(v, decimals)}{suffix}"
     except Exception:
         return "—"
 
@@ -100,7 +101,7 @@ def fmt_int(v) -> str:
     if v is None:
         return "—"
     try:
-        return f"{int(round(v)):,}"
+        return vn_num(int(round(v)))
     except Exception:
         return "—"
 
@@ -108,7 +109,7 @@ def fmt_int(v) -> str:
 def fmt_pct(v, decimals: int = 1) -> str:
     if not _finite(v):
         return "—"
-    return f"{v:.{decimals}f}%"
+    return f"{vn_num(v, decimals)}%"
 
 
 # Status glyphs (lucide paths) — the 4 levels differ by shape and weight, not by hue alone,
@@ -672,7 +673,7 @@ def _history_insights(history: Dict[str, Any]) -> List[str]:
         pace = binding_delta / months
         eta = (100 - binding_last) / pace
         eta_txt = f"khoảng {eta:.0f} tháng" if eta < 60 else "trên 5 năm"
-        out.append(f"Nếu giữ đúng tốc độ {months} tháng vừa qua ({pace:.1f} điểm/tháng), <b>{binding_label}</b> sẽ chạm 100% ngưỡng sau <b>{eta_txt}</b> — cần đối chiếu với kế hoạch ngân sách và thời gian mua sắm.")
+        out.append(f"Nếu giữ đúng tốc độ {months} tháng vừa qua ({vn_num(pace, 1)} điểm/tháng), <b>{binding_label}</b> sẽ chạm 100% ngưỡng sau <b>{eta_txt}</b> — cần đối chiếu với kế hoạch ngân sách và thời gian mua sắm.")
     elif _finite(binding_delta) and binding_delta <= 0.3:
         out.append("Mức sử dụng đi ngang hoặc giảm trong kỳ — chưa tạo áp lực đầu tư thêm; ưu tiên tối ưu và thu hồi tài nguyên nhàn rỗi.")
     groups = [g["summary"] for g in history.get("groups", []) if g["summary"].get("points")]
@@ -1241,9 +1242,9 @@ def _management_brief(model: Dict[str, Any], cluster_rows: List[Dict[str, Any]],
             continue
         if pct >= 100:
             need = (f"khoảng +{extra_cores:.0f} core vật lý" if key == "cpu" and extra_cores > 0.5 else
-                    f"khoảng +{extra_ram:,.0f} GB RAM" if key == "ram" and extra_ram > 0.5 else "bổ sung host")
-            add("cao", f"{label} đã vượt ngưỡng cho phép ({oc:.1f}x / tối đa {oc_max:.1f}x)",
-                f"{label} đang cấp phát gấp {oc:.2f} lần năng lực vật lý, vượt mức tối đa {oc_max:.1f}x theo chính sách.",
+                    f"khoảng +{vn_num(extra_ram)} GB RAM" if key == "ram" and extra_ram > 0.5 else "bổ sung host")
+            add("cao", f"{label} đã vượt ngưỡng cho phép ({vn_num(oc, 1)}x / tối đa {vn_num(oc_max, 1)}x)",
+                f"{label} đang cấp phát gấp {vn_num(oc, 2)} lần năng lực vật lý, vượt mức tối đa {vn_num(oc_max, 1)}x theo chính sách.",
                 f"Bổ sung {need} cho cluster vượt ngưỡng; trước mắt thu hồi VM không dùng, cân bằng tải.",
                 "Ứng dụng chậm giờ cao điểm; không còn chỗ khôi phục khi hỏng 1 host.",
                 f"Duyệt ngân sách bổ sung {label}.", "Quý này",
@@ -1304,7 +1305,7 @@ def _management_brief(model: Dict[str, Any], cluster_rows: List[Dict[str, Any]],
 
     # 6) Reclaim opportunity
     if reclaim["count"] >= 3:
-        equiv = f" — tương đương ~{host_equiv:.1f} host" if host_equiv >= 0.3 else ""
+        equiv = f" — tương đương ~{vn_num(host_equiv, 1)} host" if host_equiv >= 0.3 else ""
         add("thap", f"{reclaim['count']} VM không dùng vẫn chiếm {fmt_int(reclaim['vcpu'])} vCPU / {fmt_int(reclaim['ramGB'])} GB RAM",
             f"{reclaim['count']} VM idle hoặc tắt lâu ngày vẫn giữ tài nguyên{equiv}, khoảng {reclaim_pct_ram:.0f}% dư địa RAM cho phép.",
             "Xác nhận với chủ ứng dụng rồi thu hồi trước khi mua thêm.",
@@ -1545,7 +1546,7 @@ def _technical_actions_html(actions: List[Dict[str, Any]]) -> str:
     for a in actions:
         need = []
         if a["extraPhysCores"] > 0.05:
-            need.append(f"+{a['extraPhysCores']:.1f} core v\u1eadt l\u00fd (CPU)")
+            need.append(f"+{vn_num(a['extraPhysCores'], 1)} core v\u1eadt l\u00fd (CPU)")
         if a["extraRamGB"] > 0.5:
             need.append(f"+{a['extraRamGB']:.0f} GB RAM")
         need_text = "; ".join(need) if need else "Ch\u01b0a v\u01b0\u1ee3t ng\u01b0\u1ee1ng \u2014 theo d\u00f5i th\u00eam"
@@ -2130,9 +2131,9 @@ def render_technical_html(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]]
         {"label": "Hosts / VMs", "value": f"{fmt_int(model['hostCount'])} / {fmt_int(model['vmCount'])}",
          "sub": f"{fmt_int(model['poweredOnCount'])} bật · {fmt_int(model['poweredOffCount'])} tắt · {fmt_int(len(cluster_rows))} cluster", "cls": "na"},
         {"label": "CPU overcommit", "value": fmt_num(cpu_oc, 2, "x"),
-         "sub": f"= {fmt_pct(model.get('cpuPct'))} ngưỡng {policy.cpu_overcommit_max:.1f}x · HT {policy.ht_factor:.1f}x", "cls": cpu_cls},
+         "sub": f"= {fmt_pct(model.get('cpuPct'))} ngưỡng {vn_num(policy.cpu_overcommit_max, 1)}x · HT {vn_num(policy.ht_factor, 1)}x", "cls": cpu_cls},
         {"label": "RAM overcommit", "value": fmt_num(ram_oc, 2, "x"),
-         "sub": f"= {fmt_pct(model.get('ramPct'))} ngưỡng {policy.ram_overcommit_max:.1f}x", "cls": ram_cls},
+         "sub": f"= {fmt_pct(model.get('ramPct'))} ngưỡng {vn_num(policy.ram_overcommit_max, 1)}x", "cls": ram_cls},
         {"label": "Findings", "value": f"{fmt_int(sev['critical'])} / {fmt_int(sev['warning'])} / {fmt_int(sev['info'])}",
          "sub": "critical / warning / info", "cls": sev_cls},
         {"label": "Chính sách", "value": f"Idle {policy.idle_days} ngày",

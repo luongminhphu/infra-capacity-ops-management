@@ -59,3 +59,14 @@ def norm_text(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", s).strip()
 
 
+def vn_num(v: Any, decimals: int = 0) -> str:
+    """Vietnamese display of a number: 1234567.891 -> "1.234.567,9" (decimals=1). Same convention as
+    the web (decision Q7: `.` thousands, `,` decimals). Only for text people read — never for SVG
+    coordinates, CSS lengths or anything parsed back."""
+    s = f"{float(v):,.{max(0, int(decimals))}f}"
+    return s.replace(",", "\u00a7").replace(".", ",").replace("\u00a7", ".")
+
+
+def vn_g(v: Any) -> str:
+    """Short form like format(v, "g") with a Vietnamese decimal comma: 1.5 -> "1,5", 2.0 -> "2"."""
+    return format(float(v), "g").replace(".", ",")

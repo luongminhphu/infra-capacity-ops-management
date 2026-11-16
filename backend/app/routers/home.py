@@ -14,6 +14,7 @@ from ..models import AuditLog, InboxAck, InboxAssignment, User, UserPref
 from ..security import get_current_user, is_admin, require_admin
 from ..spend.fiscal import today_vn
 from ..spend.roles import has_role
+from ..shared.text import vn_g
 
 router = APIRouter(prefix="/api", tags=["home"])
 MAX_PREFS_BYTES = 4096
@@ -232,7 +233,7 @@ def agenda(days: int = Query(default=120, ge=7, le=400), user: User = Depends(ge
         for e in db.query(LicenseEntitlement).filter(LicenseEntitlement.valid_to.isnot(None)):
             d = e.valid_to.date()
             if d <= end and (d - today).days >= -90:
-                add(d, "license", f"License {e.product} hết hạn", f"{e.quantity:g} {e.metric} · {e.scope_cluster or e.scope_vcenter or 'toàn bộ'}",
+                add(d, "license", f"License {e.product} hết hạn", f"{vn_g(e.quantity)} {e.metric} · {e.scope_cluster or e.scope_vcenter or 'toàn bộ'}",
                     "lic-assess", tone_of(d))
     if is_on(features, "spend") and has_role(user, "viewer"):
         from ..spend import service
