@@ -211,6 +211,9 @@ class Settings(BaseSettings):
     # vCenters and backup servers polled at the same time (each in its own thread / DB session).
     sync_concurrency: int = Field(default=4)
     enable_scheduler: bool = Field(default=True)
+    # /api/health/ready fails (503) when the scheduler heartbeat is stale. Set false when several
+    # replicas run (the scheduler state is per pod): the scheduler is then reported but not gating.
+    readiness_require_scheduler: bool = Field(default=True)
     # Socket timeout of every vCenter SOAP call (login, each PropertyCollector page). Per source:
     # VCENTER_i_TIMEOUT. pyVmomi waits forever without it (one hung vCenter froze every poll).
     vcenter_timeout_seconds: int = Field(default=120)

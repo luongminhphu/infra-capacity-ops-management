@@ -203,7 +203,7 @@ def test_full_report_structure_and_vn_numbers():
     assert "Ngưỡng đánh giá" not in html and "app-thresholds" not in html
     assert "ioBox Solutions · Đề xuất cấu hình máy chủ – CMC" in html and "Ms. Hung" in html and "Phiên bản 1.1" in html
     assert "radar" not in html.lower() or "svg_radar" not in html
-    assert report_sizing_full.vn("12,100.5 GB và 0.95 : 1, 2×32C") == "12.100,5 GB và 0,95 : 1, 2×32C"
+    assert not hasattr(report_sizing_full, "vn")  # engine text is vi-VN already, no separator swap in the report
     assert report_sizing_full._clean_note("EWS VM", "EWS VM: Engineering") == "Engineering"
     assert r["results"]
 
@@ -382,3 +382,40 @@ def test_compact_report_same_template_with_bom_conclusion():
     # toggles still apply to the compact report
     t = report_sizing.render_sizing_html(vms, p, prof, detail="brief", report_options={"sections": {"tco": False, "glossary": True}})
     assert 'id="sec-tco"' not in t and 'id="app-glossary"' in t
+
+
+def test_engine_text_is_vi_vn():
+    """Decision Q7: engine sentences (recommendation, findings, assumptions, expandText) use `.` thousands and
+    `,` decimals; values are unchanged and identifiers (profile key) stay plain."""
+    import html as _html
+    import re
+    from app import report_sizing_full
+    vms = [sizing.VmSpec(name="APP", qty=120, vcpu=8, ram_gb=48, disk_gb=250.5),
+           sizing.VmSpec(name="DB", qty=12, vcpu=24, ram_gb=256, disk_gb=2048)]
+    prof = [sizing.HostProfile(name="2×32C / 1 TB", sockets=2, cores_per_socket=32, ram_gb=1024, unit_price=820.5e6)]
+    p = sizing.SizingParams(cpu_ratio=1.5, ram_ratio=1.25, growth_pct=17.5, annual_growth_pct=22.5,
+                            license_price_per_core=3.85e6, warranty_ext_values=[45.5e6, None])
+    r = sizing.build_sizing(vms, p, prof)
+    d = r["demand"]
+    assert (d["vcpu"], d["ramGB"]) == (1248, 8832)
+    head = r["recommendation"]["headline"]
+    # 120×8 + 12×24 = 1248 vCPU · 120×48 + 12×256 = 8832 GB RAM · (30060 + 24576) GB / 1024 = 53.36 TiB of data
+    assert "(1.248 vCPU · 8.832 GB RAM · 53,4 TiB dữ liệu)" in head and "1.024 GB RAM mỗi host" in head
+    assert r["results"][0]["key"] == "2x32x1024"                     # identifier stays plain
+    assum = " ".join(r["assumptions"])
+    assert "1,5 vCPU / thread (≈ 3 vCPU / core)" in assum and "Tỷ lệ chia sẻ RAM: 1,25 : 1" in assum
+    assert "+17,5%" in assum and "22,5% / năm" in assum
+    assert "năm 4: 45.500.000 / host / năm; năm 5: chưa nhập" in assum and "3.850.000 / core / năm" in assum
+    assert "22,5%/năm" in r["analysis"]["expandText"]
+    assert any(f["title"] == "Cấp RAM vượt dung lượng thật (1,25 : 1)" for f in r["analysis"]["findings"])
+    # no English grouping (1,248) or English decimal (1.5) anywhere in engine text
+    eng = re.compile(r"(?<![\d.,\w])(\d{1,3}(?:,\d{3})+|\d+\.(?:\d{1,2}|\d{4,}))(?![\d])")
+    texts = [head, r["recommendation"]["detail"], r["analysis"]["expandText"], *r["assumptions"],
+             *[f[k] for f in r["analysis"]["findings"] for k in ("title", "detail", "action")],
+             *[s["what"] for s in r["analysis"]["nextSteps"]],
+             *[s["label"] for s in r["analysis"]["waterfall"]["cpu"]]]
+    assert [t for t in texts if eng.search(t)] == []
+    # the PDF prints them as they are (no double swap: 1.248 must not become 1,248)
+    page = report_sizing_full.render_full_html(vms, p, prof)
+    page = _html.unescape(re.sub(r"<[^>]+>", " ", re.sub(r"<style.*?</style>", " ", page, flags=re.S)))
+    assert "1.248 vCPU" in page and "1,248" not in page and "3.850.000 / core / năm" in page

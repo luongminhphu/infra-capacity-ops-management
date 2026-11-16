@@ -168,8 +168,11 @@ async def health():
 
 @app.get("/api/health/ready")
 def health_ready():
-    """Readiness: the database answers SELECT 1 and, when the scheduler is on, its loop ticked
-    recently. 503 with a short reason otherwise (no hostnames, no error text)."""
+    """Readiness: the database answers SELECT 1 and, when the scheduler is on and
+    READINESS_REQUIRE_SCHEDULER is true (default), its loop ticked recently. The scheduler state is
+    always reported; with READINESS_REQUIRE_SCHEDULER=false it is informational only (`required`:
+    false), so with several replicas one pod's stale loop never takes it out of the Service
+    (audit BEQ-01). 503 with a short reason otherwise (no hostnames, no error text)."""
     from sqlalchemy import text
     from .collectors.scheduler import heartbeat_status
 
@@ -189,9 +192,14 @@ def health_ready():
         checks["scheduler"] = hb
     else:
         checks["scheduler"] = {"ok": True, "disabled": True}
-    ready = all(c["ok"] for c in checks.values())
+    require_scheduler = bool(s.readiness_require_scheduler)
+    checks["scheduler"] = {**checks["scheduler"], "required": require_scheduler}
+    gating = {k: c for k, c in checks.items() if k != "scheduler" or require_scheduler}
+    ready = all(c["ok"] for c in gating.values())
     if not ready:
-        logger.warning("Readiness failed: %s", ", ".join(f"{k}={c.get('reason')}" for k, c in checks.items() if not c["ok"]))
+        logger.warning("Readiness failed: %s", ", ".join(f"{k}={c.get('reason')}" for k, c in gating.items() if not c["ok"]))
+    elif not checks["scheduler"]["ok"]:
+        logger.warning("Readiness: scheduler not healthy (%s), not gating readiness", checks["scheduler"].get("reason"))
     return JSONResponse({"status": "ok" if ready else "not_ready", "checks": checks}, status_code=200 if ready else 503)
 
 
