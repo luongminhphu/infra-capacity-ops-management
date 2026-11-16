@@ -117,17 +117,17 @@ function bpRender() {
       <div class="sim-actions">${actions}</div>
       <p class="criteria-status" id="bpMsg" role="status"></p>
     </section>
-    <section class="kpi-grid">
-      <div class="kpi-card"><div class="label">Kế hoạch FY ${esc(p.fiscalYear)}</div><div class="value">${spMoney(s.total)}</div>
-        <div class="sub">${esc(s.count)} dòng · so với FY ${esc(s.baseline.fiscalYear)}: <b>${bpPct(s.deltaPct)}</b></div></div>
-      <div class="kpi-card"><div class="label">Thực tế FY ${esc(s.baseline.fiscalYear)}</div><div class="value">${spMoney(s.baseline.total)}</div>
-        <div class="sub">Opex ${spMoney(s.baseline.opex)} · Capex ${spMoney(s.baseline.capex)}</div></div>
-      <div class="kpi-card"><div class="label">Opex kế hoạch</div><div class="value">${spMoney(s.byKind.opex)}</div>
-        <div class="sub">Capex ${spMoney(s.byKind.capex)} · tăng giá gia hạn ${spMoney(s.renewalUplift)} (trước VAT)</div></div>
-      ${act ? `<div class="kpi-card"><div class="label">Đã thực hiện</div><div class="value ${act.variance > 0 ? 'tone-bad' : ''}">${spMoney(act.actualTotal)}</div>
-        <div class="sub">${act.usedPct === null ? '—' : uiNumber(act.usedPct, 1) + '% kế hoạch'} · ngoài kế hoạch ${spMoney(act.unplannedTotal)}</div></div>`
-      : `<div class="kpi-card"><div class="label">Trần ngân sách</div><div class="value ${s.cap === null ? '' : capTone}">${s.cap === null ? 'Không đặt' : spMoney(s.cap)}</div>
-        <div class="sub">${s.overCap ? `Vượt ${spMoney(s.overCap)} — ${esc(s.cutLineIds.length)} dòng dưới đường cắt (theo ưu tiên)` : 'Trong trần'}</div></div>`}
+    <section class="kpi-strip">
+      <div class="kpi-cell"><div class="kpi-l">Kế hoạch FY ${esc(p.fiscalYear)}</div><div class="kpi-v">${spMoney(s.total)}</div>
+        <div class="kpi-s">${esc(s.count)} dòng · so với FY ${esc(s.baseline.fiscalYear)}: <b>${bpPct(s.deltaPct)}</b></div></div>
+      <div class="kpi-cell"><div class="kpi-l">Thực tế FY ${esc(s.baseline.fiscalYear)}</div><div class="kpi-v">${spMoney(s.baseline.total)}</div>
+        <div class="kpi-s">Opex ${spMoney(s.baseline.opex)} · Capex ${spMoney(s.baseline.capex)}</div></div>
+      <div class="kpi-cell"><div class="kpi-l">Opex kế hoạch</div><div class="kpi-v">${spMoney(s.byKind.opex)}</div>
+        <div class="kpi-s">Capex ${spMoney(s.byKind.capex)} · tăng giá gia hạn ${spMoney(s.renewalUplift)} (trước VAT)</div></div>
+      ${act ? `<div class="kpi-cell"><div class="kpi-l">Đã thực hiện</div><div class="kpi-v"><span class="${act.variance > 0 ? 'tone-bad' : ''}">${spMoney(act.actualTotal)}</span></div>
+        <div class="kpi-s">${act.usedPct === null ? '—' : uiNumber(act.usedPct, 1) + '% kế hoạch'} · ngoài kế hoạch ${spMoney(act.unplannedTotal)}</div></div>`
+      : `<div class="kpi-cell"><div class="kpi-l">Trần ngân sách</div><div class="kpi-v"><span class="${s.cap === null ? '' : capTone}">${s.cap === null ? 'Không đặt' : spMoney(s.cap)}</span></div>
+        <div class="kpi-s">${s.overCap ? `Vượt ${spMoney(s.overCap)} — ${esc(s.cutLineIds.length)} dòng dưới đường cắt (theo ưu tiên)` : 'Trong trần'}</div></div>`}
     </section>
     ${s.staleCount ? `<div class="insight-box src-warning"><strong>${esc(s.staleCount)} dòng có nguồn đã thay đổi</strong> (Opex đã gia hạn / ngừng, dự án bị xoá). Kiểm tra rồi bỏ khỏi kế hoạch hoặc xoá.</div>` : ''}
     <div class="sr-two">
@@ -198,7 +198,7 @@ function bpOpenLine(id) {
   const p = bpState.plan, l = p.lines.find(x => x.id === id);
   if (!l) return;
   if (!p.can.edit) {
-    spDialog(esc(l.title), `<dl class="sp-dl">
+    uiPanelDialog(esc(l.title), `<dl class="sp-dl">
       <div class="sp-dl-item"><dt>Nguồn</dt><dd>${esc(BP_SOURCE[l.source])} ${esc(l.sourceCode || '')}</dd></div>
       <div class="sp-dl-item"><dt>Kế hoạch</dt><dd>${spMoney(l.amountGross)} (trước VAT ${spMoney(l.amountNet)})</dd></div>
       <div class="sp-dl-item"><dt>Hiện tại</dt><dd>${spMoney(l.baseNet)}</dd></div>
@@ -208,7 +208,7 @@ function bpOpenLine(id) {
     return;
   }
   const isNew = l.source === 'new';
-  spDialog(`Sửa dòng — ${esc(l.title)}`, bpLineForm(l), `${isNew || l.stale ? '<button class="btn btn-ghost btn-sm btn-danger" type="button" id="bpDel">Xoá dòng</button>' : ''}
+  uiPanelDialog(`Sửa dòng — ${esc(l.title)}`, bpLineForm(l), `${isNew || l.stale ? '<button class="btn btn-ghost btn-sm btn-danger" type="button" id="bpDel">Xoá dòng</button>' : ''}
     <span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="bpSave">Lưu</button>`);
   spOnce('#bpSave', async () => {
@@ -225,7 +225,7 @@ function bpOpenLine(id) {
 }
 
 function bpOpenNew() {
-  spDialog('Thêm đề xuất mới', bpLineForm(null), `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog('Thêm đề xuất mới', bpLineForm(null), `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="bpSave">Thêm</button>`);
   spOnce('#bpSave', async () => {
     try {

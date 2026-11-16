@@ -27,7 +27,7 @@ async function renderAiSettings(force) {
   if (!(currentUser && currentUser.isAdmin)) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
   let d;
-  try { d = await apiRequest('/admin/ai'); } catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  try { d = await apiRequest('/admin/ai'); } catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const u = d.usage;
   const pct = Math.min(100, (u.costUsd / Math.max(1, u.budgetUsd)) * 100);
   const tone = u.costUsd >= u.budgetUsd ? 'crit' : u.costUsd >= u.alertUsd ? 'bad' : 'ok';
@@ -101,7 +101,7 @@ async function homeAiBrief(btn) {
       <p class="home-brief-text">${esc(s.headline)}</p>
       ${s.points.length ? `<ul class="home-list">${s.points.map(p => `<li class="home-item"><div class="home-item-main">${uiLevelPill(p.level)} ${esc(p.text)}</div></li>`).join('')}</ul>` : ''}
       ${s.decisions.length ? `<div class="sp-h">Việc nên làm</div><ol class="home-ai-dec">${s.decisions.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}</div>`;
-  } catch (err) { out.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; }
+  } catch (err) { out.innerHTML = `${uiError(err.message)}`; }
   finally { btn.disabled = false; }
 }
 

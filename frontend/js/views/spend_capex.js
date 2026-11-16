@@ -42,11 +42,11 @@ function cpxRender() {
       <td class="num">${p.opexCount ? `${spMoney(p.opexGross)}<span class="muted-sub">${esc(p.opexCount)} khoản</span>` : '—'}</td>
       <td>${spPill(...(CPX_STATUS[p.status] || ['na', p.statusLabel]))}</td></tr>`).join('');
   $('#spendMount').innerHTML = `
-    <section class="kpi-grid">
-      <div class="kpi-card"><div class="label">Tổng giá trị Capex (sau VAT)</div><div class="value">${spMoney(total)}</div><div class="sub">${list.length} dự án theo bộ lọc</div></div>
-      <div class="kpi-card"><div class="label">Opex gia hạn phát sinh</div><div class="value">${spMoney(opex)}</div><div class="sub">Tổng các kỳ gia hạn đã sinh từ các dự án này</div></div>
-      <div class="kpi-card"><div class="label">Dự án chờ duyệt</div><div class="value ${drafts ? 'tone-warn' : ''}">${drafts}</div><div class="sub">Nháp chưa sinh Opex — cần quyền Duyệt</div></div>
-      <div class="kpi-card"><div class="label">Năm tài chính hiện tại</div><div class="value">${esc(m.currentFiscalYear)}</div><div class="sub">Bắt đầu tháng ${esc(m.settings.fiscalStartMonth)}</div></div>
+    <section class="kpi-strip">
+      <div class="kpi-cell"><div class="kpi-l">Tổng giá trị Capex (sau VAT)</div><div class="kpi-v">${spMoney(total)}</div><div class="kpi-s">${list.length} dự án theo bộ lọc</div></div>
+      <div class="kpi-cell"><div class="kpi-l">Opex gia hạn phát sinh</div><div class="kpi-v">${spMoney(opex)}</div><div class="kpi-s">Tổng các kỳ gia hạn đã sinh từ các dự án này</div></div>
+      <div class="kpi-cell"><div class="kpi-l">Dự án chờ duyệt</div><div class="kpi-v"><span class="${drafts ? 'tone-warn' : ''}">${drafts}</span></div><div class="kpi-s">Nháp chưa sinh Opex — cần quyền Duyệt</div></div>
+      <div class="kpi-cell"><div class="kpi-l">Năm tài chính hiện tại</div><div class="kpi-v">${esc(m.currentFiscalYear)}</div><div class="kpi-s">Bắt đầu tháng ${esc(m.settings.fiscalStartMonth)}</div></div>
     </section>
     <section class="table-card">
       <div class="panel-head">
@@ -58,7 +58,7 @@ function cpxRender() {
         <label class="field"><span>Trạng thái</span><select data-cpx-filter="status">${spOpt('', 'Tất cả', f.status)}${Object.entries(CPX_STATUS).map(([k, [, t]]) => spOpt(k, t, f.status)).join('')}</select></label>
         <label class="field sp-search"><span>Tìm</span><input type="text" data-cpx-filter="q" value="${esc(f.q)}" placeholder="Mã hoặc tên dự án"></label>
       </div>
-      ${cpxState.error ? `<p class="criteria-status error">${esc(cpxState.error)}</p>` : ''}
+      ${cpxState.error ? `${uiError(cpxState.error)}` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
         <thead><tr><th>Mã</th><th>Dự án</th><th>Go-live</th><th class="num">Hạng mục</th><th class="num">Giá trị sau VAT</th><th class="num">Opex gia hạn</th><th>Trạng thái</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="7" class="empty-note">${spCan('editor') ? 'Chưa có dự án — bấm “Thêm dự án”.' : 'Chưa có dự án.'}</td></tr>`}</tbody>
@@ -163,7 +163,7 @@ async function cpxOpenDetail(code) {
     spCan('editor') && p.status !== 'closed' ? btn('id="cpxEdit"', 'Sửa') : '',
     moves,
   ].join('');
-  spDialog(`${esc(p.code)} — ${esc(p.name)}`, body, actions);
+  uiPanelDialog(`${esc(p.code)} — ${esc(p.name)}`, body, actions);
   $('#spDialogBody').onclick = async (e) => {
     const go = e.target.closest('[data-sp-goto]');
     if (go) return spOpenDetail(go.dataset.spGoto);
@@ -260,7 +260,7 @@ async function cpxOpenForm(p) {
       <button class="btn btn-secondary btn-sm" type="button" id="cpxPreview">Xem trước Opex</button></div>
     <datalist id="spVendorList">${m.vendors.filter(x => x.active).map(x => `<option value="${esc(x.name)}"></option>`).join('')}</datalist>
   </form>`;
-  spDialog(p ? `Sửa ${esc(p.code)}` : 'Thêm dự án Capex', body,
+  uiPanelDialog(p ? `Sửa ${esc(p.code)}` : 'Thêm dự án Capex', body,
     `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
      <button class="btn btn-primary btn-sm" type="button" id="cpxSave">Lưu</button>`);
   $('#cpxItemAdd').onclick = () => { $('#cpxItems').insertAdjacentHTML('beforeend', cpxItemRow(m)); refreshIcons(); };

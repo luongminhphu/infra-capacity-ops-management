@@ -111,7 +111,9 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 - **Topbar**: tiêu đề trang + tab trong trang (`#/<mục>/<tab>`), tìm kiếm Ctrl + K, đồng bộ. Phạm vi (vCenter /
   cluster / host) nằm **trong** trang, ngay trên nội dung, không đẩy topbar xuống nhiều dòng.
 - **Khung danh sách → chi tiết**: danh sách trái (`minmax(380px, 44%)`), chi tiết phải; danh sách là
-  `role="listbox"` + `aria-activedescendant`, phím J / K / Enter; chi tiết `aria-live="polite"`.
+  `role="listbox"` + `aria-activedescendant`, phím J / K / ↑ ↓ / Home / End, Enter vào chi tiết; chi tiết `aria-live="polite"`.
+  Một bộ helper cho mọi trang (ui.js): `uiListKeys`, `uiListSelect`, `uiFocusDetail`, `uiPaneOrDialog`, `uiPanelDialog`. Khoá dòng là
+  mã / tên đối tượng, không phải chỉ số mảng.
   Nguồn: quyết định hướng C (16/11/2026); `--domain ux` “Keyboard Navigation”. `search.py` **không có kết quả phù hợp
   trong dữ liệu** cho mẫu list → detail (`master detail list`, `list detail split view`).
 - Phạm vi (vCenter / cluster / host) trên điện thoại (< 640 px) gom sau nút “Phạm vi: …” (`aria-expanded`). Nguồn: §7 “không
@@ -127,7 +129,7 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 | Hộp thoại | `<dialog>` + `showModal()` cho xác nhận / form chặn trang; bảng điều khiển không chặn dùng `popover`; focus thấy rõ | `modern-web-guidance` “dialog”; `--domain ux` “Focus States”, “Focus Appearance” |
 | Bảng | `<table>` + `<caption>`; khi cuộn ngang bọc `role="region" tabindex="0" aria-labelledby`; tiêu đề dính; sắp xếp có `aria-sort` | `modern-web-guidance` “responsive-table”, “sortable-table”; `--domain ux` “Table Handling”, “Horizontal Scroll” |
 | Bộ lọc | Chip / chế độ xem đã lưu cho lọc chính; lọc phụ trong popover; không quá 3 `select` hiện cùng lúc | quyết định hướng C (16/11/2026) |
-| KPI | Dải KPI liền khối có bullet bar (vạch 80 % / 100 %) thay cho thẻ số to rời | `--domain chart` “KPI target progress” |
+| KPI | Dải KPI liền khối (`uiKpiStrip` / `.kpi-strip` › `.kpi-cell`) có bullet bar (vạch 80 % / 100 %) thay cho thẻ số to rời; ô bấm được để lọc có `role="button"` + `aria-pressed` | `--domain chart` “KPI target progress” |
 | Đang tải / lỗi | `uiLoading(text)`; lỗi `uiError(text, retry)` có `role="alert"` + nút Thử lại | `--domain ux` “Error Recovery”, “Error Messages”; vòng 2 PR8 |
 | Trạng thái rỗng | Nói điều gì đang thiếu + một hành động (`uiEmpty`) | `--domain ux` “Empty States” |
 | Pill / tag | Trạng thái: `uiPill(tone, label, title)`; nhãn trung tính: `uiTag(label, title)` (§3) | `--domain ux` “Color Only” |

@@ -123,7 +123,7 @@ async function renderArchiveView() {
   if (!mount) return;
   let d;
   try { d = await apiRequest(`/report-archive?${new URLSearchParams({ ...(archState.kind ? { kind: archState.kind } : {}), mine: archState.mine ? 'true' : 'false' })}`); }
-  catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const size = (b) => b >= 1048576 ? `${fmtNum(b / 1048576, 1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
   mount.innerHTML = `<section class="table-card">
     <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Kho báo cáo</div>

@@ -171,7 +171,7 @@ async function renderAuthSettings(force) {
   authSettingsAt = Date.now();
   let st;
   try { st = await apiRequest('/admin/auth-status'); }
-  catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const kv = (k, v) => `<div class="sp-dl-item"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
   mount.innerHTML = `
     <dl class="sp-dl">
@@ -214,7 +214,7 @@ async function renderUsersSettings(force) {
   usersSettingsAt = Date.now();
   let users;
   try { users = await apiRequest('/admin/users'); }
-  catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const src = { local: 'Cục bộ', entra: 'Microsoft Entra ID' };
   const spendCol = !!(users.spend && users.spend.on);
   mount.innerHTML = `

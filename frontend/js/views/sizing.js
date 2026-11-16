@@ -431,11 +431,11 @@ function renderSizingResult(result, payload, scroll = true) {
   const local = p.storage_mode === 'local';
 
   const tiles = `
-    <div class="kpi-grid sz-kpis">
-      <article class="kpi-card"><div class="label">Số VM yêu cầu</div><div class="value">${szNum(d.vmCount)}</div><div class="sub">${payload.vms.length} dòng · TB ${szNum(d.avgVcpu, 1)} vCPU / ${szGB(d.avgRamGB)} / VM</div></article>
-      <article class="kpi-card"><div class="label">vCPU</div><div class="value">${szNum(d.vcpu)} <span class="sz-arrow">→</span> ${szNum(d.vcpuPlanned)}</div><div class="sub">sau +${szNum(p.growth_pct)}% tăng trưởng · cần ${szNum(d.logicalCpuNeeded)} pCPU logic @ ${p.cpu_ratio}x</div></article>
-      <article class="kpi-card"><div class="label">RAM</div><div class="value">${szGB(d.ramGB)} <span class="sz-arrow">→</span> ${szGB(d.ramPlannedGB)}</div><div class="sub">sau tăng trưởng · RAM vật lý cần ${szGB(d.physRamNeededGB)} @ ${p.ram_ratio}x</div></article>
-      <article class="kpi-card"><div class="label">${local ? 'Lưu trữ cục bộ cần' : 'Dung lượng SAN cần cấp'}</div><div class="value">${szGB(d.storageNeededGB)}</div><div class="sub">từ ${szGB(d.diskGB)} yêu cầu · +${szNum(p.growth_pct)}% tăng trưởng · +${szNum(p.storage_overhead_pct)}% overhead${local ? ` · ×${p.storage_protection_factor} bảo vệ` : ''}</div></article>
+    <div class="kpi-strip sz-kpis">
+      <div class="kpi-cell"><div class="kpi-l">Số VM yêu cầu</div><div class="kpi-v">${szNum(d.vmCount)}</div><div class="kpi-s">${payload.vms.length} dòng · TB ${szNum(d.avgVcpu, 1)} vCPU / ${szGB(d.avgRamGB)} / VM</div></div>
+      <div class="kpi-cell"><div class="kpi-l">vCPU</div><div class="kpi-v">${szNum(d.vcpu)} <span class="sz-arrow">→</span> ${szNum(d.vcpuPlanned)}</div><div class="kpi-s">sau +${szNum(p.growth_pct)}% tăng trưởng · cần ${szNum(d.logicalCpuNeeded)} pCPU logic @ ${p.cpu_ratio}x</div></div>
+      <div class="kpi-cell"><div class="kpi-l">RAM</div><div class="kpi-v">${szGB(d.ramGB)} <span class="sz-arrow">→</span> ${szGB(d.ramPlannedGB)}</div><div class="kpi-s">sau tăng trưởng · RAM vật lý cần ${szGB(d.physRamNeededGB)} @ ${p.ram_ratio}x</div></div>
+      <div class="kpi-cell"><div class="kpi-l">${local ? 'Lưu trữ cục bộ cần' : 'Dung lượng SAN cần cấp'}</div><div class="kpi-v">${szGB(d.storageNeededGB)}</div><div class="kpi-s">từ ${szGB(d.diskGB)} yêu cầu · +${szNum(p.growth_pct)}% tăng trưởng · +${szNum(p.storage_overhead_pct)}% overhead${local ? ` · ×${p.storage_protection_factor} bảo vệ` : ''}</div></div>
     </div>`;
 
   const cmpRows = rows.map(r => {
@@ -695,14 +695,14 @@ function sizingAdvisoryHtml(result) {
   const [rcls, rtxt] = SZ_READY[a.readiness] || SZ_READY.ok;
   const fc = a.findingCounts || {};
   const costTiles = best && best.advisory.costs.tco ? `
-      <article class="kpi-card"><div class="label">TCO ${best.advisory.costs.years} năm (đề xuất)</div><div class="value">${szMoneyShort(best.advisory.costs.tco)}</div><div class="sub">phần cứng ${szMoneyShort(best.advisory.costs.hardware)} · bảo hành ${szMoneyShort(best.advisory.costs.warranty)} · license ${szMoneyShort(best.advisory.costs.license)}</div></article>
-      <article class="kpi-card"><div class="label">Chi phí / VM / tháng</div><div class="value">${szMoneyShort(best.advisory.costs.perVmMonth)}</div><div class="sub">/ VM: ${szMoneyShort(best.advisory.costs.perVm)} · / vCPU: ${szMoneyShort(best.advisory.costs.perVcpu)}</div></article>` : '';
+      <div class="kpi-cell"><div class="kpi-l">TCO ${best.advisory.costs.years} năm (đề xuất)</div><div class="kpi-v">${szMoneyShort(best.advisory.costs.tco)}</div><div class="kpi-s">phần cứng ${szMoneyShort(best.advisory.costs.hardware)} · bảo hành ${szMoneyShort(best.advisory.costs.warranty)} · license ${szMoneyShort(best.advisory.costs.license)}</div></div>
+      <div class="kpi-cell"><div class="kpi-l">Chi phí / VM / tháng</div><div class="kpi-v">${szMoneyShort(best.advisory.costs.perVmMonth)}</div><div class="kpi-s">/ VM: ${szMoneyShort(best.advisory.costs.perVm)} · / vCPU: ${szMoneyShort(best.advisory.costs.perVcpu)}</div></div>` : '';
   const insightTiles = best ? `
-    <div class="kpi-grid sz-kpis">
-      <article class="kpi-card"><div class="label">Đặc tính workload</div><div class="value">${szNum(wl.ramPerVcpu, 1)} GB/vCPU</div><div class="sub">${esc(wl.characterLabel)}</div></article>
-      <article class="kpi-card"><div class="label">Dư địa tăng trưởng thêm</div><div class="value">${best.advisory.runway.extraGrowthPct == null ? '—' : '+' + szNum(Math.max(0, best.advisory.runway.extraGrowthPct)) + '%'}</div><div class="sub">ngoài +${szNum(result.params.growth_pct)}% đã dự phòng, vẫn giữ N+${best.redundancy}</div></article>
-      <article class="kpi-card"><div class="label">License theo core</div><div class="value">${szNum(best.advisory.license.coresTotal)} core</div><div class="sub">${szNum(best.advisory.license.coresPerHost)}/host${best.advisory.license.paddedCores ? ` · ${szNum(best.advisory.license.paddedCores)} core trả thừa` : ''}</div></article>
-      <article class="kpi-card"><div class="label">Cần mở rộng</div><div class="value">${a.projection && a.projection.expandYear != null ? 'Năm ' + a.projection.expandYear : 'Không'}</div><div class="sub">trong ${a.projection ? a.projection.years : '—'} năm · tăng ${szNum(result.params.annual_growth_pct)}%/năm</div></article>
+    <div class="kpi-strip sz-kpis">
+      <div class="kpi-cell"><div class="kpi-l">Đặc tính workload</div><div class="kpi-v">${szNum(wl.ramPerVcpu, 1)} GB/vCPU</div><div class="kpi-s">${esc(wl.characterLabel)}</div></div>
+      <div class="kpi-cell"><div class="kpi-l">Dư địa tăng trưởng thêm</div><div class="kpi-v">${best.advisory.runway.extraGrowthPct == null ? '—' : '+' + szNum(Math.max(0, best.advisory.runway.extraGrowthPct)) + '%'}</div><div class="kpi-s">ngoài +${szNum(result.params.growth_pct)}% đã dự phòng, vẫn giữ N+${best.redundancy}</div></div>
+      <div class="kpi-cell"><div class="kpi-l">License theo core</div><div class="kpi-v">${szNum(best.advisory.license.coresTotal)} core</div><div class="kpi-s">${szNum(best.advisory.license.coresPerHost)}/host${best.advisory.license.paddedCores ? ` · ${szNum(best.advisory.license.paddedCores)} core trả thừa` : ''}</div></div>
+      <div class="kpi-cell"><div class="kpi-l">Cần mở rộng</div><div class="kpi-v">${a.projection && a.projection.expandYear != null ? 'Năm ' + a.projection.expandYear : 'Không'}</div><div class="kpi-s">trong ${a.projection ? a.projection.years : '—'} năm · tăng ${szNum(result.params.annual_growth_pct)}%/năm</div></div>
       ${costTiles}
     </div>` : '';
 

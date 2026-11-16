@@ -16,6 +16,86 @@ function uiPill(tone, label, title) {
   return `<span class="pill ${t}"${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</span>`;
 }
 
+/* ---------- List → detail (MASTER §6, audit FE-20): one keyboard model and one pane / dialog for every page ---------- */
+function uiPaneOrDialog(paneSel, title, code, body, actions) {
+  const pane = $(paneSel);
+  if (pane && matchMedia('(min-width: 1024px)').matches) {
+    if (!$('#spDialog').open) $('#spDialogBody').innerHTML = '';
+    const render = () => {
+      pane.innerHTML = `<div class="sp-pane-head"><h3 id="spPaneTitle">${title}</h3><span class="muted-sub">${esc(code)}</span></div>
+        <div class="sp-pane-actions">${(actions || '').replace('<span class="src-spacer"></span>', '').trim()}</div>
+        <p class="src-result" id="spDialogMsg" role="status"></p>
+        <div class="sp-dialog-body">${body}</div>`;
+      refreshIcons();
+    };
+    render();
+    return pane;
+  }
+  uiPanelDialog(`${esc(code)} — ${title}`, body, actions);
+  return $('#spDialogBody');
+}
+
+/* Keyboard for a list → detail listbox (one model for every page, MASTER §6): J / K / ↑ ↓ / Home / End move,
+   Enter / Space open the current item. `open(key, focus)` renders the detail; `onEnter(key)` (optional) replaces
+   what Enter does — e.g. move focus into the detail pane with uiFocusDetail. */
+function uiListKeys(e, keyAttr, current, open, onEnter) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const lb = e.currentTarget === e.target ? e.target : e.target.closest('[role="listbox"]');
+  if (!lb) return;
+  const keys = [...lb.querySelectorAll('[role="option"]')].map(o => o.dataset[keyAttr]);
+  const i = keys.indexOf(current), k = e.key.toLowerCase();
+  let next = null;
+  if (k === 'arrowdown' || k === 'j') next = keys[Math.min(i + 1, keys.length - 1)];
+  else if (k === 'arrowup' || k === 'k') next = keys[Math.max(i - 1, 0)];
+  else if (k === 'home') next = keys[0];
+  else if (k === 'end') next = keys[keys.length - 1];
+  else if (k === 'enter' || k === ' ') {
+    if (onEnter && current) { e.preventDefault(); onEnter(current); return; }
+    next = current || keys[0];
+  }
+  if (!next) return;
+  e.preventDefault();
+  open(next, true);
+}
+
+/* Move keyboard focus into a detail pane (Enter on a list row) and bring it into view on small screens. */
+function uiFocusDetail(sel) {
+  const d = typeof sel === 'string' ? $(sel) : sel;
+  if (!d) return;
+  if (!d.hasAttribute('tabindex')) d.setAttribute('tabindex', '-1');
+  d.focus({ preventScroll: true });
+  d.scrollIntoView({ block: 'nearest' });
+}
+
+/* Mark the selected option of a listbox (aria-selected + aria-activedescendant). */
+function uiListSelect(listSel, keyAttr, key, focus) {
+  const lb = $(listSel);
+  if (!lb) return;
+  let sel = null;
+  lb.querySelectorAll('[role="option"]').forEach(o => { const on = o.dataset[keyAttr] === String(key); o.setAttribute('aria-selected', String(on)); if (on) sel = o; });
+  if (sel) { lb.setAttribute('aria-activedescendant', sel.id); sel.scrollIntoView({ block: 'nearest' }); } else lb.removeAttribute('aria-activedescendant');
+  if (focus) lb.focus();
+}
+
+
+/* The shared panel dialog (#spDialog in index.html): title is trusted HTML built by the caller (escape data!). */
+function uiPanelDialog(title, body, actions) {
+  const dlg = $('#spDialog');
+  $('#spDialogBody').onclick = null;
+  $('#spDialogBody').innerHTML = `
+    <div class="src-dialog-head"><div class="panel-title" role="heading" aria-level="2" id="spDialogTitle">${title}</div>
+      <button class="btn btn-ghost btn-sm" type="button" data-sp-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
+    <div class="sp-dialog-body">${body}</div>
+    <p class="src-result" id="spDialogMsg" role="status"></p>
+    <div class="src-dialog-actions">${actions || ''}</div>`;
+  if (!dlg.open) dlg.showModal();
+  refreshIcons();
+  if (!dlg.dataset.bound) {
+    dlg.dataset.bound = '1';
+    dlg.addEventListener('click', (e) => { if (e.target.closest('[data-sp-close]')) dlg.close(); });
+  }
+}
+
 /* Neutral label (kind, origin, "Lịch sử", "Demo"…): no status glyph, never one of the 4 levels. */
 function uiTag(label, title) {
   return `<span class="tag"${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</span>`;

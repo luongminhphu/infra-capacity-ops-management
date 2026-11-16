@@ -63,7 +63,7 @@ function ctRender() {
           <label class="sr-only" for="ctQ">Tìm hợp đồng</label>
           <input id="ctQ" type="search" data-ct-filter="q" value="${esc(f.q)}" placeholder="Mã hoặc tên hợp đồng">
         </div>
-        ${ctState.error ? `<p class="criteria-status error">${esc(ctState.error)}</p>` : ''}
+        ${ctState.error ? `${uiError(ctState.error)}` : ''}
         ${groups ? `<ul class="hm-rows" id="ctList" role="listbox" tabindex="0" aria-label="Hợp đồng, nhóm theo trạng thái">${groups}</ul>`
           : uiEmpty(spCan('editor') ? 'Chưa có hợp đồng khớp bộ lọc. Bấm “Thêm hợp đồng”, hoặc tạo từ một khoản Opex.' : 'Chưa có hợp đồng khớp bộ lọc.')}
         <div class="hm-hint"><span>${list.length} hợp đồng</span><span><kbd>J</kbd> <kbd>K</kbd> chuyển</span>
@@ -111,7 +111,7 @@ function ctBind() {
   });
   mount.addEventListener('keydown', (e) => {
     if (spState.sub !== 'contracts' || !e.target.closest('#ctList')) return;
-    spListKeys(e, 'ctCode', ctState.selected, (code, focus) => ctOpenDetail(code, focus));
+    uiListKeys(e, 'ctCode', ctState.selected, (code, focus) => ctOpenDetail(code, focus));
   });
 }
 
@@ -138,7 +138,7 @@ async function ctOpenCreate(prefill) {
     <datalist id="ctCodeList">${opex.map(o => `<option value="${esc(o.code)}">${esc(o.title)}</option>`).join('')}${capexList.map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join('')}</datalist>
     <datalist id="spVendorList">${spState.meta.vendors.filter(x => x.active).map(x => `<option value="${esc(x.name)}"></option>`).join('')}</datalist>
   </form>`;
-  spDialog('Thêm hợp đồng', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog('Thêm hợp đồng', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="ctSave">Tạo</button>`);
   spOnce('#ctSave', async () => {
     const fd = Object.fromEntries(new FormData($('#ctForm')).entries());
@@ -205,7 +205,7 @@ async function ctOpenDetail(code, focus) {
     ${c.note ? `<p class="sp-desc">${esc(c.note)}</p>` : ''}
     ${purge}
     <h4 class="sp-h">Thanh toán</h4>
-    <div id="ctPayments"><p class="muted-sub">Đang tải…</p></div>
+    <div id="ctPayments">${uiLoading('Đang tải…')}</div>
     ${upload}
     <h4 class="sp-h">Lịch sử version</h4>
     ${timeline ? `<ol class="ct-timeline">${timeline}</ol>` : '<p class="muted-sub">Chưa có version nào.</p>'}
@@ -220,8 +220,8 @@ async function ctOpenDetail(code, focus) {
     c.status === 'draft' && spCan('editor') && c.currentVersion ? btn('id="ctNegotiate"', 'Chuyển sang đàm phán') : '',
   ].join('');
   ctState.selected = c.code;
-  const host = spPaneOrDialog('#ctDetail', esc(c.title), c.code, body, actions);
-  spListSelect('#ctList', 'ctCode', c.code, focus);
+  const host = uiPaneOrDialog('#ctDetail', esc(c.title), c.code, body, actions);
+  uiListSelect('#ctList', 'ctCode', c.code, focus);
   if (typeof payRender === 'function') payRender(c.code);
   const reopen = async () => { await ctRefresh(); await ctOpenDetail(c.code); };
   const post = (path, payload) => apiRequest(`/spend/contracts/${encodeURIComponent(c.code)}/${path}`, { method: 'POST', body: JSON.stringify(payload || {}) });

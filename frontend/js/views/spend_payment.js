@@ -13,7 +13,7 @@ async function payRender(code) {
   if (!mount) return;
   if (payState.code !== code) { payState.code = code; payState.open = new Set(); payState.editing = null; }
   try { payState.data = await apiRequest(`/spend/contracts/${encodeURIComponent(code)}/payments`); }
-  catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const d = payState.data;
   const diff = d.differenceFromValue;
   const rows = d.items.map(p => {

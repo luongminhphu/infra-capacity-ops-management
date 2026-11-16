@@ -127,14 +127,14 @@ function homeRender() {
     </section>
     <div id="homeAiBrief"></div>
     <div class="hm-domains" role="group" aria-label="Lọc theo miền">${domains}</div>
-    ${d.error ? `<p class="criteria-status error">${esc(d.error)}</p>` : ''}
+    ${d.error ? uiError(d.error, 'data-home-refresh') : ''}
     ${d.unavailable.length ? `<p class="criteria-status">Tạm thời không đọc được: ${esc(d.unavailable.join(', '))}.</p>` : ''}
     <section class="hm-split panel" aria-label="Hộp việc">
       <div class="hm-list">
         <div class="hm-toolbar"><div class="hm-views" role="group" aria-label="Chế độ xem">${views}</div>
           <button class="btn btn-ghost btn-sm" type="button" data-home-refresh title="Đọc lại từ mọi module"><i data-lucide="refresh-cw"></i><span class="sr-only">Làm mới</span></button></div>
         ${homeState.level || homeState.source ? `<div class="hm-filters">${homeState.level ? `<button class="chip-x" type="button" data-home-level="">Mức: ${esc(HOME_LEVEL_TEXT[homeState.level])} ✕</button>` : ''}${homeState.source ? `<button class="chip-x" type="button" data-home-source="">${esc((d.sources[homeState.source] || {}).label || '')} ✕</button>` : ''}</div>` : ''}
-        ${groups ? `<ul class="hm-rows" role="listbox" tabindex="0" aria-label="Việc, sắp theo mức" aria-activedescendant="">${groups}</ul>`
+        ${groups ? `<ul class="hm-rows" role="listbox" tabindex="0" aria-label="Việc, sắp theo mức">${groups}</ul>`
           : uiEmpty(homeState.view === 'done' ? 'Chưa có việc nào được đánh dấu xong hay tạm ẩn.' : homeState.view === 'mine' ? 'Chưa có việc nào giao cho bạn.' : 'Không có việc cần xử lý theo bộ lọc này.')}
         <p class="hm-hint"><span><kbd>J</kbd> <kbd>K</kbd> chuyển việc</span><span><kbd>E</kbd> xong</span><span><kbd>H</kbd> ẩn 7 ngày</span><span><kbd>Ctrl K</kbd> tìm</span></p>
       </div>
@@ -292,6 +292,7 @@ function homeBind() {
     const i = keys.indexOf(homeState.selected), k = e.key.toLowerCase();
     if (k === 'arrowdown' || k === 'j') { e.preventDefault(); if (keys.length) homeSelect(keys[Math.min(i + 1, keys.length - 1)], true); }
     else if (k === 'arrowup' || k === 'k') { e.preventDefault(); if (keys.length) homeSelect(keys[Math.max(i - 1, 0)], true); }
+    else if (k === 'home' || k === 'end') { e.preventDefault(); if (keys.length) homeSelect(k === 'home' ? keys[0] : keys[keys.length - 1], true); }
     else if (k === 'enter') { const it = homeState.data.items.find(x => x.key === homeState.selected); if (it && it.page) location.hash = homeLink(it.page, it.query); }
     else if ((k === 'e' || k === 'h') && homeState.selected && homeState.view !== 'done') {
       e.preventDefault();
@@ -316,7 +317,7 @@ async function renderAgendaView() {
     });
   }
   try { agState.data = await apiRequest(`/agenda?days=${agState.days}`); }
-  catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   agRender();
 }
 
@@ -367,7 +368,7 @@ async function renderPaymentsPage(keepPane) {
   const mount = $('#spendMount');
   let d;
   try { d = await apiRequest(`/spend/payments?status=${payListState.status}`); }
-  catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   payListState.data = d;
   const pid = (p) => `${p.contractCode}:${p.seq}`;
   if (!d.items.some(p => pid(p) === payListState.selected)) payListState.selected = d.items.length ? pid(d.items[0]) : null;
@@ -406,11 +407,11 @@ function payOpenPick(key, focus) {
   const p = (payListState.data && payListState.data.items || []).find(x => `${x.contractCode}:${x.seq}` === key);
   if (!p) return;
   payListState.selected = key;
-  spListSelect('#payList', 'payPick', key, focus);
+  uiListSelect('#payList', 'payPick', key, focus);
   uiRequire('spend').then(() => {
     if (typeof payState !== 'undefined' && p.id !== undefined) { payState.code = p.contractCode; payState.open = new Set([p.id]); payState.editing = null; }
     return ctOpenDetail(p.contractCode);
-  }).then(() => spListSelect('#payList', 'payPick', key, focus), (err) => uiAlert(err.message));
+  }).then(() => uiListSelect('#payList', 'payPick', key, focus), (err) => uiAlert(err.message));
 }
 
 function payBindList() {
@@ -424,7 +425,7 @@ function payBindList() {
   };
   mount.onkeydown = (e) => {
     if (spState.sub !== 'payments' || !e.target.closest('#payList')) return;
-    spListKeys(e, 'payPick', payListState.selected, payOpenPick);
+    uiListKeys(e, 'payPick', payListState.selected, payOpenPick);
   };
 }
 
@@ -433,7 +434,7 @@ async function runPlanningPreview(btn) {
   const out = $('#planningResult');
   if (!out) return;
   let params;
-  try { params = getPlanningParams(); } catch (err) { out.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  try { params = getPlanningParams(); } catch (err) { out.innerHTML = `${uiError(err.message)}`; return; }
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== null && v !== '').map(([k, v]) => [k, String(v)]));
   if (typeof currentVcenterFilter !== 'undefined' && currentVcenterFilter) qs.set('vcenter', currentVcenterFilter);
   if (btn) btn.disabled = true;
@@ -461,7 +462,7 @@ async function runPlanningPreview(btn) {
         <td>${c.nodes > 0 && canCapex ? `<button class="btn btn-ghost btn-sm" type="button" data-plan-capex="${esc(c.name)}">Tạo Capex nháp</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
     planState.result = d;
     out.onclick = (e) => { const b = e.target.closest('[data-plan-capex]'); if (b) planOpenCapex(d.clusters.find(x => x.name === b.dataset.planCapex)); };
-  } catch (err) { out.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; }
+  } catch (err) { out.innerHTML = `${uiError(err.message)}`; }
   finally { if (btn) btn.disabled = false; }
 }
 
@@ -481,7 +482,7 @@ async function planOpenCapex(c) {
       <label class="field"><span>Đơn giá 1 node trước VAT (đ, để trống nếu chưa có)</span><input name="price" inputmode="numeric"></label>
     </div></form>
     <p class="muted-sub">Theo kịch bản cơ sở: ${esc(c.nodes)} node ${esc(c.nodeSpec.cores)} cores / ${esc(c.nodeSpec.ramGB)} GB, cần vận hành từ ${esc(c.firstNeedLabel || '—')}, đặt hàng trước ${esc(c.orderByLabel || '—')}. Dự án tạo ở trạng thái nháp; bổ sung NCC, bảo hành và báo giá trong Capex (hoặc qua So sánh báo giá).</p>`;
-  spDialog('Tạo Capex nháp từ quy hoạch', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog('Tạo Capex nháp từ quy hoạch', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="pcSave">Tạo Capex</button>`);
   spOnce('#pcSave', async () => {
     const fd = Object.fromEntries(new FormData($('#pcForm')).entries());
