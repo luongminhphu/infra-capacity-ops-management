@@ -198,6 +198,7 @@ function bkOverview(s) {
         <tbody>${groups || uiEmptyRow(3, 'Không có job lỗi trong kỳ.')}</tbody></table></div>
       </article>
     </section>
+    ${typeof bkSizeOverview === 'function' ? bkSizeOverview(s) : ''}
     <section class="table-card ai-out" id="bkAiOut" aria-live="polite"></section>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Client cần xử lý</div><p class="panel-sub">Lỗi liên tiếp, quá RPO hoặc lần gần nhất không thành công.</p></div>
