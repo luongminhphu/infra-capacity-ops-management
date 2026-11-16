@@ -101,7 +101,7 @@ const PAL_ACTIONS = [
   { label: 'Tạo gói báo giá', page: 'spend-quotes', run: () => uiRequire('spend').then(() => qtOpenForm()), role: 'editor', feature: 'spend' },
   { label: 'Tạo dự án cải tạo văn phòng', page: 'spend-renovations', run: () => uiRequire('spend').then(() => rnOpenForm()), role: 'editor', feature: 'spend' },
   { label: 'Xem kết quả quy hoạch tài nguyên', page: 'planning', run: () => typeof runPlanningPreview === 'function' && runPlanningPreview() },
-  { label: 'Đồng bộ dữ liệu ngay', run: () => { const b = $('#btnSyncNow'); if (b) b.click(); } },
+  { label: 'Đồng bộ dữ liệu ngay', run: () => { const b = $('#btnSyncNow'); if (b) b.click(); }, admin: true },
 ];
 
 function palPages(q) {
@@ -116,7 +116,7 @@ function palPages(q) {
 }
 
 function palActions(q) {
-  return PAL_ACTIONS.filter(a => (!a.feature || featureOn(a.feature)) && (!a.role || spendRoleOk(a.role)) && (!a.page || navItemVisible(a.page))
+  return PAL_ACTIONS.filter(a => (!a.feature || featureOn(a.feature)) && (!a.role || spendRoleOk(a.role)) && (!a.admin || uiIsAdmin()) && (!a.page || navItemVisible(a.page))
     && (!q || a.label.toLowerCase().includes(q))).map(a => ({ type: 'action', label: a.label, sub: 'Thao tác', action: a }));
 }
 

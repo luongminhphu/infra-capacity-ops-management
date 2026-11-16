@@ -321,7 +321,7 @@ function renderLicOsTable() {
       <td>${esc(LIC_SOURCE_LABEL[o.source] || o.source)}</td>
       <td><span class="pill ${confCls[o.confidence] || 'na'}">${esc(LIC_CONF_LABEL[o.confidence] || o.confidence)}</span></td>
       <td class="lic-note">${esc(o.note || '')}</td>
-      <td><button class="btn btn-secondary btn-sm" data-lic-action="override" data-idx="${st_idx(v)}" type="button">Override</button></td>
+      <td>${uiIsAdmin() ? `<button class="btn btn-secondary btn-sm" data-lic-action="override" data-idx="${st_idx(v)}" type="button">Override</button>` : ''}</td>
     </tr>`;
   }).join('') || uiEmptyRow(13, 'Không có VM khớp bộ lọc.');
   $('#licOsFoot').textContent = `${rows.length} / ${licState().inv.vms.length} VM${rows.length > 1500 ? ' (hiển thị 1500 dòng đầu — thu hẹp bộ lọc hoặc xuất Excel)' : ''}`;
@@ -431,7 +431,7 @@ function renderLicAssess() {
       <div class="panel-head">
         <div><div class="panel-title" role="heading" aria-level="2">Nhu cầu license theo cluster</div><p class="panel-sub">Windows Server được tính theo cluster vì HA/DRS/vMotion cho phép mọi VM chạy trên mọi host; không đếm theo host hiện tại và không chỉ đếm số VM Windows. Chế độ đếm OSE Standard: <b>${ws.peakMode === 'current_placement' ? 'theo host hiện tại (tham chiếu)' : 'toàn cluster'}</b>.</p></div>
         <div class="panel-toolbar">
-          ${st.viewingSnapshot ? '' : '<button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot</button>'}
+          ${st.viewingSnapshot || !uiIsAdmin() ? '' : '<button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot</button>'}
           <button class="btn btn-secondary btn-sm" data-lic-action="export-pdf" type="button" title="Executive summary: kết luận, quyết định đề nghị, tổng quan license theo cluster">Xuất PDF · Executive summary</button>
           <button class="btn btn-secondary btn-sm" data-lic-action="export-assess" type="button">Xuất Excel</button>
         </div>
@@ -531,7 +531,7 @@ function renderLicRules() {
     <td>${r.verifiedAt ? `${licDate(r.verifiedAt)}<div class="muted-sub">${esc(r.verifiedBy || '')}</div>` : '<span class="muted-sub">chưa</span>'}</td>
     <td class="lic-actions">
       <button class="btn btn-secondary btn-sm" data-lic-action="rule-edit" data-id="${r.id}" type="button">${admin ? 'Xem / tạo version' : 'Xem'}</button>
-      ${r.status !== 'verified' ? `<button class="btn btn-secondary btn-sm" data-lic-action="rule-verify" data-id="${r.id}" type="button">Xác minh</button>` : ''}
+      ${r.status !== 'verified' && uiIsAdmin() ? `<button class="btn btn-secondary btn-sm" data-lic-action="rule-verify" data-id="${r.id}" type="button">Xác minh</button>` : ''}
       ${!admin ? '' : r.isActive ? `<button class="btn btn-secondary btn-sm" data-lic-action="rule-deactivate" data-id="${r.id}" type="button">Tắt</button>` : `<button class="btn btn-secondary btn-sm" data-lic-action="rule-activate" data-id="${r.id}" type="button">Kích hoạt</button>`}
     </td></tr>`).join('');
   const editor = ed ? `<div class="planning-panel lic-editor">
@@ -641,12 +641,12 @@ function renderLicSnapshots() {
       <td class="num">${sm.vmware ? `${licNum(sm.vmware.demandCores)} / thiếu ${licNum(sm.vmware.shortfallCores)}` : '—'}</td>
       <td class="num">${sm.windowsServer ? `Std ${licRange(sm.windowsServer.standard.demandCores, sm.windowsServer.standard.demandCoresMax)} · DC ${licNum(sm.windowsServer.datacenter.demandCores)}` : '—'}</td>
       <td><code class="lic-hash" title="${esc(s.resultHash || '')}">${esc(String(s.resultHash || '').slice(0, 10))}</code><span class="muted-sub" id="licRecomp${s.id}"></span></td>
-      <td class="lic-actions"><div class="lic-btns"><button class="btn btn-secondary btn-sm" data-lic-action="snap-view" data-id="${s.id}" type="button">Xem</button> <button class="btn btn-secondary btn-sm" data-lic-action="snap-recompute" data-id="${s.id}" type="button">Tái lập</button> <button class="btn btn-secondary btn-sm" data-lic-action="snap-pdf" data-id="${s.id}" type="button">PDF</button> <button class="btn btn-secondary btn-sm btn-danger" data-lic-action="snap-delete" data-id="${s.id}" type="button">Xoá</button></div></td>
+      <td class="lic-actions"><div class="lic-btns"><button class="btn btn-secondary btn-sm" data-lic-action="snap-view" data-id="${s.id}" type="button">Xem</button>${uiIsAdmin() ? ` <button class="btn btn-secondary btn-sm" data-lic-action="snap-recompute" data-id="${s.id}" type="button">Tái lập</button>` : ''} <button class="btn btn-secondary btn-sm" data-lic-action="snap-pdf" data-id="${s.id}" type="button">PDF</button>${uiIsAdmin() ? ` <button class="btn btn-secondary btn-sm btn-danger" data-lic-action="snap-delete" data-id="${s.id}" type="button">Xoá</button>` : ''}</div></td>
     </tr>`;
   }).join('');
   return `<section class="table-card">
     <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Snapshot assessment</div><p class="panel-sub">Mỗi snapshot lưu toàn bộ đầu vào (inventory, override, version rule và tham số, entitlement) cùng kết quả và hash. "Tái lập" chạy lại engine trên đầu vào đã lưu và so hash để chứng minh kết quả tái lập được, độc lập với inventory hiện tại.</p></div>
-      <div class="panel-toolbar"><input id="licSnapTitle" placeholder="Tiêu đề snapshot (tuỳ chọn)"><button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot phạm vi hiện tại</button></div></div>
+      ${uiIsAdmin() ? '<div class="panel-toolbar"><input id="licSnapTitle" placeholder="Tiêu đề snapshot (tuỳ chọn)"><button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot phạm vi hiện tại</button></div>' : `<span class="muted-sub">${ADMIN_ONLY_NOTE}</span>`}</div>
     <div class="table-scroll"><table class="data-table lic-table"><thead><tr><th class="num">#</th><th>Thời điểm</th><th>Tiêu đề</th><th>Phạm vi</th><th>Kết luận</th><th class="num">VMware core</th><th class="num">Windows Server core</th><th>Hash</th><th></th></tr></thead>
     <tbody>${rows || uiEmptyRow(9, 'Chưa có snapshot.')}</tbody></table></div>
   </section>`;

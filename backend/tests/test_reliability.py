@@ -144,7 +144,7 @@ def test_run_syncs_keeps_order_and_isolates_errors():
         raise RuntimeError("x")
     out = scheduler.run_syncs([lambda: {"key": "a", "ok": True}, fail, lambda: {"key": "c", "ok": True}],
                               [{"key": "a"}, {"key": "b"}, {"key": "c"}], workers=1, deadline=5)
-    assert [r["key"] for r in out] == ["a", "b", "c"] and out[1] == {"key": "b", "ok": False, "error": "x"}
+    assert [r["key"] for r in out] == ["a", "b", "c"] and out[1] == {"key": "b", "ok": False, "error": "Đồng bộ thất bại. Xem log máy chủ để biết chi tiết."}   # internals stay in the log
 
 
 # ---------------------------------------------------------------------------

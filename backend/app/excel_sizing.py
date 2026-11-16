@@ -28,7 +28,7 @@ from . import sizing_advisory
 from .report_view import customer_view
 
 from .excel_style import (  # noqa: E402  (shared Excel look; names kept for this module)
-    AMBER, BLUE, CRIT, CRIT_BG, FAINT, INK, LINE, MONEY, MUTED, NAVY, NUM, NUM1, OK, OK_BG, READY, SERIES, SEV, SURFACE2, TEAL, WARN, _fill, _fit_heights, _font, _gb, _money_short, _print_setup, _r, _section, _sheet_title, _table, _tile, _widths, _write_rows, thin, Formula,
+    AMBER, BLUE, CRIT, CRIT_BG, FAINT, INK, LINE, MONEY, MUTED, NAVY, NUM, NUM1, OK, OK_BG, READY, SERIES, SEV, SURFACE2, TEAL, WARN, _fill, _fit_heights, _font, _gb, _money_short, _print_setup, _r, _section, _sheet_title, _table, _tile, _widths, _write_rows, thin, Formula, ext_cell,
 )
 
 
@@ -280,7 +280,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
             c.fill = _fill(NAVY)
         for i, r in enumerate(data, 1):
             for j, v in enumerate(r, 1):
-                ws.cell(row=row + i, column=j, value=v).font = _font(9)
+                ext_cell(ws, row + i, j, v).font = _font(9)   # profile / VM-group names come from the user (SEC-07)
         row += len(data) + 2
         return top
 

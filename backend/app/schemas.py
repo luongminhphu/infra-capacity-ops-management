@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -24,9 +24,10 @@ class ImportPayload(BaseModel):
     """Client already parsed & normalized the CSV/JSON on the frontend (reusing the
     existing normalizeAndValidate logic) — the backend just persists it as a
     SnapshotRun so imported data also feeds the historical trend charts."""
-    hosts: list = []
-    vms: list = []
-    label: Optional[str] = "Import thủ công"
+    # bounded and typed: one bad / huge payload must not bloat the DB or 500 half-way (SEC-14)
+    hosts: List[Dict[str, Any]] = Field(default_factory=list, max_length=5000)
+    vms: List[Dict[str, Any]] = Field(default_factory=list, max_length=50000)
+    label: Optional[str] = Field(default="Import thủ công", max_length=200)
 
 
 class SettingsUpdate(BaseModel):

@@ -96,7 +96,7 @@ function renderBackupHead() {
         <span class="bk-chips">${chips || '<span class="pill na">Chưa cấu hình máy chủ backup</span>'}</span>
       </div>
       <div class="panel-toolbar">
-        <button class="btn btn-secondary btn-sm" id="bkSync" type="button"><i data-lucide="refresh-cw"></i>Đồng bộ backup</button>
+        ${uiIsAdmin() ? '<button class="btn btn-secondary btn-sm" id="bkSync" type="button"><i data-lucide="refresh-cw"></i>Đồng bộ backup</button>' : ''}
         <button class="btn btn-secondary btn-sm" id="bkXlsx" type="button"><i data-lucide="sheet"></i>Xuất Excel</button>
         <button class="btn btn-primary btn-sm" id="bkPdf" type="button"><i data-lucide="file-text"></i>Báo cáo PDF</button>
       </div>

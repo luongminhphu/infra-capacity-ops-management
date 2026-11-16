@@ -186,8 +186,10 @@ def test_os_classify_suggests_only_unknown(app_, admin, editor, monkeypatch):
         ("app-legacy-07", "linux", "RHEL 7"), ("db-ora-02", "windows_server", "2012 R2")]
     assert out["items"][0]["instanceUuid"] == "u-7" and out["items"][0]["osEdition"] is None
     # once confirmed via the existing overrides API, the VM is no longer a candidate
-    assert editor.put("/api/licensing/overrides", json={"vcenterKey": "vc1", "instanceUuid": "u-7", "vm": "app-legacy-07",
-                                                        "category": "linux", "osVersion": "RHEL 7", "note": "AI đề xuất"}).status_code == 200
+    body = {"vcenterKey": "vc1", "instanceUuid": "u-7", "vm": "app-legacy-07",
+            "category": "linux", "osVersion": "RHEL 7", "note": "AI đề xuất"}
+    assert editor.put("/api/licensing/overrides", json=body).status_code == 403     # decision 16/11: admins only
+    assert admin.put("/api/licensing/overrides", json=body).status_code == 200
     seen.clear()
     editor.post("/api/ai/os-classify")
     assert [v["guestFullName"] for v in _facts(seen)["vm"]] == ["Other (32-bit)"]

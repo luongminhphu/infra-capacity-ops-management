@@ -66,7 +66,7 @@ def list_servers(db: Session = Depends(get_db), user: User = Depends(get_current
 
 
 @router.post("/servers/{key}/sync")
-def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     cfg = _cfg(key)
     try:
         run = sync_netbackup(db, cfg)
@@ -82,7 +82,7 @@ def sync_one(key: str, db: Session = Depends(get_db), user: User = Depends(get_c
 
 
 @router.post("/sync-all")
-def sync_all(user: User = Depends(get_current_user)):
+def sync_all(user: User = Depends(require_admin)):
     # Every backup server in parallel, each in its own DB session.
     results = sync_backups(get_settings())
     return {"results": [{**r, "finishedAt": to_iso_utc(r["finishedAt"])} if r.get("ok") else r for r in results]}
