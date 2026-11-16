@@ -31,7 +31,7 @@ async function aiRunInto(btn, out, fn) {
   if (!out) return;
   btn.disabled = true;
   out.innerHTML = uiNote('AI đang phân tích…');
-  try { out.innerHTML = await fn(); } catch (err) { out.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; }
+  try { out.innerHTML = await fn(); } catch (err) { out.innerHTML = `${uiError(err.message)}`; }
   finally { btn.disabled = false; }
 }
 

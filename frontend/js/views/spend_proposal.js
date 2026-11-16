@@ -33,7 +33,7 @@ async function renderProposalsPage() {
         <div class="panel-toolbar">${spCan('editor') ? `<button class="btn btn-primary btn-sm" type="button" data-pp-new ${noTpl ? 'disabled title="Chưa có mẫu — admin tải mẫu ở Cài đặt"' : ''}><i data-lucide="plus"></i>Soạn tờ trình</button>` : ''}</div>
       </div>
       ${noTpl ? '<div class="insight-box">Chưa có mẫu tờ trình. Quản trị viên tải Mẫu A / Mẫu B (.docx) ở Cài đặt → Chi phí &amp; nhắc hạn → Tờ trình &amp; AI.</div>' : ''}
-      ${ppState.error ? `<p class="criteria-status error">${esc(ppState.error)}</p>` : ''}
+      ${ppState.error ? `${uiError(ppState.error)}` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
         <thead><tr><th>Mã</th><th>Về việc</th><th>Gắn với</th><th>Trạng thái</th><th>File</th><th>Cập nhật</th></tr></thead>
         <tbody>${rows || uiEmptyRow(6, 'Chưa có tờ trình.')}</tbody>
@@ -79,7 +79,7 @@ async function ppOpenCreate(prefill) {
       <label class="field sp-span2"><span>Bối cảnh, lý do, phương án đã cân nhắc (AI dùng để viết)</span><textarea name="contextNote" rows="5" maxlength="8000" placeholder="Vd: thiết bị hết bảo hành 31/12/2026, đang chạy hệ thống giao dịch; đã hỏi giá 2 nhà cung cấp…"></textarea></label>
     </div>
     <p class="panel-sub">${ppState.ai.enabled ? 'Khi bấm “Soạn bằng AI”, dữ liệu các khoản đã chọn và phần bối cảnh được gửi tới Anthropic. Không ghi mật khẩu hay thông tin cá nhân vào bối cảnh.' : 'AI đang tắt: chỉ điền các trường dữ liệu vào mẫu.'}</p></form>`;
-  spDialog('Soạn tờ trình', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog('Soạn tờ trình', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="ppCreate">Tạo</button>`);
   const form = $('#ppForm');
   const sync = () => {
@@ -146,7 +146,7 @@ async function ppOpenDetail(code, note) {
     draft && spCan('editor') ? btn('data-pp-gen="0"', p.file ? 'Tạo lại (chỉ dữ liệu)' : 'Chỉ điền dữ liệu') : '',
     draft && spCan('editor') && ppState.ai.enabled ? btn('data-pp-gen="1"', p.file ? 'Soạn lại bằng AI' : 'Soạn bằng AI', 'btn-primary') : '',
   ].join('');
-  spDialog(`${esc(p.code)} — ${esc(p.subject)}`, body, actions);
+  uiPanelDialog(`${esc(p.code)} — ${esc(p.subject)}`, body, actions);
   const reopen = async (msg) => { await ppRefresh(); await ppOpenDetail(p.code, msg); };
   $('#spDialogBody').onclick = (e) => {
     const go = e.target.closest('[data-sp-goto]'); if (go) return spOpenDetail(go.dataset.spGoto);
@@ -194,7 +194,7 @@ async function ppRenderAdmin(mount) {
   let aiCfg, templates, recipients;
   try {
     [aiCfg, templates, recipients] = await Promise.all([apiRequest('/spend/proposals/ai'), apiRequest('/spend/proposals/templates'), apiRequest('/spend/proposals/recipients')]);
-  } catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  } catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const tplRows = templates.map(t => `<tr>
       <td><b>${esc(t.name)}</b><span class="muted-sub">${esc(t.kindLabel)}</span></td>
       <td class="wrap">${t.outline.sections.map(s => `${spPill(...(PP_SECTION_KIND[s.kind] || ['na', s.kind]))} ${esc(s.heading)}`).join('<br>')}</td>

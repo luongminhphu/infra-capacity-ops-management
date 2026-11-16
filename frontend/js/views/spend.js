@@ -120,49 +120,7 @@ function spDetailPane() {
 
 /* Shared by Hợp đồng / Đợt thanh toán: render an object's detail in the page's pane on wide screens, else in the
    dialog. Same body / ids either way; the dialog's stale copy is cleared so ids stay unique. `title` is escaped HTML. */
-function spPaneOrDialog(paneSel, title, code, body, actions) {
-  const pane = $(paneSel);
-  if (pane && matchMedia('(min-width: 1024px)').matches) {
-    if (!$('#spDialog').open) $('#spDialogBody').innerHTML = '';
-    const render = () => {
-      pane.innerHTML = `<div class="sp-pane-head"><h3 id="spPaneTitle">${title}</h3><span class="muted-sub">${esc(code)}</span></div>
-        <div class="sp-pane-actions">${(actions || '').replace('<span class="src-spacer"></span>', '').trim()}</div>
-        <p class="src-result" id="spDialogMsg" role="status"></p>
-        <div class="sp-dialog-body">${body}</div>`;
-      refreshIcons();
-    };
-    render();
-    return pane;
-  }
-  spDialog(`${esc(code)} — ${title}`, body, actions);
-  return $('#spDialogBody');
-}
-
-/* Keyboard for a list → detail listbox: J / K / arrows move, Enter opens. `open(key)` renders the detail. */
-function spListKeys(e, keyAttr, current, open) {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const lb = e.currentTarget === e.target ? e.target : e.target.closest('[role="listbox"]');
-  if (!lb) return;
-  const keys = [...lb.querySelectorAll('[role="option"]')].map(o => o.dataset[keyAttr]);
-  const i = keys.indexOf(current), k = e.key.toLowerCase();
-  let next = null;
-  if (k === 'arrowdown' || k === 'j') next = keys[Math.min(i + 1, keys.length - 1)];
-  else if (k === 'arrowup' || k === 'k') next = keys[Math.max(i - 1, 0)];
-  else if (k === 'enter' || k === ' ') next = current || keys[0];
-  if (!next) return;
-  e.preventDefault();
-  open(next, true);
-}
-
-/* Mark the selected option of a listbox (aria-selected + aria-activedescendant). */
-function spListSelect(listSel, keyAttr, key, focus) {
-  const lb = $(listSel);
-  if (!lb) return;
-  let sel = null;
-  lb.querySelectorAll('[role="option"]').forEach(o => { const on = o.dataset[keyAttr] === String(key); o.setAttribute('aria-selected', String(on)); if (on) sel = o; });
-  if (sel) { lb.setAttribute('aria-activedescendant', sel.id); sel.scrollIntoView({ block: 'nearest' }); } else lb.removeAttribute('aria-activedescendant');
-  if (focus) lb.focus();
-}
+/* List → detail helpers (uiPaneOrDialog, uiListKeys, uiListSelect, uiPanelDialog) live in ui.js (audit FE-20 / FE-25). */
 
 const SP_VIEWS = [['open', 'Cần theo dõi'], ['expiring', 'Sắp hết hạn'], ['overdue', 'Quá hạn'], ['all', 'Tất cả']];
 
@@ -212,7 +170,7 @@ function spRenderPage() {
               <label class="field"><span>Cost center</span><select data-sp-filter="costCenter">${spOpt('', 'Tất cả', f.costCenter)}${m.costCenters.map(x => spOpt(x.id, `${x.code} — ${x.name}`, f.costCenter)).join('')}</select></label>
             </div></details>
         </div>
-        ${spState.error ? `<p class="criteria-status error">${esc(spState.error)}</p>` : ''}
+        ${spState.error ? `${uiError(spState.error)}` : ''}
         ${groups ? `<ul class="hm-rows" id="spList" role="listbox" tabindex="0" aria-label="Khoản Opex, sắp theo ngày hết hạn">${groups}</ul>`
           : uiEmpty(spCan('editor') ? 'Chưa có khoản nào khớp bộ lọc. Bấm “Thêm khoản” để nhập, hoặc “Nhập Excel”.' : 'Chưa có khoản nào khớp bộ lọc.')}
         <div class="hm-hint sp-pager"><span>${esc(l.total)} khoản · trang ${esc(f.page)}/${esc(pages)}</span>
@@ -284,22 +242,6 @@ async function spRefresh() {
 }
 
 /* ---------- Dialog shell ---------- */
-function spDialog(title, body, actions) {
-  const dlg = $('#spDialog');
-  $('#spDialogBody').onclick = null;
-  $('#spDialogBody').innerHTML = `
-    <div class="src-dialog-head"><div class="panel-title" role="heading" aria-level="2" id="spDialogTitle">${title}</div>
-      <button class="btn btn-ghost btn-sm" type="button" data-sp-close aria-label="Đóng"><i data-lucide="x"></i></button></div>
-    <div class="sp-dialog-body">${body}</div>
-    <p class="src-result" id="spDialogMsg" role="status"></p>
-    <div class="src-dialog-actions">${actions || ''}</div>`;
-  if (!dlg.open) dlg.showModal();
-  refreshIcons();
-  if (!dlg.dataset.bound) {
-    dlg.dataset.bound = '1';
-    dlg.addEventListener('click', (e) => { if (e.target.closest('[data-sp-close]')) dlg.close(); });
-  }
-}
 function spMsg(text, ok) {
   const dlg = $('#spDialog');
   const el = (dlg && dlg.open && $('#spDialogMsg', dlg)) || $('#spDialogMsg');
@@ -381,7 +323,7 @@ async function spOpenDetail(code) {
     };
     if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) await document.startViewTransition(render).updateCallbackDone; else render();
   } else {
-    spDialog(`${esc(it.code)} — ${esc(it.title)}`, body, actions);
+    uiPanelDialog(`${esc(it.code)} — ${esc(it.title)}`, body, actions);
   }
   const body$ = pane || $('#spDialogBody');
   body$.onclick = async (e) => {
@@ -493,7 +435,7 @@ async function spOpenForm(it) {
     <datalist id="spVendorList">${m.vendors.filter(x => x.active).map(x => `<option value="${esc(x.name)}"></option>`).join('')}</datalist>
     <datalist id="spHostList">${hosts.map(h => `<option value="${esc(h.hostName)}">${esc([h.vcenterKey, h.cluster, h.vendor, h.model].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>
   </form>`;
-  spDialog(it ? `Sửa ${esc(it.code)}` : 'Thêm khoản Opex', body,
+  uiPanelDialog(it ? `Sửa ${esc(it.code)}` : 'Thêm khoản Opex', body,
     `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
      <button class="btn btn-primary btn-sm" type="button" id="spSave">Lưu</button>`);
   const form = $('#spForm');
@@ -543,7 +485,7 @@ function spOpenRenew(it) {
       <label class="field"><span>Mã PO mới</span><input name="poRef" maxlength="64" value=""></label>
       <label class="field"><span>Trạng thái khoản mới</span><select name="status">${spOpt('active', 'Đang hiệu lực (đã ký)', 'active')}${spOpt('planned', 'Dự kiến (chưa ký)', '')}</select></label>
     </form>`;
-  spDialog(`Gia hạn ${esc(it.code)}`, body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog(`Gia hạn ${esc(it.code)}`, body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="spRenewSave">Gia hạn</button>`);
   spOnce('#spRenewSave', async () => {
     const p = Object.fromEntries(new FormData($('#spRenewForm')).entries());
@@ -557,7 +499,7 @@ function spOpenRenew(it) {
 }
 
 function spOpenStop(it) {
-  spDialog(`Ngừng ${esc(it.code)}`, `<p class="panel-sub">Khoản bị ngừng sẽ không còn được nhắc hạn. Người có quyền Duyệt có thể kích hoạt lại.</p>
+  uiPanelDialog(`Ngừng ${esc(it.code)}`, `<p class="panel-sub">Khoản bị ngừng sẽ không còn được nhắc hạn. Người có quyền Duyệt có thể kích hoạt lại.</p>
     <label class="field"><span>Lý do ngừng *</span><textarea id="spStopReason" rows="3" maxlength="500" placeholder="Vd: thiết bị đã thanh lý, chuyển sang nhà cung cấp khác…"></textarea></label>`,
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
    <button class="btn btn-primary btn-sm btn-danger" type="button" id="spStopSave">Ngừng</button>`);
@@ -620,7 +562,7 @@ async function spRenderSettings() {
         ${admin ? `<div class="sp-inline"><input type="text" id="spCatCode" maxlength="32" placeholder="MÃ_MỚI" aria-label="Mã loại"><input type="text" id="spCatName" maxlength="128" placeholder="Tên loại" aria-label="Tên loại mới"><button class="btn btn-secondary btn-sm" type="button" id="spCatAdd">Thêm loại</button></div>` : ''}
       </div>
     </div>
-    ${admin ? '<div id="spAdminMount"><p class="muted-sub">Đang tải cấu hình kênh nhắc…</p></div>' : ''}
+    ${admin ? `<div id="spAdminMount">${uiLoading('Đang tải cấu hình kênh nhắc…')}</div>` : ''}
     <p class="criteria-status" id="spSettingsMsg"></p>`;
   const msg = (t, ok) => { const el = $('#spSettingsMsg'); el.textContent = t || ''; el.className = 'criteria-status' + (t ? (ok ? ' ok' : ' error') : ''); };
   spOnce('#spSetSave', async () => {
@@ -658,7 +600,7 @@ async function spRenderAdmin() {
   try {
     [smtp, channels, log, users] = await Promise.all([apiRequest('/spend/admin/smtp'), apiRequest('/spend/admin/channels'),
       apiRequest('/spend/admin/reminders?limit=50'), apiRequest('/spend/admin/users')]);
-  } catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
+  } catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const chRows = channels.map(c => `<tr>
       <td><b>${esc(c.name)}</b><span class="muted-sub">${c.kind === 'discord' ? 'Discord' : 'Email'}</span></td>
       <td class="wrap">${c.kind === 'discord' ? (c.webhookReadable === false ? '<span class="tone-crit">Webhook không giải mã được — nhập lại</span>' : 'Webhook đã lưu (ẩn)')
@@ -778,7 +720,7 @@ function spOpenChannel(kind, c) {
     : `<div class="src-grid"><label class="field"><span>Tên kênh</span><input id="spChName" maxlength="128" value="${esc(v.name)}" placeholder="Email nhóm hạ tầng"></label>
         <label class="field"><span>Người nhận (cách nhau dấu phẩy)</span><input id="spChTo" value="${esc(v.recipients)}" placeholder="infra@congty.vn, finance@congty.vn"></label></div>
        <label class="finding-filter-item"><input type="checkbox" id="spChOwner" ${v.includeOwner ? 'checked' : ''}><span>Gửi thêm cho email người phụ trách của từng khoản (chỉ các khoản của họ)</span></label>`;
-  spDialog(`${c ? 'Sửa' : 'Thêm'} kênh ${kind === 'discord' ? 'Discord' : 'email'}`, body,
+  uiPanelDialog(`${c ? 'Sửa' : 'Thêm'} kênh ${kind === 'discord' ? 'Discord' : 'email'}`, body,
     `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button><button class="btn btn-primary btn-sm" type="button" id="spChSave">Lưu</button>`);
   spOnce('#spChSave', async () => {
     const p = { kind, name: $('#spChName').value, enabled: v.enabled };

@@ -156,6 +156,8 @@ function bindLicensingView() {
   });
   // Delegated actions inside the body
   $('#licBody').addEventListener('click', onLicBodyClick);
+  // category cells act as toggle buttons: Enter / Space like a click
+  $('#licBody').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-lic-cat]')) { e.preventDefault(); onLicBodyClick(e); } });
   $('#licBody').addEventListener('change', onLicBodyChange);
   $('#licBody').addEventListener('input', (e) => {
     if (e.target.id === 'licOsSearch') { st.filters.q = e.target.value; renderLicOsTable(); }
@@ -230,7 +232,7 @@ function renderLicHardware() {
   }).join('');
 
   return `
-    <div class="kpi-grid lic-kpi-6">${kpis.map(([l, v, s]) => `<div class="kpi-card"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('')}</div>
+    <div class="kpi-strip lic-kpi-6">${kpis.map(([l, v, s]) => `<div class="kpi-cell"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div><div class="kpi-s">${s}</div></div>`).join('')}</div>
     <section class="table-card">
       <div class="panel-head">
         <div><div class="panel-title" role="heading" aria-level="2">ESXi theo vCenter / cluster / host</div><p class="panel-sub">Bấm vào dòng cluster để xem từng host. Physical core là số core vật lý của CPU; logical thread là số luồng khi bật Hyper-Threading; vCPU là tài nguyên ảo cấp cho VM — chỉ physical core được dùng để tính license.</p></div>
@@ -259,7 +261,7 @@ function renderLicOs() {
   const clusters = [...new Set(st.inv.vms.map(v => v.cluster).filter(Boolean))].sort();
   const opt = (obj, cur, allLabel) => `<option value="all"${cur === 'all' ? ' selected' : ''}>${allLabel}</option>` + Object.entries(obj).map(([k, l]) => `<option value="${k}"${cur === k ? ' selected' : ''}>${esc(l)}</option>`).join('');
   return `
-    <div class="kpi-grid lic-kpi-5">${cats.map(([k, b]) => `<div class="kpi-card lic-cat-card" data-lic-cat="${k}" title="Lọc theo ${LIC_CATEGORY_LABEL[k]}"><div class="label">${LIC_CATEGORY_LABEL[k]}</div><div class="value">${b.count}</div><div class="sub">${b.poweredOn} đang bật · ${licNum(b.vcpu)} vCPU · ${licNum(b.ramGB)} GB</div></div>`).join('')}</div>
+    <div class="kpi-strip lic-kpi-5">${cats.map(([k, b]) => `<div class="kpi-cell lic-cat-card" role="button" tabindex="0" aria-pressed="${st.filters.category === k}" data-lic-cat="${k}" title="Lọc theo ${LIC_CATEGORY_LABEL[k]}"><div class="kpi-l">${LIC_CATEGORY_LABEL[k]}</div><div class="kpi-v">${b.count}</div><div class="kpi-s">${b.poweredOn} đang bật · ${licNum(b.vcpu)} vCPU · ${licNum(b.ramGB)} GB</div></div>`).join('')}</div>
     <section class="table-card">
       <div class="panel-head">
         <div><div class="panel-title" role="heading" aria-level="2">VM inventory &amp; phân loại guest OS</div>

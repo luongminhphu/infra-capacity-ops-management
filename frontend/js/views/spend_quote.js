@@ -50,7 +50,7 @@ function vdRender() {
       </div>
       ${noShort ? `<p class="criteria-status">${esc(noShort)} nhà cung cấp chưa có tên viết tắt.</p>` : ''}
       <div class="sp-filters"><label class="field sp-search"><span>Tìm</span><input type="text" data-vd-q value="${esc(vdState.q)}" placeholder="Tên, tên viết tắt, lĩnh vực"></label></div>
-      ${vdState.error ? `<p class="criteria-status error">${esc(vdState.error)}</p>` : ''}
+      ${vdState.error ? `${uiError(vdState.error)}` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
         <thead><tr><th>Tên viết tắt</th><th>Tên đầy đủ</th><th>Lĩnh vực</th><th>Trạng thái</th><th class="num">Báo giá</th><th class="num">Hợp đồng</th><th class="num">Opex + Capex</th></tr></thead>
         <tbody>${rows || uiEmptyRow(7, 'Chưa có nhà cung cấp — NCC được tạo khi nhập Opex, Capex hoặc upload báo giá.')}</tbody>
@@ -104,7 +104,7 @@ async function vdOpen(id) {
     ${hist('Hợp đồng', v.contracts.map(c => `<li><b>${esc(c.code)}</b> — ${esc(c.title)}</li>`), 'Chưa có hợp đồng.')}
     ${hist('Opex', v.opex.map(o => `<li><b>${esc(o.code)}</b> — ${esc(o.title)} · FY ${esc(o.fiscalYear)} · ${spMoney(o.amountGross)}</li>`), 'Chưa có khoản Opex.')}
     ${hist('Hạng mục Capex', v.capexItems.map(i => `<li><b>${esc(i.projectCode)}</b> — ${esc(i.description)} · ${spMoney(i.amountGross)}</li>`), 'Chưa có hạng mục Capex.')}`;
-  spDialog(`Nhà cung cấp — ${esc(v.label)}`, body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
+  uiPanelDialog(`Nhà cung cấp — ${esc(v.label)}`, body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
     ${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" id="vdSave">Lưu</button>' : ''}`);
   spOnce('#vdSave', async () => {
     const fd = Object.fromEntries(new FormData($('#vdForm')).entries());
@@ -148,7 +148,7 @@ function qtRenderList() {
           <p class="panel-sub">Mỗi gói nhận báo giá của nhiều NCC (mặc định 3). Hệ thống đọc file, kiểm tra công thức tiền, so sánh từng hạng mục và lập phiếu đánh giá NCC.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-qt-prices><i data-lucide="search"></i>Tra cứu đơn giá</button>${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-qt-new><i data-lucide="plus"></i>Tạo gói báo giá</button>' : ''}</div>
       </div>
-      ${qtState.error ? `<p class="criteria-status error">${esc(qtState.error)}</p>` : ''}
+      ${qtState.error ? `${uiError(qtState.error)}` : ''}
       ${groups ? `<ul class="hm-rows" id="qtList" role="listbox" tabindex="0" aria-label="Gói báo giá, nhóm theo trạng thái">${groups}</ul>` : uiEmpty(spCan('editor') ? 'Chưa có gói báo giá. Bấm “Tạo gói báo giá”.' : 'Chưa có gói báo giá.')}
       <p class="hm-hint"><span>${list.length} gói</span><span><kbd>J</kbd> <kbd>K</kbd> chuyển · <kbd>Enter</kbd> mở</span></p>
     </section>`;
@@ -179,7 +179,7 @@ function qtBind() {
       if (sel) { e.preventDefault(); qtOpen(sel.dataset.qtCode); }
       return;
     }
-    spListKeys(e, 'qtCode', ($('#qtList [aria-selected="true"]') || {}).dataset?.qtCode, (code) => spListSelect('#qtList', 'qtCode', code, true));
+    uiListKeys(e, 'qtCode', ($('#qtList [aria-selected="true"]') || {}).dataset?.qtCode, (code) => uiListSelect('#qtList', 'qtCode', code, true));
   });
 }
 
@@ -197,7 +197,7 @@ async function qtOpenForm(r) {
       <label class="field sp-span2"><span>Mô tả / phạm vi</span><textarea name="description" rows="3" maxlength="5000">${esc(p.description || '')}</textarea></label>
     </div><datalist id="qtCapexList">${capex.map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join('')}</datalist></form>
     ${r ? '' : '<p class="muted-sub">Phiếu đánh giá được tạo sẵn: khung tiêu chuẩn 70% (6 tiêu chí) và khung mở rộng 30% theo khối — sửa được ở tab Đánh giá.</p>'}`;
-  spDialog(r ? `Sửa gói ${esc(r.code)}` : 'Tạo gói báo giá', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog(r ? `Sửa gói ${esc(r.code)}` : 'Tạo gói báo giá', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="qtSave">${r ? 'Lưu' : 'Tạo'}</button>`);
   spOnce('#qtSave', async () => {
     const fd = Object.fromEntries(new FormData($('#qtForm')).entries());
@@ -474,7 +474,7 @@ async function qtOpenLines(qid) {
       <tbody id="qlBody">${(q.lines || []).map(l => qtLineRow(l, ro).replace('<tr data-line>', `<tr data-line${bad.has(l.id) ? ' class="qt-bad"' : ''}>`)).join('')}</tbody></table></div>
     ${ro ? '' : '<button class="btn btn-ghost btn-sm" type="button" id="qlAdd"><i data-lucide="plus"></i>Thêm dòng</button>'}
     <p class="muted-sub">Sửa cho khớp file gốc của NCC — không “sửa hộ” lỗi tính toán của NCC; lỗi đó cần NCC xác nhận lại. Lưu sẽ bỏ dấu “Đã kiểm tra”.</p>`;
-  spDialog(`Dòng báo giá — ${esc(q.vendorLabel)}`, body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
+  uiPanelDialog(`Dòng báo giá — ${esc(q.vendorLabel)}`, body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
     ${ro ? '' : '<button class="btn btn-primary btn-sm" type="button" id="qlSave">Lưu &amp; kiểm tra lại</button>'}`);
   $('#spDialog').classList.add('qt-wide');
   $('#spDialog').addEventListener('close', () => $('#spDialog').classList.remove('qt-wide'), { once: true });
@@ -515,7 +515,7 @@ function qtAiBlock(d) {
 }
 
 async function qtOpenPrices() {
-  spDialog('Tra cứu đơn giá theo mặt hàng', `
+  uiPanelDialog('Tra cứu đơn giá theo mặt hàng', `
     <p class="panel-sub">Tìm theo model hoặc tên hàng trong các báo giá <b>đã kiểm tra</b>; đơn giá quy đổi VND, trước VAT.</p>
     <div class="sp-inline"><input type="text" id="qpQ" maxlength="80" placeholder="Vd: C9300-48T, Meraki, cáp Cat6A"><button class="btn btn-primary btn-sm" type="button" id="qpGo">Tìm</button></div>
     <div id="qpOut"></div>`, '<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>');
@@ -549,7 +549,7 @@ function qtOpenToCapex(d) {
       <label class="field"><span>Bảo hành / license (năm)</span><input name="coverageYears" type="number" min="0" max="10" value="0"></label>
       <label class="field"><span>Bắt đầu bảo hành</span><input name="startDate" type="date"></label>
     </div></form><p class="muted-sub">NCC: <b>${esc(sel ? sel.vendorLabel : '')}</b>, VAT theo báo giá. Có số năm bảo hành thì Capex tự sinh Opex gia hạn dự kiến.</p>`;
-  spDialog('Tạo dự án Capex từ báo giá được chọn', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog('Tạo dự án Capex từ báo giá được chọn', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="qcSave">Tạo Capex</button>`);
   spOnce('#qcSave', async () => {
     const fd = Object.fromEntries(new FormData($('#qcForm')).entries());
@@ -565,7 +565,7 @@ async function qtOpenToProposal(d) {
   try { tpls = (await apiRequest('/spend/proposals/templates')).filter(t => t.active && t.kind === 'B'); } catch (err) { /* shown below */ }
   if (!tpls.length) { qtMsg('Chưa có mẫu tờ trình Mẫu B đang dùng — admin tải mẫu ở Cài đặt → Tờ trình & AI.'); return; }
   const sel = d.quotations.find(q => q.id === d.selectedQuotationId);
-  spDialog('Soạn tờ trình Mẫu B từ gói báo giá', `<form id="qpForm" class="sp-form" novalidate><div class="src-grid">
+  uiPanelDialog('Soạn tờ trình Mẫu B từ gói báo giá', `<form id="qpForm" class="sp-form" novalidate><div class="src-grid">
       <label class="field sp-span2"><span>Về việc *</span><input name="subject" maxlength="255" value="${esc(`Đề xuất lựa chọn nhà cung cấp — ${d.title}`)}"></label>
       <label class="field"><span>Mẫu</span><select name="templateId">${tpls.map(t => spOpt(t.id, t.name, tpls[0].id)).join('')}</select></label>
       <label class="field sp-span2"><span>Bối cảnh cho AI (tuỳ chọn)</span><textarea name="contextNote" rows="3" maxlength="8000">${esc(sel ? `Đề xuất chọn ${sel.vendorLabel}. ${d.selectionReason || ''}` : '')}</textarea></label>

@@ -38,7 +38,7 @@ function rnRenderList() {
           ${spCan('admin') ? '<button class="btn btn-ghost btn-sm" type="button" data-rn-act="groups"><i data-lucide="list"></i>Nhóm chi phí</button><button class="btn btn-ghost btn-sm" type="button" data-rn-act="import"><i data-lucide="upload"></i>Nhập lịch sử</button>' : ''}
           ${spCan('editor') ? '<button class="btn btn-primary btn-sm" type="button" data-rn-act="new"><i data-lucide="plus"></i>Tạo dự án</button>' : ''}</div>
       </div>
-      ${rnState.error ? `<p class="criteria-status error">${esc(rnState.error)}</p>` : ''}
+      ${rnState.error ? `${uiError(rnState.error)}` : ''}
       <div class="table-scroll"><table class="data-table sp-table">
         <thead><tr><th>Tầng</th><th>Năm</th><th>Dự án</th><th>Trạng thái</th><th class="num">Cabling</th><th class="num">Network</th><th class="num">VC</th><th class="num">Tổng</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="8" class="empty-note">Chưa có dự án.${spCan('admin') ? ' Bấm “Nhập lịch sử” để nạp các tầng đã làm từ file so sánh (sheet Summarize).' : ''}</td></tr>`}</tbody>
@@ -219,7 +219,7 @@ async function rnOpenForm(p) {
       ${p ? `<label class="field"><span>Trạng thái</span><select name="status"${p.status === 'closed' ? ' disabled' : ''}>${spOpt('planning', 'Lập kế hoạch', p.status)}${spOpt('executing', 'Đang thi công', p.status)}${p.status === 'closed' ? spOpt('closed', 'Đã chốt', 'closed') : ''}</select></label>` : ''}
       <label class="field sp-span2"><span>Ghi chú</span><textarea name="notes" rows="2" maxlength="5000">${esc(v.notes || '')}</textarea></label>
     </div></form><p class="muted-sub">Quy mô dùng để tính chi phí / node và / phòng họp VC; cấu hình dùng để chỉ so với các tầng cùng loại.</p>`;
-  spDialog(p ? `Sửa ${esc(p.code)}` : 'Tạo dự án cải tạo', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+  uiPanelDialog(p ? `Sửa ${esc(p.code)}` : 'Tạo dự án cải tạo', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="rnSave">${p ? 'Lưu' : 'Tạo'}</button>`);
   spOnce('#rnSave', async () => {
     const fd = Object.fromEntries(new FormData($('#rnForm')).entries());
@@ -232,7 +232,7 @@ async function rnOpenForm(p) {
 }
 
 async function rnOpenImport() {
-  spDialog('Nhập lịch sử từ file so sánh (Summarize)', `
+  uiPanelDialog('Nhập lịch sử từ file so sánh (Summarize)', `
     <p class="panel-sub">Chọn file Excel theo bố cục đang dùng (khối I / II / III, bảng “SO SÁNH CHI PHÍ … FL6 - FL12 - FL3”). Hệ thống đọc các cột tầng, quy mô trong tiêu đề cột (“(62 nodes) - 24 NS”, “(10G &amp; Wifi7)”) và số theo nhóm chi phí; xem trước rồi mới lưu.</p>
     <div class="sp-inline"><input type="file" id="rnFile" accept=".xlsx"><button class="btn btn-ghost btn-sm" type="button" id="rnPreview">Xem trước</button></div>
     <div id="rnPrev"></div>`, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
@@ -249,7 +249,7 @@ async function rnOpenImport() {
     try {
       const r = await send(null);
       const year = new Date().getFullYear();
-      $('#rnPrev').innerHTML = `${r.message ? `<p class="criteria-status error">${esc(r.message)}</p>` : ''}
+      $('#rnPrev').innerHTML = `${r.message ? `${uiError(r.message)}` : ''}
         ${r.findings.length ? `<div class="sp-h">Phát hiện trong file</div><ul class="qt-findings">${r.findings.map(f => `<li class="warn"><b>${esc(f.code)}</b> ${esc(f.message)}</li>`).join('')}</ul>` : ''}
         <div class="table-scroll"><table class="data-table"><thead><tr><th>Nhập</th><th>Tầng</th><th>Năm *</th><th>Loại số liệu</th><th>Quy mô / cấu hình</th><th class="num">Cabling</th><th class="num">Network</th><th class="num">VC</th></tr></thead><tbody>
         ${r.projects.map(p => `<tr data-rn-imp="${esc(p.floor)}"><td><input type="checkbox" class="rn-inc" checked></td><td><b>${esc(p.floor)}</b>${p.existing.length ? `<span class="muted-sub">đã có: ${esc(p.existing.map(e => e.year).join(', '))}</span>` : ''}</td>
@@ -283,7 +283,7 @@ async function rnOpenGroups() {
     <div class="table-scroll"><table class="data-table qt-lines"><thead><tr><th>Nhóm chi phí</th><th>Tên gọi khác (để ghép dòng báo giá)</th><th>Dùng</th></tr></thead>
     <tbody data-grp-ws="${ws}">${g[ws].map(row).join('')}</tbody></table></div>
     <button class="btn btn-ghost btn-sm" type="button" data-grp-add="${ws}">+ Thêm nhóm</button>`).join('');
-  spDialog('Nhóm chi phí chuẩn', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
+  uiPanelDialog('Nhóm chi phí chuẩn', body, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
     <button class="btn btn-primary btn-sm" type="button" id="grpSave">Lưu</button>`);
   $('#spDialogBody').onclick = (e) => {
     const add = e.target.closest('[data-grp-add]');

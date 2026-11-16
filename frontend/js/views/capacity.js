@@ -253,12 +253,7 @@ function cpBind() {
     else if (matchMedia('(max-width:1023px)').matches) { const d = $('#complianceDetail'); if (d) d.scrollIntoView({ block: 'start' }); }
   };
   list.addEventListener('click', (e) => { const o = e.target.closest('[data-cp]'); if (o) select(o.dataset.cp); });
-  list.addEventListener('keydown', (e) => {
-    const codes = [...list.querySelectorAll('[data-cp]')].map(o => o.dataset.cp);
-    const i = codes.indexOf(cpState.selected), k = e.key.toLowerCase();
-    if (k === 'arrowdown' || k === 'j') { e.preventDefault(); if (codes.length) select(codes[Math.min(i + 1, codes.length - 1)], true); }
-    else if (k === 'arrowup' || k === 'k') { e.preventDefault(); if (codes.length) select(codes[Math.max(i - 1, 0)], true); }
-  });
+  list.addEventListener('keydown', (e) => uiListKeys(e, 'cp', cpState.selected, select, () => uiFocusDetail('#complianceDetail')));
 }
 
 function renderComplianceView() {

@@ -217,23 +217,24 @@ const BK_CL_ORDER = { crit: 0, warn: 1, ok: 2, na: 3 };
 function bkClients(s) {
   const st = bkState(), f = st.clientFilter;
   const q = f.q.trim().toLowerCase();
+  // The selection is the client NAME (audit FE-20): an array index pointed at another client after a filter / reload.
   const all = (s.clients || []).map((c, i) => ({ ...c, _i: i }));
   const list = all.filter(c => (f.status === 'all' || c.status === f.status) && (!q || `${c.client} ${c.policies.join(' ')}`.toLowerCase().includes(q)))
     .sort((a, b) => (BK_CL_ORDER[a.status] ?? 9) - (BK_CL_ORDER[b.status] ?? 9));   // stable: keeps server order inside a group
   const cnt = (k) => all.filter(c => k === 'all' || c.status === k).length;
-  if (!list.some(c => c._i === st.clientSel)) st.clientSel = list.length ? list[0]._i : null;
+  if (!list.some(c => c.client === st.clientSel)) st.clientSel = list.length ? list[0].client : null;
   const groups = ['crit', 'warn', 'ok', 'na'].map(k => {
     const g = list.filter(c => c.status === k);
     if (!g.length) return '';
     return `<li class="hm-group" role="presentation"><span>${esc(BK_STATUS[k])}</span><span>${g.length}</span></li>` + g.map(c => `
-      <li class="hm-row" role="option" id="bkc-${c._i}" data-bk-client="${c._i}" aria-selected="${c._i === st.clientSel}">
+      <li class="hm-row" role="option" id="bkc-${c._i}" data-bk-client="${esc(c.client)}" aria-selected="${c.client === st.clientSel}">
         <span class="hm-lv lv-${esc(c.status)}" aria-hidden="true"></span>
         <span class="hm-t">${esc(c.client)}</span>
         <span class="hm-r"><b>${bkHours(c.hoursSinceSuccess)}</b>${c.consecutiveFail ? `${c.consecutiveFail} lần lỗi liền` : 'từ lần thành công'}</span>
         <span class="hm-m">${esc(c.statusLabel)} · ${esc(c.policies.join(', ') || '—')}</span>
         <span class="sr-only">${esc(BK_STATUS[c.status] || '')}</span></li>`).join('');
   }).join('');
-  const sel = list.find(c => c._i === st.clientSel);
+  const sel = list.find(c => c.client === st.clientSel);
   return `
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Client &amp; RPO</div><p class="panel-sub">RPO = thời gian từ bản backup thành công gần nhất (status 0 hoặc 1). Cảnh báo khi quá ${bkNum(s.thresholds.rpo_hours)} giờ; nghiêm trọng khi quá ${bkNum(s.thresholds.rpo_crit_hours)} giờ hoặc lỗi liên tiếp từ ${s.thresholds.consecutive_fail} lần.</p></div>
@@ -269,16 +270,15 @@ function bkClientDetail(c) {
     <div class="hm-d-actions"><button class="btn btn-secondary btn-sm" type="button" data-bk-action="client-jobs" data-client="${esc(c.client)}"><i data-lucide="list-checks"></i>Xem job của client</button></div>`;
 }
 
-function bkClientSelect(i, focus) {
+function bkClientSelect(name, focus) {
   const st = bkState();
-  st.clientSel = i;
+  st.clientSel = name;
   const list = $('#bkClientList');
   if (!list) return;
-  list.querySelectorAll('[role="option"]').forEach(o => o.setAttribute('aria-selected', String(Number(o.dataset.bkClient) === i)));
-  const o = list.querySelector(`[data-bk-client="${i}"]`);
-  if (o) { list.setAttribute('aria-activedescendant', o.id); o.scrollIntoView({ block: 'nearest' }); }
-  const c = (st.summary.clients || [])[i];
-  $('#bkClientDetail').innerHTML = bkClientDetail(c ? { ...c, _i: i } : null);
+  uiListSelect('#bkClientList', 'bkClient', name);
+  const all = st.summary.clients || [];
+  const i = all.findIndex(c => c.client === name);
+  $('#bkClientDetail').innerHTML = bkClientDetail(i >= 0 ? { ...all[i], _i: i } : null);
   refreshIcons();
   if (focus) list.focus();
   else if (matchMedia('(max-width:1023px)').matches) $('#bkClientDetail').scrollIntoView({ block: 'start' });
@@ -779,10 +779,7 @@ function bindBackupBody() {
   body.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.dataset.bkFilter === 'jobQ') { st.jobFilter.q = e.target.value; bkLoadJobs(); return; }
     if (e.target.id !== 'bkClientList') return;
-    const ids = [...e.target.querySelectorAll('[data-bk-client]')].map(o => Number(o.dataset.bkClient));
-    const i = ids.indexOf(st.clientSel), k = e.key.toLowerCase();
-    if ((k === 'arrowdown' || k === 'j') && ids.length) { e.preventDefault(); bkClientSelect(ids[Math.min(i + 1, ids.length - 1)], true); }
-    else if ((k === 'arrowup' || k === 'k') && ids.length) { e.preventDefault(); bkClientSelect(ids[Math.max(i - 1, 0)], true); }
+    uiListKeys(e, 'bkClient', st.clientSel, bkClientSelect, () => uiFocusDetail('#bkClientDetail'));   // J / K / ↑↓ / Home / End / Enter, same as every list
   });
   body.addEventListener('click', async e => {
     const tg = e.target.closest('[data-sc-toggle]');
@@ -793,7 +790,7 @@ function bindBackupBody() {
       return;
     }
     const cl = e.target.closest('[data-bk-client]');
-    if (cl) { bkClientSelect(Number(cl.dataset.bkClient)); return; }
+    if (cl) { bkClientSelect(cl.dataset.bkClient); return; }
     const a = e.target.closest('[data-bk-action]');
     const syncBtn = e.target.closest('[data-bk-sync]');
     if (syncBtn) {
