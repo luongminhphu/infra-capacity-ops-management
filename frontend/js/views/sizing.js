@@ -450,7 +450,7 @@ function renderSizingResult(result, payload, scroll = true) {
       : '';
     return `
       <tr class="${r.recommended ? 'sz-best' : ''}${r.suggested ? ' sz-suggested' : ''}">
-        <td><b>${esc(pr.name)}</b><div class="muted-sub">${pr.sockets}×${pr.coresPerSocket}C = ${pr.cores} cores · ${szGB(pr.ramGB)} RAM${local ? ` · ${szGB(pr.diskGB)} đĩa` : ''}</div></td>
+        <td><b>${esc(pr.name)}</b><div class="muted-sub">${esc(pr.sockets)}×${esc(pr.coresPerSocket)}C = ${esc(pr.cores)} cores · ${szGB(pr.ramGB)} RAM${local ? ` · ${szGB(pr.diskGB)} đĩa` : ''}</div></td>
         <td class="num">${r.hostsForCpu}</td>
         <td class="num">${r.hostsForRam}</td>
         <td class="num">+${r.redundancy}</td>
@@ -554,7 +554,7 @@ function renderSizingAdjust(result) {
     .concat(rows.filter(r => r.hostsTotal).map(r => `<option value="${esc(r.key)}" ${r.key === curKey ? 'selected' : ''}>${esc(r.profile.name.replace(' (gợi ý)', ''))} — ${r.hostsComputed || r.hostsTotal} host${tag(r)}</option>`)).join('');
   const quick = SZ_QUICK.map(([k, label, min, max, step, fmt]) => `
     <div class="sz-adj-row"><span class="sz-adj-label">${label}</span>
-      <input type="range" data-quick="${k}" min="${min}" max="${max}" step="${step}" value="${p[k]}"><output data-out="${k}">${fmt(p[k])}</output></div>`).join('')
+      <input type="range" data-quick="${k}" min="${min}" max="${max}" step="${step}" value="${esc(p[k])}"><output data-out="${k}">${esc(fmt(p[k]))}</output></div>`).join('')
     + `<div class="sz-adj-row"><span class="sz-adj-label">Dự phòng sự cố</span>
       <select data-quick="redundancy">${[0, 1, 2].map(x => `<option value="${x}" ${Number(p.redundancy) === x ? 'selected' : ''}>N+${x}</option>`).join('')}</select><span></span></div>`;
   const secs = rep.sections || {};

@@ -54,7 +54,8 @@
   --btn-primary-bg:var(--cy4);--btn-primary-bg-hover:#0B8099;--btn-primary-bg-pressed:var(--cy3);--btn-primary-fg:var(--white);  /* 5.36 */
   --btn-secondary-bg:var(--g3);--btn-secondary-bg-hover:var(--g4);--btn-secondary-fg:var(--g9);
   --btn-ghost-bg:transparent;--btn-ghost-bg-hover:var(--overlay-hover);--btn-ghost-fg:var(--text-primary);
-  --field-bg:var(--g0);--field-border:var(--g5);--field-border-focus:var(--cy5);--field-fg:var(--text-primary);--field-placeholder:var(--g7);
+  --field-bg:var(--g0);--field-border:#66768B;   /* ≥ 3:1 on every dark surface (WCAG 1.4.11; validation 16/11) */
+  --field-border-focus:var(--cy5);--field-fg:var(--text-primary);--field-placeholder:var(--g7);
   /* status: four different hues (green / amber / orange / red) + glyph + weight; labels stay ink */
   --status-success:var(--ok5);--status-warning:var(--am5);--tone-bad:var(--or5);--status-error:var(--rd5);
   --ok-bg:rgba(76,195,138,.16);--warn-bg:rgba(242,193,78,.18);--bad-bg:rgba(242,140,56,.18);--crit-bg:rgba(239,78,90,.16);--na-bg:rgba(169,182,198,.10);
@@ -90,7 +91,8 @@
   --overlay-hover:rgba(14,106,130,.06);--scrim:rgba(18,26,36,.5);
   --btn-primary-bg:var(--cy3);--btn-primary-bg-hover:var(--cy4);--btn-primary-bg-pressed:#0A5568;   /* white 6.17 */
   --btn-secondary-bg:#E3E9EF;--btn-secondary-bg-hover:#D5DDE5;--btn-secondary-fg:#121A24;--btn-ghost-fg:#121A24;
-  --field-bg:#FFFFFF;--field-border:#A9B6C6;--field-placeholder:#566579;
+  --field-bg:#FFFFFF;--field-border:#768396;   /* ≥ 3:1 on every light surface */
+  --field-placeholder:#566579;
   --status-success:var(--ok3);--status-warning:var(--am3);--tone-bad:var(--or3);--status-error:var(--rd3);
   --ok-bg:rgba(26,115,70,.10);--warn-bg:rgba(242,193,78,.30);--bad-bg:rgba(168,74,10,.10);--crit-bg:rgba(180,35,48,.10);--na-bg:rgba(62,76,94,.08);
   --crit-solid:var(--rd3);--warn-glyph:var(--am3);   /* white on rd3 6.51 */
@@ -925,8 +927,8 @@ td.finding-code{font-weight:var(--fw-semibold);color:var(--brand);white-space:no
 .sr-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:var(--space-4);}
 .sr-legend{display:flex;gap:var(--space-4);font-size:var(--fs-caption);color:var(--text-secondary);margin:var(--space-2) 0 var(--space-3);}
 .sr-dot{display:inline-block;width:10px;height:10px;border-radius:var(--radius-xs);margin-right:var(--space-1);vertical-align:middle;}
-.sr-opex{background:var(--chart-optimized);}
-.sr-capex{background:var(--sc40);}
+.sr-opex{background:var(--chart-s1);}
+.sr-capex{background:var(--chart-s2);}
 .sr-year{display:grid;grid-template-columns:80px minmax(0,1fr) 170px;gap:var(--space-3);align-items:center;margin-bottom:var(--space-3);}
 .sr-year-label{font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);}
 .sr-year-bars{display:flex;height:18px;background:var(--neutral-a8);border-radius:var(--radius-xs);overflow:hidden;}
@@ -1363,6 +1365,7 @@ details.sp-more>summary .n{min-width:18px;height:18px;padding:0 5px;border-radiu
 /* KPI numbers never break mid-number; narrow cells use a smaller size instead */
 .kpi-cell{container-type:inline-size;}
 .kpi-v{overflow-wrap:normal;white-space:nowrap;}
+.kpi-cell.muted .kpi-v{white-space:normal;overflow-wrap:anywhere;}   /* a sentence, not a number: wrap (overlapped the next cell at 820 / 390 px) */
 @container (width < 230px){ .kpi-v{font-size:var(--fs-body);} }
 
 /* ── BOM & Cài đặt (PR 5/6) ─ */
@@ -1404,3 +1407,22 @@ summary{min-height:24px;}
 /* VM change cards: grid items may shrink; their inner tables scroll inside the card, not the page (375 px) */
 .history-vm-grid > *{min-width:0;}
 .history-vm-card{overflow-x:auto;}
+
+/* ── Round 2 a11y (validation 16/11, decision Q8) ─ */
+/* Phones: 16 px in form fields so iOS does not zoom on focus (quick-reference readable-font-size). */
+@media (max-width:640px){
+  select,textarea,input:not([type="checkbox"]):not([type="radio"]):not([type="range"]){font-size:var(--fs-body);}
+}
+/* Touch layouts: main targets 44 px high (MASTER §5) — buttons, fields, tabs, view chips, list rows. */
+@media (max-width:1023px){
+  .btn,.btn-sm,.sim-tab,.hm-view,.view-toggle button,select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]){height:auto;min-height:var(--control-h-lg);}
+  .hm-row,.sp-li{min-height:var(--control-h-lg);}
+  .nav-item{min-height:var(--control-h-lg);}
+}
+.chart-table{margin-top:var(--space-2);font-size:var(--fs-caption);}
+.chart-table>summary{cursor:pointer;color:var(--text-brand);font-weight:var(--fw-medium);min-height:24px;display:inline-flex;align-items:center;}
+.chart-table .table-scroll{max-height:320px;margin-top:var(--space-2);}
+.chart-table thead th:not(:first-child){text-align:right;}
+.chart-table tbody th{position:static;background:none;text-transform:none;letter-spacing:0;font-size:var(--fs-caption);font-weight:var(--fw-medium);color:var(--text-primary);cursor:default;}
+.chart-table table{width:auto;min-width:min(100%,420px);}

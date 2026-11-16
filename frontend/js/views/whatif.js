@@ -365,9 +365,9 @@ function renderUpgradeHostForm(cluster, area, opts) {
     ${opts.embedded ? '' : `<p class="panel-sub">Mô phỏng nâng cấp tại chỗ (thêm DIMM / đổi CPU) cho các host đang chọn trong cluster ${esc(cluster)}. Quy tắc áp dụng cho từng host được tick.</p>`}
     <div class="sim-form-grid">
       <div class="field"><label>CPU cores</label><select id="upgCpuMode">${modeOpts(u.cpuMode, 'cores/host', 'cores/host')}</select></div>
-      <div class="field"><label>Giá trị CPU</label><input id="upgCpuVal" value="${u.cpuVal}" ${u.cpuMode === 'keep' ? 'disabled' : ''}></div>
+      <div class="field"><label>Giá trị CPU</label><input id="upgCpuVal" value="${esc(u.cpuVal)}" ${u.cpuMode === 'keep' ? 'disabled' : ''}></div>
       <div class="field"><label>RAM</label><select id="upgRamMode">${modeOpts(u.ramMode, 'GB/host', 'GB/host')}</select></div>
-      <div class="field"><label>Giá trị RAM</label><input id="upgRamVal" value="${u.ramVal}" ${u.ramMode === 'keep' ? 'disabled' : ''}></div>
+      <div class="field"><label>Giá trị RAM</label><input id="upgRamVal" value="${esc(u.ramVal)}" ${u.ramMode === 'keep' ? 'disabled' : ''}></div>
     </div>
     <div class="table-wrap" style="margin-top:.75rem;max-height:280px;overflow:auto;">
       <table class="data-table">
