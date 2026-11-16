@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from .shared.text import vn_num
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +96,7 @@ def _font(size=10, bold=False, color=INK, italic=False) -> Font:
 def _gb(v: Optional[float]) -> str:
     if v is None:
         return "—"
-    return f"{v / 1024:,.1f} TiB" if v >= 1024 else f"{v:,.0f} GB"
+    return f"{vn_num(v / 1024, 1)} TiB" if v >= 1024 else f"{vn_num(v)} GB"   # vi-VN text (Q7)
 
 
 def _money_short(v: Optional[float]) -> str:

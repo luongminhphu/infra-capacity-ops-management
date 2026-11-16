@@ -15,6 +15,7 @@ PRIORITY_TXT = {"cao": "Quyết định chính", "tb": "Kèm theo", "thap": "Tu�
 
 
 import re as _re
+from .shared.text import vn_g
 
 # Decision lines of the summary boxes are written for an internal approval memo
 # ("Duyệt ngân sách …"). In the full consulting report the author is the SI /
@@ -80,11 +81,11 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
                       "decision": f"Duyệt ngân sách {budget}" if budget else "Duyệt chủ trương mua sắm (chưa có báo giá)",
                       "time": "Theo tiến độ dự án"})
         if p["storage_mode"] == "san":
-            items.append({"pri": "tb", "title": f"Cấp {_gb(d['storageNeededGB'])} trên SAN cho dự án (đã gồm +{p['storage_overhead_pct']:g}% overhead)",
+            items.append({"pri": "tb", "title": f"Cấp {_gb(d['storageNeededGB'])} trên SAN cho dự án (đã gồm +{vn_g(p['storage_overhead_pct'])}% overhead)",
                           "decision": "Duyệt cấp dung lượng lưu trữ", "time": "Cùng đợt lắp host"})
         else:
             st = best["storage"]
-            items.append({"pri": "tb", "title": f"{platforms.get(p)['hci']}: ~{_gb(st.get('perHostNeededGB'))} thô / host (tổng {_gb(d['storageNeededGB'])}, hệ số bảo vệ ×{p['storage_protection_factor']:g})",
+            items.append({"pri": "tb", "title": f"{platforms.get(p)['hci']}: ~{_gb(st.get('perHostNeededGB'))} thô / host (tổng {_gb(d['storageNeededGB'])}, hệ số bảo vệ ×{vn_g(p['storage_protection_factor'])})",
                           "decision": "Đạt với cấu hình đề xuất" if st.get("ok") else "Cần tăng đĩa cục bộ mỗi host", "time": "Trong cấu hình host"})
             if st.get("ok") is False:
                 status_cls = "warn"
@@ -120,8 +121,8 @@ def _summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], existin
 
     stats = [
         {"label": "VM yêu cầu", "value": fmt_int(d["vmCount"]), "sub": f"trung bình {fmt_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} / VM", "cls": "na"},
-        {"label": "vCPU", "value": f"{fmt_int(d['vcpu'])} → {fmt_int(d['vcpuPlanned'])}", "sub": f"sau +{p['growth_pct']:g}% tăng trưởng", "cls": "na"},
-        {"label": "RAM (GB)", "value": f"{fmt_int(d['ramGB'])} → {fmt_int(d['ramPlannedGB'])}", "sub": f"sau tăng trưởng · tỷ lệ chia sẻ {p['ram_ratio']:g} : 1", "cls": "na"},
+        {"label": "vCPU", "value": f"{fmt_int(d['vcpu'])} → {fmt_int(d['vcpuPlanned'])}", "sub": f"sau +{vn_g(p['growth_pct'])}% tăng trưởng", "cls": "na"},
+        {"label": "RAM (GB)", "value": f"{fmt_int(d['ramGB'])} → {fmt_int(d['ramPlannedGB'])}", "sub": f"sau tăng trưởng · tỷ lệ chia sẻ {vn_g(p['ram_ratio'])} : 1", "cls": "na"},
         {"label": "Host đề xuất", "value": f"{best['hostsTotal']} host" if best else "—",
          "sub": (f"{best['profile']['name']} · N+{best['redundancy']}" if best else ""), "cls": "ok" if best else "na"},
         {"label": "SAN cần cấp" if p["storage_mode"] == "san" else f"{platforms.get(p)['hci']} (thô)", "value": _gb(d["storageNeededGB"]),
@@ -233,7 +234,7 @@ def _reuse_summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], e
             items.append({"pri": "info", "title": f"Mất 1 host vẫn chạy được: CPU {fmt_pct(target.get('n1CpuPct'), 0)} · RAM {fmt_pct(target.get('n1RamPct'), 0)} ngưỡng",
                           "decision": "Không cần host dự phòng thêm", "time": ""})
     if p["storage_mode"] == "san":
-        items.append({"pri": "tb", "title": f"Cấp {_gb(d['storageNeededGB'])} trên SAN cho dự án (đã gồm +{p['storage_overhead_pct']:g}% overhead)",
+        items.append({"pri": "tb", "title": f"Cấp {_gb(d['storageNeededGB'])} trên SAN cho dự án (đã gồm +{vn_g(p['storage_overhead_pct'])}% overhead)",
                       "decision": "Duyệt cấp dung lượng lưu trữ", "time": "Trước triển khai"})
     if target and target.get("extraAvgVms") is not None:
         items.append({"pri": "thap", "title": f"Dư địa còn lại của {target['name']} sau tiếp nhận: ~{fmt_int(target['extraAvgVms'])} VM cỡ dự án (tới 80% ngưỡng)",
@@ -257,7 +258,7 @@ def _reuse_summary_box(result: Dict[str, Any], best: Optional[Dict[str, Any]], e
     tgt_cls = "ok" if (target and _feasible(target)) else ("crit" if (not target or target.get("cls") == "crit") else "warn")
     stats = [
         {"label": "VM yêu cầu", "value": fmt_int(d["vmCount"]), "sub": f"trung bình {fmt_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} / VM", "cls": "na"},
-        {"label": "vCPU", "value": f"{fmt_int(d['vcpu'])} → {fmt_int(d['vcpuPlanned'])}", "sub": f"sau +{p['growth_pct']:g}% tăng trưởng", "cls": "na"},
+        {"label": "vCPU", "value": f"{fmt_int(d['vcpu'])} → {fmt_int(d['vcpuPlanned'])}", "sub": f"sau +{vn_g(p['growth_pct'])}% tăng trưởng", "cls": "na"},
         {"label": "RAM (GB)", "value": f"{fmt_int(d['ramGB'])} → {fmt_int(d['ramPlannedGB'])}", "sub": "sau tăng trưởng", "cls": "na"},
         {"label": "Cluster tiếp nhận", "value": target["name"] if target else "Không có",
          "sub": (f"{fmt_int(target.get('hostCount'))} host · N+1 {'Đạt' if target.get('n1Ok') else 'Không' if target.get('n1Ok') is False else '—'}" if target else "cần trang bị mới"), "cls": tgt_cls},

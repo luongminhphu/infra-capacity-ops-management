@@ -10,6 +10,7 @@ existing frontend rendering functions with zero translation layer.
 """
 import math
 from typing import Any, Dict, List, Optional
+from .shared.text import vn_num
 
 
 class Policy:
@@ -216,7 +217,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
                 "severity": "critical" if h["cpuPct"] > 100 else "warning",
                 "type": "host_cpu", "typeLabel": "Host CPU vượt ngưỡng",
                 "entity": h.get("host"), "cluster": h.get("cluster"), "vcenterKey": h.get("vcenterKey") or "",
-                "metric": f"CPU overcommit {h['cpuOvercommit']:.2f}x (ngưỡng {policy.cpu_overcommit_max:.1f}x)",
+                "metric": f"CPU overcommit {vn_num(h['cpuOvercommit'], 2)}x (ngưỡng {vn_num(policy.cpu_overcommit_max, 1)}x)",
                 "recommendation": "Overcommit CPU đã vượt ngưỡng cấu hình — cần di dời VM hoặc bổ sung host ngay." if h["cpuPct"] > 100 else "Overcommit CPU đang tiến gần ngưỡng — cân nhắc vMotion VM sang host khác hoặc lên kế hoạch bổ sung năng lực CPU.",
             })
         if _finite(h["ramPct"]) and h["ramPct"] >= 80:
@@ -224,7 +225,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
                 "severity": "critical" if h["ramPct"] > 100 else "warning",
                 "type": "host_ram", "typeLabel": "Host RAM vượt ngưỡng",
                 "entity": h.get("host"), "cluster": h.get("cluster"), "vcenterKey": h.get("vcenterKey") or "",
-                "metric": f"RAM overcommit {h['ramOvercommit']:.2f}x (ngưỡng {policy.ram_overcommit_max:.1f}x)",
+                "metric": f"RAM overcommit {vn_num(h['ramOvercommit'], 2)}x (ngưỡng {vn_num(policy.ram_overcommit_max, 1)}x)",
                 "recommendation": "Overcommit RAM đã vượt ngưỡng cấu hình — rủi ro cao, cần hành động ngay." if h["ramPct"] > 100 else "Overcommit RAM đang tiến gần ngưỡng — theo dõi sát, cân nhắc bổ sung RAM hoặc cân bằng lại workload.",
             })
 
@@ -235,7 +236,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
                 "severity": "critical" if cpu_oc > policy.cpu_overcommit_max * 1.25 else "warning",
                 "type": "overcommit_cpu", "typeLabel": "Overcommit ratio vượt ngưỡng (CPU)",
                 "entity": c["name"], "cluster": c["name"],
-                "metric": f"CPU overcommit {cpu_oc:.2f}x (ngưỡng {policy.cpu_overcommit_max:.1f}x)",
+                "metric": f"CPU overcommit {vn_num(cpu_oc, 2)}x (ngưỡng {vn_num(policy.cpu_overcommit_max, 1)}x)",
                 "recommendation": "Tỷ lệ vCPU:pCPU vượt ngưỡng khuyến nghị — cân nhắc bổ sung host hoặc giảm vCPU cấp phát cho VM trong cluster.",
             })
         ram_oc = c["model"]["ramOvercommit"]
@@ -244,7 +245,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
                 "severity": "critical" if ram_oc > policy.ram_overcommit_max * 1.25 else "warning",
                 "type": "overcommit_ram", "typeLabel": "Overcommit ratio vượt ngưỡng (RAM)",
                 "entity": c["name"], "cluster": c["name"],
-                "metric": f"RAM overcommit {ram_oc:.2f}x (ngưỡng {policy.ram_overcommit_max:.1f}x)",
+                "metric": f"RAM overcommit {vn_num(ram_oc, 2)}x (ngưỡng {vn_num(policy.ram_overcommit_max, 1)}x)",
                 "recommendation": "Tỷ lệ vRAM:pRAM vượt ngưỡng khuyến nghị — cân nhắc bổ sung RAM vật lý hoặc giảm RAM cấp phát cho VM trong cluster.",
             })
 
@@ -271,7 +272,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
             findings.append({
                 "severity": "info", "type": "vm_overprovision", "typeLabel": "VM over-provision (vCPU)",
                 "entity": v.get("vm"), "cluster": v.get("cluster"), "vcenterKey": v.get("vcenterKey") or "",
-                "metric": f"{int(v.get('vcpu', 0))} vCPU cấp phát, CPU usage chỉ {cpu_usage:.1f}% (ngưỡng {vm_overprovision_usage_threshold:.1f}% theo overcommit {policy.cpu_overcommit_max:.1f}x)",
+                "metric": f"{int(v.get('vcpu', 0))} vCPU cấp phát, CPU usage chỉ {vn_num(cpu_usage, 1)}% (ngưỡng {vn_num(vm_overprovision_usage_threshold, 1)}% theo overcommit {vn_num(policy.cpu_overcommit_max, 1)}x)",
                 "recommendation": "vCPU cấp phát dư nhiều so với usage thực tế và ngưỡng overcommit CPU cấu hình; cân nhắc resize giảm vCPU.",
             })
 

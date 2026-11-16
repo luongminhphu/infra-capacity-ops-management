@@ -27,6 +27,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from . import sizing_advisory
 from .report_view import customer_view
 
+from .shared.text import vn_g, vn_num
 from .excel_style import (  # noqa: E402  (shared Excel look; names kept for this module)
     AMBER, BLUE, CRIT, CRIT_BG, FAINT, INK, LINE, MONEY, MUTED, NAVY, NUM, NUM1, OK, OK_BG, READY, SERIES, SEV, SURFACE2, TEAL, WARN, _fill, _fit_heights, _font, _gb, _money_short, _print_setup, _r, _section, _sheet_title, _table, _tile, _widths, _write_rows, thin, Formula, ext_cell,
 )
@@ -133,13 +134,13 @@ def _dashboard(wb, result, payload_meta, data_ws, refs) -> None:
     # KPI tiles (rows 8–10)
     costs = best["advisory"]["costs"] if best else {}
     tiles = [
-        ("Máy ảo yêu cầu", f"{d['vmCount']:,}", f"TB {d['avgVcpu']:.1f} vCPU · {_gb(d['avgRamGB'])} / VM", BLUE),
-        ("vCPU (sau tăng trưởng)", f"{d['vcpuPlanned']:,.0f}", f"yêu cầu {d['vcpu']:,.0f} · +{p['growth_pct']:g}%", BLUE),
+        ("Máy ảo yêu cầu", f"{vn_num(d['vmCount'])}", f"TB {vn_num(d['avgVcpu'], 1)} vCPU · {_gb(d['avgRamGB'])} / VM", BLUE),
+        ("vCPU (sau tăng trưởng)", f"{vn_num(d['vcpuPlanned'])}", f"yêu cầu {vn_num(d['vcpu'])} · +{vn_g(p['growth_pct'])}%", BLUE),
         ("RAM (sau tăng trưởng)", _gb(d["ramPlannedGB"]), f"yêu cầu {_gb(d['ramGB'])}", BLUE),
         ("Host đề xuất", f"{best['hostsTotal']}" if best else "—", f"{best['profile']['name']} · N+{best['redundancy']}" if best else "", OK),
         ("Lưu trữ cần cấp", _gb(d["storageNeededGB"]), "SAN dùng chung" if p["storage_mode"] == "san" else f"HCI ({pf['hci']})", TEAL),
         ((f"TCO {costs.get('years')} năm" if costs.get("tco") else f"License ({best['advisory']['license'].get('unit', 'core') if best else 'core'})"),
-         (_money_short(costs.get("tco")) if costs.get("tco") else (f"{best['advisory']['license']['coresTotal']:,}" if best else "—")),
+         (_money_short(costs.get("tco")) if costs.get("tco") else (f"{vn_num(best['advisory']['license']['coresTotal'])}" if best else "—")),
          ("phần cứng + license" if costs.get("tco") else platforms.edition_of(p)), NAVY),
     ]
     col = 1
@@ -348,7 +349,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
 
         cpu = segs(prof["cores"] * max(1.0, p["ht_factor"]) * p["cpu_ratio"] * n, ph["logicalCpu"] * p["cpu_ratio"], dmd["vcpu"], dmd["vcpuPlanned"])
         ram = segs(prof["ramGB"] * p["ram_ratio"] * n, ph["usableRamGB"] * p["ram_ratio"], dmd["ramGB"], dmd["ramPlannedGB"])
-        labels = ["Yêu cầu", "Dự phòng tăng trưởng", "Còn trống", f"Vùng an toàn {100 - p['max_util_pct']:g}%", f"Dự phòng N+{red}", "Hypervisor"]
+        labels = ["Yêu cầu", "Dự phòng tăng trưởng", "Còn trống", f"Vùng an toàn {vn_g(100 - p['max_util_pct'])}%", f"Dự phòng N+{red}", "Hypervisor"]
         top = block("Phân bổ năng lực cụm đề xuất (%)", ["Tài nguyên"] + labels, [["CPU"] + cpu, ["RAM"] + ram])
         ch = BarChart()
         ch.type = "bar"
@@ -369,7 +370,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
         bar = BarChart()
         bar.add_data(Reference(ws, min_col=2, min_row=top, max_row=top + len(pts)), titles_from_data=True)
         bar.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(pts)))
-        _style_chart(bar, f"Dự báo số host (tăng trưởng {proj['annualGrowthPct']:g}%/năm)", "host")
+        _style_chart(bar, f"Dự báo số host (tăng trưởng {vn_g(proj['annualGrowthPct'])}%/năm)", "host")
         _color_series(bar, [BLUE])
         bar.dataLabels = _labels()
         line = LineChart()
@@ -386,7 +387,7 @@ def _chart_data(wb, result) -> Dict[str, Any]:
         xs = sens["x"]
         hdr = ["Dự phòng tăng trưởng"] + [s["name"] for s in sens["series"]]
         top = block("Độ nhạy — số host theo mức dự phòng tăng trưởng", hdr,
-                    [[f"{x:g}%"] + [s["hosts"][i] for s in sens["series"]] for i, x in enumerate(xs)])
+                    [[f"{vn_g(x)}%"] + [s["hosts"][i] for s in sens["series"]] for i, x in enumerate(xs)])
         ch = LineChart()
         ch.add_data(Reference(ws, min_col=2, max_col=1 + len(sens["series"]), min_row=top, max_row=top + len(xs)), titles_from_data=True)
         ch.set_categories(Reference(ws, min_col=1, min_row=top + 1, max_row=top + len(xs)))
@@ -697,7 +698,7 @@ def _sensitivity_sheet(wb, result, subtitle: str) -> None:
             continue
         row = _section(ws, row, f"Số host theo {title.lower()}", 1 + len(sw["series"]))
         top = row
-        rows = [[(f"{x:g}x" if key == "cpuRatio" else f"{x:g}%") + (" (hiện tại)" if x == sw["current"] else "")]
+        rows = [[(f"{vn_g(x)}x" if key == "cpuRatio" else f"{vn_g(x)}%") + (" (hiện tại)" if x == sw["current"] else "")]
                 + [s["hosts"][i] for s in sw["series"]] for i, x in enumerate(sw["x"])]
         lst = _write_rows(ws, row, [title] + [s["name"] for s in sw["series"]], rows, fmts={i: NUM for i in range(2, 2 + len(sw["series"]))})
         tno += 1
@@ -711,7 +712,7 @@ def _sensitivity_sheet(wb, result, subtitle: str) -> None:
         row = lst + 2
     proj = a.get("projection")
     if proj:
-        row = _section(ws, row, f"Dự báo theo năm — tăng trưởng {proj['annualGrowthPct']:g}%/năm, đề xuất {proj['installed']} host", 4)
+        row = _section(ws, row, f"Dự báo theo năm — tăng trưởng {vn_g(proj['annualGrowthPct'])}%/năm, đề xuất {proj['installed']} host", 4)
         top = row
         lst = _write_rows(ws, row, ["Năm", "Tăng trưởng lũy kế (%)", "Host cần", "Đánh giá"],
                           [["Hiện tại" if pt["year"] == 0 else f"Năm {pt['year']}", _r(pt["growthPct"]), pt["hosts"],

@@ -30,14 +30,19 @@ from .report_sizing_charts import (COST_COLORS, SERIES_COLORS, money_short, svg_
 # ---------------------------------------------------------------------------
 # Vietnamese number formatting
 # ---------------------------------------------------------------------------
-_NUM_RE = re.compile(r"(?<![\d.,\w])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+\.\d+)(?![\d])")
+# Group 1: a number already in Vietnamese form with thousands (1.248 / 10.598,5) — the shared PDF helpers
+# (fmt_int / fmt_num, decision Q7) emit these, and swapping again would turn 1.248 into 1,248.
+# Group 2: an English number from the sizing engine (12,100.5 / 0.95).
+_NUM_RE = re.compile(r"(?<![\d.,\w])(?:([1-9]\d{0,2}(?:\.\d{3})+(?:,\d+)?)(?![\d.])"
+                     r"|(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+\.\d+))(?![\d])")
 
 
 def vn(text: Any) -> str:
-    """Swap English separators inside numbers of an engine-generated sentence: 12,100.5 → 12.100,5."""
+    """Swap English separators inside numbers of an engine-generated sentence: 12,100.5 → 12.100,5.
+    Numbers already written the Vietnamese way (1.248) are left as they are."""
     if text is None:
         return ""
-    return _NUM_RE.sub(lambda m: m.group(1).replace(",", "§").replace(".", ",").replace("§", "."), str(text))
+    return _NUM_RE.sub(lambda m: m.group(1) or m.group(2).replace(",", "§").replace(".", ",").replace("§", "."), str(text))
 
 
 def n(v: Optional[float], d: int = 0) -> str:

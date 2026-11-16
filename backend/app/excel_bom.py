@@ -17,6 +17,7 @@ from openpyxl.utils import get_column_letter
 from .bom import CATEGORIES, CATEGORY_LABELS
 from .excel_style import BLUE, FAINT, INK, LINE, MUTED, NAVY, SURFACE, _fill, _font, _print_setup, _sheet_title
 from .timeutil import VN_TZ
+from .shared.text import vn_g
 
 ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
 THIN = Side(style="thin", color=LINE)
@@ -175,7 +176,7 @@ def build_bom_xlsx(data: Dict[str, Any]) -> bytes:
         row += 1
     if vat:
         vat_row = row
-        for lbl, formula in ((f"VAT {vat:g}%", f"=ROUND(G{tot_rows[0]}*{vat:g}/100,{2 if currency == 'USD' else 0})"),
+        for lbl, formula in ((f"VAT {vn_g(vat)}%", f"=ROUND(G{tot_rows[0]}*{vat:g}/100,{2 if currency == 'USD' else 0})"),
                              ("TỔNG CỘNG (gồm VAT)", f"=G{tot_rows[0]}+G{vat_row}")):
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
             _t(ws, row, 1, lbl, font=_font(11, True, NAVY), fill=_fill(LIGHT), alignment=Alignment(horizontal="right", indent=1))

@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from .shared.text import vn_g
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ def license_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
             continue
         level = "crit" if days < 0 else ("bad" if days <= 30 else "warn")
         out.append(item("license", level, _key("lic", e.id, level),
-                        f"License {e.product} ({e.quantity:g} {e.metric}) {'đã hết hạn' if days < 0 else f'hết hạn sau {days} ngày'}",
+                        f"License {e.product} ({vn_g(e.quantity)} {e.metric}) {'đã hết hạn' if days < 0 else f'hết hạn sau {days} ngày'}",
                         f"Phạm vi: {e.scope_cluster or e.scope_vcenter or 'toàn bộ'}.", page="lic-assess",
                         due=e.valid_to.date(), feature="license"))
     return out

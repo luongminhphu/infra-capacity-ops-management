@@ -18,6 +18,7 @@ from openpyxl.utils import get_column_letter
 
 from .excel_style import FAINT, MONEY, NAVY, _fill, _font, _print_setup, _section, _sheet_title, _widths
 from .timeutil import VN_TZ
+from .shared.text import vn_g
 
 THIN = Side(style="thin", color=FAINT)
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -215,7 +216,7 @@ def build_comparison_xlsx(d: Dict[str, Any], comp: Dict[str, Any], lines: Dict[i
                 ws2.cell(row=rr, column=7, value=q[key]).number_format = MONEY
             rr += 1
         if q.get("vatPct") is not None:
-            _txt(ws2, rr, 2, f"Tổng tính lại (VAT {q['vatPct']:g}%)", font=_font(10, True))
+            _txt(ws2, rr, 2, f"Tổng tính lại (VAT {vn_g(q['vatPct'])}%)", font=_font(10, True))
             disc = f"-G{sub_row + 2}" if q.get("statedDiscount") else ""
             _formula(ws2, rr, 8, f"=ROUND((H{sub_row}{disc})*(1+{q['vatPct']}/100),0)", MONEY, True)
         ws2.freeze_panes = ws2.cell(row=s + 1, column=3)
