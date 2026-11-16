@@ -4,7 +4,7 @@ import datetime as dt
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..features import require_feature
 from ..models import AuditLog, User
+from ..pagination import paginate
 from ..spend import codes, contracts, files, fiscal, service, settings as spend_settings
 from ..spend.models import (
     EDITOR_PARTIES, CapexProject, Contract, ContractVersion, OpexItem, SpendFile, SpendVendor,
@@ -82,8 +83,10 @@ def _touch(c: Contract, user: User) -> None:
 
 # ---------------------------------------------------------------- list / create
 @router.get("")
-def list_contracts(status: Optional[str] = None, opex: Optional[str] = None, capex: Optional[str] = None,
-                   q: Optional[str] = None, user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+def list_contracts(response: Response, status: Optional[str] = None, opex: Optional[str] = None, capex: Optional[str] = None,
+                   q: Optional[str] = None, offset: int = Query(default=0, ge=0), limit: int = Query(default=500, ge=1, le=2000),
+                   user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+    """Newest first. Paged (audit API-05): the body stays a list, X-Total-Count / X-Has-More carry the total."""
     qry = db.query(Contract)
     if status in contracts.STATUS_LABELS:
         qry = qry.filter(Contract.status == status)
@@ -94,7 +97,7 @@ def list_contracts(status: Optional[str] = None, opex: Optional[str] = None, cap
     if q:
         like = f"%{q.strip()[:100]}%"
         qry = qry.filter(Contract.code.ilike(like) | Contract.title.ilike(like))
-    rows = qry.order_by(Contract.id.desc()).limit(500).all()
+    rows = paginate(qry.order_by(Contract.id.desc()), response, offset, limit)
     links = _links(db, rows)
     vendors = dict(db.query(SpendVendor.id, SpendVendor.name).filter(SpendVendor.id.in_({c.vendor_id for c in rows if c.vendor_id})))
     return [_summary(c, links[c.id], vendors.get(c.vendor_id)) for c in rows]

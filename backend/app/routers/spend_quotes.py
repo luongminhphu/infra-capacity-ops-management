@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote as urlquote
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy import func
@@ -21,6 +21,7 @@ from .. import ai_platform, excel_quotes
 from ..database import get_db
 from ..features import require_feature
 from ..models import User
+from ..pagination import paginate
 from ..spend import ai, codes, files, fiscal, quotes as qm, service, settings as spend_settings
 from ..spend.models import (
     WORKSTREAMS, CapexItem, CapexProject, Contract, EvaluationCriterion, EvaluationScore, OpexItem, QuoteRequest, Quotation,
@@ -63,8 +64,10 @@ def _vendor_out(v: SpendVendor) -> Dict[str, Any]:
 
 
 @router.get("/vendor-profiles")
-def list_vendor_profiles(user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
-    vendors = db.query(SpendVendor).order_by(SpendVendor.name).all()
+def list_vendor_profiles(response: Response, offset: int = Query(default=0, ge=0), limit: int = Query(default=2000, ge=1, le=5000),
+                         user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+    """By name. Capped and paged (audit API-05): X-Total-Count / X-Has-More headers."""
+    vendors = paginate(db.query(SpendVendor).order_by(SpendVendor.name, SpendVendor.id), response, offset, limit)
     opex = dict(db.query(OpexItem.vendor_id, func.sum(OpexItem.amount_gross)).group_by(OpexItem.vendor_id).all())
     capex = dict(db.query(CapexItem.vendor_id, func.sum(CapexItem.amount_gross)).group_by(CapexItem.vendor_id).all())
     contracts = dict(db.query(Contract.vendor_id, func.count(Contract.id)).group_by(Contract.vendor_id).all())
@@ -342,8 +345,10 @@ def _seed_criteria(db: Session, r: QuoteRequest) -> None:
 
 # ================================================================ requests
 @router.get("/quotes")
-def list_requests(user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
-    rows = db.query(QuoteRequest).order_by(QuoteRequest.id.desc()).limit(500).all()
+def list_requests(response: Response, offset: int = Query(default=0, ge=0), limit: int = Query(default=500, ge=1, le=2000),
+                  user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+    """Newest first. Paged (audit API-05): X-Total-Count / X-Has-More headers."""
+    rows = paginate(db.query(QuoteRequest).order_by(QuoteRequest.id.desc()), response, offset, limit)
     counts = dict(db.query(Quotation.request_id, func.count(Quotation.id)).group_by(Quotation.request_id).all())
     sel_ids = [r.selected_quotation_id for r in rows if r.selected_quotation_id]
     sel = {q.id: q for q in db.query(Quotation).filter(Quotation.id.in_(sel_ids))} if sel_ids else {}

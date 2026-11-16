@@ -10,13 +10,14 @@ import datetime as dt
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..features import require_feature
 from ..models import User
+from ..pagination import paginate
 from ..spend import files, fiscal, service
 from ..spend.models import (
     CapexItem, Contract, ContractPayment, OpexItem, PaymentDocDefault, PaymentDocument, SpendFile, SpendVendor,
@@ -438,9 +439,12 @@ def replace_defaults(request: Request, data: Dict[str, Any] = Body(...), user: U
 
 
 @router.get("/payments")
-def all_payments(status: str = "open", user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
+def all_payments(response: Response, status: str = "open", offset: int = Query(default=0, ge=0),
+                 limit: int = Query(default=1000, ge=1, le=5000),
+                 user: User = Depends(require_spend("viewer")), db: Session = Depends(get_db)):
     """Every instalment of every contract (Hợp đồng & thanh toán → Đợt thanh toán), soonest first.
-    status: open (chưa thanh toán) | paid | all."""
+    status: open (chưa thanh toán) | paid | all. Paged (audit API-05): X-Total-Count / X-Has-More headers;
+    openTotal is a SQL SUM over the whole filtered set, not only the returned page."""
     if status not in ("open", "paid", "all"):
         _bad("Trạng thái lọc không hợp lệ.")
     q = db.query(ContractPayment, Contract).join(Contract, Contract.id == ContractPayment.contract_id)
@@ -448,7 +452,9 @@ def all_payments(status: str = "open", user: User = Depends(require_spend("viewe
         q = q.filter(ContractPayment.status.in_(("pending", "submitted")))
     elif status == "paid":
         q = q.filter(ContractPayment.status == "paid")
-    rows = q.order_by(ContractPayment.due_date.is_(None), ContractPayment.due_date, Contract.code, ContractPayment.seq).limit(1000).all()
+    open_total = int(q.filter(ContractPayment.status != "paid").with_entities(func.coalesce(func.sum(ContractPayment.amount), 0)).scalar() or 0)
+    rows = paginate(q.order_by(ContractPayment.due_date.is_(None), ContractPayment.due_date, Contract.code, ContractPayment.seq,
+                               ContractPayment.id), response, offset, limit)
     today = fiscal.today_vn()
     vendors = {v.id: service.vendor_label(v) for v in db.query(SpendVendor).filter(SpendVendor.id.in_({c.vendor_id for _, c in rows if c.vendor_id} or {0}))}
     docs: Dict[int, List[PaymentDocument]] = {}
@@ -463,4 +469,4 @@ def all_payments(status: str = "open", user: User = Depends(require_spend("viewe
                     "paidAt": p.paid_at.isoformat() if p.paid_at else None, "paidAmount": p.paid_amount,
                     "docsDone": sum(1 for d in ds if d.done), "docsTotal": len(ds),
                     "requiredMissing": [d.name for d in ds if d.required and not d.done], **_tone(p, today)})
-    return {"items": out, "openTotal": sum(x["amount"] for x in out if x["status"] != "paid")}
+    return {"items": out, "openTotal": open_total}

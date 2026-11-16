@@ -72,14 +72,10 @@ function renderExecutiveForecastCard(elId, label, forecast, unavailableReason) {
     <p>${esc(forecast.insight)}</p>`;
 }
 
-async function renderExecutiveTrendChart() {
+/* trendData: the `trend` piece of /dashboard/executive (null when that request failed). */
+function renderExecutiveTrendChart(trendData) {
   if (typeof Chart === 'undefined') return;
-  let trendData;
-  try {
-    trendData = await api.getTrend({ days: 90 });
-  } catch (err) {
-    trendData = { trend: [], forecast: { available: false, reason: 'Không tải được lịch sử.' } };
-  }
+  if (!trendData) trendData = { trend: [], forecast: { available: false, reason: 'Không tải được lịch sử.' } };
   const colors = chartPalette();
   destroyChart('execTrend');
 
@@ -115,16 +111,11 @@ async function renderExecutiveTrendChart() {
   renderExecutiveForecastCard('#execForecastRam', 'Dự báo RAM', forecast.ram, forecast.reason);
 }
 
-async function renderExecutiveByVcenterChart() {
+/* byVcenter: { key: { hosts, vms } } from /dashboard/executive (null when that request failed). */
+function renderExecutiveByVcenterChart(byVcenter) {
   if (typeof Chart === 'undefined') return;
   destroyChart('execByVcenter');
-  let grouped;
-  try {
-    grouped = await api.getLatestData({ group_by_vcenter: true });
-  } catch (err) {
-    grouped = { byVcenter: {} };
-  }
-  const byVcenter = grouped.byVcenter || {};
+  byVcenter = byVcenter || {};
   const keys = Object.keys(byVcenter);
   if (!keys.length) { $('#execByVcenter').innerHTML = uiEmpty('Chưa có dữ liệu theo vCenter.'); return; }
   $('#execByVcenter').innerHTML = uiSmallMultiples(keys.map(k => {
@@ -218,22 +209,29 @@ function renderExecutiveDecisionRegister(brief) {
     </tr>`).join('');
 }
 
-async function renderExecutiveBrief() {
-  let brief = null;
-  try {
-    const vcenter = (typeof currentVcenterFilter !== 'undefined' && currentVcenterFilter !== 'import') ? currentVcenterFilter : 'all';
-    brief = await api.getManagementBrief(vcenter, !!appState.policy.includeStorage);
-  } catch (err) {
-    brief = { available: false, message: `Không tải được nhận định: ${err.message || err}` };
-  }
+function renderExecutiveBrief(brief) {
   renderExecutiveBriefCard(brief);
   renderExecutiveRecommendations(brief);
   renderExecutiveDecisionRegister(brief);
 }
 
+/* One request for the whole page (audit API-02): /dashboard/executive returns trend, byVcenter,
+   brief, history and vmChanges, built server-side by the same functions as the single endpoints.
+   The brief scope rule ('import' -> 'all') is applied server-side. */
 async function renderExecutiveView() {
   renderExecutiveKpis();
   renderExecutiveTopRisk();
-  await Promise.all([renderExecutiveTrendChart(), renderExecutiveByVcenterChart(), renderExecutiveBrief(),
-    renderHistoryPanel('execHistoryMount', { showVmChanges: false })]);
+  let d = null, error = null;
+  try {
+    d = await api.getExecutiveOverview({
+      vcenter: historyVcenterParam(), storage: appState.policy.includeStorage ? '1' : '0',
+      months: historyState.months, group: historyState.group, days: 90 });
+  } catch (err) {
+    error = err.message || String(err);
+  }
+  renderExecutiveTrendChart(d && d.trend);
+  renderExecutiveByVcenterChart(d && d.byVcenter);
+  renderExecutiveBrief(d ? d.brief : { available: false, message: `Không tải được nhận định: ${error}` });
+  await renderHistoryPanel('execHistoryMount', { showVmChanges: false },
+    d ? { history: d.history, vmChanges: d.vmChanges } : { error });
 }
