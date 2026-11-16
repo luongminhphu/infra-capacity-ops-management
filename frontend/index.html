@@ -213,7 +213,7 @@
               <thead><tr>
                 <th data-key="name">Cluster</th><th data-key="hosts">Hosts</th><th data-key="vms">VMs</th>
                 <th data-key="cpuPct" title="% ngưỡng overcommit CPU đã dùng = overcommit CPU thực tế ÷ ngưỡng overcommit CPU × 100. Overcommit CPU = vCPU dùng / pCPU logic (pCPU logic = CPU Cores vật lý × hệ số Hyperthreading)">CPU % (theo overcommit)</th><th data-key="ramPct" title="% ngưỡng overcommit RAM đã dùng = overcommit RAM thực tế ÷ ngưỡng overcommit RAM × 100">RAM % (theo overcommit)</th><th data-key="storagePct" class="col-storage">Storage %</th>
-                <th data-key="cpuOvercommit">CPU overcommit</th><th data-key="ramOvercommit">RAM overcommit</th><th data-key="status">Status</th>
+                <th data-key="cpuOvercommit">CPU overcommit</th><th data-key="ramOvercommit">RAM overcommit</th><th data-key="status">Trạng thái</th>
               </tr></thead>
               <tbody></tbody>
             </table>
@@ -342,9 +342,9 @@
               <select id="whatifClusterSelect" aria-label="Cluster mô phỏng"></select>
             </div>
             <div class="legend-list">
-              <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>An toàn (&lt;80% ngưỡng overcommit)</div>
-              <div class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>Theo dõi (80–100% ngưỡng overcommit)</div>
-              <div class="legend-item"><span class="legend-dot" style="background:var(--crit)"></span>Vượt ngưỡng (&gt;100% ngưỡng overcommit)</div>
+              <div class="legend-item"><span class="legend-dot" style="background:var(--status-ok)"></span>An toàn (&lt;80% ngưỡng overcommit)</div>
+              <div class="legend-item"><span class="legend-dot" style="background:var(--status-warn)"></span>Theo dõi (80–100% ngưỡng overcommit)</div>
+              <div class="legend-item"><span class="legend-dot" style="background:var(--status-crit)"></span>Vượt ngưỡng (&gt;100% ngưỡng overcommit)</div>
             </div>
             <h3 class="side-card-h4-gap">Lịch sử simulation</h3>
             <div class="sim-list" id="simHistoryList"><div class="empty-note">Chưa có simulation nào.</div></div>
@@ -354,12 +354,12 @@
           <div class="sim-shell">
             <div class="sim-card">
               <div class="sim-tabbar" id="simTabs">
-                <button class="sim-tab active" data-sim="addHost" type="button">Add host</button>
-                <button class="sim-tab" data-sim="upgradeHost" type="button">Upgrade host</button>
-                <button class="sim-tab" data-sim="upgradeAndAdd" type="button">Upgrade + add host</button>
-                <button class="sim-tab" data-sim="addVm" type="button">Add VM</button>
-                <button class="sim-tab" data-sim="resizeVm" type="button">Resize VM</button>
-                <button class="sim-tab" data-sim="decommission" type="button">Decommission idle VM</button>
+                <button class="sim-tab active" data-sim="addHost" type="button">Thêm host</button>
+                <button class="sim-tab" data-sim="upgradeHost" type="button">Nâng cấp host</button>
+                <button class="sim-tab" data-sim="upgradeAndAdd" type="button">Nâng cấp + thêm host</button>
+                <button class="sim-tab" data-sim="addVm" type="button">Thêm VM</button>
+                <button class="sim-tab" data-sim="resizeVm" type="button">Đổi cấu hình VM</button>
+                <button class="sim-tab" data-sim="decommission" type="button">Decommission VM idle</button>
               </div>
               <div id="simFormArea"></div>
             </div>
@@ -619,7 +619,7 @@
                   <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
                     <label class="field"><span>Tiêu chí Storage</span><select data-opt="exec.storage"><option value="setting">Theo cài đặt hiện tại</option><option value="1">Có đánh giá Storage</option><option value="0">Không đánh giá Storage</option></select></label>
                     <label class="field"><span>Xu hướng &amp; biến động VM</span><select data-opt="exec.months"><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12" selected>12 tháng</option></select></label>
-                    <p class="rpt-opt-note">Cluster / host và loại finding: khung bên phải.</p>
+                    <p class="rpt-opt-note">Cluster / host và loại phát hiện: khung bên phải.</p>
                   </details>
                   <div class="report-card-actions"><button class="btn btn-primary btn-sm" type="button" data-report="cap-exec"><i data-lucide="file-text"></i>PDF</button></div>
                 </article>
@@ -631,7 +631,7 @@
                   <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
                     <label class="field"><span>Tiêu chí Storage</span><select data-opt="tech.storage"><option value="setting">Theo cài đặt hiện tại</option><option value="1">Có đánh giá Storage</option><option value="0">Không đánh giá Storage</option></select></label>
                     <label class="field"><span>Xu hướng &amp; biến động VM</span><select data-opt="tech.months"><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12" selected>12 tháng</option></select></label>
-                    <p class="rpt-opt-note">Cluster / host và loại finding: khung bên phải.</p>
+                    <p class="rpt-opt-note">Cluster / host và loại phát hiện: khung bên phải.</p>
                   </details>
                   <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="cap-tech"><i data-lucide="file-text"></i>PDF</button></div>
                 </article>
@@ -832,7 +832,7 @@
             </section>
 
             <section class="side-card side-card-static">
-              <h4>Loại finding (PDF Vận hành / Kỹ thuật)</h4>
+              <h4>Loại phát hiện (PDF Vận hành / Kỹ thuật)</h4>
               <p class="side-hint" id="pdfFindingFilterSummary">Tất cả loại</p>
               <label class="finding-filter-item finding-filter-all">
                 <input type="checkbox" id="pdfFindingTypeAll" checked>

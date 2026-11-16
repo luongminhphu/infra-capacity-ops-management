@@ -259,7 +259,7 @@ function uiEntityLink(type, name, vcenterKey, strong = true) {
 function chartPalette() {
   const cs = getComputedStyle(document.documentElement);
   const g = (name) => cs.getPropertyValue(name).trim();
-  return { text:g('--text'), muted:g('--muted'), divider:g('--divider'), primary:g('--primary'), accent:g('--accent'), ok:g('--ok'), warn:g('--warn'), bad:g('--bad'), crit:g('--crit'), faint:g('--faint'),
+  return { text:g('--text'), muted:g('--muted'), divider:g('--divider'), primary:g('--primary'), accent:g('--accent'), ok:g('--status-ok'), warn:g('--status-warn'), bad:g('--status-bad'), crit:g('--status-crit'), faint:g('--faint'),
     // Series / sequential colours for multi-line or stacked charts.
     series: [1, 2, 3, 4, 5, 6, 7, 8].map(i => g(`--chart-s${i}`)), deep: g('--chart-deep'), amber: g('--chart-index'),
     seq: [1, 2, 3, 4, 5].map(i => g(`--chart-seq-${i}`)),
@@ -441,4 +441,26 @@ const uiChartTablePlugin = {
     if (box && box.classList.contains('chart-table')) box.remove();
   },
 };
-if (typeof Chart !== 'undefined') Chart.register(uiChartTablePlugin);
+/* Line series told apart by line style and point shape too, not hue alone (validation 16/11, ui-ux-pro-max
+   chart rule "distinct colors + distinct line styles"). Only for charts with >= 2 line series; a dataset
+   that sets its own borderDash (threshold / total lines) keeps it, and then the others vary by point shape. */
+const UI_SERIES_DASH = [[], [6, 4], [2, 3], [8, 3, 2, 3]];
+const UI_SERIES_POINT = ['circle', 'rectRot', 'triangle', 'rect'];
+const uiSeriesStylePlugin = {
+  id: 'icoSeriesStyle',
+  beforeUpdate(chart) {
+    const isLine = d => (d.type || chart.config.type) === 'line';
+    const sets = (chart.data.datasets || []).filter(isLine);
+    const series = sets.filter(d => d._icoStyled || d.borderDash === undefined);
+    if (series.length < 2) return;
+    // a chart that already uses a dashed line to mean something ("tổng", "ngưỡng") keeps dashes for that:
+    // its other series differ by point shape only
+    const authorDash = sets.some(d => !d._icoStyled && Array.isArray(d.borderDash) && d.borderDash.length);
+    series.forEach((d, i) => {
+      d._icoStyled = true;
+      if (!authorDash) d.borderDash = UI_SERIES_DASH[i % UI_SERIES_DASH.length];
+      d.pointStyle = UI_SERIES_POINT[i % UI_SERIES_POINT.length];
+    });
+  },
+};
+if (typeof Chart !== 'undefined') Chart.register(uiChartTablePlugin, uiSeriesStylePlugin);

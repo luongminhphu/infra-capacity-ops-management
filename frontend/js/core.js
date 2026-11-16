@@ -304,10 +304,10 @@ function combineStatus(...statuses) {
 
 function getBarColor(pct) {
   if (!isFinite(pct)) return 'var(--faint)';
-  if (pct > 100) return 'var(--crit)';
-  if (pct >= 80) return 'var(--bad)';
-  if (pct >= 50) return 'var(--warn)';
-  return 'var(--ok)';
+  if (pct > 100) return 'var(--status-crit)';
+  if (pct >= 80) return 'var(--status-bad)';
+  if (pct >= 50) return 'var(--status-warn)';
+  return 'var(--status-ok)';
 }
 
 /** Apply what-if deltas (host adds/removes, vm adds/resizes) to base hosts/vms for a target cluster. */

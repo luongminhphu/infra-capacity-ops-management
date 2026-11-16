@@ -321,7 +321,7 @@ function renderLicOsTable() {
       <td>${esc(LIC_SOURCE_LABEL[o.source] || o.source)}</td>
       <td><span class="pill ${confCls[o.confidence] || 'na'}">${esc(LIC_CONF_LABEL[o.confidence] || o.confidence)}</span></td>
       <td class="lic-note">${esc(o.note || '')}</td>
-      <td>${uiIsAdmin() ? `<button class="btn btn-secondary btn-sm" data-lic-action="override" data-idx="${st_idx(v)}" type="button">Override</button>` : ''}</td>
+      <td>${uiIsAdmin() ? `<button class="btn btn-secondary btn-sm" data-lic-action="override" data-idx="${st_idx(v)}" type="button">Ghi đè</button>` : ''}</td>
     </tr>`;
   }).join('') || uiEmptyRow(13, 'Không có VM khớp bộ lọc.');
   $('#licOsFoot').textContent = `${rows.length} / ${licState().inv.vms.length} VM${rows.length > 1500 ? ' (hiển thị 1500 dòng đầu — thu hẹp bộ lọc hoặc xuất Excel)' : ''}`;
@@ -346,7 +346,7 @@ function renderLicOverrideEditor(vm) {
       <div class="field"><label>Ghi chú / bằng chứng</label><input id="licOvNote" value="${esc(existing?.note || '')}" placeholder="VD: kiểm tra winver qua RDP ngày …"></div>
     </div>
     <div class="sim-actions">
-      <button class="btn btn-primary btn-sm" data-lic-action="override-save" type="button">Lưu override</button>
+      <button class="btn btn-primary btn-sm" data-lic-action="override-save" type="button">Lưu ghi đè</button>
       ${existing ? `<button class="btn btn-secondary btn-sm btn-danger" data-lic-action="override-delete" data-id="${existing.id}" type="button">Xoá override</button>` : ''}
       <button class="btn btn-secondary btn-sm" data-lic-action="override-cancel" type="button">Đóng</button>
     </div>
@@ -645,7 +645,7 @@ function renderLicSnapshots() {
     </tr>`;
   }).join('');
   return `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Snapshot assessment</div><p class="panel-sub">Mỗi snapshot lưu toàn bộ đầu vào (inventory, override, version rule và tham số, entitlement) cùng kết quả và hash. "Tái lập" chạy lại engine trên đầu vào đã lưu và so hash để chứng minh kết quả tái lập được, độc lập với inventory hiện tại.</p></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Snapshot đánh giá</div><p class="panel-sub">Mỗi snapshot lưu toàn bộ đầu vào (inventory, override, version rule và tham số, entitlement) cùng kết quả và hash. "Tái lập" chạy lại engine trên đầu vào đã lưu và so hash để chứng minh kết quả tái lập được, độc lập với inventory hiện tại.</p></div>
       ${uiIsAdmin() ? '<div class="panel-toolbar"><input id="licSnapTitle" placeholder="Tiêu đề snapshot (tuỳ chọn)"><button class="btn btn-primary btn-sm" data-lic-action="snap-save" type="button">Lưu snapshot phạm vi hiện tại</button></div>' : `<span class="muted-sub">${ADMIN_ONLY_NOTE}</span>`}</div>
     <div class="table-scroll"><table class="data-table lic-table"><thead><tr><th class="num">#</th><th>Thời điểm</th><th>Tiêu đề</th><th>Phạm vi</th><th>Kết luận</th><th class="num">VMware core</th><th class="num">Windows Server core</th><th>Hash</th><th></th></tr></thead>
     <tbody>${rows || uiEmptyRow(9, 'Chưa có snapshot.')}</tbody></table></div>
@@ -716,7 +716,7 @@ async function onLicBodyClick(e) {
     else if (act === 'rule-cancel') { st.ruleEditing = null; renderLicBody(); }
     else if (act === 'rule-save') {
       let params;
-      try { params = JSON.parse($('#licRuleParams').value); } catch (err) { const el = $('#licRuleErr'); el.classList.remove('hidden'); el.style.color = 'var(--bad)'; el.textContent = `JSON không hợp lệ: ${err.message}`; return; }
+      try { params = JSON.parse($('#licRuleParams').value); } catch (err) { const el = $('#licRuleErr'); el.classList.remove('hidden'); el.style.color = 'var(--status-bad)'; el.textContent = `JSON không hợp lệ: ${err.message}`; return; }
       await api.licRuleVersion(id, { params, name: $('#licRuleName').value.trim() || null, sourceUrl: $('#licRuleUrl').value.trim() || null, sourceNote: $('#licRuleNote').value.trim() || null, activate: btn.dataset.activate === '1' });
       st.ruleEditing = null; await licLoad(true); renderLicBody(); licSetStatus('Đã tạo version rule mới.');
     }
@@ -762,9 +762,9 @@ async function licRunWhatif() {
   if (w.type === 'move_vms') {
     const dst = split($('#lwTarget')?.value);
     scenario.sourceCluster = src.cl; scenario.targetCluster = dst.cl; scenario.targetVcenterKey = dst.vc;
-    if (dst.cl === src.cl && dst.vc === src.vc) { err.classList.remove('hidden'); err.style.color = 'var(--bad)'; err.textContent = 'Cluster đích phải khác cluster nguồn.'; return; }
+    if (dst.cl === src.cl && dst.vc === src.vc) { err.classList.remove('hidden'); err.style.color = 'var(--status-bad)'; err.textContent = 'Cluster đích phải khác cluster nguồn.'; return; }
   }
-  if (w.type === 'resize_host' && !scenario.cores && !scenario.sockets && !scenario.ramGB) { err.classList.remove('hidden'); err.style.color = 'var(--bad)'; err.textContent = 'Nhập ít nhất một thông số mới (core, socket hoặc RAM).'; return; }
+  if (w.type === 'resize_host' && !scenario.cores && !scenario.sockets && !scenario.ramGB) { err.classList.remove('hidden'); err.style.color = 'var(--status-bad)'; err.textContent = 'Nhập ít nhất một thông số mới (core, socket hoặc RAM).'; return; }
   w.busy = true; renderLicBody();
   try {
     const sc = licScope();
@@ -772,7 +772,7 @@ async function licRunWhatif() {
   } catch (e) {
     w.result = null;
     renderLicBody();
-    const el = $('#licWhatifErr'); if (el) { el.classList.remove('hidden'); el.style.color = 'var(--bad)'; el.textContent = `Không chạy được kịch bản: ${e.message}`; }
+    const el = $('#licWhatifErr'); if (el) { el.classList.remove('hidden'); el.style.color = 'var(--status-bad)'; el.textContent = `Không chạy được kịch bản: ${e.message}`; }
     w.busy = false; return;
   }
   w.busy = false; renderLicBody();
