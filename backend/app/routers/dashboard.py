@@ -165,3 +165,33 @@ def vm_changes(
     snapshot inside the look-back window (optionally limited to the given
     clusters and/or hosts)."""
     return history.get_vm_changes(db, _scope_keys(vcenter), months, clusters=_split_csv(clusters), hosts=_split_csv(hosts))
+
+
+@router.get("/executive")
+def executive_overview(
+    vcenter: Optional[str] = Query(default="all", description="Page vCenter filter ('all', a key or 'import')"),
+    storage: Optional[str] = Query(default=None, description="Same as /api/reports/brief?storage="),
+    months: int = Query(default=12, description="History look-back window: 3, 6 or 12 months"),
+    group: str = Query(default="cluster", pattern="^(vcenter|cluster)$"),
+    days: int = Query(default=90, ge=1, le=365, description="Trend window, as /api/dashboard/trend?days="),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Everything the Executive page loads, in one request (audit API-02). Each piece is
+    produced by the function behind the endpoint the page called before, with the same
+    parameters, so the numbers are identical:
+      trend      = /api/dashboard/trend?days=
+      byVcenter  = /api/data/latest?group_by_vcenter=true -> byVcenter (flat hosts/vms dropped)
+      brief      = /api/reports/brief?vcenter=&storage=  ('import' scope reads as 'all', as the page did)
+      history    = /api/dashboard/history?vcenter=&months=&group=
+      vmChanges  = /api/dashboard/vm-changes?vcenter=&months="""
+    from . import reports
+    vcenter = vcenter or "all"
+    brief_scope = "all" if vcenter == "import" else vcenter
+    return {
+        "trend": trend_history(days=days, db=db, user=user),
+        "byVcenter": data_access.get_latest_grouped(db, include_import=True).get("byVcenter", {}),
+        "brief": reports.management_brief(vcenter=brief_scope, storage=storage, db=db, user=user),
+        "history": resource_history(vcenter=vcenter, months=months, group=group, clusters=None, db=db, user=user),
+        "vmChanges": vm_changes(vcenter=vcenter, months=months, clusters=None, hosts=None, db=db, user=user),
+    }

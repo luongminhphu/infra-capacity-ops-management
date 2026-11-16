@@ -3,7 +3,7 @@ import logging
 import datetime as dt
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from ..collectors.scheduler import sync_backups
 from ..config import get_settings
 from ..database import get_db
 from ..backup import schedule as bschedule
+from ..pagination import set_page_headers
 from ..models import AppSetting, BackupPolicySnapshot, BackupScheduleRule, BackupScopeRule, BackupSyncRun, ReportLogo, User
 from ..security import get_current_user, require_admin
 from ..timeutil import to_iso_utc
@@ -97,11 +98,13 @@ def summary(server: Optional[str] = Query(default="all"), days: int = Query(defa
 
 
 @router.get("/jobs")
-def jobs(server: Optional[str] = Query(default="all"), days: int = Query(default=7, ge=1, le=90),
+def jobs(response: Response, server: Optional[str] = Query(default="all"), days: int = Query(default=7, ge=1, le=90),
          outcome: Optional[str] = Query(default=None, pattern="^(success|partial|failed|running)$"),
          category: Optional[str] = Query(default="backup", pattern="^(backup|copy|restore|other|all)$"),
-         q: Optional[str] = Query(default=None), limit: int = Query(default=500, ge=1, le=5000),
+         q: Optional[str] = Query(default=None), offset: int = Query(default=0, ge=0), limit: int = Query(default=500, ge=1, le=5000),
          db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Newest first (start time, then id). `total` (body) and X-Total-Count count every matching job;
+    offset / limit select the page (audit API-05)."""
     since = dt.datetime.utcnow() - dt.timedelta(days=days)
     needle = (q or "").strip().lower()
     rows, total = [], 0
@@ -112,9 +115,10 @@ def jobs(server: Optional[str] = Query(default="all"), days: int = Query(default
             continue
         if needle and not any(needle in str(j.get(f) or "").lower() for f in ("clientName", "policyName", "jobId", "statusText")):
             continue
-        total += 1
-        if len(rows) < limit:
+        if offset <= total and len(rows) < limit:
             rows.append(j)
+        total += 1
+    set_page_headers(response, total, offset, len(rows))
     return _jsonable({"total": total, "rows": rows})
 
 

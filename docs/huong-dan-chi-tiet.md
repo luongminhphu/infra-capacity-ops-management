@@ -1267,6 +1267,8 @@ bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job
 - Kiểm tra sức khoẻ: `/api/health` (liveness, không I/O) và `/api/health/ready` (readiness: DB trả lời
   `SELECT 1` và vòng poll còn nhịp — trễ quá 3 × chu kỳ + 2 × hạn tổng một nguồn + 2 phút thì 503). k8s dùng
   `/api/health/ready` cho readinessProbe.
+  Chạy > 1 replica: đặt `READINESS_REQUIRE_SCHEDULER=false` (mặc định `true`). Khi đó readiness chỉ kiểm DB;
+  trạng thái scheduler vẫn nằm trong `checks.scheduler` (kèm `required: false`) để theo dõi.
 
 - Mỗi lần đồng bộ (thủ công qua "Đồng bộ ngay"/"Sync all", hoặc tự động theo
   `POLL_INTERVAL_MINUTES`, mặc định 60 phút) tạo một `SnapshotRun` mới trong Postgres — đây là
