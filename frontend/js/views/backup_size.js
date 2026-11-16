@@ -125,3 +125,27 @@ function bkSizeBind(s) {
   const sel = body.querySelector('[data-bk-sizetop]');
   if (sel) sel.onchange = () => { bkSizeState().top = Number(sel.value) || 10; rerender(); };
 }
+
+/* Tổng quan backup: compact top 5 of both rankings with a link to the full tab. */
+function bkSizeOverview(s) {
+  const z = s.sizeStats;
+  if (!z || !z.clients) return '';
+  const list = (rows, val, sub) => {
+    const top = (rows || []).slice(0, 5), mx = Math.max(0, ...top.map(val));
+    return `<table class="data-table bk-size-mini"><thead><tr><th class="num">#</th><th>Máy chủ</th><th class="num">${sub}</th></tr></thead><tbody>${top.map((r, i) => `<tr>
+        <td class="num">${i + 1}</td><td>${bkSizeClient(r)}</td>
+        <td class="num bk-size-cell"><b>${bkSize(val(r))}</b>${bkSizeBar(val(r), mx)}</td></tr>`).join('')}</tbody></table>`;
+  };
+  const days = bkNum(s.period ? s.period.days : bkState().days);
+  return `
+    <section class="table-card">
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Dung lượng backup theo máy chủ</div>
+        <p class="panel-sub">${bkNum(z.clients)} máy chủ backup thành công trong ${days} ngày, tổng <b>${bkSize(z.totalGB)}</b>; 10 máy chủ lớn nhất chiếm <b>${bkPct(z.top10SharePct)}</b>.</p></div>
+        <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-size">Xem đủ top 50</button></div></div>
+      <div class="chart-grid exec-chart-grid bk-size-pair">
+        <div><h3 class="sp-h">Dung lượng lớn nhất <span class="muted-sub sr-inline">bản Full gần nhất</span></h3>${list(z.bySize, r => r.sizeGB || 0, 'Dung lượng')}</div>
+        <div><h3 class="sp-h">Backup nhiều nhất <span class="muted-sub sr-inline">trong ${days} ngày</span></h3>${list(z.byTotal, r => r.totalGB || 0, 'Đã backup')}</div>
+      </div>
+    </section>
+`;
+}
