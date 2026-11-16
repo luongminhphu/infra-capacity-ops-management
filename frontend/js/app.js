@@ -670,6 +670,8 @@ async function handleRemoveLogo() {
 /* Non-admins keep the live (on-screen) threshold / storage what-if, but cannot save or change the logo. */
 function applySharedConfigGates() {
   const admin = uiIsAdmin();
+  const syncNow = $('#btnSyncNow');      // manual vCenter / NetBackup sync: admins only (decision 16/11)
+  if (syncNow) syncNow.classList.toggle('hidden', !admin);
   const saveThr = $('#btnSaveThresholds');
   if (saveThr) {
     saveThr.disabled = !admin;
@@ -800,6 +802,7 @@ async function loadLiveData() {
    and therefore feeds the Executive trend history alongside live polls. */
 async function persistImportIfReady() {
   if (!appState.hosts.length && !appState.vms.length) return;
+  if (!uiIsAdmin()) return;            // import feeds the shared dashboard: admins only; others see it locally
   try {
     await api.importData({ hosts: appState.hosts, vms: appState.vms, label: 'manual-import' });
     await refreshVcenterList();

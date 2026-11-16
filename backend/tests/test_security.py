@@ -123,7 +123,7 @@ def test_cors_default_closed_and_wildcard_without_credentials(client):
 # ---------------------------------------------------------------- SEC-05: shared configuration is admin-only
 
 def test_shared_config_writes_need_admin(client, non_admin):
-    # Reads and manual sync stay open to every user.
+    # Reads stay open to every user (manual sync became admin-only on 16/11: see below).
     assert client.get("/api/settings").status_code == 200
     assert client.get("/api/backup/thresholds").status_code == 200
     assert client.get("/api/licensing/rules").status_code == 200
@@ -247,3 +247,74 @@ def test_backup_sync_error_is_generic(client, monkeypatch, caplog):
         r = client.post(f"/api/backup/servers/{key}/sync")
     assert r.status_code == 502 and "postgresql://" not in r.text and "Đồng bộ backup thất bại" in r.json()["detail"]
     assert any(rec.exc_info for rec in caplog.records)                # traceback kept in the server log
+
+
+# ---------------------------------------------------------------- Round 2 (16/11): admin-only writes on shared data
+
+def test_round2_shared_data_writes_need_admin(client, non_admin):
+    """Q1 manual sync, Q2 license data (OS overrides, assessment snapshots, rule verification),
+    Q3 inventory import: admins only. Reads stay open."""
+    assert client.get("/api/licensing/overrides").status_code == 200
+    assert client.get("/api/vcenters").status_code == 200
+    rule_id = client.get("/api/licensing/rules").json()[0]["id"]
+    vc_key, nbu_key = "any-vc", "any-nbu"            # the admin check runs before the key lookup
+    for method, path, body in (
+        ("post", "/api/import", {"hosts": [], "vms": []}),
+        ("post", f"/api/vcenters/{vc_key}/sync", None),
+        ("post", "/api/vcenters/sync-all", None),
+        ("post", f"/api/backup/servers/{nbu_key}/sync", None),
+        ("post", "/api/backup/sync-all", None),
+        ("put", "/api/licensing/overrides", {"vm": "x", "category": "windows_server"}),
+        ("delete", "/api/licensing/overrides/1", None),
+        ("post", f"/api/licensing/rules/{rule_id}/verify", {"note": "ok"}),
+        ("post", "/api/licensing/assessments", {"vcenter": "all"}),
+        ("post", "/api/licensing/assessments/1/recompute", None),
+        ("delete", "/api/licensing/assessments/1", None),
+    ):
+        r = client.request(method.upper(), path, json=body)
+        assert r.status_code == 403, (path, r.status_code)
+
+
+def test_import_is_bounded_and_audited(client):
+    from app.models import AuditLog
+    too_many = {"hosts": [{"host": f"h{i}"} for i in range(5001)], "vms": []}
+    assert client.post("/api/import", json=too_many).status_code == 422
+    assert client.post("/api/import", json={"hosts": ["not-an-object"], "vms": []}).status_code == 422
+    r = client.post("/api/import", json={"hosts": [{"cluster": "C1", "host": "h1", "cores": 8, "ramGB": 64}], "vms": []})
+    assert r.status_code == 200 and r.json()["hostCount"] == 1
+    db = SessionLocal()
+    try:
+        assert db.query(AuditLog).filter_by(action="data.import").count() >= 1
+    finally:
+        db.close()
+
+
+def test_vcenter_sync_error_is_generic_and_last_error_admin_only(client, monkeypatch, caplog):
+    from app.routers import vcenters as vc_router
+
+    def boom(db, cfg, settings):
+        raise RuntimeError("postgresql://ico:pw@db/internal")
+
+    from types import SimpleNamespace
+    cfg = SimpleNamespace(key="vc-test", name="vc-test", host="vc.example.local", demo=True)
+    real = get_settings()
+    monkeypatch.setattr(vc_router, "get_settings", lambda: SimpleNamespace(vcenters=lambda: [cfg], **{k: getattr(real, k) for k in ("admin_users",)}))
+    monkeypatch.setattr(vc_router, "sync_vcenter", boom)
+    key = "vc-test"
+    with caplog.at_level(logging.ERROR, logger="vco.routers.vcenters"):
+        r = client.post(f"/api/vcenters/{key}/sync")
+    assert r.status_code == 502 and "postgresql://" not in r.text and "Đồng bộ thất bại" in r.json()["detail"]
+    assert any(rec.exc_info for rec in caplog.records)
+
+
+def test_public_error_hides_unknown_exceptions():
+    from app.collectors.scheduler import public_error
+    from app.vcenter.client import VCenterConnectionError
+    assert public_error(RuntimeError("password=hunter2")) == "Đồng bộ thất bại. Xem log máy chủ để biết chi tiết."
+    assert public_error(VCenterConnectionError("Không kết nối được vCenter")) == "Không kết nối được vCenter"
+
+
+def test_sizing_pdf_header_cannot_close_style():
+    from app.report_sizing_full import _css
+    css = _css('ACME</style><h1>x</h1>', 'v"1\nnext', "16/11/2026")
+    assert "</style>" not in css and "<h1>" not in css and "\\3C " in css

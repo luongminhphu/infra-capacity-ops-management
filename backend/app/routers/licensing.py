@@ -154,7 +154,7 @@ def list_overrides(db: Session = Depends(get_db), user: User = Depends(get_curre
 
 
 @router.put("/overrides")
-def upsert_override(payload: OverrideIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def upsert_override(payload: OverrideIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     if payload.category not in os_classify.CATEGORIES:
         raise HTTPException(400, f"category phải thuộc {os_classify.CATEGORIES}")
     # Select-then-insert can race (double click, two users); the partial unique indexes created in
@@ -193,7 +193,7 @@ def _same_override(db: Session, vcenter_key: Optional[str], instance_uuid: Optio
 
 
 @router.delete("/overrides/{override_id}")
-def delete_override(override_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_override(override_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     row = db.query(VmOsOverride).filter(VmOsOverride.id == override_id).first()
     if not row:
         raise HTTPException(404, "Không tìm thấy override")
@@ -269,7 +269,7 @@ def deactivate_rule(rule_id: int, db: Session = Depends(get_db), user: User = De
 
 
 @license_router.post("/rules/{rule_id}/verify")
-def verify_rule(rule_id: int, payload: RuleVerifyIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def verify_rule(rule_id: int, payload: RuleVerifyIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     r = db.query(LicenseRuleSet).filter(LicenseRuleSet.id == rule_id).first()
     if not r:
         raise HTTPException(404, "Không tìm thấy rule")
@@ -401,7 +401,7 @@ def _snap_meta(s: LicenseAssessment) -> Dict[str, Any]:
 
 
 @license_router.post("/assessments")
-def create_snapshot(payload: SnapshotIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_snapshot(payload: SnapshotIn, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     result, inputs = _run_assess(db, payload.vcenter, payload.cluster, payload.clusters)
     snap = LicenseAssessment(
         created_by=user.username, title=payload.title or f"Assessment {datetime.utcnow():%Y-%m-%d %H:%M} UTC",
@@ -432,7 +432,7 @@ def get_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depen
 
 
 @license_router.post("/assessments/{snap_id}/recompute")
-def recompute_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def recompute_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     """Re-run the engine on the stored inputs and compare hashes — proves the
     snapshot is reproducible independent of the current inventory."""
     s = db.query(LicenseAssessment).filter(LicenseAssessment.id == snap_id).first()
@@ -445,7 +445,7 @@ def recompute_snapshot(snap_id: int, db: Session = Depends(get_db), user: User =
 
 
 @license_router.delete("/assessments/{snap_id}")
-def delete_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_snapshot(snap_id: int, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     s = db.query(LicenseAssessment).filter(LicenseAssessment.id == snap_id).first()
     if not s:
         raise HTTPException(404, "Không tìm thấy snapshot")

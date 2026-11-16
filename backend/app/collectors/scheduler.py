@@ -289,8 +289,17 @@ def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, An
         elif isinstance(exc, SourceBusy):
             results[i] = {**keys[i], "ok": False, "skipped": True, "error": str(exc)}
         else:                                # already logged and recorded as an error run
-            results[i] = {**keys[i], "ok": False, "error": str(exc)}
+            results[i] = {**keys[i], "ok": False, "error": public_error(exc)}
     return [r for r in results if r is not None]
+
+
+def public_error(exc: BaseException) -> str:
+    """Message safe to show in the UI: our own connection errors are written for operators
+    (no secrets); anything else (SQL, library internals) stays in the log only."""
+    from ..backup.client import NetBackupError
+    if isinstance(exc, (vcenter_client.VCenterConnectionError, NetBackupError, SourceBusy)):
+        return str(exc)
+    return "Đồng bộ thất bại. Xem log máy chủ để biết chi tiết."
 
 
 def sync_vcenters(settings: Settings, configs: Optional[List[VCenterConfig]] = None) -> List[Dict[str, Any]]:

@@ -927,7 +927,13 @@ def _existing_chart(existing: List[Dict[str, Any]]) -> str:
 # ---------------------------------------------------------------------------
 def _css(header_left: str, header_right: str, date_txt: str) -> str:
     c = COLORS
-    q = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')  # noqa: E731
+    # CSS string escape for user text in @page headers: quotes / backslash, and `<` `>` + newlines as CSS hex
+    # escapes so `</style>` in a customer name cannot leave the <style> element (SEC2-07)
+    def q(text: str) -> str:
+        out = str(text or "").replace("\\", "\\\\").replace('"', '\\"')
+        for ch, rep in (("<", "\\3C "), (">", "\\3E "), ("\n", " "), ("\r", " ")):
+            out = out.replace(ch, rep)
+        return out
     return f"""
 @page {{
   size: A4; margin: 18mm 15mm 16mm 15mm;

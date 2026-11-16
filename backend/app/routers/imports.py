@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -8,16 +9,16 @@ from ..collectors.scheduler import _host_inventory_cols, _vm_inventory_cols
 from ..config import get_settings
 from ..database import get_db
 from ..models import (
-    ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, User, VmSnapshot,
+    AuditLog, ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, User, VmSnapshot,
 )
 from ..schemas import ImportPayload
-from ..security import get_current_user
+from ..security import require_admin
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 
 
 @router.post("")
-def import_data(payload: ImportPayload, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def import_data(payload: ImportPayload, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     """Persist a manually-imported CSV/Excel dataset (already parsed & normalized
     client-side, reusing the original app's normalizeHostRow/normalizeVmRow
     logic) as a SnapshotRun with source='import', so it also feeds the
@@ -75,6 +76,9 @@ def import_data(payload: ImportPayload, db: Session = Depends(get_db), user: Use
         ))
 
     run.finished_at = dt.datetime.utcnow()
+    # an import becomes part of the shared dashboard / reports: keep who did it
+    db.add(AuditLog(username=user.username, action="data.import",
+                    detail=json.dumps({"runId": run.id, "hosts": len(host_rows), "vms": len(vm_rows)})))
     db.commit()
 
     return {
