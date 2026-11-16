@@ -109,7 +109,7 @@ class SnapshotRun(Base):
     source = Column(String(16), nullable=False, default="live")  # 'live' | 'import'
     status = Column(String(16), nullable=False, default="ok")  # 'ok' | 'error'
     error_message = Column(Text, nullable=True)
-    started_at = Column(DateTime, default=utcnow)
+    started_at = Column(DateTime, default=utcnow, index=True)   # retention purge filters on it (SCH-06)
     finished_at = Column(DateTime, nullable=True)
 
     hosts = relationship("HostSnapshot", back_populates="run", cascade="all, delete-orphan")

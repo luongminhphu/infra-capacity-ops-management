@@ -69,6 +69,9 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
    phải được thêm vào dict `additive` trong `database.py::ensure_schema()` (kiểu nullable hoặc có
    `DEFAULT`, chạy được cả SQLite và PostgreSQL, idempotent). Không đổi tên / xoá cột trong cùng
    một bản phát hành — hai pod cũ và mới chạy song song trong lúc rollout.
+   Index (`Index(...)`, `Column(index=True)`) và CHECK mới trên bảng đã có: chỉ cần khai báo trên model —
+   `ensure_schema()` tự tạo index còn thiếu (`CONCURRENTLY` trên PostgreSQL) và thêm CHECK `NOT VALID` rồi `VALIDATE`.
+   Các bước migration chạy dưới advisory lock nên hai pod khởi động cùng lúc không đụng nhau.
 5. **Giao diện và báo cáo viết tiếng Việt**, có dấu đầy đủ, văn phong ngắn, nêu thẳng vấn đề →
    quyết định. Code, tên biến, comment code viết tiếng Anh. Field dữ liệu dùng camelCase giống
    frontend (`ramGB`, `isPoweredOn`, `vcpu`...).
