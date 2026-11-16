@@ -1269,6 +1269,12 @@ bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job
   `/api/health/ready` cho readinessProbe.
   Chạy > 1 replica: đặt `READINESS_REQUIRE_SCHEDULER=false` (mặc định `true`). Khi đó readiness chỉ kiểm DB;
   trạng thái scheduler vẫn nằm trong `checks.scheduler` (kèm `required: false`) để theo dõi.
+- **Xoá cột tiền Float cũ (DAT-10, bước cuối).** Tiền license và chi phí AI chỉ còn lưu bằng số nguyên
+  (`license_entitlements.unit_price_minor` theo đơn vị nhỏ nhất của tiền tệ, `ai_runs.cost_usd_micros` theo micro-USD).
+  Bản này không đọc / ghi hai cột cũ `unit_price`, `cost_usd`; khi khởi động vẫn chép dữ liệu pod bản cũ vừa ghi sang cột
+  số nguyên. Sau khi rollout xong (không còn pod bản cũ), đặt `DROP_LEGACY_MONEY_COLUMNS=true` ở lần deploy kế tiếp:
+  pod khởi động sẽ xoá hai cột (log `DAT-10: dropped legacy Float column …`). Không bật ngay trong lần rollout này —
+  pod cũ còn đọc cột đó.
 
 - Mỗi lần đồng bộ (thủ công qua "Đồng bộ ngay"/"Sync all", hoặc tự động theo
   `POLL_INTERVAL_MINUTES`, mặc định 60 phút) tạo một `SnapshotRun` mới trong Postgres — đây là

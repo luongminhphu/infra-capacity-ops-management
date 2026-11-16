@@ -101,11 +101,11 @@ def test_budget_rate_and_alert(app_, admin, editor, monkeypatch):
     monkeypatch.setattr(transport, "JSON_CALL", _fake({"headline": "x", "points": [], "decisions": []}, seen))
     _enable(admin, budgetUsd=100, alertUsd=50, ratePerHour=2)
     db = SessionLocal()
-    db.add(AiRun(task="quote_extract", status="ok", cost_usd=49.99, created_at=dt.datetime.utcnow()))
+    db.add(AiRun(task="quote_extract", status="ok", cost_usd_micros=49_990_000, created_at=dt.datetime.utcnow()))
     db.commit()
     posts = []
     assert ai_platform.alert_if_needed(db, post=lambda u, p: posts.append(p)) is False         # 49,99 < 50
-    db.add(AiRun(task="quote_extract", status="ok", cost_usd=0.02, created_at=dt.datetime.utcnow()))
+    db.add(AiRun(task="quote_extract", status="ok", cost_usd_micros=20_000, created_at=dt.datetime.utcnow()))
     db.commit()
     assert ai_platform.alert_if_needed(db, post=lambda u, p: posts.append(p)) is True
     assert ai_platform.alert_if_needed(db, post=lambda u, p: posts.append(p)) is False         # once per month
@@ -123,7 +123,7 @@ def test_budget_rate_and_alert(app_, admin, editor, monkeypatch):
     db.commit()
     assert "giới hạn 2" in editor.post("/api/ai/home-brief").json()["detail"]
     # Budget: 100 USD reached → everything stops.
-    db.add(AiRun(task="quote_extract", status="ok", cost_usd=60.0, created_at=dt.datetime.utcnow()))
+    db.add(AiRun(task="quote_extract", status="ok", cost_usd_micros=60_000_000, created_at=dt.datetime.utcnow()))
     db.commit()
     r = admin.post("/api/ai/home-brief")
     assert r.status_code == 409 and "hết hạn mức" in r.json()["detail"]
@@ -185,5 +185,5 @@ def test_usage_counted_when_refused(app_, admin, monkeypatch):
     assert r.status_code == 422
     db = SessionLocal()
     run = db.query(AiRun).filter_by(task="home_brief", status="error").one()
-    assert run.output_tokens == 500 and run.cost_usd == pytest.approx(0.014)
+    assert run.output_tokens == 500 and run.cost_usd_micros == 14000
     db.close()

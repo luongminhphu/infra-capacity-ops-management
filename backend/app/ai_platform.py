@@ -21,7 +21,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from sqlalchemy import BigInteger, cast, func
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .models import AiCache, AiRun, User
@@ -111,10 +111,8 @@ def _month_start(now: Optional[dt.datetime] = None) -> dt.datetime:
 
 
 def _micros_col():
-    """DAT-10 release 2: the integer micro-USD column is the source of truth. A row written by an
-    old pod after ensure_schema() ran has only the Float set: convert it in the same SQL so the sum
-    stays an integer sum (no float accumulation)."""
-    return func.coalesce(AiRun.cost_usd_micros, cast(func.round(AiRun.cost_usd * 1_000_000), BigInteger), 0)
+    """DAT-10: cost is stored only as integer micro-USD; summed as integers."""
+    return func.coalesce(AiRun.cost_usd_micros, 0)
 
 
 def month_cost_micros(db: Session, now: Optional[dt.datetime] = None) -> int:
@@ -272,7 +270,7 @@ def record(db: Session, task: str, user: Optional[User], status: str, h: Optiona
     cost = price(usage.get("model"), usage.get("in"), usage.get("out")) if status in ("ok", "error") else 0.0
     db.add(AiRun(task=task, username=user.username if user else None, model=usage.get("model"), status=status,
                  input_tokens=usage.get("in") or None, output_tokens=usage.get("out") or None,
-                 cost_usd=cost, cost_usd_micros=usd_to_micros(cost),       # DAT-10: integer twin
+                 cost_usd_micros=usd_to_micros(cost),                     # DAT-10: integer micro-USD only
                  input_hash=h, latency_ms=int((time.monotonic() - started) * 1000), message=message[:300] or None))
     db.commit()
 
@@ -389,6 +387,6 @@ def usage_report(db: Session) -> Dict[str, Any]:
         "byTask": by_task,
         "recent": [{"at": r.created_at.isoformat() + "Z", "task": r.task, "user": r.username, "model": r.model, "status": r.status,
                     "inputTokens": r.input_tokens, "outputTokens": r.output_tokens,
-                    "costUsd": micros_to_usd(r.cost_usd_micros if r.cost_usd_micros is not None else usd_to_micros(r.cost_usd)),
+                    "costUsd": micros_to_usd(r.cost_usd_micros or 0),
                     "latencyMs": r.latency_ms, "message": r.message} for r in recent],
     }
