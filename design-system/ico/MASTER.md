@@ -22,8 +22,9 @@
 
 ## 2. Màu web (“Phòng máy”)
 
-Token: `frontend/css/styles.css` (`:root` = dark mặc định, `[data-theme="light"]`). Tên token cũ của HSC (`--blue-a12`,
-`--sb60`…) chỉ còn là alias trỏ sang màu mới — không dùng cho code mới.
+Token: `frontend/css/styles.css` (`:root` = theme dark, `[data-theme="light"]`). Alias HSC cũ đã gỡ ở vòng 2 (FE-02 / FE-03):
+chỉ còn nhóm tint `--blue-a8…32`, `--green-a8`, `--red-a24`, `--yellow-a24`, `--neutral-a4/8`, `--sc40`, `--sr40/80` chờ
+3 token vai trò (FE-04, cần duyệt) — không dùng cho code mới.
 
 | Vai trò | Token | Dark | Light | Nguồn |
 |---|---|---|---|---|
@@ -62,6 +63,9 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 - PDF: `report_pdf.status_pill()` vẽ glyph SVG inline, cùng quy tắc.
 - Số to có màu (`.tone-*`) chỉ dùng cho số ≥ 18 px; nhãn nhỏ không tô màu trạng thái.
 - Mức ưu tiên (`prio-cao/tb/thap`) **không phải trạng thái**: không có glyph, chữ mực.
+- **Nhãn trung tính** (loại, nguồn, phân loại HĐH, “Lịch sử”, “Demo”, “ghi đè”) dùng `uiTag(label, title)` — viền mảnh,
+  không glyph. Không mượn `pill ok/crit` để tô một nhãn không phải trạng thái. Không viết `<span class="pill …">` bằng tay:
+  `uiPill` / `uiTag` lọc tone và escape nhãn. Nguồn: `--domain ux` “Color Only”; audit FE-23 (vòng 2).
 
 ## 4. Chữ
 
@@ -76,39 +80,56 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 - Font: `--domain typography` “vietnamese readable” → *Vietnamese Friendly* (Be Vietnam Pro); `--domain google-fonts`: Be Vietnam Pro,
   JetBrains Mono có subset `vietnamese`. Bộ *Dashboard Data* (Fira Code + Fira Sans) bị loại vì Fira Code không có subset tiếng Việt.
 - Không viết hoa toàn bộ cho nhãn nhóm / tiêu đề bảng (ALL CAPS chỉ cho nhãn trạng thái).
+- **Định dạng số vi-VN ở mọi nơi người đọc**: `1.234.567` · `1.234,5` · `9,6%` · `0,64x` (web, PDF, chữ trong Excel).
+  Web: `fmtInt` / `fmtNum` / `fmtPct` / `fmtX` (core.js), `uiNumber` / `uiMoney` (ui.js), Chart.js `locale = 'vi-VN'`.
+  Python: `vn_num` / `vn_g` (`shared/text.py`), qua `fmt_num` / `fmt_int` / `fmt_pct` của `report_pdf.py`.
+  Giữ số thuần (dấu chấm, không nhóm) cho dữ liệu máy đọc: CSV, dữ liệu biểu đồ, toạ độ SVG, độ rộng CSS, công thức Excel;
+  ô số Excel vẫn là số. Nguồn: `--domain ux` “Number Formatting”; quyết định Q7 (16/11/2026).
 
 ## 5. Khoảng cách, bo góc, đổ bóng, chuyển động
 
-- Khoảng cách HSC: 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 (`--space-1…8`).
+- Khoảng cách: 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 (`--space-1…8`); hai vùng bấm cạnh nhau cách ≥ 8 px.
+  Nguồn: thang HSC; `--domain ux` “Touch Spacing”.
 - Bo góc web: 6 control · 10 khối · 14 lớp nổi (dialog, popover) · pill cho chip lọc / chế độ xem.
+  Nguồn: quyết định hướng C (16/11/2026); `search.py` **không có kết quả phù hợp trong dữ liệu** (`rounded corners`
+  `--domain style` chỉ trả Organic Biophilic / Neumorphism — loại vì không phải app dữ liệu).
 - Control: 36 px mặc định; **< 1024 px: nút, ô nhập, tab, chế độ xem, dòng danh sách, mục sidebar ≥ 44 px** (`--control-h-lg`);
   không dưới 24 px ở mọi nơi (WCAG 2.5.8). Nguồn: `--domain ux` “Touch Target Size”; Q8.
 - Icon (lucide): 3 cỡ token `--icon-sm` 14 · `--icon-md` 16 · `--icon-lg` 20 (pro-rules “Consistent Icon Sizing”; Q8).
 - Chuyển động: `--domain ux` “Duration Timing” — token chung, không coi 150–300 ms là chuẩn cứng; GSAP / scroll reveal
   (gợi ý của `--design-system`) bị loại: app nội bộ, chỉ chuyển động khi thao tác.
 - Chuyển động: 120 / 160 / 200 ms, vào `cubic-bezier(.2,0,0,1)`, ra nhanh hơn. Chỉ chuyển động khi người dùng
-  thao tác (mở chi tiết, đổi theme). Luôn tôn trọng `prefers-reduced-motion`.
+  thao tác (mở chi tiết, đổi theme), tối đa 1–2 phần tử mỗi màn. Luôn tôn trọng `prefers-reduced-motion`.
+  Nguồn: `--domain ux` “Duration Timing”, “Reduced Motion”, “Excessive Motion”.
 
 ## 6. Bố cục & điều hướng
 
 - **Sidebar 240 px** (2 miền + Hệ thống, nhãn nhóm chữ thường) có **số việc** từng mục; < 1024 px thành drawer.
+  Nguồn: quyết định hướng C (16/11/2026); `--domain ux` “Active State”; `modern-web-guidance` “navigation-drawer”.
 - **Topbar**: tiêu đề trang + tab trong trang (`#/<mục>/<tab>`), tìm kiếm Ctrl + K, đồng bộ. Phạm vi (vCenter /
   cluster / host) nằm **trong** trang, ngay trên nội dung, không đẩy topbar xuống nhiều dòng.
 - **Khung danh sách → chi tiết**: danh sách trái (`minmax(380px, 44%)`), chi tiết phải; danh sách là
   `role="listbox"` + `aria-activedescendant`, phím J / K / Enter; chi tiết `aria-live="polite"`.
-- **Khối kết luận**: vạch trạng thái 4 px + trạng thái + một câu (Inter 28–36 px, `text-wrap:balance`) + câu dẫn.
-- Co giãn theo **container query** cho khối; breakpoint trang chỉ còn 640 và 1024.
+  Nguồn: quyết định hướng C (16/11/2026); `--domain ux` “Keyboard Navigation”. `search.py` **không có kết quả phù hợp
+  trong dữ liệu** cho mẫu list → detail (`master detail list`, `list detail split view`).
+- Phạm vi (vCenter / cluster / host) trên điện thoại (< 640 px) gom sau nút “Phạm vi: …” (`aria-expanded`). Nguồn: §7 “không
+  quá 3 select hiện cùng lúc”; vòng 2 PR8.
+- **Khối kết luận**: vạch trạng thái 4 px + trạng thái + một câu (Be Vietnam Pro 28–36 px trên web, Inter trên PDF,
+  `text-wrap:balance`) + câu dẫn. Nguồn: quyết định 16/11/2026 (khối kết luận của hướng B).
+- Co giãn theo **container query** cho khối; breakpoint trang chỉ còn 640 và 1024. Nguồn: `modern-web-guidance` “size-aware-styling”.
 
 ## 7. Thành phần
 
-| Thành phần | Quy tắc |
-|---|---|
-| Hộp thoại | `<dialog>` + `showModal()` cho xác nhận / form chặn trang; bảng điều khiển không chặn dùng `popover` |
-| Bảng | `<table>` + `<caption>`; khi cuộn ngang bọc `role="region" tabindex="0" aria-labelledby`; tiêu đề dính; sắp xếp có `aria-sort` |
-| Bộ lọc | Chip / chế độ xem đã lưu cho lọc chính; lọc phụ trong popover; không quá 3 `select` hiện cùng lúc |
-| KPI | Dải KPI liền khối có bullet bar (vạch 80 % / 100 %) thay cho thẻ số to rời |
-| Trạng thái rỗng | Nói điều gì đang thiếu + một hành động (`uiEmpty`) |
-| Logo công ty | Khe cao cố định, `width:auto; object-fit:contain` — không bao giờ kéo giãn |
+| Thành phần | Quy tắc | Nguồn |
+|---|---|---|
+| Hộp thoại | `<dialog>` + `showModal()` cho xác nhận / form chặn trang; bảng điều khiển không chặn dùng `popover`; focus thấy rõ | `modern-web-guidance` “dialog”; `--domain ux` “Focus States”, “Focus Appearance” |
+| Bảng | `<table>` + `<caption>`; khi cuộn ngang bọc `role="region" tabindex="0" aria-labelledby`; tiêu đề dính; sắp xếp có `aria-sort` | `modern-web-guidance` “responsive-table”, “sortable-table”; `--domain ux` “Table Handling”, “Horizontal Scroll” |
+| Bộ lọc | Chip / chế độ xem đã lưu cho lọc chính; lọc phụ trong popover; không quá 3 `select` hiện cùng lúc | quyết định hướng C (16/11/2026) |
+| KPI | Dải KPI liền khối có bullet bar (vạch 80 % / 100 %) thay cho thẻ số to rời | `--domain chart` “KPI target progress” |
+| Đang tải / lỗi | `uiLoading(text)`; lỗi `uiError(text, retry)` có `role="alert"` + nút Thử lại | `--domain ux` “Error Recovery”, “Error Messages”; vòng 2 PR8 |
+| Trạng thái rỗng | Nói điều gì đang thiếu + một hành động (`uiEmpty`) | `--domain ux` “Empty States” |
+| Pill / tag | Trạng thái: `uiPill(tone, label, title)`; nhãn trung tính: `uiTag(label, title)` (§3) | `--domain ux` “Color Only” |
+| Logo công ty | Khe cao cố định, `width:auto; object-fit:contain` — không bao giờ kéo giãn | quyết định vòng 1 (logo bị kéo giãn trên báo cáo) |
 
 ## 8. Biểu đồ (web + PDF cùng quy tắc)
 
@@ -128,6 +149,8 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 
 ## 9. PDF / Excel — giữ HSC Design System
 
+Nguồn: quyết định 16/11/2026 (hai bộ nhận diện tách bạch, §1). Skill `hsc-design-system` chỉ còn phạm vi này.
+
 - `COLORS` trong `report_pdf.py` = vai trò HSC trên nền trắng (ink `#0B2D5C`, muted
   `#465F83`, faint `#597090`, ok `#187A2C`, bad `#B82E37`, crit `#8F282D`, crit_solid `#B82E37`…).
 - Không thêm hex rời trong `report_*.py` / `excel_*.py`; cần màu mới thì thêm vào `COLORS` / `excel_style.py`.
@@ -136,11 +159,15 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 ## 10. Chữ trên giao diện
 
 Tiếng Việt có dấu, câu ngắn, động từ hành động (“Duyệt”, “Tạo gia hạn”, “Đánh dấu xong”). Một hành động giữ một tên
-suốt luồng. Lỗi nói chuyện gì xảy ra và cách sửa, không xin lỗi. Không trộn Anh – Việt trên nhãn (“Add host” → “Thêm host”).
+suốt luồng. Lỗi nói chuyện gì xảy ra và cách sửa, không xin lỗi. Không trộn Anh – Việt trên nhãn (“Add host” → “Thêm host”);
+**giữ thuật ngữ kỹ thuật quốc tế** (vCPU, overcommit, VM, host, cluster, datastore, snapshot, Opex / Capex, RPO, N+1).
+Nguồn: skill `design-skills:ux-writing`; `--domain ux` “Form Labels”; quyết định Q10 (16/11/2026).
 
 ## 11. Kiểm tra trước khi giao
 
 - [ ] Không mã màu / px mới ngoài token (`:root`, `COLORS`, `excel_style.py`); không chép màu web vào báo cáo.
+- [ ] Số hiển thị qua helper vi-VN (§4); không `toFixed` / `toLocaleString('en-US')` cho chữ người đọc.
+- [ ] Không `<span class="pill …">` viết tay — `uiPill` / `uiTag` (§3).
 - [ ] Dark + light, ≥ 1440 px và < 1024 px; không cuộn ngang trang.
 - [ ] Chữ ≥ 4,5 : 1, glyph / viền điều khiển ≥ 3 : 1; focus nhìn thấy; dùng được hoàn toàn bằng bàn phím.
 - [ ] Quyết định mới về màu / font / mật độ: tra `ui-ux-pro-max` (`python3 .claude/skills/ui-ux-pro-max/scripts/search.py`),

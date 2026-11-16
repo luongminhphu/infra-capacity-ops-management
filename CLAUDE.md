@@ -80,7 +80,9 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
    qua token trong `frontend/css/styles.css`. **Báo cáo PDF / Excel** giữ HSC Design System (`COLORS` trong
    `report_pdf.py`, `excel_style.py`, font Inter qua `fonts-inter`). Không hard-code màu mới, chữ phải đạt WCAG AA.
    Trạng thái luôn là 4 mức AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG, hiển thị bằng glyph + nhãn (`uiPill`,
-   `status_pill`). Xem skill `hsc-design-system` và `pdf-report`.
+   `status_pill`); nhãn trung tính dùng `uiTag`. Số hiển thị kiểu vi-VN (`1.234,5`) qua helper (`fmtNum`, `uiNumber`,
+   `vn_num`) — MASTER §4. Web: đọc MASTER; PDF / Excel: skill `hsc-design-system` và `pdf-report`.
+   Quyết định design mới (màu, font, mật độ, thành phần) phải tra `ui-ux-pro-max` trước — xem mục Skill bên dưới.
 7. **Bảo mật**:
    - Endpoint mới phải chọn rõ `Depends(get_current_user)` hay `Depends(require_admin)`;
      thao tác thay đổi cấu hình hệ thống, user, tính năng nên dùng `require_admin`.
@@ -103,14 +105,23 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 - `vmware-collector` — đọc vCenter bằng pyVmomi, demo generator, scheduler.
 - `netbackup-api` — NetBackup REST chỉ đọc, parser, mã lỗi, RPO.
 - `capacity-math` — công thức overcommit, HT, ngưỡng, N+1, dự phóng, mã đối soát.
-- `hsc-design-system` — design system ICO: web “Phòng máy”, báo cáo PDF / Excel theo HSC (trỏ về `design-system/ico/MASTER.md`).
+- `hsc-design-system` — chỉ cho báo cáo PDF / Excel (HSC, Inter, số vi-VN). Giao diện web: `design-system/ico/MASTER.md`.
 - `pdf-report` — quy ước báo cáo PDF A4 bằng WeasyPrint.
 - `spend-module` — module Chi phí & Hợp đồng: tiền VND số nguyên, năm tài chính, phân quyền 4 mức, trạng thái suy ra,
   nhắc hạn idempotent, upload an toàn, khung danh sách → chi tiết (`spPaneOrDialog`).
 - `ui-ux-pro-max` — tra cứu style / bảng màu / font / UX guideline (bên thứ ba, `nextlevelbuilder/ui-ux-pro-max-skill`,
   cài bằng `npx skills add`; mã nằm ở `.agents/skills/`, `.claude/skills/ui-ux-pro-max` là symlink, phiên bản ghim trong
-  `skills-lock.json`). Chạy `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<từ khoá>" --design-system`.
-  Gợi ý của skill chỉ là tham khảo: quy tắc của `design-system/ico/MASTER.md` luôn được ưu tiên.
+  `skills-lock.json`). Cách tra:
+  ```bash
+  python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<2–5 từ khoá, một ý>" --domain ux|color|style|typography|google-fonts|chart|product
+  ```
+  - Một truy vấn một ý; không đưa dữ liệu thật (tên host, số tiền) vào truy vấn; không dùng `--stack`.
+  - **Kiểm độ phù hợp**: loại kết quả landing / marketing / thương mại điện tử. Không khớp → thử lại một lần với từ khoá
+    khác; vẫn không có → ghi “không có kết quả phù hợp trong dữ liệu” và dùng nguồn khác (quyết định đã duyệt, WCAG,
+    `modern-web-guidance`).
+  - **Font tiếng Việt**: font mới phải có subset `vietnamese` (`--domain google-fonts`) và tự host ở `frontend/vendor/`.
+  - **Không** chạy `--persist --force` lên `design-system/ico/MASTER.md`; kết quả chỉ là đề xuất, MASTER đổi sau khi chủ
+    sản phẩm duyệt và mỗi quy tắc ghi **Nguồn**. Cách làm đầy đủ: `docs/design/redesign/README.md` mục 1.
 
 Quét bảo mật: chạy `/security-review` (thay đổi đang chờ) hoặc `/claude-security`
 (quét sâu cả repo) trong Claude Code trước khi tạo PR.
