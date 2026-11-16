@@ -21,11 +21,11 @@ import threading
 import time
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from sqlalchemy import func
+from sqlalchemy import BigInteger, cast, func
 from sqlalchemy.orm import Session
 
 from .models import AiCache, AiRun, User
-from .shared.money import usd_to_micros
+from .shared.money import micros_to_usd, usd_to_micros
 
 logger = logging.getLogger("vco.ai")
 
@@ -110,8 +110,20 @@ def _month_start(now: Optional[dt.datetime] = None) -> dt.datetime:
     return dt.datetime(now.year, now.month, 1)
 
 
+def _micros_col():
+    """DAT-10 release 2: the integer micro-USD column is the source of truth. A row written by an
+    old pod after ensure_schema() ran has only the Float set: convert it in the same SQL so the sum
+    stays an integer sum (no float accumulation)."""
+    return func.coalesce(AiRun.cost_usd_micros, cast(func.round(AiRun.cost_usd * 1_000_000), BigInteger), 0)
+
+
+def month_cost_micros(db: Session, now: Optional[dt.datetime] = None) -> int:
+    return int(db.query(func.coalesce(func.sum(_micros_col()), 0)).filter(AiRun.created_at >= _month_start(now)).scalar() or 0)
+
+
 def month_cost(db: Session, now: Optional[dt.datetime] = None) -> float:
-    return float(db.query(func.coalesce(func.sum(AiRun.cost_usd), 0.0)).filter(AiRun.created_at >= _month_start(now)).scalar() or 0.0)
+    """USD for display; budget comparisons use month_cost_micros()."""
+    return micros_to_usd(month_cost_micros(db, now))
 
 
 def check(db: Session, task: str, user: Optional[User]):
@@ -124,8 +136,9 @@ def check(db: Session, task: str, user: Optional[User]):
     if not task_states(cfg)[task]:
         raise AiBlocked(f"Tác vụ “{TASKS[task][0]}” đang tắt (Cài đặt → AI & MCP).")
     budget = cfg.budget_usd if cfg.budget_usd is not None else 100
-    spent = month_cost(db) + _reserved["usd"]
-    if spent >= budget:
+    spent_micros = month_cost_micros(db) + usd_to_micros(_reserved["usd"])
+    spent = micros_to_usd(spent_micros)
+    if spent_micros >= usd_to_micros(budget):
         raise AiBlocked(f"Đã dùng hết hạn mức AI tháng này ({spent:.2f} / {budget} USD) — AI tạm dừng tới đầu tháng sau.".replace(".", ",", 1))
     if user is not None:
         limit = cfg.rate_per_hour or 30
@@ -324,8 +337,9 @@ def alert_if_needed(db: Session, post=None) -> bool:
     db.query(AiRun).filter(AiRun.created_at < now - dt.timedelta(days=RUN_RETENTION_DAYS)).delete(synchronize_session=False)
     db.commit()
     threshold = cfg.alert_usd if cfg.alert_usd is not None else 50
-    spent = month_cost(db, now)
-    if spent < threshold or cfg.alert_month == month:
+    spent_micros = month_cost_micros(db, now)
+    spent = micros_to_usd(spent_micros)
+    if spent_micros < usd_to_micros(threshold) or cfg.alert_month == month:
         return False
     # Atomic claim: only the request that flips alert_month sends the alert.
     res = db.execute(update(SpendAiConfig).where(SpendAiConfig.id == 1, or_(SpendAiConfig.alert_month.is_(None),
@@ -358,19 +372,23 @@ def usage_report(db: Session) -> Dict[str, Any]:
     start = _month_start()
     by_task = {t: {"label": TASKS.get(t, (t,))[0], "calls": 0, "cached": 0, "blocked": 0, "errors": 0, "costUsd": 0.0}
                for t in TASKS}
-    for t, st, n, cost in (db.query(AiRun.task, AiRun.status, func.count(AiRun.id), func.coalesce(func.sum(AiRun.cost_usd), 0.0))
-                           .filter(AiRun.created_at >= start).group_by(AiRun.task, AiRun.status)):
+    task_micros: Dict[str, int] = {}
+    for t, st, n, micros in (db.query(AiRun.task, AiRun.status, func.count(AiRun.id), func.coalesce(func.sum(_micros_col()), 0))
+                             .filter(AiRun.created_at >= start).group_by(AiRun.task, AiRun.status)):
         row = by_task.setdefault(t, {"label": t, "calls": 0, "cached": 0, "blocked": 0, "errors": 0, "costUsd": 0.0})
         key = {"ok": "calls", "cached": "cached", "blocked": "blocked", "error": "errors"}[st]
         row[key] += n
-        row["costUsd"] = round(row["costUsd"] + float(cost), 4)
+        task_micros[t] = task_micros.get(t, 0) + int(micros or 0)          # integer sum; rounded once for display
+    for t, micros in task_micros.items():
+        by_task[t]["costUsd"] = round(micros_to_usd(micros), 4)
     recent = db.query(AiRun).order_by(AiRun.id.desc()).limit(30).all()
     return {
-        "month": start.strftime("%Y-%m"), "costUsd": round(month_cost(db), 4),
+        "month": start.strftime("%Y-%m"), "costUsd": round(micros_to_usd(month_cost_micros(db)), 4),
         "budgetUsd": cfg.budget_usd if cfg and cfg.budget_usd is not None else 100,
         "alertUsd": cfg.alert_usd if cfg and cfg.alert_usd is not None else 50,
         "byTask": by_task,
         "recent": [{"at": r.created_at.isoformat() + "Z", "task": r.task, "user": r.username, "model": r.model, "status": r.status,
-                    "inputTokens": r.input_tokens, "outputTokens": r.output_tokens, "costUsd": r.cost_usd,
+                    "inputTokens": r.input_tokens, "outputTokens": r.output_tokens,
+                    "costUsd": micros_to_usd(r.cost_usd_micros if r.cost_usd_micros is not None else usd_to_micros(r.cost_usd)),
                     "latencyMs": r.latency_ms, "message": r.message} for r in recent],
     }

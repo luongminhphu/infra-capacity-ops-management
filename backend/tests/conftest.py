@@ -15,6 +15,19 @@ os.environ.setdefault("NETBACKUP_1_HOST", "nbu-master.test.local")
 
 
 import pytest  # noqa: E402
+from sqlalchemy import event  # noqa: E402
+
+from app.database import engine as _engine  # noqa: E402
+
+
+# SCH-11: SQLite leaves foreign keys unenforced unless every connection asks for it. PostgreSQL always
+# enforces them, so the tests must too (RESTRICT / CASCADE, orphan rows).
+@event.listens_for(_engine, "connect")
+def _sqlite_fk_on(dbapi_conn, _record):
+    if _engine.dialect.name == "sqlite":
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
 
 
 @pytest.fixture(autouse=True)

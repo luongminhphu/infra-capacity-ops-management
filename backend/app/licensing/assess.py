@@ -13,8 +13,10 @@ import hashlib
 import json
 import math
 from collections import defaultdict
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from ..shared.money import exponent, from_minor, mul_minor, to_minor
 from .os_classify import summarize
 
 WS_PRODUCTS = {"ws_std": "Windows Server Standard", "ws_dc": "Windows Server Datacenter"}
@@ -117,14 +119,23 @@ def _ent_matches_scope(e: Dict[str, Any], vcenter_keys: Optional[List[str]], clu
     return True
 
 
+def _ent_price_minor(e: Dict[str, Any]) -> Optional[int]:
+    """DAT-10 release 2: integer minor units are the source of truth. Entitlement dicts stored in
+    snapshots before release 2 carry only `unitPrice`; they are converted the same way."""
+    if e.get("unitPriceMinor") is not None:
+        return int(e["unitPriceMinor"])
+    return to_minor(e.get("unitPrice"), e.get("currency") or "VND")
+
+
 def _ent_summary(ents: List[Dict[str, Any]], product: str, unit: str) -> Dict[str, Any]:
-    """unit: 'core' or 'cpu'."""
+    """unit: 'core' or 'cpu'. Money is summed in integer minor units of each currency and only
+    converted to a decimal value for the response."""
     rows = [e for e in ents if e.get("product") == product]
     qty = 0.0
     cost_known = True
-    total_cost = 0.0
+    owned_minor: Dict[str, int] = defaultdict(int)
     currencies = set()
-    price_per_core: Optional[float] = None
+    best: Optional[Dict[str, Any]] = None        # cheapest price per core (or per CPU): {minor, per, currency}
     declared_none = any((e.get("kind") or "owned") == "none" for e in rows)
     for e in rows:
         if (e.get("kind") or "owned") == "none":
@@ -134,23 +145,42 @@ def _ent_summary(ents: List[Dict[str, Any]], product: str, unit: str) -> Dict[st
         else:
             units = float(e.get("quantity") or 0)
         qty += units
-        if e.get("unitPrice") is not None:
+        minor = _ent_price_minor(e)
+        if minor is not None:
+            cur = (e.get("currency") or "VND").upper()
             if units > 0:
-                total_cost += float(e["unitPrice"]) * float(e.get("quantity") or 0)
-            currencies.add(e.get("currency") or "VND")
-            per = float(e["unitPrice"]) / (METRIC_CORES.get(e.get("metric") or "core", 1) if unit == "core" else 1)
-            price_per_core = per if price_per_core is None else min(price_per_core, per)
+                owned_minor[cur] += mul_minor(minor, e.get("quantity") or 0)
+            currencies.add(cur)
+            per = METRIC_CORES.get(e.get("metric") or "core", 1) if unit == "core" else 1
+            cand = {"minor": minor, "per": per, "currency": cur}
+            if best is None or _major_per_unit(cand) < _major_per_unit(best):
+                best = cand
         elif units > 0:
             cost_known = False
+    total_cost = sum((Decimal(m) / (Decimal(10) ** exponent(c)) for c, m in owned_minor.items()), Decimal(0))
     return {
         "product": product, "label": PRODUCT_LABEL.get(product, product), "count": len(rows),
         "units": qty, "unit": unit, "hasSa": any(e.get("hasSa") for e in rows if (e.get("kind") or "owned") != "none"),
         "declaredNone": declared_none,   # người dùng xác nhận CHƯA có license sản phẩm này
-        "costKnown": cost_known and bool(rows), "totalCost": total_cost if rows else None,
+        "costKnown": cost_known and bool(rows), "totalCost": float(total_cost) if rows else None,
         "currency": (sorted(currencies)[0] if len(currencies) == 1 else ("mixed" if currencies else None)),
-        "pricePerUnit": price_per_core,  # per core (or per CPU for legacy); lowest if several
+        "pricePerUnit": float(_major_per_unit(best)) if best else None,  # per core (or per CPU for legacy); lowest if several
         "items": rows,
+        "_price": best,                  # internal: exact basis for cost maths, never returned
     }
+
+
+def _major_per_unit(p: Dict[str, Any]) -> Decimal:
+    return Decimal(p["minor"]) / Decimal(p["per"]) / (Decimal(10) ** exponent(p["currency"]))
+
+
+def _cost(units: Any, price: Dict[str, Any]) -> float:
+    """units (cores / CPUs) × exact price per unit, rounded HALF_UP once to the currency's minor unit."""
+    return from_minor(mul_minor(price["minor"], units, price["per"]), price["currency"])
+
+
+def _public(ent: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in ent.items() if k not in ("items", "_price")}
 
 
 def cluster_in_scope(item: Dict[str, Any], scope: Dict[str, Any]) -> bool:
@@ -290,11 +320,12 @@ def assess(hosts: List[Dict[str, Any]], vms_classified: List[Dict[str, Any]], ru
         shortfall = max(0.0, cores - ent["units"])
         shortfall_max = max(0.0, cores_max - ent["units"])
         cost = None
-        if ent["pricePerUnit"] is not None:
+        if ent["_price"] is not None:
+            pr = ent["_price"]
             cost = {
                 "currency": ent["currency"], "pricePerCore": ent["pricePerUnit"],
-                "demandCost": cores * ent["pricePerUnit"], "demandCostMax": cores_max * ent["pricePerUnit"],
-                "shortfallCost": shortfall * ent["pricePerUnit"], "shortfallCostMax": shortfall_max * ent["pricePerUnit"],
+                "demandCost": _cost(cores, pr), "demandCostMax": _cost(cores_max, pr),
+                "shortfallCost": _cost(shortfall, pr), "shortfallCostMax": _cost(shortfall_max, pr),
                 "ownedCost": ent["totalCost"],
             }
         return {
@@ -303,7 +334,7 @@ def assess(hosts: List[Dict[str, Any]], vms_classified: List[Dict[str, Any]], ru
             "entitledCores": ent["units"], "shortfallCores": shortfall, "shortfallCoresMax": shortfall_max,
             "shortfallPacks": _packs(int(shortfall), pack_sizes), "shortfallPacksMax": _packs(int(shortfall_max), pack_sizes),
             "status": _status(cores, cores_max, ent["units"], has) if ws_total_vms + unknown_total > 0 else ("ok" if not has else "ok"),
-            "entitlement": {k: v for k, v in ent.items() if k != "items"}, "cost": cost,
+            "entitlement": _public(ent), "cost": cost,
         }
 
     ws_std_opt = _ws_option("standard", std_cores, std_cores_max, ent_std)
@@ -354,11 +385,11 @@ def assess(hosts: List[Dict[str, Any]], vms_classified: List[Dict[str, Any]], ru
     min_order = _i(vmc.get("min_cores_per_order"), 0)
     order_qty = max(vmw_short, min_order) if vmw_short > 0 and min_order > 0 else vmw_short
     vmw_cost = None
-    priced = [e for e in vmw_ents.values() if e["pricePerUnit"] is not None]
+    priced = [e for e in vmw_ents.values() if e["_price"] is not None]
     if priced:
-        pick = min(priced, key=lambda e: e["pricePerUnit"])
+        pick = min(priced, key=lambda e: _major_per_unit(e["_price"]))
         vmw_cost = {"basis": pick["label"], "currency": pick["currency"], "pricePerCore": pick["pricePerUnit"],
-                    "demandCost": vmw_cores * pick["pricePerUnit"], "shortfallCost": order_qty * pick["pricePerUnit"]}
+                    "demandCost": _cost(vmw_cores, pick["_price"]), "shortfallCost": _cost(order_qty, pick["_price"])}
     legacy = None
     if vml:
         cpu_demand = sum((h["vmwareLegacyCpuLicenses"] or 0) for h in host_rows)
@@ -366,7 +397,7 @@ def assess(hosts: List[Dict[str, Any]], vms_classified: List[Dict[str, Any]], ru
         legacy = {"demandCpuLicenses": cpu_demand, "entitled": ent_leg["units"],
                   "shortfall": max(0.0, cpu_demand - ent_leg["units"]),
                   "status": _status(cpu_demand, cpu_demand, ent_leg["units"], ent_leg["units"] > 0 or bool(ent_leg.get("declaredNone"))),
-                  "entitlement": {k: v for k, v in ent_leg.items() if k != "items"},
+                  "entitlement": _public(ent_leg),
                   "formula": f"Số license CPU = Σ(host) socket × ceil(core/socket / {_i(vml.get('cores_per_cpu_license'), 32)})."}
 
     vmw_formula = [
@@ -419,7 +450,7 @@ def assess(hosts: List[Dict[str, Any]], vms_classified: List[Dict[str, Any]], ru
         "vmware": {
             "demandCores": vmw_cores, "entitledCores": vmw_ent_total, "shortfallCores": vmw_short,
             "orderCores": order_qty, "status": _status(vmw_cores, vmw_cores, vmw_ent_total, vmw_has) if host_rows else "ok",
-            "entitlements": {p: {k: v for k, v in e.items() if k != "items"} for p, e in vmw_ents.items()},
+            "entitlements": {p: _public(e) for p, e in vmw_ents.items()},
             "declaredNone": vmw_declared_none, "cost": vmw_cost, "legacy": legacy,
             "formula": vmw_formula, "assumptions": vmw_assumptions, "dataGaps": vmw_gaps,
         },
@@ -442,9 +473,10 @@ def _recommend(std: Dict[str, Any], dc: Dict[str, Any]) -> Dict[str, Any]:
         return out
     out["byCores"] = "datacenter" if std["demandCores"] > dc["demandCores"] else "standard"
     if std.get("cost") and dc.get("cost") and std["cost"]["currency"] == dc["cost"]["currency"] and std["cost"]["currency"] != "mixed":
-        s, d = std["cost"]["demandCost"], dc["cost"]["demandCost"]
+        cur = std["cost"]["currency"]
+        s, d = to_minor(std["cost"]["demandCost"], cur), to_minor(dc["cost"]["demandCost"], cur)
         out["byCost"] = "datacenter" if s > d else "standard"
-        out["saving"] = abs(s - d)
+        out["saving"] = from_minor(abs(s - d), cur)
         out["currency"] = std["cost"]["currency"]
     else:
         out["note"] = "Chưa đủ đơn giá cả hai edition (cùng đơn vị tiền) để so sánh chi phí."
