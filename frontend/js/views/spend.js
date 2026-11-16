@@ -92,11 +92,12 @@ async function renderSpendView() {
 async function spRenderSpendSub() {
   const mount = $('#spendMount');
   if (!mount) return;
-  if (!spState.meta) mount.innerHTML = uiNote('Đang tải…');
+  // every Chi phí tab shows the same loading state while its data comes (several showed nothing)
+  mount.innerHTML = uiLoading();
   try {
     await spLoadMeta();
   } catch (err) {
-    mount.innerHTML = `<div class="panel empty-note">${esc(err.message)}</div>`;
+    mount.innerHTML = `<div class="panel">${uiError(err.message)}</div>`;
     return;
   }
   if (spState.sub === 'capex' && typeof renderCapexPage === 'function') { await renderCapexPage(); return; }

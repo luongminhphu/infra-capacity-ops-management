@@ -786,11 +786,10 @@ async function loadLiveData() {
     appState.vms = data.vms || [];
     appState.reportTimestamp = new Date().toISOString();
     appState.validation = { errors: [], warnings: [] };
-    const footprintNote = data.runMeta && data.runMeta.length
-      ? [`Dữ liệu từ ${data.runMeta.map(r => `${r.vcenterKey === 'import' ? 'import thủ công' : r.vcenterKey} (${r.finishedAt ? new Date(r.finishedAt).toLocaleString('vi-VN') : 'chưa rõ giờ'})`).join(', ')}.`]
-      : [];
-    // Where the numbers come from is information, not a warning: one quiet line (MASTER.md, trang-chu.md).
-    showValidationBanner([], [], footprintNote);
+    // Where the numbers come from is information, not a warning: one short line, the per-source times on
+    // demand (MASTER.md, trang-chu.md; was a 2-line sentence on phones).
+    showValidationBanner([], []);
+    renderSourceMeta(data.runMeta || []);
     refreshAll(); // renders whichever page is active, including Điều hành
   } catch (err) {
     console.error('Không tải được dữ liệu vCenter', err);
@@ -891,3 +890,57 @@ async function bootstrap() {
 
 setupLoginOptions();
 bootstrap();
+
+
+/* ---------- Data source line ("Cập nhật …") ---------- */
+function renderSourceMeta(runMeta) {
+  const banner = $('#validationBanner');
+  if (!banner || !runMeta.length) return;
+  const name = r => (r.vcenterKey === 'import' ? 'import thủ công' : r.vcenterKey);
+  const when = r => (r.finishedAt ? new Date(r.finishedAt) : null);
+  const times = runMeta.map(when).filter(Boolean);
+  const oldest = times.length ? new Date(Math.min(...times)) : null;      // the stalest source is the one that matters
+  const short = d => d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  const summary = oldest
+    ? `Dữ liệu cập nhật ${short(oldest)}${runMeta.length > 1 ? ` · ${runMeta.length} nguồn` : ` · ${name(runMeta[0])}`}`
+    : 'Dữ liệu: chưa rõ giờ cập nhật';
+  const detail = runMeta.map(r => `${name(r)} (${when(r) ? when(r).toLocaleString('vi-VN') : 'chưa rõ giờ'})`).join(', ');
+  banner.classList.add('show', 'info');
+  banner.classList.remove('error', 'warn');
+  banner.innerHTML = `<details class="src-meta"><summary>${esc(summary)}</summary><span>${esc(detail)}</span></details>`;
+}
+
+/* ---------- Scope toggle on phones ---------- */
+function updateScopeToggle() {
+  const box = $('#topbarScope'), txt = $('#scopeToggleText');
+  if (!box || !txt) return;
+  // selects the current page uses (the others carry .hidden); "Tất cả …" adds nothing to the summary
+  const used = [...box.querySelectorAll('select')].filter(sel => !sel.classList.contains('hidden'));
+  const btn = $('#scopeToggle');
+  if (btn && btn.classList.contains('hidden') !== !used.length) btn.classList.toggle('hidden', !used.length);   // page without scope: no button
+  const parts = used
+    .map(sel => (sel.options[sel.selectedIndex] || {}).text || '').filter(t => t && !/^Tất cả/.test(t));
+  const next = parts.length ? `Phạm vi: ${parts.join(' · ')}` : 'Phạm vi: tất cả';
+  if (txt.textContent !== next) txt.textContent = next;      // unchanged text: no DOM write, so the observer below settles
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const box = $('#topbarScope'), btn = $('#scopeToggle');
+  if (btn && box) {
+    btn.addEventListener('click', () => {
+      const open = !box.classList.contains('is-open');
+      box.classList.toggle('is-open', open);
+      btn.setAttribute('aria-expanded', String(open));
+      if (open) { const first = box.querySelector('select:not(.hidden)'); if (first) first.focus(); }
+    });
+    box.addEventListener('change', updateScopeToggle);
+    new MutationObserver(updateScopeToggle).observe(box, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+    updateScopeToggle();
+  }
+  const tabs = $('#pageTabs');
+  if (tabs) {
+    const mark = () => tabs.classList.toggle('at-end', tabs.scrollLeft + tabs.clientWidth >= tabs.scrollWidth - 4);
+    tabs.addEventListener('scroll', mark, { passive: true });
+    new MutationObserver(mark).observe(tabs, { childList: true });
+    mark();
+  }
+});
