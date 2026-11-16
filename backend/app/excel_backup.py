@@ -13,8 +13,9 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Font
 
-from .excel_style import (BLUE, CRIT, CRIT_BG, NAVY, NUM, NUM1, OK, OK_BG, TEAL, WARN, WARN_BG, _fill, _font, _print_setup,
+from .excel_style import (BLUE, CRIT, CRIT_BG, MUTED, NAVY, NUM, NUM1, OK, OK_BG, TEAL, WARN, WARN_BG, _fill, _font, _print_setup,
                            _section, _sheet_title, _table, _tile, _widths, _write_rows, ext_cell)
+from .shared.text import vn_num
 from .timeutil import VN_TZ
 
 STATUS_TXT = {"ok": "Đạt", "warn": "Cần theo dõi", "crit": "Cần xử lý", "na": "Không hoạt động"}
@@ -245,6 +246,45 @@ def _storage(wb, r, subtitle) -> None:
     _widths(ws, {"A": 12, "B": 22, "C": 14, "D": 11, "E": 11, "F": 12, "G": 13, "H": 10, "I": 13, "J": 12, "K": 14})
 
 
+def _sizes(wb, r, subtitle) -> None:
+    """Top servers by data size (last successful Full) and by data backed up in the period (top 50 each)."""
+    z = r.get("sizeStats") or {}
+    ws, row = _sheet(wb, "Dung lượng", "Máy chủ dung lượng lớn nhất & backup nhiều nhất", subtitle, 9)
+    ws.cell(row=row, column=1, value=(f"{vn_num(z.get('clients') or 0)} máy chủ có backup thành công · tổng "
+                                      f"{vn_num(z.get('totalGB') or 0, 1)} GB · top 10 chiếm {vn_num(z.get('top10SharePct') or 0, 1)}%. "
+                                      "Dung lượng = bản Full thành công gần nhất trong kỳ; chưa có Full thì lấy job thành công lớn nhất."
+                                      )).font = _font(9, color=MUTED)
+    row = _section(ws, row + 2, "Theo dung lượng (bản Full gần nhất)", 9)
+    rows = [[i + 1, x["client"], x["vm"], x["sizeGB"], "Full" if x["sizeBasis"] == "full" else "Job lớn nhất", _local(x["sizeAt"]),
+             x["vmDiskUsedGB"], x["vmDiskProvGB"], ", ".join(x["policies"])] for i, x in enumerate(z.get("bySize") or [])]
+    top1 = row
+    last = _write_rows(ws, row, ["#", "Client", "VM (vCenter)", "Dung lượng (GB)", "Căn cứ", "Thời điểm", "Đĩa VM đã dùng (GB)",
+                                 "Đĩa VM cấp phát (GB)", "Policy"], rows,
+                       fmts={1: NUM, 4: NUM1, 6: DATE_FMT, 7: NUM1, 8: NUM1}, wrap_cols=(9,))
+    if rows:
+        _table(ws, f"A{top1}:I{last}", "TopDungLuong")
+        ch = BarChart()
+        ch.type, ch.title, ch.style = "bar", "Top 10 theo dung lượng (GB)", 10
+        n = min(10, len(rows))
+        ch.add_data(Reference(ws, min_col=4, min_row=top1, max_row=top1 + n), titles_from_data=True)
+        ch.set_categories(Reference(ws, min_col=2, min_row=top1 + 1, max_row=top1 + n))
+        ch.y_axis.numFmt, ch.legend = "#,##0", None
+        ch.x_axis.scaling.orientation = "maxMin"          # largest on top
+        ch.height, ch.width = 7.5, 16
+        ws.add_chart(ch, f"K{top1}")
+    row = _section(ws, last + 2, "Theo dữ liệu đã backup trong kỳ", 9)
+    rows = [[i + 1, x["client"], x["vm"], x["totalGB"], x["jobs"], x["largestJob"]["gb"], x["largestJob"]["schedule"],
+             _local(x["largestJob"]["startTime"]), ", ".join(x["policies"])] for i, x in enumerate(z.get("byTotal") or [])]
+    top2 = row
+    last2 = _write_rows(ws, row, ["#", "Client", "VM (vCenter)", "Đã backup (GB)", "Số job", "Job lớn nhất (GB)", "Loại job lớn nhất",
+                                  "Thời điểm", "Policy"], rows,
+                        fmts={1: NUM, 4: NUM1, 5: NUM, 6: NUM1, 8: DATE_FMT}, wrap_cols=(9,))
+    if rows:
+        _table(ws, f"A{top2}:I{last2}", "TopDaBackup")
+    ws.freeze_panes = ws[f"C{top1 + 1}"]
+    _widths(ws, {"A": 6, "B": 28, "C": 26, "D": 15, "E": 13, "F": 16, "G": 17, "H": 17, "I": 34})
+
+
 def _coverage(wb, r, subtitle) -> None:
     cov = r["coverage"]
     ws, row = _sheet(wb, "Độ phủ VM", "Độ phủ backup máy ảo (đối chiếu inventory vCenter)", subtitle, 7)
@@ -303,6 +343,7 @@ def build_backup_xlsx(r: Dict[str, Any], jobs: List[Dict[str, Any]], servers: Li
     _clients(wb, r, subtitle)
     _policies(wb, r, subtitle)
     _storage(wb, r, subtitle)
+    _sizes(wb, r, subtitle)
     _coverage(wb, r, subtitle)
     _jobs(wb, jobs, subtitle)
     wb.properties.creator = "Infra Capacity Ops"

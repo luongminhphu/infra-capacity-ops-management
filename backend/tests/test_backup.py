@@ -593,3 +593,26 @@ def test_size_stats_in_summary_and_capped():
     assert st["bySize"][0]["client"] == "srv60" and st["bySize"][-1]["client"] == "srv11"
     # top 10 = 51 … 60 GB = 555 of 1 830 GB
     assert st["totalGB"] == 1830.0 and st["top10SharePct"] == 30.3
+
+
+def test_size_tables_in_pdf_html_and_excel_sheet():
+    import io
+    from openpyxl import load_workbook
+    from app import excel_backup, report_backup
+    jobs = [_sized(1, "db01", 520, 20), _sized(2, "db01", 30, 10, "DIFFERENTIAL_INCREMENTAL"),
+            _sized(3, "fs01", 1536, 30, "DIFFERENTIAL_INCREMENTAL"), _sized(4, "app01", 100, 12)]
+    rep = analysis.analyze(jobs, [], [], [], None, analysis.BackupThresholds(), NOW, days=7)
+    html = report_backup.render_backup_html(rep, [], "Tất cả", appendix=False)
+    assert "Máy chủ dung lượng lớn nhất &amp; backup nhiều nhất" in html
+    sec = html[html.index("Máy chủ dung lượng lớn nhất &amp; backup nhiều nhất"):html.index("Policy backup")]
+    assert sec.index("fs01") < sec.index("db01") < sec.index("app01")          # 1,5 TB > 520 GB > 100 GB
+    assert "1,5 TB" in sec and "520,0 GB" in sec and "Job lớn nhất" in sec    # fs01 has no Full: flagged
+    assert ">10</span>Tiêu chí đánh giá" in html                               # sections renumbered after the new 7
+    wb = load_workbook(io.BytesIO(excel_backup.build_backup_xlsx(rep, [], [], "Tất cả")))
+    ws = wb["Dung lượng"]
+    vals = [[c.value for c in r] for r in ws.iter_rows()]
+    head = next(i for i, r in enumerate(vals) if r[:4] == ["#", "Client", "VM (vCenter)", "Dung lượng (GB)"])
+    assert [(r[1], r[3], r[4]) for r in vals[head + 1:head + 4]] == [("fs01", 1536.0, "Job lớn nhất"), ("db01", 520.0, "Full"), ("app01", 100.0, "Full")]
+    head2 = next(i for i, r in enumerate(vals) if r[:4] == ["#", "Client", "VM (vCenter)", "Đã backup (GB)"])
+    assert [(r[1], r[3], r[4]) for r in vals[head2 + 1:head2 + 4]] == [("fs01", 1536.0, 1), ("db01", 550.0, 2), ("app01", 100.0, 1)]
+    assert ws._charts, "top-10 chart"

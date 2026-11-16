@@ -305,13 +305,60 @@ def _storage(r: Dict[str, Any]) -> str:
   </div>"""
 
 
+def _size_gb(gb: Optional[float]) -> str:
+    """GB → "512,4 GB" / "1,2 TB" (vi-VN, same as the web)."""
+    if gb is None:
+        return "—"
+    return f"{vn(gb / 1024, 1)} TB" if gb >= 1024 else f"{vn(gb, 1)} GB"
+
+
+def _size_bar(v: float, mx: float) -> str:
+    """Relative bar against the largest row of the table (series colour: a size, not a status)."""
+    w = max(2.0, min(100.0, v * 100.0 / mx)) if mx else 0
+    return (f'<div style="height:4px;margin-top:2px;background:{COLORS["track_bg"]};border-radius:2px;">'
+            f'<div style="width:{w:.1f}%;height:4px;background:{COLORS["series1"]};border-radius:2px;"></div></div>')
+
+
+def _sizes(r: Dict[str, Any], top: int = 10) -> str:
+    z = r.get("sizeStats") or {}
+    by_size, by_total = (z.get("bySize") or [])[:top], (z.get("byTotal") or [])[:top]
+    if not by_size:
+        return """
+  <div class="section"><div class="section-title"><span class="sec-num">7</span>Máy chủ dung lượng lớn nhất &amp; backup nhiều nhất</div>
+  <div class="small-note" style="font-size:9px;">Chưa có job backup thành công trong kỳ.</div></div>"""
+    mx_s = max(x["sizeGB"] or 0 for x in by_size)
+    mx_t = max(x["totalGB"] or 0 for x in by_total) if by_total else 0
+    name = lambda x: f"<b>{esc(x['vm'] or x['client'])}</b>" + (f'<div class="small-note">client {esc(x["client"])}</div>'
+                                                             if x["vm"] and x["vm"].lower() != str(x["client"]).lower() else "")
+    rows1 = [[vn(i + 1, 0), name(x), f"<b>{_size_gb(x['sizeGB'])}</b>{_size_bar(x['sizeGB'] or 0, mx_s)}",
+              f"Full {_t(x['sizeAt'])}" if x["sizeBasis"] == "full" else "Job lớn nhất",
+              f"{_size_gb(x['vmDiskUsedGB'])} / {_size_gb(x['vmDiskProvGB'])}" if x["vmDiskUsedGB"] is not None else "—",
+              esc(", ".join(x["policies"][:2]) or "—")] for i, x in enumerate(by_size)]
+    rows2 = [[vn(i + 1, 0), name(x), f"<b>{_size_gb(x['totalGB'])}</b>{_size_bar(x['totalGB'] or 0, mx_t)}", vn(x["jobs"], 0),
+              f"{_size_gb(x['largestJob']['gb'])} · {esc(x['largestJob']['schedule'] or '—')} · {_t(x['largestJob']['startTime'])}"]
+             for i, x in enumerate(by_total)]
+    days = r["period"]["days"]
+    return f"""
+  <div class="section breakable">
+    <div class="section-title"><span class="sec-num">7</span>Máy chủ dung lượng lớn nhất &amp; backup nhiều nhất</div>
+    <div class="section-sub">{vn(z.get('clients'), 0)} máy chủ có backup thành công trong {days} ngày, tổng <b>{_size_gb(z.get('totalGB'))}</b>;
+    10 máy chủ lớn nhất chiếm <b>{vn(z.get('top10SharePct'))}%</b>. Dung lượng = bản Full thành công gần nhất trong kỳ (ước tính dữ liệu cần backup);
+    chưa có Full thì lấy job thành công lớn nhất. Đĩa VM lấy từ vCenter khi khớp tên / IP.</div>
+    <div class="chart-card-title" style="margin-top:4px;">Top {len(by_size)} máy chủ theo dung lượng</div>
+    {_table(["#", "Máy chủ", "Dung lượng", "Căn cứ", "Đĩa VM dùng / cấp", "Policy"], rows1, widths=["5%", "24%", "18%", "15%", "18%", "20%"])}
+    <div class="chart-card-title" style="margin-top:8px;">Top {len(by_total)} máy chủ theo dữ liệu đã backup trong kỳ</div>
+    {_table(["#", "Máy chủ", "Đã backup", "Số job", "Job lớn nhất"], rows2, widths=["5%", "30%", "20%", "9%", "36%"])}
+    <div class="small-note">Danh sách đầy đủ (top 50): sheet “Dung lượng” trong file Excel.</div>
+  </div>"""
+
+
 def _policies(r: Dict[str, Any]) -> str:
     rows = [[f"<b>{esc(p['name'])}</b>", esc(p["policyType"] or "—"), "Bật" if p["active"] else ("Tắt" if p["active"] is False else "—"),
              vn(p["clients"], 0), _t(p["lastRunAt"]), vn(p["jobs"], 0), vn(p["failed"], 0) if p["failed"] else "0",
              (vn(p["successRate"]) + "%") if p["successRate"] is not None else "—", _pill(p["statusLabel"], p["status"])] for p in r["policies"]]
     return f"""
   <div class="section breakable">
-    <div class="section-title"><span class="sec-num">7</span>Policy backup</div>
+    <div class="section-title"><span class="sec-num">8</span>Policy backup</div>
     <div class="section-sub">Policy đang bật mà không có job trong 48 giờ được đánh giá “Không chạy”. Số client của policy VMware lấy theo VM thực tế được backup (client chọn theo query).</div>
     {_table(["Policy", "Loại", "Hoạt động", "Client", "Chạy gần nhất", "Job", "Lỗi", "Tỷ lệ", "Đánh giá"], rows)}
   </div>"""
@@ -323,7 +370,7 @@ def _findings(r: Dict[str, Any]) -> str:
              esc(f["action"])] for f in r["findings"]]
     return f"""
   <div class="section breakable">
-    <div class="section-title"><span class="sec-num">8</span>Phát hiện &amp; khuyến nghị</div>
+    <div class="section-title"><span class="sec-num">9</span>Phát hiện &amp; khuyến nghị</div>
     {_table(["Mức độ", "Hạng mục", "Phát hiện", "Khuyến nghị"], rows, cls="decision-table", widths=["12%", "13%", "40%", "35%"])}
   </div>"""
 
@@ -352,7 +399,7 @@ def _criteria(r: Dict[str, Any], servers: List[Dict[str, Any]]) -> str:
                     for s in servers) or "—"
     return f"""
   <div class="section">
-    <div class="section-title"><span class="sec-num">9</span>Tiêu chí đánh giá &amp; nguồn dữ liệu</div>
+    <div class="section-title"><span class="sec-num">10</span>Tiêu chí đánh giá &amp; nguồn dữ liệu</div>
     <ul class="brief-list">{''.join(f'<li>{x}</li>' for x in items)}</ul>
     <div class="assumption-note">Nguồn: REST API của hệ thống backup qua tài khoản chỉ đọc — {src}. Inventory VM: lần đồng bộ vCenter gần nhất.</div>
   </div>"""
@@ -396,7 +443,7 @@ def render_backup_html(r: Dict[str, Any], servers: List[Dict[str, Any]], scope_l
     generated = _now_str()
     logo = f'<img class="cover-logo" src="{logo_data_url}" alt="logo"/>' if logo_data_url else ""
     p = r["period"]
-    body = (_summary(r) + _daily(r) + _schedule(r) + _failures(r) + _clients(r) + _coverage(r) + _storage(r) + _policies(r)
+    body = (_summary(r) + _daily(r) + _schedule(r) + _failures(r) + _clients(r) + _coverage(r) + _storage(r) + _sizes(r) + _policies(r)
             + _findings(r) + _criteria(r, servers) + (_appendix(r) if appendix else ""))
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8"/><style>{_base_css('Báo cáo hiện trạng backup', generated)}{_exec_visual_css()}{_css()}</style></head>
 <body>
