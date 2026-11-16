@@ -21,6 +21,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from .shared.text import vn_g, vn_num
 from .sizing_advisory import AdvisoryThresholds
 
 # Column aliases accepted when importing an Excel/CSV VM list (lower-case,
@@ -287,7 +288,7 @@ STD_RAM_GB = [128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096]
 
 
 def _ram_label(gb: float) -> str:
-    return f"{gb / 1024:g} TB" if gb >= 1024 else f"{gb:g} GB"
+    return f"{vn_g(gb / 1024)} TB" if gb >= 1024 else f"{vn_g(gb)} GB"
 
 
 def _suggest_variants(best_profile: HostProfile, best: Dict[str, Any], profiles: List[HostProfile],
@@ -402,7 +403,7 @@ def build_sizing(vms: List[VmSpec], params: SizingParams, profiles: List[HostPro
         if selection["changedOption"]:
             parts.append(f"chọn {selection['name']} thay cho phương án tự động {selection['autoName']}")
         if selection["changedHosts"]:
-            parts.append(f"đề xuất {selection['hosts']} host thay vì {selection['hostsComputed']} host theo tính toán (thêm dư địa)")
+            parts.append(f"đề xuất {vn_num(selection['hosts'])} host thay vì {vn_num(selection['hostsComputed'])} host theo tính toán (thêm dư địa)")
         if parts:
             recommendation["why"] = "Người lập điều chỉnh: " + "; ".join(parts) + "."
     return {
@@ -424,20 +425,20 @@ def assumption_rows(p: SizingParams) -> List[List[str]]:
     pf = platforms.get(p)
     ht = max(1.0, p.ht_factor)
     rows = [
-        ["Tỷ lệ chia sẻ CPU", f"{p.cpu_ratio:g} vCPU / thread (≈ {p.cpu_ratio * ht:g} vCPU / core)", "Số vCPU tối đa xếp lên 1 luồng CPU vật lý (HT ×" + f"{ht:g})"],
-        ["Tỷ lệ chia sẻ RAM", f"{p.ram_ratio:g} : 1", "Không cấp RAM vượt dung lượng thật" if p.ram_ratio <= 1 else "Cấp RAM vượt dung lượng thật"],
-        ["Vùng an toàn", f"{100 - p.max_util_pct:g}%", f"Mỗi host chỉ dùng tối đa {p.max_util_pct:g}%"],
-        ["Dự phòng tăng trưởng", f"+{p.growth_pct:g}%", "Cộng vào nhu cầu ban đầu (tương đương năm thứ 1 của dự báo nếu bằng tăng trưởng hằng năm)"],
-        ["Dự phòng sự cố", f"N+{p.redundancy}, tối thiểu {p.min_hosts} host", f"Mất {p.redundancy} host hệ thống vẫn chạy" if p.redundancy else "Không có host dự phòng"],
-        ["Tài nguyên dành cho hypervisor", f"{p.reserve_cores:g} core + {p.reserve_ram_gb:g} GB / host",
+        ["Tỷ lệ chia sẻ CPU", f"{vn_g(p.cpu_ratio)} vCPU / thread (≈ {vn_g(p.cpu_ratio * ht)} vCPU / core)", "Số vCPU tối đa xếp lên 1 luồng CPU vật lý (HT ×" + f"{vn_g(ht)})"],
+        ["Tỷ lệ chia sẻ RAM", f"{vn_g(p.ram_ratio)} : 1", "Không cấp RAM vượt dung lượng thật" if p.ram_ratio <= 1 else "Cấp RAM vượt dung lượng thật"],
+        ["Vùng an toàn", f"{vn_g(100 - p.max_util_pct)}%", f"Mỗi host chỉ dùng tối đa {vn_g(p.max_util_pct)}%"],
+        ["Dự phòng tăng trưởng", f"+{vn_g(p.growth_pct)}%", "Cộng vào nhu cầu ban đầu (tương đương năm thứ 1 của dự báo nếu bằng tăng trưởng hằng năm)"],
+        ["Dự phòng sự cố", f"N+{p.redundancy}, tối thiểu {vn_num(p.min_hosts)} host", f"Mất {p.redundancy} host hệ thống vẫn chạy" if p.redundancy else "Không có host dự phòng"],
+        ["Tài nguyên dành cho hypervisor", f"{vn_g(p.reserve_cores)} core + {vn_g(p.reserve_ram_gb)} GB / host",
          f"{pf['hypervisor']}" + (f" và dịch vụ lưu trữ ({pf['hci']})" if p.storage_mode == "local" and pf.get("overhead_note") else "") + "; trừ khỏi năng lực khả dụng"],
     ]
     if p.storage_mode == "local":
-        rows.append([f"Lưu trữ ({pf['hci']})", f"Hệ số bảo vệ ×{p.storage_protection_factor:g}, dự trữ {p.storage_overhead_pct:g}%",
+        rows.append([f"Lưu trữ ({pf['hci']})", f"Hệ số bảo vệ ×{vn_g(p.storage_protection_factor)}, dự trữ {vn_g(p.storage_overhead_pct)}%",
                      "×2 tương đương 2 bản sao (mirror), chịu lỗi 1 host; dự trữ cho snapshot, swap, dựng lại dữ liệu"])
     else:
-        rows.append(["Lưu trữ (SAN)", f"Dự trữ {p.storage_overhead_pct:g}%", "Snapshot, swap, tăng trưởng ổ đĩa ảo, vùng trống tối thiểu"])
-    rows.append(["Tăng trưởng hằng năm", f"{p.annual_growth_pct:g}% / năm, dự báo {p.horizon_years} năm",
+        rows.append(["Lưu trữ (SAN)", f"Dự trữ {vn_g(p.storage_overhead_pct)}%", "Snapshot, swap, tăng trưởng ổ đĩa ảo, vùng trống tối thiểu"])
+    rows.append(["Tăng trưởng hằng năm", f"{vn_g(p.annual_growth_pct)}% / năm, dự báo {p.horizon_years} năm",
                  "Dự báo tính lại từ nhu cầu ban đầu, không cộng dồn với dự phòng tăng trưởng"])
     years = max(1, int(p.tco_years or 1))
     inc = max(0, min(years, int(p.warranty_included_years or 0)))
@@ -445,7 +446,7 @@ def assumption_rows(p: SizingParams) -> List[List[str]]:
     if ext_years:
         vals = list(p.warranty_ext_values or [])
         unit_txt = "% giá host / năm" if p.warranty_ext_mode == "pct" else " / host / năm"
-        ext_txt = "; ".join(f"năm {y}: " + (f"{vals[i]:,.0f}{unit_txt}" if p.warranty_ext_mode != "pct" else f"{vals[i]:g}{unit_txt}")
+        ext_txt = "; ".join(f"năm {y}: " + (f"{vn_num(vals[i])}{unit_txt}" if p.warranty_ext_mode != "pct" else f"{vn_g(vals[i])}{unit_txt}")
                             if i < len(vals) and vals[i] is not None else f"năm {y}: chưa nhập" for i, y in enumerate(ext_years))
     else:
         ext_txt = "không có năm gia hạn"
@@ -455,7 +456,7 @@ def assumption_rows(p: SizingParams) -> List[List[str]]:
                 f"Theo core, tối thiểu {p.license_min_cores_per_socket} core / CPU"
                 + (f", {pf['license_min_per_host']} core / host" if pf.get("license_min_per_host") else ""))
     rows.append(["License", lic_rule,
-                 (f"{p.license_price_per_core:,.0f} / {unit} / năm" if p.license_price_per_core is not None else "Chưa có đơn giá")
+                 (f"{vn_num(p.license_price_per_core)} / {unit} / năm" if p.license_price_per_core is not None else "Chưa có đơn giá")
                  + f"; {platforms.edition_of(p)}"])
     return rows
 
@@ -465,11 +466,11 @@ def assumption_lines(p: SizingParams) -> List[str]:
 
 
 def _fmt_int(v: float) -> str:
-    return f"{int(round(v)):,}"
+    return vn_num(round(v))
 
 
 def _tib(gb: float) -> str:
-    return f"{gb / 1024:,.1f} TiB" if gb >= 1024 else f"{gb:,.0f} GB"
+    return f"{vn_num(gb / 1024, 1)} TiB" if gb >= 1024 else f"{vn_num(gb)} GB"
 
 
 def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Optional[Dict[str, Any]],
@@ -478,12 +479,12 @@ def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Opt
         return {"headline": "Chưa có VM nào trong danh sách yêu cầu.", "detail": "", "why": ""}
     p = best["profile"]
     headline = (
-        f"Đề xuất {best['hostsTotal']} host {p['name']} ({p['cores']} core · {_fmt_int(p['ramGB'])} GB RAM mỗi host) "
-        f"cho {demand['vmCount']} VM ({_fmt_int(demand['vcpu'])} vCPU · {_fmt_int(demand['ramGB'])} GB RAM · {_tib(demand['diskGB'])} dữ liệu)."
+        f"Đề xuất {_fmt_int(best['hostsTotal'])} host {p['name']} ({_fmt_int(p['cores'])} core · {_fmt_int(p['ramGB'])} GB RAM mỗi host) "
+        f"cho {_fmt_int(demand['vmCount'])} VM ({_fmt_int(demand['vcpu'])} vCPU · {_fmt_int(demand['ramGB'])} GB RAM · {_tib(demand['diskGB'])} dữ liệu)."
     )
     fail = best["failure"]
     if fail["ok"] and fail["cpuPct"] is not None:
-        fail_txt = (f"Khi mất {best['redundancy']} host, cụm dùng {fail['cpuPct']:.0f}% CPU · {fail['ramPct']:.0f}% RAM"
+        fail_txt = (f"Khi mất {best['redundancy']} host, cụm dùng {vn_num(fail['cpuPct'])}% CPU · {vn_num(fail['ramPct'])}% RAM"
                     + (" — sát mức tối đa." if fail.get("atLimit") else "."))
     else:
         fail_txt = f"Chưa đạt dự phòng N+{best['redundancy']} — cần thêm host hoặc giảm tỷ lệ chia sẻ."
@@ -492,12 +493,12 @@ def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Opt
     store_txt = (f"Lưu trữ cần cấp: {_tib(demand['storageNeededGB'])} trên SAN." if params.storage_mode == "san"
                  else f"Lưu trữ {hci}: {_tib(demand['storageNeededGB'])} dung lượng thô (~{_tib(best['storage'].get('perHostNeededGB', 0))} mỗi host).")
     bind = {"CPU": "CPU", "RAM": "RAM", "CPU & RAM": "cả CPU và RAM"}.get(best["binding"], best["binding"])
-    detail = (f"Yếu tố quyết định số host là {bind}: cần {best['hostsForCpu']} host theo CPU, {best['hostsForRam']} host theo RAM, "
+    detail = (f"Yếu tố quyết định số host là {bind}: cần {_fmt_int(best['hostsForCpu'])} host theo CPU, {_fmt_int(best['hostsForRam'])} host theo RAM, "
               f"cộng {best['redundancy']} host dự phòng. {fail_txt} {store_txt}")
     extra = best["spare"].get("extraAvgVms")
     if extra is not None:
         detail += (" Không còn dư địa cho VM mới khi vẫn giữ dự phòng." if extra <= 0
-                   else f" Sau khi trừ dự phòng, cụm còn chứa thêm khoảng {extra} VM cỡ trung bình.")
+                   else f" Sau khi trừ dự phòng, cụm còn chứa thêm khoảng {_fmt_int(extra)} VM cỡ trung bình.")
     # Why this option over the others (same order as the ranking rule).
     why = ""
     peers = [r for r in (results or []) if r is not best and r["hostsTotal"] and not r.get("suggested")]
@@ -511,7 +512,7 @@ def _recommendation_text(demand: Dict[str, Any], params: SizingParams, best: Opt
         if same_hosts:
             tight_peers = [r for r in same_hosts if r.get("tight")]
             if tight_peers and not best.get("tight"):
-                parts.append(f"cùng {best['hostsTotal']} host nhưng {', '.join(r['profile']['name'] for r in tight_peers[:2])} sát ngưỡng, không còn dư địa")
+                parts.append(f"cùng {_fmt_int(best['hostsTotal'])} host nhưng {', '.join(r['profile']['name'] for r in tight_peers[:2])} sát ngưỡng, không còn dư địa")
             else:
                 parts.append(f"cùng số host, {basis_txt} thấp hơn hoặc bằng và điểm tổng hợp cao hơn")
         if parts:
@@ -632,7 +633,7 @@ def rows_to_vmspecs(table: List[List[Any]]) -> Dict[str, Any]:
                 warnings.append(f"Dòng {n} ({name}): thiếu vCPU/RAM — bỏ qua.")
             continue
         if ram and ram < 1 and "mb" not in str(cell(row, "ram_gb", "")).lower():
-            warnings.append(f"Dòng {n} ({name or 'VM'}): RAM {ram:g} GB có vẻ bất thường.")
+            warnings.append(f"Dòng {n} ({name or 'VM'}): RAM {vn_g(ram)} GB có vẻ bất thường.")
         rows_out.append({
             "name": name or f"VM-{len(rows_out) + 1:02d}",
             "qty": qty, "vcpu": vcpu, "ramGB": ram, "diskGB": disk,

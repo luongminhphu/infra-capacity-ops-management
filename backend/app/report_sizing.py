@@ -59,9 +59,7 @@ def _gb(v: Optional[float]) -> str:
 def _money(v: Optional[float], currency: str) -> str:
     if v is None:
         return "—"
-    # English grouping here; the report converts every number to Vietnamese format (1.950.000.000) in one pass.
-    s = f"{int(round(v)):,}"
-    return f"{s} {currency}".strip()
+    return f"{fmt_int(v)} {currency}".strip()  # vi-VN grouping: 1.950.000.000 VND
 
 
 def _pill(text: str, cls: str) -> str:
