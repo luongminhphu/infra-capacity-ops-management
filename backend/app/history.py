@@ -79,6 +79,13 @@ def _pct(used: float, total: float, oc_max: float) -> Optional[float]:
     return round(used / total / oc_max * 100.0, 1)
 
 
+TREND_COLUMNS = (
+    ClusterAggregate.captured_at, ClusterAggregate.run_id, ClusterAggregate.vcenter_key, ClusterAggregate.cluster,
+    ClusterAggregate.host_count, ClusterAggregate.vm_count, ClusterAggregate.total_logical_cores,
+    ClusterAggregate.total_ram_gb, ClusterAggregate.used_vcpu, ClusterAggregate.used_ram_gb,
+)
+
+
 def get_resource_history(db: Session, vcenter_keys: Optional[List[str]], months: int,
                          group_by: str, policy: capacity.Policy,
                          include_import: bool = True,
@@ -91,7 +98,9 @@ def get_resource_history(db: Session, vcenter_keys: Optional[List[str]], months:
     months = normalize_months(months)
     group_by = "cluster" if group_by == "cluster" else "vcenter"
     since = window_start(months)
-    q = db.query(ClusterAggregate).join(SnapshotRun, SnapshotRun.id == ClusterAggregate.run_id) \
+    # Only the columns the series need, as plain rows (audit BEQ-07): no ORM identity map for
+    # tens of thousands of aggregates over a 12-month window.
+    q = db.query(*TREND_COLUMNS).join(SnapshotRun, SnapshotRun.id == ClusterAggregate.run_id) \
         .filter(ClusterAggregate.captured_at >= since, SnapshotRun.status == "ok")
     if vcenter_keys is not None:
         q = q.filter(ClusterAggregate.vcenter_key.in_(vcenter_keys))

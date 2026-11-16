@@ -71,13 +71,10 @@ async function spLoadList() {
   ['fy', 'status', 'category', 'vendor', 'costCenter', 'q'].forEach(k => { if (f[k] !== '' && f[k] !== null) qs.set(k, f[k]); });
   spState.loading = true;
   try {
-    const [list, expiring, overdue] = await Promise.all([
-      apiRequest(`/spend/opex?${qs}`),
-      apiRequest('/spend/opex?status=expiring&size=1'),
-      apiRequest('/spend/opex?status=overdue&size=1'),
-    ]);
+    // one request: the list carries the whole-register expiring / overdue counters (audit API-04)
+    const list = await apiRequest(`/spend/opex?${qs}`);
     spState.list = list;
-    spState.counts = { expiring: expiring.total, overdue: overdue.total };
+    spState.counts = list.counts || { expiring: 0, overdue: 0 };
     spState.error = null;
   } catch (err) { spState.error = err.message; }
   spState.loading = false;

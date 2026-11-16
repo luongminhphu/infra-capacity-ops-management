@@ -187,6 +187,54 @@ def record_request(method: str, route: str, status: int, ms: float, db_ms: float
                                    "dbMs": round(db_ms, 1), "dbQueries": db_queries})
 
 
+_RID_OK = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
+
+
+def request_id_from(scope) -> str:
+    """Reuse a well-formed inbound X-Request-ID (proxy / App Proxy correlation), else a new one.
+    Anything else is ignored so a client cannot inject text into the logs."""
+    for k, v in scope.get("headers") or []:
+        if k == b"x-request-id":
+            try:
+                cand = v.decode("ascii")
+            except UnicodeDecodeError:
+                break
+            if _RID_OK.match(cand):
+                return cand
+            break
+    return os.urandom(8).hex()
+
+
+def current_request_id() -> Optional[str]:
+    ctx = _request_ctx.get()
+    return ctx.get("request_id") if ctx else None
+
+
+class job_context:
+    """Tags logs of a background job with "job-<name>-<id>" (audit OBS-02 / BEQ-11). The context
+    is copied into asyncio.to_thread workers, so their log lines carry the same id."""
+
+    def __init__(self, name: str):
+        self.id = f"job-{name}-{os.urandom(3).hex()}"
+
+    def __enter__(self):
+        self._token = _request_ctx.set({"db_ms": 0.0, "db_queries": 0, "request_id": self.id})
+        return self
+
+    def __exit__(self, *exc):
+        _request_ctx.reset(self._token)
+        return False
+
+
+class RequestIdLogFilter(logging.Filter):
+    """Adds `request_id` to every log record ("-" outside a request) for the log format."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "request_id"):
+            record.request_id = current_request_id() or "-"
+        return True
+
+
 class TimingMiddleware:
     def __init__(self, app):
         self.app = app
@@ -194,7 +242,8 @@ class TimingMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not (scope["path"].startswith("/api/") or scope["path"].startswith("/mcp")):
             return await self.app(scope, receive, send)
-        ctx = {"db_ms": 0.0, "db_queries": 0}
+        rid = request_id_from(scope)
+        ctx = {"db_ms": 0.0, "db_queries": 0, "request_id": rid}
         token = _request_ctx.set(ctx)
         status_holder = {"status": 500}
         start = time.perf_counter()
@@ -202,6 +251,8 @@ class TimingMiddleware:
         async def _send(message):
             if message["type"] == "http.response.start":
                 status_holder["status"] = message["status"]
+                message.setdefault("headers", [])
+                message["headers"] = list(message["headers"]) + [(b"x-request-id", rid.encode("ascii"))]
             await send(message)
 
         try:

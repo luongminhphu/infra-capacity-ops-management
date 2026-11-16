@@ -33,7 +33,7 @@ def trend_history(
     # (VN day, vCenter, cluster) only the LAST snapshot of that day — several polls a day (schedule,
     # manual sync, import) must not be summed, or the totals scale with the number of polls.
     history_rows = (
-        db.query(ClusterAggregate)
+        db.query(*history.TREND_COLUMNS)   # plain rows, needed columns only (audit BEQ-07)
         .join(SnapshotRun, SnapshotRun.id == ClusterAggregate.run_id)
         .filter(ClusterAggregate.captured_at >= since, SnapshotRun.status == "ok")
         .order_by(ClusterAggregate.captured_at.asc(), ClusterAggregate.run_id.asc())

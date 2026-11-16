@@ -15,6 +15,7 @@ Reliability
 * The loop records a heartbeat read by /api/health/ready.
 """
 import asyncio
+import contextvars
 import datetime as dt
 import logging
 import math
@@ -26,7 +27,7 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
-from .. import capacity, data_access
+from .. import capacity, data_access, observability
 from ..config import Settings, VCenterConfig, get_settings
 from ..database import SessionLocal
 from ..models import ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, VmSnapshot
@@ -281,7 +282,9 @@ def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, An
     while next_idx < n or running:
         while next_idx < n and len(running) < workers:
             running[next_idx] = time.monotonic()
-            threading.Thread(target=runner, args=(next_idx,), name=f"sync-{next_idx}", daemon=True).start()
+            # own copy of the caller's context per thread: log lines keep the round's job id
+            threading.Thread(target=contextvars.copy_context().run, args=(runner, next_idx),
+                             name=f"sync-{next_idx}", daemon=True).start()
             next_idx += 1
         wait = max(0.01, min(running.values()) + deadline - time.monotonic())
         try:
@@ -340,14 +343,38 @@ def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
     return run_syncs(tasks, keys, settings.sync_concurrency, deadline_seconds(settings))
 
 
-def _ops_alerts() -> None:
-    """Discord alerts for capacity / backup at the 90 % level (docs/design/super-app.md decision 5)."""
+def _ops_alerts() -> Optional[Dict[str, int]]:
+    """Discord alerts for capacity / backup at the 90 % level (docs/design/super-app.md decision 5).
+    Returns the counters ({"new", "resolved", "sent", "failed"}) or None when the check failed."""
     from .. import ops_alerts
     try:
         with SessionLocal() as db:
-            ops_alerts.check_and_notify(db)
+            return ops_alerts.check_and_notify(db)
     except Exception:  # noqa: BLE001 — an alert failure must not stop the polling loop
         logger.exception("Operations alerts check failed")
+        return None
+
+
+def round_summary(results: List[Dict[str, Any]], seconds: float, alerts: Optional[Dict[str, int]],
+                  purge: Optional[Dict[str, int]]) -> str:
+    """One key=value line per scheduler round (audit BEQ-11), easy to grep / parse:
+    job=poll sources=3 ok=2 failed=1 skipped=0 duration_ms=4210 failed_keys=vc2 alerts_new=1 ..."""
+    ok = sum(1 for r in results if r.get("ok"))
+    skipped = [r.get("vcenterKey") or r.get("key") for r in results if r.get("skipped")]
+    failed = [r.get("vcenterKey") or r.get("key") for r in results if not r.get("ok") and not r.get("skipped")]
+    parts = [f"job=poll sources={len(results)} ok={ok} failed={len(failed)} skipped={len(skipped)}",
+             f"duration_ms={int(seconds * 1000)}"]
+    if failed:
+        parts.append("failed_keys=" + ",".join(str(k) for k in failed))
+    if skipped:
+        parts.append("skipped_keys=" + ",".join(str(k) for k in skipped))
+    if alerts is None:
+        parts.append("alerts=error")
+    else:
+        parts.append(" ".join(f"alerts_{k}={alerts.get(k, 0)}" for k in ("new", "resolved", "sent", "failed")))
+    if purge:
+        parts.append(" ".join(f"purged_{k}={v}" for k, v in sorted(purge.items())))
+    return " ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -382,23 +409,22 @@ async def scheduler_loop(app_settings: Settings):
     """Poll every source each interval, off the API event loop."""
     interval = max(5, app_settings.poll_interval_minutes) * 60
     while True:
-        started = dt.datetime.utcnow()
+        started = time.monotonic()
         _beat(interval)
+        job = observability.job_context("poll")
+        job.__enter__()   # every log line of this round (threads included) carries the job id
         try:
             results = await asyncio.to_thread(sync_everything, app_settings)
-            failed = [r.get("vcenterKey") or r.get("key") for r in results if not r["ok"] and not r.get("skipped")]
-            skipped = [r.get("vcenterKey") or r.get("key") for r in results if r.get("skipped")]
             _beat(interval)
-            await asyncio.to_thread(_ops_alerts)
-            await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
-            logger.info("Scheduled sync of %d sources finished in %.1fs%s%s", len(results),
-                        (dt.datetime.utcnow() - started).total_seconds(),
-                        f"; failed: {', '.join(failed)} (retry next cycle)" if failed else "",
-                        f"; skipped (sync already running): {', '.join(skipped)}" if skipped else "")
+            alerts = await asyncio.to_thread(_ops_alerts)
+            purge = await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
+            logger.info("%s", round_summary(results, time.monotonic() - started, alerts, purge))
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
             logger.exception("Scheduled sync cycle failed; will retry next cycle")
+        finally:
+            job.__exit__(None, None, None)
         _heartbeat["rounds"] += 1
         _beat(interval)
         await asyncio.sleep(interval)

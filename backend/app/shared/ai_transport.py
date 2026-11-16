@@ -12,6 +12,8 @@ the output only fills a .docx that a person reviews before use.
 """
 import json
 import logging
+import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from .. import secrets_box
@@ -20,6 +22,25 @@ from ..spend.models import SpendAiConfig
 logger = logging.getLogger("vco.spend.ai")
 
 TIMEOUT_S = 180.0
+# Interactive tool loops (Hỏi ICO) stop after this many seconds in total, whatever the turn count
+# (audit REL-06). Each request inside the loop gets at most the time that remains.
+TOOLS_DEADLINE_S = 120.0
+# At most this many Anthropic requests in flight per process; a request waits up to
+# SLOT_WAIT_S for a free slot, then fails with a clear message instead of piling up threads.
+MAX_CONCURRENT = 4
+SLOT_WAIT_S = 30.0
+_slots = threading.BoundedSemaphore(MAX_CONCURRENT)
+_local = threading.local()   # .deadline (time.monotonic()) while a tool loop runs on this thread
+
+
+def _request_timeout() -> float:
+    deadline = getattr(_local, "deadline", None)
+    if deadline is None:
+        return TIMEOUT_S
+    left = deadline - time.monotonic()
+    if left <= 0.5:   # not worth starting a request that cannot finish
+        raise AiError("Câu hỏi cần quá nhiều thời gian tra cứu — hãy hỏi cụ thể hơn.")
+    return min(TIMEOUT_S, left)
 MAX_TOKENS = 16000
 # Models that accept the server-side refusal fallback (`fallbacks: "default"`).
 FALLBACK_MODELS = {"claude-fable-5-2", "claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
@@ -151,6 +172,8 @@ def _call_anthropic(cfg: SpendAiConfig, api_key: str, messages: List[Dict[str, A
     extra: Dict[str, Any] = {}
     if model in FALLBACK_MODELS:
         extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+    if not _slots.acquire(timeout=SLOT_WAIT_S):
+        raise AiError("AI đang bận xử lý nhiều yêu cầu — thử lại sau ít phút.")
     try:
         response = client.beta.messages.create(
             model=model, max_tokens=MAX_TOKENS, system=SYSTEM, messages=messages,
@@ -172,6 +195,8 @@ def _call_anthropic(cfg: SpendAiConfig, api_key: str, messages: List[Dict[str, A
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    finally:
+        _slots.release()
     _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối soạn nội dung này.")
@@ -267,6 +292,8 @@ def _call_anthropic_pdf(cfg: SpendAiConfig, api_key: str, pdf_bytes: bytes) -> s
                                         "data": base64.standard_b64encode(pdf_bytes).decode()}},
         {"type": "text", "text": "Chép bảng báo giá trong file này theo cấu trúc JSON đã cho."},
     ]
+    if not _slots.acquire(timeout=SLOT_WAIT_S):
+        raise AiError("AI đang bận xử lý nhiều yêu cầu — thử lại sau ít phút.")
     try:
         response = client.beta.messages.create(
             model=model, max_tokens=MAX_TOKENS, system=QUOTE_SYSTEM, messages=[{"role": "user", "content": content}],
@@ -284,6 +311,8 @@ def _call_anthropic_pdf(cfg: SpendAiConfig, api_key: str, pdf_bytes: bytes) -> s
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    finally:
+        _slots.release()
     _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối đọc file này.")
@@ -361,6 +390,8 @@ def _call_anthropic_diff(cfg: SpendAiConfig, api_key: str, payload: Dict[str, An
     model = cfg.model or DEFAULT_MODEL
     extra: Dict[str, Any] = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in FALLBACK_MODELS else {}
     text_in = "Dữ liệu các báo giá (JSON):\n" + json.dumps(payload, ensure_ascii=False, default=str)
+    if not _slots.acquire(timeout=SLOT_WAIT_S):
+        raise AiError("AI đang bận xử lý nhiều yêu cầu — thử lại sau ít phút.")
     try:
         response = client.beta.messages.create(
             model=model, max_tokens=MAX_TOKENS, system=DIFF_SYSTEM, messages=[{"role": "user", "content": text_in}],
@@ -378,6 +409,8 @@ def _call_anthropic_diff(cfg: SpendAiConfig, api_key: str, payload: Dict[str, An
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    finally:
+        _slots.release()
     _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối phân tích nội dung này.")
@@ -418,6 +451,8 @@ def _call_anthropic_json(cfg: SpendAiConfig, api_key: str, system: str, user_tex
     client = anthropic.Anthropic(api_key=api_key, timeout=TIMEOUT_S, max_retries=1)
     model = cfg.model or DEFAULT_MODEL
     extra: Dict[str, Any] = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in FALLBACK_MODELS else {}
+    if not _slots.acquire(timeout=SLOT_WAIT_S):
+        raise AiError("AI đang bận xử lý nhiều yêu cầu — thử lại sau ít phút.")
     try:
         response = client.beta.messages.create(
             model=model, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user_text}],
@@ -435,6 +470,8 @@ def _call_anthropic_json(cfg: SpendAiConfig, api_key: str, system: str, user_tex
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    finally:
+        _slots.release()
     _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối nội dung này.")
@@ -463,9 +500,11 @@ def _create(cfg: SpendAiConfig, api_key: str, **kwargs):
     """One Messages API request with the platform's error mapping and usage accounting."""
     import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key, timeout=TIMEOUT_S, max_retries=1)
+    client = anthropic.Anthropic(api_key=api_key, timeout=_request_timeout(), max_retries=1)
     model = cfg.model or DEFAULT_MODEL
     extra: Dict[str, Any] = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in FALLBACK_MODELS else {}
+    if not _slots.acquire(timeout=SLOT_WAIT_S):
+        raise AiError("AI đang bận xử lý nhiều yêu cầu — thử lại sau ít phút.")
     try:
         response = client.beta.messages.create(model=model, **kwargs, **extra)
     except anthropic.AuthenticationError:
@@ -479,6 +518,8 @@ def _create(cfg: SpendAiConfig, api_key: str, **kwargs):
         raise AiError(f"Anthropic lỗi máy chủ (HTTP {exc.status_code}) — thử lại sau.") from None
     except anthropic.APIConnectionError:
         raise AiError("Không kết nối được api.anthropic.com (mạng / proxy / timeout).") from None
+    finally:
+        _slots.release()
     _note_usage(response)   # billed even when refused / cut
     if response.stop_reason == "refusal":
         raise AiError("Model từ chối nội dung này.")
@@ -547,10 +588,20 @@ def run_tools(cfg: SpendAiConfig, system: str, question: str, tools: List[Dict[s
     """Manual tool loop: the model calls read-only tools (handler(name, input) -> str) until it
     answers. Returns (answer text, names of the tools called). Raises AiError."""
     api_key = _api_key(cfg)
+    _local.deadline = time.monotonic() + TOOLS_DEADLINE_S
+    try:
+        return _tool_loop(cfg, api_key, system, question, tools, handler, max_turns, max_tokens, token_budget, result_chars)
+    finally:
+        _local.deadline = None
+
+
+def _tool_loop(cfg, api_key, system, question, tools, handler, max_turns, max_tokens, token_budget, result_chars):
     messages: List[Dict[str, Any]] = [{"role": "user", "content": question}]
     used: List[str] = []
     spent = 0
     for _ in range(max_turns):
+        if time.monotonic() >= _local.deadline:
+            raise AiError("Câu hỏi cần quá nhiều thời gian tra cứu — hãy hỏi cụ thể hơn.")
         if spent > token_budget:
             raise AiError("Câu hỏi cần tra cứu quá nhiều dữ liệu — hãy hỏi hẹp hơn (một cluster, một VM…).")
         turn = TOOLS_CALL(cfg, api_key, system, messages, tools, max_tokens)

@@ -44,9 +44,11 @@ async def _read(request: Request, file: UploadFile) -> bytes:
 async def preview(request: Request, kind: str = KIND, file: UploadFile = File(...),
                   user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
     data = await _read(request, file)
-    cfg = spend_settings.load(db)
+
+    def _run():   # every DB call on one worker thread, none on the event loop (audit BEQ-08)
+        return importer.preview(db, kind, data, spend_settings.load(db), user)
     try:
-        pv = await run_in_threadpool(importer.preview, db, kind, data, cfg, user)
+        pv = await run_in_threadpool(_run)
     except importer.ImportError_ as exc:
         raise HTTPException(422, str(exc))
     return importer.public_preview(pv, kind)
@@ -56,20 +58,21 @@ async def preview(request: Request, kind: str = KIND, file: UploadFile = File(..
 async def commit(request: Request, kind: str = KIND, skipErrors: bool = False, file: UploadFile = File(...),
                  user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
     data = await _read(request, file)
-    cfg = spend_settings.load(db)
+
+    def _run():   # load settings, write, commit / rollback on the same worker thread (audit BEQ-08)
+        try:
+            out = importer.commit(db, kind, data, spend_settings.load(db), user, request, skipErrors)
+            db.commit()
+            return out
+        except BaseException:
+            db.rollback()
+            raise
     try:
-        out = await run_in_threadpool(importer.commit, db, kind, data, cfg, user, request, skipErrors)
-        db.commit()
+        return await run_in_threadpool(_run)
     except importer.ImportError_ as exc:
-        db.rollback()
         raise HTTPException(422, str(exc))
     except IntegrityError as exc:
-        db.rollback()
         raise HTTPException(409, "Dữ liệu vừa bị thay đổi bởi thao tác khác — kiểm tra lại rồi nhập lại.") from exc
-    except HTTPException:
-        db.rollback()
-        raise
-    return out
 
 
 @router.get("/template.xlsx")
