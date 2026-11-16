@@ -270,14 +270,13 @@ def update_project(code: str, request: Request, data: Dict[str, Any] = Body(...)
         version = int(data.get("rowVersion"))
     except (TypeError, ValueError):
         raise HTTPException(400, "Thiếu rowVersion.")
-    if version != p.row_version:
-        raise HTTPException(409, "Dự án vừa được người khác sửa — tải lại để xem bản mới nhất.")
+    # conditional UPDATE in the database (SCH-01 / DAT-05): two concurrent saves cannot both pass
+    service.bump_version(db, p, version, "Dự án vừa được người khác sửa — tải lại để xem bản mới nhất.")
     cfg = spend_settings.load(db)
     before = {"name": p.name, "fiscalYear": p.fiscal_year, "goLiveDate": p.go_live_date,
               "items": [(i.id, i.amount_net, i.coverage_years, i.start_date) for i in db.query(CapexItem).filter_by(project_id=p.id)]}
     _apply_project(db, p, data, cfg)
     removed = _apply_items(db, p, data.get("items"), user, request)
-    p.row_version += 1
     p.updated_at, p.updated_by = dt.datetime.utcnow(), user.username
     db.flush()
     result = capex.reconcile(db, p, cfg, user, request)
@@ -301,8 +300,8 @@ def change_status(code: str, request: Request, data: Dict[str, Any] = Body(...),
     if not has_role(user, need):
         raise HTTPException(403, "Cần quyền “Duyệt” cho thao tác này.")
     before = p.status
+    service.bump_version(db, p)
     p.status = target
-    p.row_version += 1
     p.updated_at, p.updated_by = dt.datetime.utcnow(), user.username
     db.flush()
     result = capex.reconcile(db, p, spend_settings.load(db), user, request)

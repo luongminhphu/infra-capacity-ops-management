@@ -36,10 +36,13 @@ def _key(*parts: Any) -> str:
 
 def item(source: str, level: str, key: str, title: str, detail: str = "", page: str = "", query: str = "",
          due: Optional[dt.date] = None, feature: Optional[str] = None, role: Optional[str] = None,
-         push: bool = False) -> Dict[str, Any]:
-    """role: None (any signed-in user) | 'spend:viewer|editor|approver' | 'admin'."""
+         push: bool = False, alert_key: Optional[str] = None) -> Dict[str, Any]:
+    """role: None (any signed-in user) | 'spend:viewer|editor|approver' | 'admin'.
+    alert_key: identity for Discord alerts when it must not change with the level (the inbox key does
+    change, so a worsened item reappears after "Xong"); defaults to the key."""
     return {"key": key[:255], "source": source, "level": level, "title": title[:300], "detail": detail[:600], "page": page,
-            "query": query, "due": due, "feature": feature, "role": role, "push": push}
+            "query": query, "due": due, "feature": feature, "role": role, "push": push,
+            "alertKey": (alert_key or key)[:255]}
 
 
 def _pct(v: Optional[float]) -> str:
@@ -66,7 +69,8 @@ def capacity_items(db: Session) -> List[Dict[str, Any]]:
         out.append(item("capacity", level, _key("cap", r["name"], level),
                         f"Cluster {r['name']}: CPU {_pct(cpu)} · RAM {_pct(ram)}",
                         f"{r['hosts']} host, {r['vms']} VM — {r['overall']['text']}. Xem chi tiết và đề xuất ở Capacity.",
-                        page="dashboard", push=peak >= PUSH_LEVEL_PCT))
+                        page="dashboard", push=peak >= PUSH_LEVEL_PCT,
+                        alert_key=_key("cap", r["name"])))      # BEQ-04: one alert per cluster, whatever the level
     return out
 
 
@@ -219,9 +223,15 @@ def collect(db: Session, today: Optional[dt.date] = None, use_cache: bool = True
 def _compute(db: Session, today: dt.date) -> Tuple[List[Dict[str, Any]], List[str]]:
     items, errors = [], []
     for name, fn, wants_today in PROVIDERS:
+        # Each provider runs in a SAVEPOINT: on PostgreSQL a failed SQL statement aborts the whole
+        # transaction, so without it one broken module would fail every later one (and the Discord
+        # 90 % alerts that reuse this session) — BEQ-02.
+        sp = db.begin_nested()
         try:
             items.extend(fn(db, today) if wants_today else fn(db))
+            sp.commit()
         except Exception:  # noqa: BLE001 — one module down must not empty the home page
+            sp.rollback()
             logger.exception("Inbox provider %s failed", name)
             errors.append(name)
     items.sort(key=lambda x: (LEVEL_RANK.get(x["level"], 9), x["due"] or dt.date.max, x["title"]))

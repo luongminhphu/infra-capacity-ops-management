@@ -6,6 +6,7 @@ per channel (`sent_channels`): a channel that failed is retried on the next run.
 Channels: Discord channels of Cài đặt → Chi phí & nhắc hạn ticked "Nhận cảnh báo vận hành"
 (webhook encrypted with secrets_box, Discord-only URL check against SSRF)."""
 import datetime as dt
+import threading
 import logging
 from typing import Any, Dict, List, Set
 
@@ -61,7 +62,21 @@ def _set_sent(s: OpsAlertState, ids: Set[str]) -> None:
     s.sent_channels = ",".join(sorted(ids))
 
 
+def _akey(it: Dict[str, Any]) -> str:
+    return it.get("alertKey") or it["key"]
+
+
+_run_lock = threading.Lock()
+
+
 def check_and_notify(db: Session, post=None) -> Dict[str, int]:
+    """Serialised (BEQ-03): the scheduler round and "Chạy ngay" never send the same alert twice —
+    the second caller waits, then sees what the first one recorded."""
+    with _run_lock:
+        return _check_and_notify(db, post)
+
+
+def _check_and_notify(db: Session, post=None) -> Dict[str, int]:
     """Compare the current push items with the stored state and tell each channel what it has not
     been told yet: the alerts it has not received, and "Đã hết" for the ones it received that have
     cleared. Delivery is tracked per channel, so a channel that failed gets them on a later run.
@@ -77,7 +92,7 @@ def check_and_notify(db: Session, post=None) -> Dict[str, int]:
     if unknown:
         logger.warning("Ops alerts: provider(s) %s failed; their alerts are kept unchanged this run", ", ".join(sorted(unknown)))
     features = get_features(db)
-    current = {it["key"]: it for it in items if it.get("push") and it["source"] in PUSH_SOURCES
+    current = {it.get("alertKey") or it["key"]: it for it in items if it.get("push") and it["source"] in PUSH_SOURCES
                and not (it.get("feature") and features.get(it["feature"]) is False)}
     states = {s.key: s for s in db.query(OpsAlertState).all()}
     channels = _channels(db)
@@ -115,7 +130,7 @@ def check_and_notify(db: Session, post=None) -> Dict[str, int]:
         cid = str(ch.id)
         to_new = [current[k] for k in current if cid not in _sent(states[k])]
         to_resolve = [s for s in states.values() if not s.active and cid in _sent(s)]
-        pending.update(it["key"] for it in to_new)
+        pending.update(_akey(it) for it in to_new)
         if not to_new and not to_resolve:
             continue
         try:
@@ -126,17 +141,17 @@ def check_and_notify(db: Session, post=None) -> Dict[str, int]:
             failed += 1
             logger.warning("Ops alert to channel %s failed: %s", ch.id, exc)
             for it in to_new:
-                states[it["key"]].last_error = str(exc)[:500]
+                states[_akey(it)].last_error = str(exc)[:500]
             continue
         except Exception as exc:  # noqa: BLE001 — a bug must not skip the commit of the other channels' state
             failed += 1
             logger.exception("Ops alert to channel %s failed unexpectedly", ch.id)
             for it in to_new:
-                states[it["key"]].last_error = f"{type(exc).__name__}"[:500]
+                states[_akey(it)].last_error = f"{type(exc).__name__}"[:500]
             continue
         sent += 1
         for it in to_new:
-            s = states[it["key"]]
+            s = states[_akey(it)]
             _set_sent(s, _sent(s) | {cid})
             s.last_sent_at = now
         for s in to_resolve:

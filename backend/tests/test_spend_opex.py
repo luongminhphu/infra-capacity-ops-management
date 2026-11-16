@@ -274,3 +274,34 @@ def test_user_role_admin_and_entra_mapping(app_, admin):
     u2 = User(username="y", password_hash="!", spend_role="editor", spend_role_source="ui")
     apply_entra_roles(u2, s, [])                     # admin-assigned role is kept
     assert u2.spend_role == "editor"
+
+
+
+def test_concurrent_transition_is_refused_not_lost(editor):
+    """SCH-01: two requests that loaded the same version both pass the status check; the second
+    one must get 409 from the conditional UPDATE instead of silently overwriting the first."""
+    import pytest
+    from fastapi import HTTPException
+    from app.database import SessionLocal
+    from app.models import User
+    from app.spend import service
+    from app.spend.models import OpexItem
+    code = editor.post("/api/spend/opex", json=_opex()).json()["code"]
+    s1, s2 = SessionLocal(), SessionLocal()
+    try:
+        u = s1.query(User).filter_by(username="editor1").first()
+        a = s1.query(OpexItem).filter_by(code=code).one()
+        b = s2.query(OpexItem).filter_by(code=code).one()          # same row, same version, loaded before a commits
+        service.transition(s1, a, "stop", u, None, reason="Ngừng dịch vụ")
+        s1.commit()
+        with pytest.raises(HTTPException) as exc:
+            service.transition(s2, b, "stop", u, None, reason="Lần hai")
+        assert exc.value.status_code == 409
+        s2.rollback()
+        fresh = SessionLocal()
+        row = fresh.query(OpexItem).filter_by(code=code).one()
+        assert row.stop_reason == "Ngừng dịch vụ" and row.status == "stopped"
+        fresh.close()
+    finally:
+        s1.close()
+        s2.close()
