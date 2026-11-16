@@ -649,7 +649,7 @@ def iter_jobs(db, keys: Optional[List[str]], since: dt.datetime) -> Iterable[Dic
     q = db.query(BackupJob).filter(BackupJob.start_time >= since)
     if keys is not None:
         q = q.filter(BackupJob.nbu_key.in_(keys))
-    for r in q.order_by(BackupJob.start_time.desc()).limit(20000):
+    for r in q.order_by(BackupJob.start_time.desc(), BackupJob.id.desc()).limit(20000):
         d = _job_dict(r)
         d.update({"scheduleName": r.schedule_name, "scheduleLabel": sc.schedule_label(r.schedule_type), "files": r.files, "storageUnit": r.storage_unit, "mediaServer": r.media_server,
                   "statusText": sc.describe(r.status), "group": sc.GROUPS[sc.group_of(r.status)] if r.status and r.status > 1 else "",

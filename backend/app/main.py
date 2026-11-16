@@ -17,6 +17,7 @@ from . import mcp_server, observability
 from .routers import admin, ai_admin, ai_data as ai_data_router, report_archive as report_archive_router, users_admin as users_admin_router, bom as bom_router, exports as exports_router, appconfig, entities, home, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, spend_capex, spend_contracts, spend_import, spend_plans, spend_payments, spend_proposals, spend_quotes, spend_renovations, spend_reports, vcenters
 from .spend import reminders as spend_reminders, service as spend_service
 from .security import ensure_bootstrap_admin
+from .shared.stored_text import InvalidStoredValue
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s [%(request_id)s]: %(message)s")
 for _h in logging.getLogger().handlers:   # request id on every line (audit OBS-02); "-" outside a request
@@ -81,6 +82,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Infra Capacity Ops Management API", lifespan=lifespan)
+
+
+@app.exception_handler(InvalidStoredValue)
+async def _invalid_stored_value(request: Request, exc: InvalidStoredValue):
+    """SCH-10: a JSON / CSV text column got a value of the wrong shape — refuse with 422, nothing saved."""
+    logger.warning("Rejected write on %s %s: %s", request.method, request.url.path, exc.label)
+    return JSONResponse(status_code=422, content={"detail": exc.message})
 
 settings = get_settings()
 
@@ -160,8 +168,11 @@ async def health():
 
 @app.get("/api/health/ready")
 def health_ready():
-    """Readiness: the database answers SELECT 1 and, when the scheduler is on, its loop ticked
-    recently. 503 with a short reason otherwise (no hostnames, no error text)."""
+    """Readiness: the database answers SELECT 1 and, when the scheduler is on and
+    READINESS_REQUIRE_SCHEDULER is true (default), its loop ticked recently. The scheduler state is
+    always reported; with READINESS_REQUIRE_SCHEDULER=false it is informational only (`required`:
+    false), so with several replicas one pod's stale loop never takes it out of the Service
+    (audit BEQ-01). 503 with a short reason otherwise (no hostnames, no error text)."""
     from sqlalchemy import text
     from .collectors.scheduler import heartbeat_status
 
@@ -181,9 +192,14 @@ def health_ready():
         checks["scheduler"] = hb
     else:
         checks["scheduler"] = {"ok": True, "disabled": True}
-    ready = all(c["ok"] for c in checks.values())
+    require_scheduler = bool(s.readiness_require_scheduler)
+    checks["scheduler"] = {**checks["scheduler"], "required": require_scheduler}
+    gating = {k: c for k, c in checks.items() if k != "scheduler" or require_scheduler}
+    ready = all(c["ok"] for c in gating.values())
     if not ready:
-        logger.warning("Readiness failed: %s", ", ".join(f"{k}={c.get('reason')}" for k, c in checks.items() if not c["ok"]))
+        logger.warning("Readiness failed: %s", ", ".join(f"{k}={c.get('reason')}" for k, c in gating.items() if not c["ok"]))
+    elif not checks["scheduler"]["ok"]:
+        logger.warning("Readiness: scheduler not healthy (%s), not gating readiness", checks["scheduler"].get("reason"))
     return JSONResponse({"status": "ok" if ready else "not_ready", "checks": checks}, status_code=200 if ready else 503)
 
 

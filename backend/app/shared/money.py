@@ -4,8 +4,10 @@ Amounts are stored in the currency's minor unit: VND has none (1 = 1 đồng), U
 AI costs are fractions of a cent, so they are stored in micro-dollars (1 USD = 1_000_000).
 Rounding is ROUND_HALF_UP on the decimal value, never on a float product.
 
-Two-release migration: release 1 adds the integer columns, writes both, and backfills; reads still
-use the old Float column. Release 2 switches reads to the integer column and stops writing the float.
+Two-release migration: release 1 added the integer columns, writes both, and backfills. Release 2
+(this one) reads only the integer columns — every sum is an integer sum, converted to a decimal
+value once for display — but still writes the Float too, because pods of release 1 may run side by
+side during the rollout. A later release stops writing the Float and drops it.
 """
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Optional
@@ -35,3 +37,22 @@ def usd_to_micros(value: Any) -> int:
     except (InvalidOperation, ValueError):
         return 0
     return int((d * Decimal(1_000_000)).quantize(Decimal(1), ROUND_HALF_UP))
+
+
+def from_minor(minor: Optional[int], currency: Optional[str] = "VND") -> Optional[float]:
+    """123450 USD-cents -> 1234.5; 1_234_568 VND -> 1234568.0. For display / JSON only."""
+    if minor is None:
+        return None
+    return float(Decimal(int(minor)) / (Decimal(10) ** exponent(currency)))
+
+
+def micros_to_usd(micros: Optional[int]) -> float:
+    """37038 micro-USD -> 0.037038 (display only)."""
+    return float(Decimal(int(micros or 0)) / Decimal(1_000_000))
+
+
+def mul_minor(minor: int, qty: Any, divisor: Any = 1) -> int:
+    """minor × qty / divisor rounded HALF_UP to a whole minor unit, computed in Decimal (qty and
+    divisor may be fractional: pack quantities, cores per pack)."""
+    d = Decimal(int(minor)) * Decimal(str(qty or 0)) / Decimal(str(divisor or 1))
+    return int(d.quantize(Decimal(1), ROUND_HALF_UP))

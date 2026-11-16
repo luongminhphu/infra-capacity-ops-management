@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from .pdf_kit import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, _stat_tiles_html, esc, fmt_int,
                          html_to_pdf_bytes)
 from .report_planning import _planning_css
+from .shared.money import from_minor, to_minor
 
 PRIORITY_CSS = {"cao": "priority-cao", "tb": "priority-tb", "thap": "priority-thap", "info": "priority-info"}
 PRIORITY_TXT = {"cao": "Quyết định chính", "tb": "Kèm theo", "thap": "Tuỳ chọn", "info": "Thông tin"}
@@ -149,13 +150,15 @@ def _summary_box(res: Dict[str, Any]) -> str:
         {"label": "VMware core thiếu", "value": fmt_int(vm["shortfallCores"]), "sub": f"nhu cầu {fmt_int(vm['demandCores'])} · có {fmt_int(vm['entitledCores'])}", "cls": STATUS_TXT.get(vm["status"], ("", "na"))[1]},
         {"label": f"WS {ED_TXT.get(ed_key, '')} core thiếu".strip(), "value": ws_short, "sub": (f"nhu cầu {_rng(ed['demandCores'], ed.get('demandCoresMax'))} · có {fmt_int(ed['entitledCores'])}" if ed else "không có VM Windows Server"), "cls": STATUS_TXT.get(ed["status"], ("", "na"))[1] if ed else "na"},
     ]
-    total_cost = 0.0
+    total_minor = 0          # DAT-10: summed in integer minor units, converted once for display
     cur = None
     any_cost = False
-    if vm.get("cost") and vm["status"] == "shortfall":
-        total_cost += vm["cost"]["shortfallCost"] or 0; cur = vm["cost"].get("currency"); any_cost = True
-    if ed and ed.get("cost") and ed["status"] == "shortfall":
-        total_cost += ed["cost"]["shortfallCost"] or 0; cur = cur or ed["cost"].get("currency"); any_cost = True
+    for c, st in ((vm.get("cost"), vm["status"]), ((ed or {}).get("cost"), (ed or {}).get("status"))):
+        if c and st == "shortfall":
+            cur = cur or c.get("currency")
+            total_minor += to_minor(c.get("shortfallCost") or 0, cur) or 0
+            any_cost = True
+    total_cost = from_minor(total_minor, cur) or 0.0
     stats.append({"label": "Chi phí bù thiếu hụt", "value": _money(total_cost, cur) if any_cost else "Chưa có đơn giá",
                   "sub": "VMware + Windows Server (edition đề xuất)" if any_cost else "nhập đơn giá để ước tính", "cls": "crit" if any_cost and total_cost > 0 else "na"})
     fg, bg = STATUS_COLOR[status_cls]

@@ -14,12 +14,12 @@ every block full-width with no extra side margins; charts are inline SVG and the
 capacity bar is an HTML table (WeasyPrint lays tables out more predictably than flex).
 """
 import math
-import re
 from .pdf_kit import status_pill as _status_mark  # one status mark for every report (MASTER.md §3)
 from typing import Any, Dict, List, Optional
 
 from . import platforms, sizing
 from .report_view import customer_view
+from .shared.text import vn_num
 from .pdf_kit import (COLORS, STATUS_COLOR, _base_css, _exec_visual_css, _now_str, esc,
                          svg_bar_chart, svg_donut, svg_gauge)
 from .report_planning import _planning_css
@@ -28,27 +28,14 @@ from .report_sizing_charts import (COST_COLORS, SERIES_COLORS, money_short, svg_
                                    svg_waterfall, svg_yearly_tco)
 
 # ---------------------------------------------------------------------------
-# Vietnamese number formatting
+# Vietnamese number formatting (decision Q7). Every producer feeding this report — the sizing engine
+# (sizing.py / sizing_advisory.py), pdf_kit / report_sizing helpers and the SVG charts — already writes
+# vi-VN numbers, so engine sentences are printed as they are (no separator swap afterwards).
 # ---------------------------------------------------------------------------
-# Group 1: a number already in Vietnamese form with thousands (1.248 / 10.598,5) — the shared PDF helpers
-# (fmt_int / fmt_num, decision Q7) emit these, and swapping again would turn 1.248 into 1,248.
-# Group 2: an English number from the sizing engine (12,100.5 / 0.95).
-_NUM_RE = re.compile(r"(?<![\d.,\w])(?:([1-9]\d{0,2}(?:\.\d{3})+(?:,\d+)?)(?![\d.])"
-                     r"|(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+\.\d+))(?![\d])")
-
-
-def vn(text: Any) -> str:
-    """Swap English separators inside numbers of an engine-generated sentence: 12,100.5 → 12.100,5.
-    Numbers already written the Vietnamese way (1.248) are left as they are."""
-    if text is None:
-        return ""
-    return _NUM_RE.sub(lambda m: m.group(1) or m.group(2).replace(",", "§").replace(".", ",").replace("§", "."), str(text))
-
-
 def n(v: Optional[float], d: int = 0) -> str:
     if v is None or not isinstance(v, (int, float)) or not math.isfinite(v):
         return "—"
-    return f"{v:,.{d}f}".replace(",", "§").replace(".", ",").replace("§", ".")
+    return vn_num(v, d)
 
 
 def pct(v: Optional[float], d: int = 0) -> str:
@@ -202,7 +189,7 @@ def _cover(result, best, params, doc: Dict[str, str], logo_html: str, toc: List[
     <div class="eyebrow">Đề xuất giải pháp · Hạ tầng ảo hoá{(" " + esc(platforms.get(params)["label"])) if getattr(params, "platform", "vmware") != "generic" else ""}</div>
     <div class="cv-title">Đề xuất cấu hình máy chủ</div>
     <div class="cv-project">{esc(" – ".join(x for x in (env, customer) if x))}</div>
-    <div class="cv-sub">{esc(vn(result['recommendation']['headline'])) if best else 'Chưa có VM trong danh sách yêu cầu.'}</div>
+    <div class="cv-sub">{esc(result['recommendation']['headline']) if best else 'Chưa có VM trong danh sách yêu cầu.'}</div>
     {_status_mark({"text": txt, "cls": cls})}
   </div>
   <table class="cv-grid"><tr>
@@ -228,27 +215,18 @@ def _summary(result, best, existing, currency, mode, target, include_new, includ
     fc = a.get("findingCounts") or {}
     box = (_reuse_summary_box(result, best, existing, target, include_new, currency, project, si=True) if mode == "reuse"
            else _summary_box(result, best, existing if include_existing else [], currency, si=True))
-    box = _vn_html(box)
     why = result["recommendation"].get("why") or ""
     if opts.get("selectionNote"):
         why = (why.rstrip(".") + ". " if why else "") + opts["selectionNote"].strip()
-    why_html = f'<div class="callout" style="margin-top:8px;"><b>Lý do chọn phương án.</b> {esc(vn(why[len("Lý do chọn: "):] if why.startswith("Lý do chọn: ") else why))}</div>' if why else ""
+    why_html = f'<div class="callout" style="margin-top:8px;"><b>Lý do chọn phương án.</b> {esc(why[len("Lý do chọn: "):] if why.startswith("Lý do chọn: ") else why)}</div>' if why else ""
     risk_line = (f'<div class="note-line">Rủi ro &amp; lưu ý: <b>{fc.get("critical", 0)} nghiêm trọng</b> · <b>{fc.get("warning", 0)} cảnh báo</b> · '
                  f'{fc.get("info", 0)} lưu ý' + (f' — chi tiết tại mục {opts["risksNum"]}.' if opts.get("risksNum") else '.') + '</div>')
     if opts.get("compact") and (result["analysis"].get("expandText")):
-        why_html += f'<div class="note-line"><b>Mở rộng:</b> {esc(vn(result["analysis"]["expandText"]))}</div>'
+        why_html += f'<div class="note-line"><b>Mở rộng:</b> {esc(result["analysis"]["expandText"])}</div>'
     note = (opts.get("note") or "").strip()
     note_html = ("<div class=\"callout note\" style=\"margin-top:8px;\"><b>Ghi chú.</b> "
                  + "<br/>".join(esc(x) for x in note.splitlines() if x.strip()) + "</div>") if note else ""
     return box + why_html + note_html + risk_line
-
-
-_TEXT_NODE_RE = re.compile(r">([^<>]+)<")
-
-
-def _vn_html(html: str) -> str:
-    """Apply `vn` to text nodes only (never to CSS / attributes)."""
-    return _TEXT_NODE_RE.sub(lambda m: ">" + vn(m.group(1)) + "<", html)
 
 
 def _scope(result, params, doc: Dict[str, Any]) -> str:
@@ -467,7 +445,7 @@ def _bom_summary(best, params, result) -> str:
                      f"license {esc(money_short(c['license']))} · bảo hành {esc(money_short(c['warranty'] or 0))}).")
     lines.append("BOM là cấu hình tham chiếu; model, thông số và giá cuối cùng chốt trong báo giá.")
     return ('<div class="callout bom-summary keep" style="margin-top:6px;"><b>Kết luận BOM.</b><ul class="tight" style="margin-top:3px;">'
-            + "".join(f"<li>{vn(x)}</li>" for x in lines) + "</ul></div>")
+            + "".join(f"<li>{x}</li>" for x in lines) + "</ul></div>")
 
 
 def _bom(best, params, result) -> str:
@@ -635,7 +613,7 @@ def _gauges(best, p) -> str:
         cls = "na" if v is None else ("ok" if v < util - 2 else ("warn" if v <= 100 else "crit"))
         color = COLORS[STATUS_COLOR[cls][0]] if cls != "na" else COLORS["faint"]
         svg = svg_gauge(v, color, size=112, label_top=top, caption=capn, zones=zones)
-        cells += f'<td><div class="gauge-card {cls}">{_vn_html(svg)}</div></td>'
+        cells += f'<td><div class="gauge-card {cls}">{svg}</div></td>'
     return f'<table class="grid4 keep"><tr>{cells}</tr></table>'
 
 
@@ -690,7 +668,7 @@ def _design(result, best, params, num: str = "5", show: Optional[Dict[str, bool]
         k += 1
     if show.get("alloc", True):
         parts.append(f'<div class="keep"><div class="sub-h">{num}.{k} Phân bổ năng lực</div><div class="chart-card">{_stackbar(best, d, p)}</div>'
-                     f'{_gauges(best, p)}<div class="callout" style="margin-top:6px;"><b>Cân đối CPU / RAM.</b> {esc(vn(bal_txt))}</div></div>')
+                     f'{_gauges(best, p)}<div class="callout" style="margin-top:6px;"><b>Cân đối CPU / RAM.</b> {esc(bal_txt)}</div></div>')
     return "".join(parts)
 
 
@@ -787,7 +765,7 @@ def _scale(result, best_idx, params) -> str:
     lines = svg_lines([f"{n(x)}%" for x in xs], series, width=330, height=160, current_idx=cur, y_label="host")
     leg = _legend([(s["color"], s["name"]) for s in series])
     pts = proj["points"] if proj else []
-    proj_svg = _vn_html(svg_projection(pts, proj["installed"] if proj else 0, width=330, height=160))
+    proj_svg = svg_projection(pts, proj["installed"] if proj else 0, width=330, height=160)
 
     def flat_note(key: str, label: str, fmt) -> str:
         s = sens[key]
@@ -814,8 +792,8 @@ def _scale(result, best_idx, params) -> str:
         {_legend([(COLORS['primary'], 'Host cần'), (COLORS['crit'], 'Vượt số host đề xuất'), (COLORS['ok'], 'Số host đề xuất')])}</div></td>
       <td><div class="chart-card"><div class="chart-card-title">Số host theo mức dự phòng tăng trưởng</div>{lines}{leg}</div></td>
     </tr></table>
-    <div class="callout" style="margin-top:8px;"><b>Thời điểm mở rộng.</b> {esc(vn(a.get('expandText') or ''))}<br/>{esc(vn(growth_note))}</div>
-    <ul class="tight" style="margin-top:6px;"><li>{esc(vn(cpu_note))}</li><li>{esc(vn(util_note))}</li></ul>"""
+    <div class="callout" style="margin-top:8px;"><b>Thời điểm mở rộng.</b> {esc(a.get('expandText') or '')}<br/>{esc(growth_note)}</div>
+    <ul class="tight" style="margin-top:6px;"><li>{esc(cpu_note)}</li><li>{esc(util_note)}</li></ul>"""
 
 
 def _findings(fnd: List[Dict[str, str]]) -> str:
@@ -823,18 +801,18 @@ def _findings(fnd: List[Dict[str, str]]) -> str:
     for x in fnd:
         cls, lbl = SEV_PILL.get(x["severity"], ("na", x["severity"]))
         rows.append([_pill(lbl, cls), esc(x["area"]),
-                     f'<b>{esc(vn(x["title"]))}</b><div class="muted small">{esc(vn(x["detail"]))}</div>', esc(vn(x["action"]))])
+                     f'<b>{esc(x["title"])}</b><div class="muted small">{esc(x["detail"])}</div>', esc(x["action"])])
     return _table(["Mức độ", "Lĩnh vực", "Nhận định", "Khuyến nghị"], rows, cls="findings-table",
                   widths=["13%", "13%", "42%", "32%"])
 
 
 def _plan(steps) -> str:
-    rows = [[f'<b>{esc(s["phase"])}</b>', esc(s["when"]), esc(vn(s["what"]))] for s in steps]
+    rows = [[f'<b>{esc(s["phase"])}</b>', esc(s["when"]), esc(s["what"])] for s in steps]
     return _table(["Giai đoạn", "Thời điểm", "Nội dung"], rows, cls="plan-table", widths=["24%", "18%", "58%"])
 
 
 def _method(result, best, params, num: str = "9", compact: bool = False) -> str:
-    rows = [[esc(k), esc(vn(v)), esc(vn(m))] for k, v, m in sizing.assumption_rows(params)]
+    rows = [[esc(k), esc(v), esc(m)] for k, v, m in sizing.assumption_rows(params)]
     t1 = _table(["Hạng mục", "Giá trị", "Ý nghĩa"], rows, cls="method-table", widths=["24%", "32%", "44%"])
     if compact:
         return t1
@@ -1101,8 +1079,8 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
         def _existing_body(num):
             if not existing:
                 return '<div class="small-note">Không có dữ liệu cluster hiện hữu (chưa đồng bộ vCenter hoặc chưa import host/VM).</div>'
-            return _vn_html(_existing_chart(existing) + _existing_table(existing, policy_txt, highlight=target["name"] if target else None)
-                            + (_target_detail(target, result["demand"]) if target else ""))
+            return (_existing_chart(existing) + _existing_table(existing, policy_txt, highlight=target["name"] if target else None)
+                    + (_target_detail(target, result["demand"]) if target else ""))
         plan.append(("sec-existing", "Hạ tầng hiện hữu", "Khả năng tiếp nhận hệ thống mới trên các cụm đang vận hành; dòng tô màu là cụm được đề xuất.",
                      _existing_body, "", True))
     if on("demand"):
@@ -1110,7 +1088,7 @@ def render_full_html(vms: List[sizing.VmSpec], params: sizing.SizingParams, prof
     if has_new and on("options"):
         plan.append(("sec-options", "So sánh phương án" + (" (trang bị mới)" if mode == "reuse" else ""), "",
                      lambda num: _options(result, currency, {"scores": on("scores"), "chart": not compact})
-                     + f'<div class="callout" style="margin-top:8px;"><b>Phương án đề xuất.</b> {esc(vn(result["recommendation"]["detail"]))}</div>', "", True))
+                     + f'<div class="callout" style="margin-top:8px;"><b>Phương án đề xuất.</b> {esc(result["recommendation"]["detail"])}</div>', "", True))
     if has_new and on("design"):
         plan.append(("sec-design", "Cấu hình đề xuất & BOM cơ bản" if compact else "Cấu hình đề xuất",
                      esc(best["profile"]["name"]) + f" × {best['hostsTotal']} host",

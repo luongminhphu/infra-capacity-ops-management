@@ -111,6 +111,9 @@ const api = {
     return apiRequest(`/dashboard/vm-changes?${new URLSearchParams(params).toString()}`);
   },
 
+  // Executive page in one request (trend, byVcenter, brief, history, vmChanges) — audit API-02.
+  getExecutiveOverview: (params = {}) => apiRequest(`/dashboard/executive?${new URLSearchParams(params).toString()}`),
+
   getManagementBrief: (vcenter, includeStorage) => {
     const qs = new URLSearchParams({ vcenter: vcenter || 'all', storage: includeStorage ? '1' : '0' }).toString();
     return apiRequest(`/reports/brief?${qs}`);

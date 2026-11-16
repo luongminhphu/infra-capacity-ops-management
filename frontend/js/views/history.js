@@ -428,7 +428,10 @@ function historyHostsParam(opts) {
   return hst && hst !== 'all' ? [hst] : null;
 }
 
-async function renderHistoryPanel(mountId, opts = {}) {
+/* preload (optional, used once, not kept in historyMounts): { history, vmChanges } already fetched
+   for the current historyState by an aggregate endpoint (Executive: /dashboard/executive), or
+   { error } when that request failed. Month / group buttons re-render without it and fetch. */
+async function renderHistoryPanel(mountId, opts = {}, preload = null) {
   const mount = document.getElementById(mountId);
   if (!mount) return;
   historyMounts[mountId] = opts;
@@ -439,14 +442,23 @@ async function renderHistoryPanel(mountId, opts = {}) {
   let data = null, changes = null;
   const clusters = historyClustersParam(opts);
   const hosts = historyHostsParam(opts);
-  try {
-    const vcenter = historyVcenterParam();
-    const jobs = [api.getResourceHistory(vcenter, historyState.months, historyState.group, clusters)];
-    jobs.push(api.getVmChanges(vcenter, historyState.months, clusters, hosts));
-    [data, changes] = await Promise.all(jobs);
-  } catch (err) {
-    historyEmpty(mountId, `Không tải được lịch sử snapshot: ${err.message || err}`);
+  if (preload && preload.error !== undefined) {
+    historyEmpty(mountId, `Không tải được lịch sử snapshot: ${preload.error}`);
     return;
+  }
+  if (preload) {
+    data = preload.history;
+    changes = preload.vmChanges;
+  } else {
+    try {
+      const vcenter = historyVcenterParam();
+      const jobs = [api.getResourceHistory(vcenter, historyState.months, historyState.group, clusters)];
+      jobs.push(api.getVmChanges(vcenter, historyState.months, clusters, hosts));
+      [data, changes] = await Promise.all(jobs);
+    } catch (err) {
+      historyEmpty(mountId, `Không tải được lịch sử snapshot: ${err.message || err}`);
+      return;
+    }
   }
   const sub = document.getElementById(`${mountId}Sub`);
   if (sub) {
