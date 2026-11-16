@@ -264,7 +264,7 @@ function renderHistoryVmChanges(mountId, changes) {
     box.innerHTML = `<div class="empty-state">Chưa đủ snapshot trong khoảng thời gian này để so sánh danh sách VM (cần ít nhất 2 lần đồng bộ).</div>`;
     return;
   }
-  const powerPill = (r) => `<span class="pill ${r.isPoweredOn ? 'ok' : ''}">${esc(r.powerState || '—')}</span>`;
+  const powerPill = (r) => `${uiPill(r.isPoweredOn ? 'ok' : 'na', r.powerState || '—')}`;
   const aiBar = `<div class="sim-actions hidden" data-ai-gate="vm_changes"><button class="btn btn-secondary btn-sm" type="button" data-ai-act="vm-changes" data-ai-mount="${esc(mountId)}">AI tóm tắt biến động</button></div>
     <div id="${esc(mountId)}AiChanges" class="ai-out" aria-live="polite"></div>`;
   const vmRow = (r, dateField, dateLabel) => `<tr>
@@ -289,7 +289,7 @@ function renderHistoryVmChanges(mountId, changes) {
   const card = (title, sub, count, tone, headers, bodyHtml) => `
     <article class="card history-vm-card ${tone}">
       <div class="panel-head">
-        <div><div class="panel-title" role="heading" aria-level="2">${esc(title)} <span class="pill ${tone === 'added' ? 'ok' : tone === 'removed' ? 'warn' : ''}">${count} VM</span></div><p class="panel-sub">${esc(sub)}</p></div>
+        <div><div class="panel-title" role="heading" aria-level="2">${esc(title)} ${uiPill(tone === 'added' ? 'ok' : tone === 'removed' ? 'warn' : 'na', `${count} VM`)}</div><p class="panel-sub">${esc(sub)}</p></div>
       </div>
       <div class="table-scroll history-vm-scroll">
         <table class="data-table">

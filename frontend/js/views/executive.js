@@ -142,7 +142,7 @@ const PRIORITY_PILL_CLS = { cao: 'prio-cao', tb: 'prio-tb', thap: 'prio-thap', i
 
 function briefPriorityPill(rec) {
   const cls = PRIORITY_PILL_CLS[rec.priority] || 'prio-info';
-  return `<span class="pill ${cls}">${esc(rec.priority_label || rec.priority || '')}</span>`;
+  return `${uiPill(cls, rec.priority_label || rec.priority || '')}`;
 }
 
 function renderExecutiveBriefCard(brief) {
@@ -171,7 +171,7 @@ function renderExecutiveRecommendations(brief) {
   box.innerHTML = `<div class="rec-grid-web">${recs.map(r => `
     <article class="rec-card-web prio-${esc(r.priority)} tone-${esc(r.tone || 'neutral')}">
       <div class="rec-head"><span class="rec-num">${r.index}</span><div class="rec-title">${esc(r.title)}</div></div>
-      <div class="rec-meta">${briefPriorityPill(r)}<span class="pill">${esc(r.timeframe || '')}</span></div>
+      <div class="rec-meta">${briefPriorityPill(r)}${uiTag(r.timeframe || '')}</div>
       <div class="rec-block"><span class="rec-label">Điều này có nghĩa</span>${esc(r.meaning)}</div>
       <div class="rec-block"><span class="rec-label">Chúng tôi đề xuất</span>${esc(r.action)}</div>
       <div class="rec-block"><span class="rec-label">Nếu chưa hành động</span>${esc(r.impact)}</div>

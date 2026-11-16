@@ -13,7 +13,7 @@ const SRC_DEFAULTS = {
 function srcSetStatus(msg, isErr) { uiSetStatus('#srcStatus', msg, isErr ? 'error' : ''); }
 
 function srcAuthLabel(it) {
-  if (it.demo) return '<span class="pill na">Demo</span>';
+  if (it.demo) return uiTag('Demo');
   const parts = [];
   if (it.hasApiKey) parts.push('API key');
   if (it.username) parts.push(esc(it.username) + (it.hasPassword ? '' : ' <span class="tone-crit">(thiếu mật khẩu)</span>'));

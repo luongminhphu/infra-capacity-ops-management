@@ -341,7 +341,7 @@ function renderVcenterStatusChips() {
       ? vcentersCache.map(v => {
           const i = vcenterStatusInfo(v);
           const pill = i.cls === 'ok' ? 'ok' : (i.cls === 'error' ? 'crit' : (i.cls === 'demo' ? 'warn' : 'na'));
-          return `<tr><td>${esc(v.name)}<span class="sub muted-sub">${esc(v.key || '')}</span></td><td><span class="pill ${pill}">${i.statusText}</span>${v.lastError ? `<div class="muted-sub">${esc(v.lastError)}</div>` : ''}</td><td>${esc(i.when)}</td></tr>`;
+          return `<tr><td>${esc(v.name)}<span class="sub muted-sub">${esc(v.key || '')}</span></td><td>${uiPill(pill, i.statusText)}${v.lastError ? `<div class="muted-sub">${esc(v.lastError)}</div>` : ''}</td><td>${esc(i.when)}</td></tr>`;
         }).join('')
       : '<tr><td colspan="3" class="empty-note">Chưa cấu hình vCenter — dùng import thủ công bên dưới.</td></tr>';
   }

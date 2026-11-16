@@ -441,12 +441,12 @@ function renderSizingResult(result, payload, scroll = true) {
   const cmpRows = rows.map(r => {
     const pr = r.profile;
     const failTxt = r.failure.hostsLeft ? `${szNum(r.failure.cpuPct)}% / ${szNum(r.failure.ramPct)}%` : '—';
-    const failPill = r.redundancy === 0 ? '<span class="pill na">N</span>'
-      : (!r.failure.ok ? '<span class="pill crit">Chưa đạt</span>' : (r.failure.atLimit ? '<span class="pill warn">Sát ngưỡng</span>' : `<span class="pill ok">Đạt N+${r.redundancy}</span>`));
-    const status = r.suggested ? '<span class="pill na" title="Phương án tham khảo do hệ thống gợi ý">Tham khảo</span>'
-      : (r.recommended ? '<span class="pill ok">Đề xuất</span>' : (r.tight ? '<span class="pill warn">Sát ngưỡng</span>' : `<span class="muted-sub">#${r.rank}</span>`));
+    const failPill = r.redundancy === 0 ? uiPill('na', 'N')
+      : (!r.failure.ok ? uiPill('crit', 'Chưa đạt') : (r.failure.atLimit ? uiPill('warn', 'Sát ngưỡng') : `${uiPill('ok', `Đạt N+${r.redundancy}`)}`));
+    const status = r.suggested ? uiPill('na', 'Tham khảo', 'Phương án tham khảo do hệ thống gợi ý')
+      : (r.recommended ? uiPill('ok', 'Đề xuất') : (r.tight ? uiPill('warn', 'Sát ngưỡng') : `<span class="muted-sub">#${r.rank}</span>`));
     const storageCell = local
-      ? `${szGB(r.storage.perHostNeededGB)}/host ${r.storage.ok === false ? '<span class="pill crit">thiếu đĩa</span>' : ''}`
+      ? `${szGB(r.storage.perHostNeededGB)}/host ${r.storage.ok === false ? uiPill('crit', 'thiếu đĩa') : ''}`
       : '';
     return `
       <tr class="${r.recommended ? 'sz-best' : ''}${r.suggested ? ' sz-suggested' : ''}">
@@ -475,8 +475,8 @@ function renderSizingResult(result, payload, scroll = true) {
         <td><b>${esc(a.name)}</b><div class="muted-sub">${a.hostCount} host · ${a.before.poweredOnCount} VM bật</div></td>
         <td class="num">${fmtPct(a.before.cpuPct)} → <b>${fmtPct(a.after.cpuPct)}</b></td>
         <td class="num">${fmtPct(a.before.ramPct)} → <b>${fmtPct(a.after.ramPct)}</b></td>
-        <td class="num">${a.n1 ? `${fmtPct(a.n1.cpuPct)} / ${fmtPct(a.n1.ramPct)} ${a.n1.ok ? '<span class="pill ok">Đạt</span>' : '<span class="pill crit">Không</span>'}` : '—'}</td>
-        <td><span class="pill ${a.cls}">${a.cls === 'ok' ? 'Hấp thụ được' : a.cls === 'warn' ? 'Sát ngưỡng' : 'Vượt ngưỡng'}</span></td>
+        <td class="num">${a.n1 ? `${fmtPct(a.n1.cpuPct)} / ${fmtPct(a.n1.ramPct)} ${a.n1.ok ? uiPill('ok', 'Đạt') : uiPill('crit', 'Không')}` : '—'}</td>
+        <td>${uiPill(a.cls, a.cls === 'ok' ? 'Hấp thụ được' : a.cls === 'warn' ? 'Sát ngưỡng' : 'Vượt ngưỡng')}</td>
       </tr>`).join('');
     absorbHtml = `
       <div class="sz-section-title">Hạ tầng hiện hữu có hấp thụ được không?</div>
@@ -564,8 +564,8 @@ function renderSizingAdjust(result) {
   const hidden = new Set(rep.hiddenFindings || []);
   const SEV = { critical: ['crit', 'Nghiêm trọng'], warning: ['warn', 'Cảnh báo'], info: ['na', 'Lưu ý'], ok: ['ok', 'Đạt'] };
   const fl = ((result.analysis || {}).findings || []).map(f => `<label class="${hidden.has(f.id) ? 'off' : ''}"><input type="checkbox" data-finding="${esc(f.id)}" ${hidden.has(f.id) ? '' : 'checked'}>
-      <span class="pill ${SEV[f.severity][0]}">${SEV[f.severity][1]}</span><span class="t">${esc(f.title)}</span></label>`).join('');
-  const extras = (rep.extraFindings || []).map((x, i) => `<label><span class="pill ${(SEV[x.severity] || SEV.info)[0]}">${(SEV[x.severity] || SEV.info)[1]}</span>
+      ${uiPill(SEV[f.severity][0], SEV[f.severity][1])}<span class="t">${esc(f.title)}</span></label>`).join('');
+  const extras = (rep.extraFindings || []).map((x, i) => `<label>${uiPill((SEV[x.severity] || SEV.info)[0], (SEV[x.severity] || SEV.info)[1])}
       <span class="t">${esc(x.title)}</span><button class="btn btn-ghost btn-sm" type="button" data-del-extra="${i}" title="Xoá">✕</button></label>`).join('');
   const changed = rep.pick || rep.hosts || rep.headline || rep.note || (rep.hiddenFindings || []).length || (rep.extraFindings || []).length
     || Object.values(rep.sections || {}).some(v => v === false);
@@ -708,7 +708,7 @@ function sizingAdvisoryHtml(result) {
 
   const findings = (a.findings || []).map(f => {
     const [cls, lbl] = SZ_SEV[f.severity] || SZ_SEV.info;
-    return `<div class="sz-finding ${f.severity}"><div><span class="pill ${cls}">${lbl}</span><div class="sz-f-area">${esc(f.area)}</div></div>
+    return `<div class="sz-finding ${f.severity}"><div>${uiPill(cls, lbl)}<div class="sz-f-area">${esc(f.area)}</div></div>
       <div><div class="sz-f-title">${esc(f.title)}</div><div class="sz-f-detail">${esc(f.detail)}</div></div>
       <div><b>Khuyến nghị:</b> ${esc(f.action)}</div></div>`;
   }).join('');
@@ -718,7 +718,7 @@ function sizingAdvisoryHtml(result) {
 
   return `
     <div class="sz-section-title">Phân tích tư vấn</div>
-    <div class="sz-readiness"><span class="pill ${rcls}">${rtxt}</span><span class="muted-sub">${fc.critical || 0} nghiêm trọng · ${fc.warning || 0} cảnh báo · ${fc.info || 0} lưu ý · ${fc.ok || 0} đạt</span></div>
+    <div class="sz-readiness">${uiPill(rcls, rtxt)}<span class="muted-sub">${fc.critical || 0} nghiêm trọng · ${fc.warning || 0} cảnh báo · ${fc.info || 0} lưu ý · ${fc.ok || 0} đạt</span></div>
     ${insightTiles}
     <div class="sz-chart-grid three">
       <div class="sz-chart"><div class="sz-chart-title">Phân bố kích thước VM</div><div class="sz-chart-sub">Số VM theo nhóm T-shirt size.</div><div class="chart-wrap"><canvas id="szChartSizes"></canvas></div></div>
@@ -749,7 +749,7 @@ function sizingTcoHtml(best) {
   const c = best && best.advisory && best.advisory.costs;
   if (!c || !c.tco || !c.yearly || !c.yearly.length) return '';
   const m = v => (v == null ? '—' : szMoneyShort(v));
-  const z = v => (v == null ? '<span class="pill warn">chưa nhập</span>' : (v ? szMoneyShort(v) : '<span class="sz-muted">–</span>'));
+  const z = v => (v == null ? uiPill('warn', 'chưa nhập') : (v ? szMoneyShort(v) : '<span class="sz-muted">–</span>'));
   const ys = c.yearly;
   const head = `<tr><th>Thành phần</th>${ys.map(y => `<th>Năm ${y.year}</th>`).join('')}<th class="sum">Tổng ${c.years} năm</th></tr>`;
   const row = (label, cells, total, cls = '') => `<tr class="${cls}"><td>${label}</td>${cells.join('')}<td class="sum">${total}</td></tr>`;

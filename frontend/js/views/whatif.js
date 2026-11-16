@@ -308,7 +308,7 @@ function buildUpgradeExtra(cluster, hosts, upgradeHosts, addHosts) {
   const n1 = modelWithOverrides(cluster, { upgradeHosts, addHosts, removeHostNames: biggest ? [biggest.host] : [] });
   const n1Ok = upgraded.length >= 2 && isFinite(n1.cpuPct) && isFinite(n1.ramPct) && n1.cpuPct <= 100 && n1.ramPct <= 100;
   const addCores = addHosts.reduce((a, h) => a + h.cores, 0), addRam = addHosts.reduce((a, h) => a + h.ramGB, 0);
-  const addRows = addHosts.map(h => `<tr><td><strong>${esc(h.host)}</strong> <span class="pill-mini" style="color:var(--status-ok)">mới</span></td>
+  const addRows = addHosts.map(h => `<tr><td><strong>${esc(h.host)}</strong> ${uiTag('mới')}</td>
       <td class="mono">— → <strong>${fmtInt(h.cores)}</strong></td><td class="mono">— → <strong>${fmtNum(h.ramGB, 0)}</strong> GB</td>
       <td class="mono">+${fmtInt(h.cores)}</td><td class="mono">+${fmtNum(h.ramGB, 0)} GB</td></tr>`).join('');
   const combinedLine = addHosts.length

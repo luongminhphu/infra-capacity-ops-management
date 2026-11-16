@@ -47,7 +47,7 @@ async function aiBackupAnalysis(btn) {
       <p class="home-brief-text">${esc(r.headline)}</p>
       ${r.causes.length ? `<div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Mức</th><th>Nguyên nhân gốc</th><th>Mã</th><th>Việc cần làm</th></tr></thead><tbody>
         ${r.causes.map(c => `<tr><td>${uiPill(...(AI_LEVEL[c.level] || AI_LEVEL.info))}</td><td class="wrap"><b>${esc(c.title)}</b><span class="muted-sub bk-wrap">${esc(c.explanation)}</span></td>
-          <td>${c.codes.map(x => `<span class="pill na">${esc(x)}</span>`).join(' ') || '—'}</td><td class="wrap">${esc(c.action)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+          <td>${c.codes.map(x => `${uiTag(x)}`).join(' ') || '—'}</td><td class="wrap">${esc(c.action)}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${r.unknownCodes.length ? `<div class="sp-h">Mã lỗi chưa có trong bảng mã</div><ul class="home-list">${r.unknownCodes.map(u => `<li class="home-item"><div class="home-item-main"><b>Mã ${esc(u.code)}</b> — ${esc(u.meaning)}<span class="muted-sub">${esc(u.action)}</span></div></li>`).join('')}</ul>` : ''}
       ${r.priorities.length ? `<div class="sp-h">Thứ tự xử lý</div><ol class="home-ai-dec">${r.priorities.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}</div>`;
   });

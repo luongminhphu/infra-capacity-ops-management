@@ -11,9 +11,14 @@
    ========================================================= */
 
 /* Status pill. tone: ok | warn | bad | crit | na (AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG / không áp dụng). */
-function uiPill(tone, label) {
+function uiPill(tone, label, title) {
   const t = /^[a-z][a-z0-9-]*$/.test(String(tone || '')) ? tone : 'na';   // ok | warn | bad | crit | na | prio-*
-  return `<span class="pill ${t}">${esc(label)}</span>`;
+  return `<span class="pill ${t}"${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</span>`;
+}
+
+/* Neutral label (kind, origin, "Lịch sử", "Demo"…): no status glyph, never one of the 4 levels. */
+function uiTag(label, title) {
+  return `<span class="tag"${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</span>`;
 }
 
 /* Shared configuration (capacity thresholds, report logo, backup scope / schedules / thresholds,

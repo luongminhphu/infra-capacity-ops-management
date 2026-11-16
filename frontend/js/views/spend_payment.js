@@ -21,7 +21,7 @@ async function payRender(code) {
     const progress = p.docsTotal ? Math.round(p.docsDone * 100 / p.docsTotal) : 0;
     const docs = p.documents.map(x => `<li class="pay-doc">
         <label class="finding-filter-item"><input type="checkbox" data-pay-tick="${esc(p.id)}:${esc(x.id)}" ${x.done ? 'checked' : ''}
-          ${p.status !== 'pending' || !spCan('editor') ? 'disabled' : ''}><span>${esc(x.name)}${x.required ? ' <span class="pill-mini">Bắt buộc</span>' : ''}</span></label>
+          ${p.status !== 'pending' || !spCan('editor') ? 'disabled' : ''}><span>${esc(x.name)}${x.required ? ' ' + uiTag('Bắt buộc') : ''}</span></label>
         <span class="muted-sub sr-inline">${x.done ? `${esc(x.doneBy || '')} · ${esc(spTime(x.doneAt))}` : 'Chưa có'}</span>
         ${x.file ? `<a href="/api/spend/files/${encodeURIComponent(x.file.id)}" download>${esc(x.file.name)}</a>` : ''}
         ${x.file && /\.pdf$/i.test(x.file.name) && spCan('editor') ? `<button class="btn btn-ghost btn-sm hidden" type="button" data-ai-gate="invoice_read" data-ai-act="invoice" data-ai-url="${esc(`/spend/contracts/${encodeURIComponent(code)}/payments/${p.id}/documents/${x.id}/ai-read`)}" data-ai-out="payAi-${esc(x.id)}">AI đọc hoá đơn</button>` : ''}

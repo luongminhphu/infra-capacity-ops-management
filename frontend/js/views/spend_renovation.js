@@ -25,7 +25,7 @@ async function renderRenovationsPage() {
 function rnRenderList() {
   const rows = (rnState.list || []).map(p => `<tr data-rn-code="${esc(p.code)}" class="sp-row" tabindex="0">
       <td><b>${esc(p.floor)}</b><span class="muted-sub">${esc(p.code)}</span></td><td>${esc(p.year)}</td>
-      <td class="wrap">${esc(p.name)}${p.isHistorical ? ' <span class="pill na">Lịch sử</span>' : ''}<span class="muted-sub">${esc([p.nodes ? `${p.nodes} node` : '', p.headcount ? `${p.headcount} NS` : '', p.configTags || ''].filter(Boolean).join(' · '))}</span></td>
+      <td class="wrap">${esc(p.name)}${p.isHistorical ? ' ' + uiTag('Lịch sử') : ''}<span class="muted-sub">${esc([p.nodes ? `${p.nodes} node` : '', p.headcount ? `${p.headcount} NS` : '', p.configTags || ''].filter(Boolean).join(' · '))}</span></td>
       <td>${spPill(...(RN_STATUS[p.status] || ['na', p.statusLabel]))}</td>
       ${['cabling', 'network', 'vc'].map(ws => `<td class="num">${rnMoney(p.workstreams[ws].total)}<span class="muted-sub">${p.workstreams[ws].kpi !== null ? esc(Number(p.workstreams[ws].kpi).toLocaleString('vi-VN')) + (ws === 'vc' ? ' / phòng' : ' / node') : ''}</span></td>`).join('')}
       <td class="num"><b>${rnMoney(p.total)}</b></td></tr>`).join('');
@@ -96,7 +96,7 @@ function rnRenderDetail() {
       <div class="panel-head">
         <div><button class="btn btn-ghost btn-sm" type="button" data-rn-act="back"><i data-lucide="arrow-left"></i>Danh sách dự án</button>
           <div class="panel-title" role="heading" aria-level="2">${esc(d.floor)} (${esc(d.year)}) — ${esc(d.name)}</div>
-          <p class="panel-sub">${esc(d.code)} · ${spPill(...(RN_STATUS[d.status] || ['na', d.statusLabel]))}${d.isHistorical ? ' <span class="pill na">Lịch sử</span>' : ''}${d.configTags ? ` · cấu hình <b>${esc(d.configTags)}</b>` : ''}${d.capex ? ` · Capex ${esc(d.capex.code)}` : ''}</p></div>
+          <p class="panel-sub">${esc(d.code)} · ${spPill(...(RN_STATUS[d.status] || ['na', d.statusLabel]))}${d.isHistorical ? ' ' + uiTag('Lịch sử') : ''}${d.configTags ? ` · cấu hình <b>${esc(d.configTags)}</b>` : ''}${d.capex ? ` · Capex ${esc(d.capex.code)}` : ''}</p></div>
         <div class="panel-toolbar">
           <button class="btn btn-ghost btn-sm" type="button" data-rn-act="xlsx"><i data-lucide="file-spreadsheet"></i>Excel (Summarize)</button>
           <button class="btn btn-ghost btn-sm" type="button" data-rn-act="pdf"><i data-lucide="file-text"></i>PDF</button>

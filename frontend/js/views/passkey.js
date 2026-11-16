@@ -125,7 +125,7 @@ async function pkWithReauth(fn, hasPasskeys) {
 async function pkMyDialog() {
   let d;
   try { d = await apiRequest('/auth/passkeys'); } catch (err) { uiConfirm(err.message, { okLabel: 'Đóng', danger: false }); return; }
-  const rows = d.items.map(p => `<tr><td><b>${esc(p.name)}</b>${p.synced ? ' <span class="pill-mini">Đồng bộ</span>' : ''}</td>
+  const rows = d.items.map(p => `<tr><td><b>${esc(p.name)}</b>${p.synced ? ' ' + uiTag('Đồng bộ') : ''}</td>
       <td>${esc(spTimeSafe(p.createdAt))}</td><td>${esc(p.lastUsedAt ? spTimeSafe(p.lastUsedAt) : '—')}</td>
       <td><button class="btn btn-ghost btn-sm btn-danger" type="button" data-pk-del="${esc(p.id)}" aria-label="Xoá ${esc(p.name)}"><i data-lucide="trash-2"></i></button></td></tr>`).join('');
   const ui = uiDialog('pkMyDlg', { title: 'Passkey của tôi' });

@@ -84,7 +84,7 @@ function renderBackupHead() {
   const chips = servers.map(s => {
     const cls = s.lastStatus === 'error' ? 'crit' : (s.lastStatus === 'ok' ? 'ok' : 'na');
     const t = s.lastStatus === 'error' ? `Lỗi: ${s.lastError}` : (s.lastSyncAt ? `Đồng bộ ${bkDate(s.lastSyncAt)}` : 'Chưa đồng bộ');
-    return `<span class="pill ${cls}" title="${esc(t)}${s.warning ? ' · ' + esc(s.warning) : ''}">${esc(s.name)} · ${esc(t)}</span>`;
+    return `${uiPill(cls, `${s.name} · ${t}`, `${t}${s.warning ? ' · ' + s.warning : ''}`)}`;
   }).join(' ');
   head.innerHTML = `
     <div class="lic-head-row">
@@ -93,7 +93,7 @@ function renderBackupHead() {
         <select id="bkDays" title="Kỳ thống kê">
           ${[1, 7, 14, 30, 60, 90].map(d => `<option value="${d}" ${d === st.days ? 'selected' : ''}>${d === 1 ? '24 giờ qua' : d + ' ngày qua'}</option>`).join('')}
         </select>
-        <span class="bk-chips">${chips || '<span class="pill na">Chưa cấu hình máy chủ backup</span>'}</span>
+        <span class="bk-chips">${chips || uiPill('na', 'Chưa cấu hình máy chủ backup')}</span>
       </div>
       <div class="panel-toolbar">
         ${uiIsAdmin() ? '<button class="btn btn-secondary btn-sm" id="bkSync" type="button"><i data-lucide="refresh-cw"></i>Đồng bộ backup</button>' : ''}
@@ -513,7 +513,7 @@ function bkSchedule(s) {
       + (r.scheduleNotes || []).map(n => `<span class="muted-sub bk-wrap tone-warn">${esc(n)}</span>`).join('')
       + (r.calendar && Object.keys(r.calendar).length ? `<span class="muted-sub">Lịch theo ngày trong tháng: ${Object.entries(r.calendar).map(([k, c]) => `${k === 'full' ? 'Full' : 'Incr'} ngày ${[...(c.monthDays || []), ...(c.lastDayOfMonth ? ['cuối tháng'] : [])].join(', ') || (c.dates || []).join(', ')}`).join(' · ')}</span>` : '');
     const full = r.source === 'fixed' ? 'Mỗi đêm (không xét Full / Incr)' : r.fullEveryDays ? `Full mỗi ${r.fullEveryDays} ngày` : `Full ${bkDaysTxt(r.fullDays)}`;
-    const extra = [r.retentionIssues && r.retentionIssues.length ? `<span class="pill warn" title="${esc(r.retentionIssues.join('; '))}">Retention lệch</span>` : ''].join('');
+    const extra = [r.retentionIssues && r.retentionIssues.length ? `${uiPill('warn', 'Retention lệch', r.retentionIssues.join('; '))}` : ''].join('');
     return `<tr><td><b>${esc(r.system)}</b> ${src}${pols}</td>
       <td class="wrap">${full}<span class="muted-sub">${r.source === 'fixed' ? '' : 'Incr ' + bkDaysTxt(r.incrDays) + ' · '}${esc(r.startTime)}→${esc(r.endTime)}${r.retentionDays ? ' · giữ Full ' + r.retentionDays + ' ngày' : ''}</span></td>
       ${cells}<td class="num"><b class="${r.compliancePct === null ? '' : r.compliancePct >= 95 ? 'tone-ok' : r.compliancePct >= 80 ? 'tone-warn' : 'tone-crit'}">${bkPct(r.compliancePct)}</b>

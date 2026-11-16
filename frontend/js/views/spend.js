@@ -594,7 +594,7 @@ async function spRenderSettings() {
       <td><input type="number" data-k="renewalPct" min="0" max="100" step="0.01" value="${esc(c.renewalPct ?? '')}" ${dis} placeholder="—" aria-label="% gia hạn"></td>
       <td><input type="checkbox" data-k="active" ${c.active ? 'checked' : ''} ${dis} aria-label="Đang dùng"></td>
       <td>${admin ? '<button class="btn btn-ghost btn-sm" type="button" data-cat-save>Lưu</button>' : ''}</td></tr>`).join('');
-  const ccs = m.costCenters.map(c => `<li><b>${esc(c.code)}</b> — ${esc(c.name)}${c.active ? '' : ' <span class="pill na">Không dùng</span>'}</li>`).join('') || '<li class="muted-sub">Chưa có cost center.</li>';
+  const ccs = m.costCenters.map(c => `<li><b>${esc(c.code)}</b> — ${esc(c.name)}${c.active ? '' : ' ' + uiPill('na', 'Không dùng')}</li>`).join('') || '<li class="muted-sub">Chưa có cost center.</li>';
   mount.innerHTML = `
     <div class="sp-settings-grid">
       <div>

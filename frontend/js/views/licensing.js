@@ -38,7 +38,7 @@ function licState() {
 const licNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d, minimumFractionDigits: d });
 const licMoney = (v, cur) => uiMoney(v, cur && cur !== 'mixed' ? cur : '', 0);
 const licPill = (status) => { const s = LIC_STATUS[status] || { cls: 'na', label: status || '—' }; return uiPill(s.cls, s.label); };
-const licRulePill = (status) => { const s = LIC_RULE_STATUS[status] || { cls: 'na', label: status }; return `<span class="pill ${s.cls}">${esc(s.label)}</span>`; };
+const licRulePill = (status) => { const s = LIC_RULE_STATUS[status] || { cls: 'na', label: status }; return `${uiPill(s.cls, s.label)}`; };
 const licDate = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('vi-VN', { hour12: false }); };
 const licBool = (v) => v === true ? 'Bật' : v === false ? 'Tắt' : '—';
 const licRange = (a, b) => (a === b || b === null || b === undefined) ? licNum(a) : `${licNum(a)} – ${licNum(b)}`;
@@ -196,7 +196,7 @@ function renderLicHardware() {
     ['vCPU đã cấp', licNum(t.vcpuAllocated), `Tỷ lệ vCPU : physical core = ${isFinite(ratio) ? licNum(ratio, 2) : '—'}`],
     ['VM', licNum(t.vms), 'Trong phạm vi lọc'],
   ];
-  const distChips = (obj, label) => `<div class="lic-dist"><span class="lic-dist-label">${label}</span>${Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="pill na">${esc(k)} · ${v}</span>`).join('')}</div>`;
+  const distChips = (obj, label) => `<div class="lic-dist"><span class="lic-dist-label">${label}</span>${Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${uiTag(`${k} · ${v}`)}`).join('')}</div>`;
 
   // Group hosts: vCenter → cluster
   const groups = {};
@@ -216,10 +216,10 @@ function renderLicHardware() {
       <td>${esc(models)}</td><td>${esc(versions)}</td>
       <td class="num">${g.hosts.length}</td><td class="num">${licNum(sum('sockets'))}</td><td class="num"><b>${licNum(sum('cores'))}</b></td>
       <td class="num">${licNum(sum('threads'))}</td><td class="num">${licNum(sum('ramGB'))}</td><td class="num">${licNum(sum('vmCount'))}</td>
-      <td>${ha ? '<span class="pill ok">HA</span>' : '<span class="pill na">HA tắt</span>'} ${drs ? '<span class="pill ok">DRS</span>' : '<span class="pill na">DRS tắt</span>'}</td>
+      <td>${ha ? uiPill('ok', 'HA') : uiPill('na', 'HA tắt')} ${drs ? uiPill('ok', 'DRS') : uiPill('na', 'DRS tắt')}</td>
     </tr>`;
     const hostRows = open ? g.hosts.map(h => `<tr class="lic-host-row">
-      <td class="lic-indent">${esc(h.host)}${h.flags?.length ? ` <span class="pill warn" title="${esc(h.flags.join(', '))}">giả định</span>` : ''}</td>
+      <td class="lic-indent">${esc(h.host)}${h.flags?.length ? ` ${uiPill('warn', 'giả định', h.flags.join(', '))}` : ''}</td>
       <td>${esc(h.vendor || '')} ${esc(h.model || '—')}<div class="muted-sub">${esc(h.cpuModel || '')}</div></td>
       <td>${esc(h.esxiVersion || '—')}${h.esxiBuild ? `<div class="muted-sub">build ${esc(h.esxiBuild)}</div>` : ''}</td>
       <td class="num">1</td><td class="num">${licNum(h.sockets)}</td><td class="num"><b>${licNum(h.cores)}</b></td>
@@ -304,22 +304,21 @@ function renderLicOsTable() {
   if (!tb) return;
   const rows = licFilteredVms();
   const confCls = { confirmed: 'ok', high: 'ok', medium: 'warn', low: 'bad', none: 'na' };
-  const catCls = { windows_server: 'crit', windows_client: 'warn', linux: 'ok', appliance: 'na', other_unknown: 'bad' };
   tb.innerHTML = rows.slice(0, 1500).map((v, i) => {
     const o = v.os;
     const ev = o.evidence || {};
     const title = `guestId: ${ev.guestId || '—'}\nconfig: ${ev.guestFullName || '—'}\ntools: ${ev.toolsGuestFullName || '—'} (${ev.toolsStatus || '—'})\nhostname: ${ev.guestHostname || '—'}`;
     return `<tr>
-      <td><b>${esc(v.vm)}</b>${o.overridden ? ' <span class="pill ok" title="Override thủ công">override</span>' : ''}</td>
+      <td><b>${esc(v.vm)}</b>${o.overridden ? ' ' + uiTag('override', 'Override thủ công') : ''}</td>
       <td class="mono"${ev.guestHostname ? ` title="hostname: ${esc(ev.guestHostname)}"` : ''}>${esc(v.ipAddress || '—')}</td>
       <td>${esc(v.cluster || '—')}<div class="muted-sub">${esc(v.host || '—')}</div></td>
-      <td>${v.isPoweredOn ? '<span class="pill ok">Bật</span>' : '<span class="pill na">Tắt</span>'}</td>
+      <td>${v.isPoweredOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td>
       <td class="num">${licNum(v.vcpu)}</td><td class="num">${licNum(v.ramGB)}</td>
-      <td><span class="pill ${catCls[o.category] || 'na'}">${esc(o.categoryLabel)}</span></td>
+      <td>${uiTag(o.categoryLabel)}</td>
       <td title="${esc(title)}">${esc(o.osVersion || '—')}</td>
       <td>${esc(o.osEdition || '—')}</td>
       <td>${esc(LIC_SOURCE_LABEL[o.source] || o.source)}</td>
-      <td><span class="pill ${confCls[o.confidence] || 'na'}">${esc(LIC_CONF_LABEL[o.confidence] || o.confidence)}</span></td>
+      <td>${uiPill(confCls[o.confidence] || 'na', LIC_CONF_LABEL[o.confidence] || o.confidence)}</td>
       <td class="lic-note">${esc(o.note || '')}</td>
       <td>${uiIsAdmin() ? `<button class="btn btn-secondary btn-sm" data-lic-action="override" data-idx="${st_idx(v)}" type="button">Ghi đè</button>` : ''}</td>
     </tr>`;
@@ -385,7 +384,7 @@ function renderLicAssess() {
         <tr><td>Nhu cầu core</td><td class="num"><b>${licRange(opt.demandCores, opt.demandCoresMax)}</b></td></tr>
         <tr><td>Pack 16 + pack 2</td><td class="num">${opt.packs.pack16 || 0} × 16 + ${opt.packs.pack2 || 0} × 2${opt.demandCoresMax !== opt.demandCores ? ` <span class="muted-sub">(tối đa ${opt.packsMax.pack16} × 16 + ${opt.packsMax.pack2} × 2)</span>` : ''}</td></tr>
         <tr><td>Chỉ pack 16 core</td><td class="num">${licRange(opt.packs.pack16Only, opt.packsMax.pack16Only)} pack</td></tr>
-        <tr><td>Entitlement hiện có</td><td class="num">${opt.entitlement.declaredNone && !(opt.entitledCores > 0) ? '<span class="pill crit">Chưa có (đã xác nhận)</span>' : `${licNum(opt.entitledCores)} core${opt.entitlement.hasSa ? ' <span class="tag">SA</span>' : ''}`}</td></tr>
+        <tr><td>Entitlement hiện có</td><td class="num">${opt.entitlement.declaredNone && !(opt.entitledCores > 0) ? uiPill('crit', 'Chưa có (đã xác nhận)') : `${licNum(opt.entitledCores)} core${opt.entitlement.hasSa ? ' <span class="tag">SA</span>' : ''}`}</td></tr>
         <tr><td>Thiếu hụt</td><td class="num"><b class="${opt.shortfallCores > 0 ? 'lic-bad' : ''}">${licRange(opt.shortfallCores, opt.shortfallCoresMax)} core</b> → ${opt.shortfallPacks.pack16} × 16 + ${opt.shortfallPacks.pack2} × 2</td></tr>
         ${c ? `<tr><td>Đơn giá / core</td><td class="num">${licMoney(c.pricePerCore, c.currency)}</td></tr>
         <tr><td>Chi phí toàn bộ nhu cầu</td><td class="num">${licMoney(c.demandCost, c.currency)}${c.demandCostMax !== c.demandCost ? ` <span class="muted-sub">– ${licMoney(c.demandCostMax, c.currency)}</span>` : ''}</td></tr>
@@ -401,7 +400,7 @@ function renderLicAssess() {
     <td><b>${esc(c.cluster)}</b><div class="muted-sub">${esc(c.vcenterKey || 'import')}</div></td>
     <td class="num">${c.hostCount}</td><td class="num">${c.sockets}</td><td class="num">${licNum(c.physicalCores)}</td><td class="num">${licNum(c.wsLicensableCores)}</td>
     <td>${c.ha ? '<span class="tag">HA</span>' : ''}${c.drs ? ' <span class="tag">DRS</span>' : ''}${!c.ha && !c.drs ? '—' : ''}</td>
-    <td class="num">${c.wsVms}${c.wsVmsLowConfidence ? ` <span class="pill warn" title="VM chỉ có bằng chứng cấu hình/tên">${c.wsVmsLowConfidence} ?</span>` : ''}</td>
+    <td class="num">${c.wsVms}${c.wsVmsLowConfidence ? ` ${uiPill('warn', `${c.wsVmsLowConfidence} ?`, 'VM chỉ có bằng chứng cấu hình/tên')}` : ''}</td>
     <td class="num">${c.unknownVms || 0}</td>
     <td class="num">${c.standard.sets !== null && c.standard.sets !== undefined ? `${c.standard.sets} bộ → ` : ''}<b>${licRange(c.standard.cores, c.standard.coresMax)}</b></td>
     <td class="num"><b>${licNum(c.datacenter.cores)}</b></td>
@@ -448,7 +447,7 @@ function renderLicAssess() {
         <div class="lic-opt-head"><b>VMware (VCF / VVF / vSphere, per-core)</b> ${licPill(vm.status)}</div>
         <table class="lic-kv">
           <tr><td>Nhu cầu core</td><td class="num"><b>${licNum(vm.demandCores)}</b></td></tr>
-          <tr><td>Entitlement hiện có</td><td class="num">${vm.declaredNone && !(vm.entitledCores > 0) ? '<span class="pill crit">Chưa có (đã xác nhận)</span>' : `${licNum(vm.entitledCores)} core`}${Object.values(vm.entitlements).filter(e => e.units > 0).map(e => `<div class="muted-sub">${esc(e.label)}: ${licNum(e.units)}</div>`).join('')}</td></tr>
+          <tr><td>Entitlement hiện có</td><td class="num">${vm.declaredNone && !(vm.entitledCores > 0) ? uiPill('crit', 'Chưa có (đã xác nhận)') : `${licNum(vm.entitledCores)} core`}${Object.values(vm.entitlements).filter(e => e.units > 0).map(e => `<div class="muted-sub">${esc(e.label)}: ${licNum(e.units)}</div>`).join('')}</td></tr>
           <tr><td>Thiếu hụt</td><td class="num"><b class="${vm.shortfallCores > 0 ? 'lic-bad' : ''}">${licNum(vm.shortfallCores)} core</b>${vm.orderCores !== vm.shortfallCores ? ` <span class="muted-sub">(đặt hàng tối thiểu ${licNum(vm.orderCores)})</span>` : ''}</td></tr>
           ${vmwCost ? `<tr><td>Đơn giá / core (${esc(vmwCost.basis)})</td><td class="num">${licMoney(vmwCost.pricePerCore, vmwCost.currency)}</td></tr>
           <tr><td>Chi phí toàn bộ nhu cầu</td><td class="num">${licMoney(vmwCost.demandCost, vmwCost.currency)}</td></tr>
@@ -500,7 +499,7 @@ function renderLicEntitlements() {
       ${e.id ? '<button class="btn btn-secondary btn-sm" data-lic-action="ent-cancel" type="button">Huỷ</button>' : ''}
     </div></div>`;
   const rows = items.map(x => `<tr>
-    <td><b>${esc(x.label)}</b>${x.kind === 'none' ? ' <span class="pill crit">Chưa có</span>' : ''}${x.hasSa && x.kind !== 'none' ? ' <span class="tag">SA</span>' : ''}</td><td>${esc(metrics[x.metric] || x.metric)}</td><td class="num">${x.kind === 'none' ? '0' : licNum(x.quantity)}</td>
+    <td><b>${esc(x.label)}</b>${x.kind === 'none' ? ' ' + uiPill('crit', 'Chưa có') : ''}${x.hasSa && x.kind !== 'none' ? ' <span class="tag">SA</span>' : ''}</td><td>${esc(metrics[x.metric] || x.metric)}</td><td class="num">${x.kind === 'none' ? '0' : licNum(x.quantity)}</td>
     <td class="num">${x.unitPrice != null ? licMoney(x.unitPrice, x.currency) : '—'}</td>
     <td>${esc(x.scopeVcenter || 'Tất cả')} / ${esc(x.scopeCluster || 'Tất cả')}</td><td>${x.validTo ? licDate(x.validTo).split(' ')[0] : '—'}</td><td class="lic-note">${esc(x.note || '')}</td>
     <td>${admin ? `<button class="btn btn-secondary btn-sm" data-lic-action="ent-edit" data-id="${x.id}" type="button">Sửa</button> <button class="btn btn-secondary btn-sm btn-danger" data-lic-action="ent-delete" data-id="${x.id}" type="button">Xoá</button>` : ''}</td>
@@ -525,7 +524,7 @@ function renderLicRules() {
   const rows = rules.map(r => `<tr class="${r.isActive ? 'lic-rule-active' : ''}">
     <td><b>${esc(r.name)}</b><div class="muted-sub">${esc(r.product)} · ${esc(r.key)}</div></td>
     <td class="num">v${r.version}</td>
-    <td>${licRulePill(r.status)}${r.isActive ? ' <span class="pill ok">đang dùng</span>' : ''}</td>
+    <td>${licRulePill(r.status)}${r.isActive ? ' ' + uiPill('ok', 'đang dùng') : ''}</td>
     <td>${licSafeUrl(r.sourceUrl) ? `<a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Nguồn</a>` : '—'}<div class="muted-sub lic-note" title="${esc(r.sourceNote || '')}">${esc((r.sourceNote || '').split('\n')[0]).slice(0, 140)}</div></td>
     <td>${r.verifiedAt ? `${licDate(r.verifiedAt)}<div class="muted-sub">${esc(r.verifiedBy || '')}</div>` : '<span class="muted-sub">chưa</span>'}</td>
     <td class="lic-actions">
@@ -579,7 +578,7 @@ function renderLicWhatif() {
   }[w.type];
 
   return `<section class="table-card">
-    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">What-if license gắn với capacity</div><p class="panel-sub">Mỗi kịch bản được tính lại cả license (VMware per-core, Windows Server Standard/Datacenter) lẫn capacity (overcommit CPU/RAM theo chính sách, khả năng chịu lỗi N+1 của cluster). Kịch bản vi phạm capacity/HA sẽ bị đánh dấu <span class="pill crit">Không đề xuất</span> dù có tiết kiệm license.</p></div></div>
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">What-if license gắn với capacity</div><p class="panel-sub">Mỗi kịch bản được tính lại cả license (VMware per-core, Windows Server Standard/Datacenter) lẫn capacity (overcommit CPU/RAM theo chính sách, khả năng chịu lỗi N+1 của cluster). Kịch bản vi phạm capacity/HA sẽ bị đánh dấu ${uiPill('crit', 'Không đề xuất')} dù có tiết kiệm license.</p></div></div>
     <div class="sim-tabbar">${LIC_SCENARIOS.map(s => `<button class="sim-tab${w.type === s.type ? ' active' : ''}" data-lic-wtype="${s.type}" type="button">${s.label}</button>`).join('')}</div>
     <p class="muted-sub">${hint}</p>
     <div class="sim-form-grid lic-form-5">${fields}</div>
@@ -602,12 +601,12 @@ function renderLicWhatifResult(r) {
   const capRows = r.capacityAfter.map((a, i) => {
     const b = r.capacityBefore[i];
     const pct = (v) => isFinite(v) ? `${Math.round(v)}%` : '—';
-    const ha = (c) => !c.haEligible ? '<span class="pill na">1 host</span>' : c.haSurvives ? '<span class="pill ok">N+1 đạt</span>' : '<span class="pill crit">N+1 không đạt</span>';
+    const ha = (c) => !c.haEligible ? uiPill('na', '1 host') : c.haSurvives ? uiPill('ok', 'N+1 đạt') : uiPill('crit', 'N+1 không đạt');
     return `<tr><td><b>${esc(a.cluster)}</b></td><td class="num">${b.hosts} → ${a.hosts}</td><td class="num">${b.vms} → ${a.vms}</td><td class="num">${pct(b.cpuPct)} → <b>${pct(a.cpuPct)}</b></td><td class="num">${pct(b.ramPct)} → <b>${pct(a.ramPct)}</b></td><td>${ha(b)} → ${ha(a)}</td></tr>`;
   }).join('');
   const reasons = r.capacityVerdicts.flatMap(v => v.reasons.map(x => `${v.cluster}: ${x}`));
   return `<section class="sim-card sim-result">
-    <div class="lic-opt-head"><b>${esc(r.description)}</b> <span class="pill ${verdict[0]}">${verdict[1]}</span></div>
+    <div class="lic-opt-head"><b>${esc(r.description)}</b> ${uiPill(verdict[0], verdict[1])}</div>
     <div class="insight-box">${r.insights.map(x => `<div>• ${esc(x)}</div>`).join('')}${reasons.length ? `<div class="lic-reasons">${reasons.map(x => `<div>⚠ ${esc(x)}</div>`).join('')}</div>` : ''}</div>
     <div class="lic-2col">
       <div><h3 class="lic-h4">License trước → sau</h3><table class="data-table lic-table"><thead><tr><th>Chỉ số</th><th class="num">Trước</th><th class="num">Sau</th><th class="num">Δ</th></tr></thead><tbody>
@@ -635,7 +634,7 @@ function renderLicSnapshots() {
     return `<tr>
       <td class="num">#${s.id}</td><td>${licDate(s.createdAt)}<div class="muted-sub">${esc(s.createdBy || '')}</div></td>
       <td><b>${esc(s.title || '')}</b>${s.note ? `<div class="muted-sub">${esc(s.note)}</div>` : ''}</td>
-      <td>${esc((sc.vcenterKeys || ['Tất cả vCenter']).join(', '))}${sc.partial ? ` <span class="pill warn" title="Chưa tính: ${esc((sc.excludedClusterKeys || []).map(licKeyLabel).join(', '))}">một phần</span>` : ''}<div class="muted-sub lic-scope-cell">${sc.clusters ? esc(sc.clusters.join(', ')) : 'tất cả cluster'}</div></td>
+      <td>${esc((sc.vcenterKeys || ['Tất cả vCenter']).join(', '))}${sc.partial ? ` ${uiPill('warn', 'một phần', `Chưa tính: ${(sc.excludedClusterKeys || []).map(licKeyLabel).join(', ')}`)}` : ''}<div class="muted-sub lic-scope-cell">${sc.clusters ? esc(sc.clusters.join(', ')) : 'tất cả cluster'}</div></td>
       <td>${licPill(sm.overallStatus)}</td>
       <td class="num">${sm.vmware ? `${licNum(sm.vmware.demandCores)} / thiếu ${licNum(sm.vmware.shortfallCores)}` : '—'}</td>
       <td class="num">${sm.windowsServer ? `Std ${licRange(sm.windowsServer.standard.demandCores, sm.windowsServer.standard.demandCoresMax)} · DC ${licNum(sm.windowsServer.datacenter.demandCores)}` : '—'}</td>
@@ -736,7 +735,7 @@ async function onLicBodyClick(e) {
     }
     else if (act === 'snap-view') { const full = await api.licSnapshotGet(id); st.viewingSnapshot = full; st.sub = 'assess'; if (typeof syncNavState === 'function') syncNavState(); renderLicBody(); }
     else if (act === 'snap-close') { st.viewingSnapshot = null; renderLicBody(); }
-    else if (act === 'snap-recompute') { const r = await api.licSnapshotRecompute(id); const el = $(`#licRecomp${id}`); if (el) el.innerHTML = r.reproducible ? ' <span class="pill ok">tái lập đúng</span>' : ` <span class="pill crit">khác: ${esc(r.recomputedHash)}</span>`; }
+    else if (act === 'snap-recompute') { const r = await api.licSnapshotRecompute(id); const el = $(`#licRecomp${id}`); if (el) el.innerHTML = r.reproducible ? ' ' + uiPill('ok', 'tái lập đúng') : ` ${uiPill('crit', `khác: ${r.recomputedHash}`)}`; }
     else if (act === 'snap-delete') { if (!await uiConfirm(`Xoá snapshot #${id}?`)) return; await api.licSnapshotDelete(id); st.snaps = await api.licSnapshots(); renderLicBody(); }
   } catch (err) {
     licSetStatus(`Thao tác thất bại: ${err.message}`, true);
