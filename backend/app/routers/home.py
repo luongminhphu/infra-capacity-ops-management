@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import inbox, ops_alerts
@@ -122,7 +123,13 @@ def ack_item(data: Dict[str, Any] = Body(...), user: User = Depends(get_current_
     row = row or InboxAck(username=user.username, item_key=key)
     row.state, row.until, row.created_at = action, until, dt.datetime.utcnow()
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:          # double click / two tabs: the other request inserted it first (BEQ-09)
+        db.rollback()
+        row = db.query(InboxAck).filter_by(username=user.username, item_key=key).first()
+        row.state, row.until, row.created_at = action, until, dt.datetime.utcnow()
+        db.commit()
     return {"ok": True, "until": _iso(until)}
 
 
@@ -189,9 +196,17 @@ def assign_item(request: Request, data: Dict[str, Any] = Body(...), user: User =
     row = row or InboxAssignment(item_key=key)
     row.assignee, row.assigned_by, row.assigned_at = who.username, user.username, dt.datetime.utcnow()
     db.add(row)
-    db.add(AuditLog(username=user.username, action="inbox.assign", client_ip=request.client.host if request.client else None,
-                    detail=json.dumps({"key": key, "assignee": who.username}, ensure_ascii=False)))
-    db.commit()
+    audit = dict(username=user.username, action="inbox.assign", client_ip=request.client.host if request.client else None,
+                 detail=json.dumps({"key": key, "assignee": who.username}, ensure_ascii=False))
+    db.add(AuditLog(**audit))
+    try:
+        db.commit()
+    except IntegrityError:          # concurrent first assignment of the same item: last one wins (BEQ-09)
+        db.rollback()
+        row = db.query(InboxAssignment).filter_by(item_key=key).first()
+        row.assignee, row.assigned_by, row.assigned_at = who.username, user.username, dt.datetime.utcnow()
+        db.add(AuditLog(**audit))
+        db.commit()
     return {"ok": True, "assignee": _assignments(db, [key]).get(key)}
 
 

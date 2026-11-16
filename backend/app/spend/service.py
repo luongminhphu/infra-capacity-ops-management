@@ -351,7 +351,8 @@ def renew(db: Session, item: OpexItem, data: Dict[str, Any], cfg: SpendSettings,
     db.add_all([OpexAsset(opex_id=new.id, serial=a.serial, description=a.description, vcenter_key=a.vcenter_key,
                           host_name=a.host_name) for a in db.query(OpexAsset).filter_by(opex_id=item.id)])
     before = item.status
-    item.status, item.row_version = "renewed", item.row_version + 1
+    bump_version(db, item)                     # SCH-01: conditional UPDATE, not `+= 1`
+    item.status = "renewed"
     item.updated_at, item.updated_by = dt.datetime.utcnow(), user.username
     audit(db, user, request, "spend.opex.renew", code=item.code, newCode=new.code, status=[before, "renewed"])
     return new
@@ -398,7 +399,7 @@ def transition(db: Session, item: OpexItem, command: str, user: User, request: O
         item.stop_reason = _text(reason, "lý do ngừng", 500, required=True)
     if command == "reactivate":
         item.stop_reason = None
-    item.row_version += 1
+    bump_version(db, item)
     item.updated_at, item.updated_by = dt.datetime.utcnow(), user.username
     audit(db, user, request, f"spend.opex.{command}", code=item.code, status=[before, target], reason=reason)
 

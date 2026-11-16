@@ -97,6 +97,12 @@ def ensure_schema() -> None:
         ):
             if table in insp.get_table_names():
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
+        # NULL in a flag that has a safe default is read as that default by the code, but backfill it so
+        # every reader agrees (SCH-08). Idempotent; matches no row after the first run.
+        for table, col, val in (("spend_ai_config", "mask_names", "TRUE"), ("spend_notify_channels", "ops_alerts", "FALSE"),
+                                ("spend_vendors", "status", "'active'")):
+            if table in insp.get_table_names() and col in {c["name"] for c in insp.get_columns(table)}:
+                conn.execute(text(f"UPDATE {table} SET {col} = {val} WHERE {col} IS NULL"))
         # One short name per vendor (used in every comparison / evaluation document and in tờ trình);
         # partial unique index on the lower-cased value works on SQLite and PostgreSQL.
         if "spend_vendors" in insp.get_table_names():

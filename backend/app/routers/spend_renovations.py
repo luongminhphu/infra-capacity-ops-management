@@ -297,8 +297,7 @@ def update_project(code: str, request: Request, data: Dict[str, Any] = Body(...)
         version = int(data.get("rowVersion") or 0)
     except (TypeError, ValueError):
         _bad("rowVersion không hợp lệ.")
-    if version != p.row_version:
-        raise HTTPException(409, "Dự án vừa được người khác sửa — tải lại.")
+    service.bump_version(db, p, version, "Dự án vừa được người khác sửa — tải lại.")   # SCH-01
     if p.status == "closed" and not has_role(user, "approver"):
         raise HTTPException(403, "Dự án đã chốt — cần quyền Duyệt để sửa.")
     floor, year = p.floor, p.year
@@ -306,7 +305,6 @@ def update_project(code: str, request: Request, data: Dict[str, Any] = Body(...)
     if (p.floor, p.year) != (floor, year) and db.query(RenovationProject.id).filter(
             RenovationProject.floor == p.floor, RenovationProject.year == p.year, RenovationProject.id != p.id).first():
         raise HTTPException(409, f"Đã có dự án {p.floor} năm {p.year}.")
-    p.row_version += 1
     p.updated_at, p.updated_by = dt.datetime.utcnow(), user.username
     service.audit(db, user, request, "spend.renovation.update", code=p.code)
     db.commit()
@@ -370,7 +368,7 @@ def save_costs(code: str, request: Request, data: Dict[str, Any] = Body(...), us
         c.note = service._text(r.get("note"), "ghi chú", 500)
         c.updated_at, c.updated_by = dt.datetime.utcnow(), user.username
     if changed:
-        p.row_version += 1
+        service.bump_version(db, p)
         service.audit(db, user, request, "spend.renovation.costs", code=p.code, changes=changed[:100])
     db.commit()
     return build_detail(db, p)
@@ -444,7 +442,7 @@ def pull_quotes(code: str, request: Request, user: User = Depends(require_spend(
     for gid, amt in m["amounts"].items():
         db.add(RenovationCost(project_id=p.id, group_id=gid, kind="awarded", amount=amt, source="quote", updated_by=user.username,
                               note="Từ " + ", ".join(m["requests"])))
-    p.row_version += 1
+    service.bump_version(db, p)
     service.audit(db, user, request, "spend.renovation.pull_quotes", code=p.code, requests=m["requests"],
                   total=sum(m["amounts"].values()))
     db.commit()
@@ -494,7 +492,7 @@ def close_project(code: str, request: Request, user: User = Depends(require_spen
     if not have and not copied:
         raise HTTPException(409, "Chưa có thực chi hay báo giá trúng nào để chốt.")
     p.status, p.closed_at, p.closed_by = "closed", dt.datetime.utcnow(), user.username
-    p.row_version += 1
+    service.bump_version(db, p)
     service.audit(db, user, request, "spend.renovation.close", code=p.code, copied=copied)
     db.commit()
     return build_detail(db, p)
@@ -506,7 +504,7 @@ def reopen_project(code: str, request: Request, user: User = Depends(require_spe
     if p.status != "closed" or p.is_historical:
         raise HTTPException(409, "Chỉ mở lại được dự án đã chốt (không phải dự án lịch sử nhập từ file).")
     p.status, p.closed_at, p.closed_by = "executing", None, None
-    p.row_version += 1
+    service.bump_version(db, p)
     service.audit(db, user, request, "spend.renovation.reopen", code=p.code)
     db.commit()
     return build_detail(db, p)
@@ -580,7 +578,7 @@ async def import_summarize(request: Request, file: UploadFile = File(...), apply
                 if not p.is_historical:
                     _bad(f"{ip.floor} {year} là dự án do người dùng quản lý — không ghi đè bằng số liệu nhập.")
                 updated.append(ip.floor)
-                p.row_version += 1
+                service.bump_version(db, p)
             for attr, val in (("nodes", ip.nodes), ("headcount", ip.headcount), ("config_tags", ip.config),
                               ("vc_rooms", ip.vc_rooms), ("meeting_rooms", ip.meeting_rooms)):
                 if getattr(p, attr) is None and val is not None:

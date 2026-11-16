@@ -143,7 +143,7 @@ def reconcile(db: Session, project: CapexProject, cfg: SpendSettings, user: User
             snap = service.snapshot(o)
             _apply_plan(o, item, project, plan)
             if _plan_fields(o) != before or service.snapshot(o) != snap:
-                o.row_version += 1
+                service.bump_version(db, o)
                 o.updated_at, o.updated_by = dt.datetime.utcnow(), user.username
                 out["updated"].append(o.code)
                 service.audit(db, user, request, "spend.opex.update", code=o.code, capex=project.code,

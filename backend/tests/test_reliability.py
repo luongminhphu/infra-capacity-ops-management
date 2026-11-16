@@ -365,3 +365,49 @@ def test_flush_requeues_logs_when_db_write_fails(monkeypatch):
         kept = [e for e in observability._pending_logs if e["message"] == "keep-me-rel"]
         observability._pending_logs[:] = [e for e in observability._pending_logs if e["message"] != "keep-me-rel"]
     assert len(kept) == 1
+
+
+
+# ---------------------------------------------------------------- Round 2 PR3: data correctness
+
+def test_capacity_alert_survives_level_change(alert_db, monkeypatch):
+    """BEQ-04: a cluster staying above 90 % that moves THEO DÕI -> VƯỢT NGƯỠNG keeps one alert
+    (no false "Đã hết" + new alert); the inbox key still changes so a worsened item reappears."""
+    db = alert_db
+    _channel(db, URL1, "ops")
+    level = {"v": "warn"}
+
+    def cap_items(db):
+        return [inbox.item("capacity", level["v"], inbox._key("cap", "C1", level["v"]), "Cluster C1", push=True,
+                           alert_key=inbox._key("cap", "C1"))]
+    monkeypatch.setattr(inbox, "PROVIDERS", [("capacity", cap_items, False)])
+    posts = []
+    post = lambda url, payload: posts.append(payload["content"])  # noqa: E731
+    assert ops_alerts.check_and_notify(db, post=post)["new"] == 1
+    level["v"] = "crit"
+    out = ops_alerts.check_and_notify(db, post=post)
+    assert out["new"] == 0 and out["resolved"] == 0 and len(posts) == 1
+    assert db.get(OpsAlertState, "cap|C1").active
+
+
+def test_failed_provider_does_not_poison_the_next_one(alert_db, monkeypatch):
+    """BEQ-02: each provider runs in a SAVEPOINT; a SQL error in one leaves the session usable."""
+    from sqlalchemy import text
+
+    def broken(db):
+        db.execute(text("SELECT * FROM no_such_table"))
+        return []
+
+    def fine(db):
+        db.execute(text("SELECT 1")).scalar()
+        return [inbox.item("backup", "bad", "bk|ok", "Vẫn chạy", push=False)]
+    monkeypatch.setattr(inbox, "PROVIDERS", [("capacity", broken, False), ("backup", fine, False)])
+    items, errors = inbox._compute(alert_db, dt.date.today())
+    assert errors == ["capacity"] and [i["key"] for i in items] == ["bk|ok"]
+    assert alert_db.execute(text("SELECT 1")).scalar() == 1
+
+
+def test_alert_runs_are_serialised():
+    """BEQ-03: the scheduler run and "Chạy ngay" share one lock."""
+    assert ops_alerts._run_lock.acquire(blocking=False)
+    ops_alerts._run_lock.release()
