@@ -53,6 +53,8 @@ services:
       # Module Chi phí & Hợp đồng IT: file đính kèm / hợp đồng lưu trên volume ico_files
       SPEND_FILES_DIR: /data/files
       SPEND_MAX_UPLOAD_MB: ${SPEND_MAX_UPLOAD_MB:-20}
+      MAX_REQUEST_MB: ${MAX_REQUEST_MB:-32}
+      TRUST_FORWARDED_FOR: ${TRUST_FORWARDED_FOR:-false}
       MCP_ENABLED: ${MCP_ENABLED:-false}
       MCP_MASK_HOSTS: ${MCP_MASK_HOSTS:-true}
       OBS_RETENTION_DAYS: ${OBS_RETENTION_DAYS:-30}

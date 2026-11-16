@@ -48,6 +48,8 @@ data:
   ENTRA_SPEND_APPROVER_ROLES: "ICO.Spend.Approver"
   SPEND_FILES_DIR: "/data/files"      # PVC ico-files (05-files-pvc.yaml)
   SPEND_MAX_UPLOAD_MB: "20"
+  MAX_REQUEST_MB: "32"            # body tối đa của mọi request; > SPEND_MAX_UPLOAD_MB
+  TRUST_FORWARDED_FOR: "false"    # "true" chỉ khi Ingress / App Proxy đặt X-Forwarded-For
   MCP_ENABLED: "false"                # "true" để admin tạo token MCP trong Cài đặt → AI / MCP
   MCP_MASK_HOSTS: "true"              # che hostname / IP nội bộ trong log trả cho AI
   MCP_TOKEN_MAX_DAYS: "180"

@@ -343,8 +343,12 @@ def _authenticate(request: Request, db: Session) -> Optional[tuple]:
     return tok, user
 
 
+MAX_BATCH = 20
+
+
 def _client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
+    """Peer IP; X-Forwarded-For only when TRUST_FORWARDED_FOR says a trusted proxy sets it (SEC2-09)."""
+    fwd = request.headers.get("x-forwarded-for") if get_settings().trust_forwarded_for else None
     return (fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else ""))[:64]
 
 
@@ -426,7 +430,6 @@ async def mcp_endpoint(request: Request, db: Session = Depends(get_db)):
         window.popleft()
     if len(window) >= s.mcp_rate_per_minute:
         return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Retry-After": "30"})
-    window.append(now)
     try:
         payload = await request.json()
     except ValueError:
@@ -434,6 +437,10 @@ async def mcp_endpoint(request: Request, db: Session = Depends(get_db)):
     messages = payload if isinstance(payload, list) else [payload]
     if not messages or not all(isinstance(m, dict) for m in messages):
         return JSONResponse(_rpc_error(None, -32600, "Invalid Request"), status_code=400)
+    # the limit counts JSON-RPC messages, not HTTP requests: a batch cannot multiply it (SEC2-09)
+    if len(messages) > MAX_BATCH or len(window) + len(messages) > s.mcp_rate_per_minute:
+        return JSONResponse({"error": "rate_limited", "maxBatch": MAX_BATCH}, status_code=429, headers={"Retry-After": "30"})
+    window.extend([now] * len(messages))
     from starlette.concurrency import run_in_threadpool   # DB work off the event loop
     replies = await run_in_threadpool(
         lambda: [r for r in (_handle(m, db, user, tok, request) for m in messages) if r is not None])
