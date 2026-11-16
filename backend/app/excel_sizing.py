@@ -652,7 +652,7 @@ def _workload_sheet(wb, result, subtitle: str) -> None:
     facts = [("Đặc tính", wl.get("characterLabel")), ("GB RAM / vCPU", _r(wl.get("ramPerVcpu"))),
              ("Số máy ảo", d["vmCount"]), ("Nhóm cấu hình", wl.get("groupCount")),
              ("Số nhóm chiếm 80% RAM", wl.get("paretoLines")),
-             ("Máy ảo lớn nhất", f"{(wl.get('largestVm') or {}).get('name', '—')} · {(wl.get('largestVm') or {}).get('vcpu', 0):g} vCPU / {_gb((wl.get('largestVm') or {}).get('ramGB'))}"),
+             ("Máy ảo lớn nhất", f"{(wl.get('largestVm') or {}).get('name', '—')} · {vn_g((wl.get('largestVm') or {}).get('vcpu', 0))} vCPU / {_gb((wl.get('largestVm') or {}).get('ramGB'))}"),
              ("Cơ sở dữ liệu / middleware", ", ".join(wl.get("dbLike", [])) or "—")]
     row = start
     for k, v in facts:
@@ -744,7 +744,7 @@ def _assumptions_sheet(wb, result, subtitle: str) -> None:
     rows = []
     for key, label, unit in sizing_advisory.THRESHOLD_META:
         v = th.get(key, defaults.get(key))
-        rows.append([label, f"{v} {unit}".strip()])
+        rows.append([label, f"{vn_g(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else v} {unit}".strip()])
     lst = _write_rows(ws, row, ["Ngưỡng", "Giá trị"], rows, wrap_cols=(2,))
     _table(ws, f"A{top}:B{lst}", "NguongTuVan", "TableStyleLight9")
     _widths(ws, {"A": 52, "B": 60})

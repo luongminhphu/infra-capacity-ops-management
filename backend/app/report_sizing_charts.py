@@ -8,6 +8,7 @@ with no JavaScript and no network.
 from typing import Any, Dict, List, Optional
 
 from .pdf_kit import COLORS, _finite, _nice_ceiling, esc
+from .shared.text import vn_num
 
 FONT = 'font-family="Inter, Noto Sans, sans-serif"'
 
@@ -35,14 +36,14 @@ def money_short(v: Optional[float], currency: str = "VND") -> str:
     a = abs(v)
     if cur == "VND":
         if a >= 1e9:
-            return f"{v / 1e9:,.2f} tỷ".replace(",", "X").replace(".", ",").replace("X", ".")
+            return f"{vn_num(v / 1e9, 2)} tỷ"
         if a >= 1e6:
-            return f"{v / 1e6:,.0f} tr".replace(",", ".")
-        return f"{v:,.0f}".replace(",", ".")
+            return f"{vn_num(v / 1e6)} tr"
+        return vn_num(v)
     for div, suf in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
         if a >= div:
-            return f"{v / div:,.1f}{suf} {currency}".strip()
-    return f"{v:,.0f} {currency}".strip()
+            return f"{vn_num(v / div, 1)}{suf} {currency}".strip()
+    return f"{vn_num(v)} {currency}".strip()
 
 
 def svg_hbars(rows: List[Dict[str, Any]], width: int = 330, label_w: int = 92, row_h: int = 18,
@@ -66,7 +67,7 @@ def svg_hbars(rows: List[Dict[str, Any]], width: int = 330, label_w: int = 92, r
         parts.append(f'<text x="{label_w - 5}" y="{y + bh / 2 + 3:.1f}" text-anchor="end" font-size="7.8" fill="{COLORS["ink"]}">{esc(name)}</text>')
         parts.append(f'<rect x="{label_w}" y="{y}" width="{plot_w}" height="{bh}" rx="2" fill="{COLORS["surface2"]}"/>')
         parts.append(f'<rect x="{label_w}" y="{y}" width="{bw:.1f}" height="{bh}" rx="2" fill="{r.get("color") or COLORS["primary"]}"/>')
-        text = r.get("text") or f"{r['value']:.0f}"
+        text = r.get("text") or vn_num(r['value'])
         parts.append(f'<text x="{label_w + bw + 4:.1f}" y="{y + bh / 2 + 3:.1f}" font-size="7.4" font-weight="700" fill="{COLORS["muted"]}">{esc(text)}</text>')
     parts.append("</svg>")
     return "".join(parts)
@@ -103,7 +104,7 @@ def svg_waterfall(steps: List[Dict[str, Any]], width: int = 330, height: int = 1
     """Cumulative steps: first and last bars full height, middle bars float from the previous total."""
     if not steps:
         return EMPTY
-    fmt = fmt or (lambda v: f"{v:,.0f}")
+    fmt = fmt or vn_num
     mx = _nice_ceiling(max(s["value"] for s in steps) * 1.12)
     pad_l, pad_r, pad_t, pad_b = 40, 6, 14, 26
     plot_w, plot_h = width - pad_l - pad_r, height - pad_t - pad_b

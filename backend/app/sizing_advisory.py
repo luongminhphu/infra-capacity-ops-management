@@ -27,6 +27,8 @@ import re
 from dataclasses import dataclass, fields
 from typing import Any, Dict, List, Optional
 
+from .shared.text import vn_g, vn_num
+
 # T-shirt sizes by (vCPU, RAM GB) upper bounds — a VM lands in the first bucket
 # whose both bounds it fits.
 SIZE_BUCKETS = [
@@ -122,8 +124,8 @@ def _clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
 def _gb_txt(v: float) -> str:
     """GB (as entered, = GiB in the hypervisor) → TiB above 1 024 GB; one unit convention for the whole report."""
     if v >= 1024:
-        return f"{v / 1024:,.1f} TiB"
-    return f"{v:,.0f} GB"
+        return f"{vn_num(v / 1024, 1)} TiB"
+    return f"{vn_num(v)} GB"
 
 
 def expand_text(proj: Optional[Dict[str, Any]]) -> Optional[str]:
@@ -132,10 +134,10 @@ def expand_text(proj: Optional[Dict[str, Any]]) -> Optional[str]:
         return None
     y = proj.get("expandYear")
     if y is None:
-        return f"Đủ năng lực trong cả {proj['years']} năm dự báo (tăng trưởng {proj['annualGrowthPct']:g}%/năm)."
+        return f"Đủ năng lực trong cả {proj['years']} năm dự báo (tăng trưởng {vn_g(proj['annualGrowthPct'])}%/năm)."
     if y <= 1:
-        return f"Với tăng trưởng {proj['annualGrowthPct']:g}%/năm, cần mở rộng ngay trong năm thứ 1."
-    return (f"Với tăng trưởng {proj['annualGrowthPct']:g}%/năm, đủ năng lực đến hết năm thứ {y - 1}; "
+        return f"Với tăng trưởng {vn_g(proj['annualGrowthPct'])}%/năm, cần mở rộng ngay trong năm thứ 1."
+    return (f"Với tăng trưởng {vn_g(proj['annualGrowthPct'])}%/năm, đủ năng lực đến hết năm thứ {y - 1}; "
             f"cần mở rộng trước năm thứ {y}.")
 
 
@@ -228,13 +230,13 @@ def demand_waterfall(demand: Dict[str, Any], params, best: Optional[Dict[str, An
     # CPU in vCPU-equivalents, RAM in GB — each step is a cumulative bar.
     cpu_steps = [
         {"label": "Yêu cầu", "value": demand["vcpu"]},
-        {"label": f"+{params.growth_pct:g}% tăng trưởng", "value": demand["vcpuPlanned"]},
-        {"label": f"Vùng an toàn {100 - params.max_util_pct:g}%", "value": demand["vcpuPlanned"] / util},
+        {"label": f"+{vn_g(params.growth_pct)}% tăng trưởng", "value": demand["vcpuPlanned"]},
+        {"label": f"Vùng an toàn {vn_g(100 - params.max_util_pct)}%", "value": demand["vcpuPlanned"] / util},
     ]
     ram_steps = [
         {"label": "Yêu cầu", "value": demand["ramGB"]},
-        {"label": f"+{params.growth_pct:g}% tăng trưởng", "value": demand["ramPlannedGB"]},
-        {"label": f"Vùng an toàn {100 - params.max_util_pct:g}%", "value": demand["ramPlannedGB"] / util},
+        {"label": f"+{vn_g(params.growth_pct)}% tăng trưởng", "value": demand["ramPlannedGB"]},
+        {"label": f"Vùng an toàn {vn_g(100 - params.max_util_pct)}%", "value": demand["ramPlannedGB"] / util},
     ]
     if best and best["hostsTotal"]:
         ph = best["perHost"]
@@ -518,8 +520,8 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
             continue
         tco = r["advisory"]["costs"]["tco"]
         if best_tco and tco and tco < best_tco * (1 - th.cheaper_alt_pct / 100.0) and r["failure"]["ok"]:
-            out.append(_finding("info", "Chi phí", f"Phương án {r['profile']['name']} có TCO thấp hơn {(1 - tco / best_tco) * 100:.0f}%",
-                                f"Cần {r['hostsTotal']} host (thay vì {best['hostsTotal']}), vẫn đạt dự phòng N+{r['redundancy']}.",
+            out.append(_finding("info", "Chi phí", f"Phương án {r['profile']['name']} có TCO thấp hơn {vn_num((1 - tco / best_tco) * 100)}%",
+                                f"Cần {vn_num(r['hostsTotal'])} host (thay vì {vn_num(best['hostsTotal'])}), vẫn đạt dự phòng N+{r['redundancy']}.",
                                 "Chọn phương án này nếu ưu tiên ngân sách hơn số host và không gian tủ rack."))
             break
 
@@ -531,14 +533,14 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
         lic_b, lic_r = a["license"]["coresTotal"], r["advisory"]["license"]["coresTotal"]
         vpc = demand["vcpuPlanned"] / max(1, r["totals"]["cores"])
         if why == "fewer_cores":
-            out.append(_finding("info", "Chi phí", f"Phương án tham khảo {r['profile']['name']}: giảm license từ {lic_b} xuống {lic_r} {a['license'].get('unit', 'core')}",
-                                f"CPU đang dư nhiều; với {r['profile']['coresPerSocket']} core/CPU vẫn đủ ({vpc:.1f} vCPU : 1 core), "
-                                f"cần {r['hostsTotal']} host, khi mất {r['redundancy']} host dùng {r['failure']['cpuPct'] or 0:.0f}% CPU · {r['failure']['ramPct'] or 0:.0f}% RAM.",
+            out.append(_finding("info", "Chi phí", f"Phương án tham khảo {r['profile']['name']}: giảm license từ {vn_num(lic_b)} xuống {vn_num(lic_r)} {a['license'].get('unit', 'core')}",
+                                f"CPU đang dư nhiều; với {r['profile']['coresPerSocket']} core/CPU vẫn đủ ({vn_num(vpc, 1)} vCPU : 1 core), "
+                                f"cần {r['hostsTotal']} host, khi mất {r['redundancy']} host dùng {vn_num(r['failure']['cpuPct'] or 0)}% CPU · {vn_num(r['failure']['ramPct'] or 0)}% RAM.",
                                 "Cân nhắc khi chi phí license theo core là ưu tiên; kiểm tra lại với yêu cầu hiệu năng của ứng dụng."))
         elif why == "more_ram":
             out.append(_finding("info", "Dư địa", f"Phương án tham khảo {r['profile']['name']}: thêm RAM để có dư địa",
-                                f"Cùng {r['hostsTotal']} host; khi mất {r['redundancy']} host RAM còn {r['failure']['ramPct'] or 0:.0f}%, "
-                                f"chứa thêm khoảng {r['spare']['extraAvgVms'] or 0} VM.",
+                                f"Cùng {r['hostsTotal']} host; khi mất {r['redundancy']} host RAM còn {vn_num(r['failure']['ramPct'] or 0)}%, "
+                                f"chứa thêm khoảng {vn_num(r['spare']['extraAvgVms'] or 0)} VM.",
                                 "Chi phí tăng chủ yếu ở phần RAM; nên chọn nếu dự kiến mở rộng ứng dụng."))
 
     # Resilience
@@ -550,16 +552,16 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
                             "Bổ sung tối thiểu 1 host dự phòng (N+1) cho môi trường Production."))
     elif not f["ok"]:
         out.append(_finding("critical", "Chịu lỗi", f"Chưa đạt dự phòng N+{red}",
-                            f"Khi mất {red} host, các host còn lại phải gánh {f['cpuPct'] or 0:.0f}% CPU và {f['ramPct'] or 0:.0f}% RAM.",
+                            f"Khi mất {red} host, các host còn lại phải gánh {vn_num(f['cpuPct'] or 0)}% CPU và {vn_num(f['ramPct'] or 0)}% RAM.",
                             "Thêm host hoặc giảm tỷ lệ chia sẻ tài nguyên."))
     elif f.get("atLimit"):
         out.append(_finding("warning", "Chịu lỗi", f"Đạt N+{red} nhưng sát ngưỡng",
-                            f"Khi mất {red} host, {'RAM' if (f['ramPct'] or 0) >= (f['cpuPct'] or 0) else 'CPU'} dùng {worst:.0f}% — "
-                            f"đúng mức tối đa cho phép ({util_pct:g}%). Chỉ cần nhu cầu tăng nhẹ là phải thêm host.",
+                            f"Khi mất {red} host, {'RAM' if (f['ramPct'] or 0) >= (f['cpuPct'] or 0) else 'CPU'} dùng {vn_num(worst)}% — "
+                            f"đúng mức tối đa cho phép ({vn_g(util_pct)}%). Chỉ cần nhu cầu tăng nhẹ là phải thêm host.",
                             "Chọn cấu hình có thêm RAM/CPU mỗi host, hoặc thêm 1 host."))
     else:
         out.append(_finding("ok", "Chịu lỗi", f"Đạt dự phòng N+{red}",
-                            f"Khi mất {red} host, cụm vẫn chạy ở mức {f['cpuPct'] or 0:.0f}% CPU và {f['ramPct'] or 0:.0f}% RAM.",
+                            f"Khi mất {red} host, cụm vẫn chạy ở mức {vn_num(f['cpuPct'] or 0)}% CPU và {vn_num(f['ramPct'] or 0)}% RAM.",
                             f"Cấu hình {pf['ha']} (tự khởi động lại VM khi host lỗi) dành sẵn năng lực N+{red}; bật {pf['balancer']} để cân bằng tải."))
     if best["hostsTotal"] == 2 and red >= 1:
         out.append(_finding("info", "Chịu lỗi", "Cụm 2 host: một nửa năng lực dành cho dự phòng",
@@ -570,7 +572,7 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     needs_overhead = pf.get("overhead_min_ram_gb") and (params.platform == "nutanix" or params.storage_mode == "local")
     if needs_overhead and params.reserve_ram_gb < pf["overhead_min_ram_gb"]:
         out.append(_finding("warning", "Nền tảng", f"Phần tài nguyên dành cho {pf['hypervisor']} có thể thấp",
-                            f"{pf['overhead_note']} Giả định hiện tại chỉ trừ {params.reserve_ram_gb:g} GB RAM / host.",
+                            f"{pf['overhead_note']} Giả định hiện tại chỉ trừ {vn_g(params.reserve_ram_gb)} GB RAM / host.",
                             f"Tăng mục \"Tài nguyên dành cho hypervisor\" lên khoảng {pf['reserve']['ram_gb']} GB RAM và {pf['reserve']['cores']} core / host rồi tính lại."))
 
     # Placement rules (anti-affinity) for DCs and multi-instance groups
@@ -600,7 +602,7 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
                             "Cấu hình vNUMA đúng kiến trúc phần cứng; nếu VM nhạy hiệu năng, chọn CPU nhiều core hơn."))
     if numa["wideRam"]:
         out.append(_finding("warning", "NUMA", f"{len(numa['wideRam'])} nhóm VM có RAM lớn hơn bộ nhớ của một CPU",
-                            f"{', '.join(numa['wideRam'][:4])} cần hơn {numa['ramPerSocketGB']:.0f} GB — phần vượt truy cập chậm hơn.",
+                            f"{', '.join(numa['wideRam'][:4])} cần hơn {vn_num(numa['ramPerSocketGB'])} GB — phần vượt truy cập chậm hơn.",
                             "Tăng RAM mỗi host, hoặc rà soát lại RAM cấp cho VM."))
 
     # Balance — explain the real cause instead of an "ideal RAM" number.
@@ -608,39 +610,39 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     loaded = max(bal["cpuUtilPct"], bal["ramUtilPct"]) >= th.balance_min_load_pct
     if loaded and bal["strandedCpuPct"] >= th.stranded_warn_pct:
         cause = ("workload thiên RAM" if workload["character"] == "memory"
-                 else f"tỷ lệ chia sẻ CPU đặt cao ({params.cpu_ratio:g} vCPU/thread ≈ {per_core:g} vCPU/core) nên CPU luôn dư")
-        out.append(_finding("warning", "Cân đối tài nguyên", f"RAM là yếu tố quyết định, CPU dư khoảng {bal['strandedCpuPct']:.0f}%",
-                            f"Nguyên nhân: {cause}. Thực tế chỉ cần {demand['vcpuPlanned'] / max(1, best['totals']['cores']):.2f} vCPU trên mỗi core vật lý.",
+                 else f"tỷ lệ chia sẻ CPU đặt cao ({vn_g(params.cpu_ratio)} vCPU/thread ≈ {vn_g(per_core)} vCPU/core) nên CPU luôn dư")
+        out.append(_finding("warning", "Cân đối tài nguyên", f"RAM là yếu tố quyết định, CPU dư khoảng {vn_num(bal['strandedCpuPct'])}%",
+                            f"Nguyên nhân: {cause}. Thực tế chỉ cần {vn_num(demand['vcpuPlanned'] / max(1, best['totals']['cores']), 2)} vCPU trên mỗi core vật lý.",
                             "Có thể chọn CPU ít core hơn để giảm chi phí license (license tính theo core)."))
     elif loaded and bal["strandedRamPct"] >= th.stranded_warn_pct:
-        out.append(_finding("warning", "Cân đối tài nguyên", f"CPU là yếu tố quyết định, RAM dư khoảng {bal['strandedRamPct']:.0f}%",
+        out.append(_finding("warning", "Cân đối tài nguyên", f"CPU là yếu tố quyết định, RAM dư khoảng {vn_num(bal['strandedRamPct'])}%",
                             f"Mỗi host có {_gb_txt(prof['ramGB'])} RAM nhưng CPU hết trước.",
                             "Chọn CPU nhiều core hơn, hoặc giảm RAM mỗi host để tối ưu chi phí."))
     elif loaded and bal["gapPct"] < th.balance_ok_gap_pct:
         out.append(_finding("ok", "Cân đối tài nguyên", "CPU và RAM được dùng cân đối",
-                            f"Mức dùng CPU {bal['cpuUtilPct']:.0f}% và RAM {bal['ramUtilPct']:.0f}% — ít tài nguyên bỏ trống.",
+                            f"Mức dùng CPU {vn_num(bal['cpuUtilPct'])}% và RAM {vn_num(bal['ramUtilPct'])}% — ít tài nguyên bỏ trống.",
                             "Giữ tỷ lệ cấu hình này."))
 
     # Sharing ratios
     if params.ram_ratio > th.ram_ratio_warn:
-        out.append(_finding("warning", "Tỷ lệ chia sẻ", f"Cấp RAM vượt dung lượng thật ({params.ram_ratio:g} : 1)",
+        out.append(_finding("warning", "Tỷ lệ chia sẻ", f"Cấp RAM vượt dung lượng thật ({vn_g(params.ram_ratio)} : 1)",
                             "Khi tải cao, hệ thống phải thu hồi bộ nhớ hoặc đẩy xuống đĩa, làm chậm toàn bộ VM.",
-                            f"Giữ tỷ lệ RAM ≤ {th.ram_ratio_warn:g} : 1 cho Production."))
+                            f"Giữ tỷ lệ RAM ≤ {vn_g(th.ram_ratio_warn)} : 1 cho Production."))
     if workload["dbLike"] and per_core > th.db_cpu_per_core_max:
         out.append(_finding("warning", "Tỷ lệ chia sẻ", "Cơ sở dữ liệu dùng chung CPU ở tỷ lệ cao",
-                            f"{', '.join(workload['dbLike'][:4])} nhạy độ trễ nhưng áp chung tỷ lệ {per_core:g} vCPU/core.",
-                            f"Đặt CPU reservation hoặc nhóm host riêng với tỷ lệ ≤ {th.db_cpu_per_core_max:g} vCPU/core cho các VM này."))
+                            f"{', '.join(workload['dbLike'][:4])} nhạy độ trễ nhưng áp chung tỷ lệ {vn_g(per_core)} vCPU/core.",
+                            f"Đặt CPU reservation hoặc nhóm host riêng với tỷ lệ ≤ {vn_g(th.db_cpu_per_core_max)} vCPU/core cho các VM này."))
     if per_core > th.high_cpu_per_core_warn:
-        out.append(_finding("warning", "Tỷ lệ chia sẻ", f"Tỷ lệ chia sẻ CPU giả định cao ({per_core:g} vCPU/core)",
-                            f"Giả định {params.cpu_ratio:g} vCPU trên mỗi thread, tức {per_core:g} vCPU trên mỗi core vật lý — cao hơn thông lệ 2–4 vCPU/core cho Production.",
+        out.append(_finding("warning", "Tỷ lệ chia sẻ", f"Tỷ lệ chia sẻ CPU giả định cao ({vn_g(per_core)} vCPU/core)",
+                            f"Giả định {vn_g(params.cpu_ratio)} vCPU trên mỗi thread, tức {vn_g(per_core)} vCPU trên mỗi core vật lý — cao hơn thông lệ 2–4 vCPU/core cho Production.",
                             "Dùng giả định thấp hơn khi sizing; theo dõi CPU Ready (thời gian chờ CPU) dưới 5% khi vận hành."))
 
     # Growth
     run = a["runway"]["extraGrowthPct"]
     if run is not None and run < th.low_runway_pct:
         out.append(_finding("warning", "Tăng trưởng", "Không còn dư địa tăng trưởng" if run < 1 else "Dư địa tăng trưởng thấp",
-                            (f"Ngoài +{params.growth_pct:g}% đã dự phòng, cụm không nhận thêm được tải nào mà vẫn giữ N+{red}."
-                             if run < 1 else f"Ngoài +{params.growth_pct:g}% đã dự phòng, cụm chỉ nhận thêm khoảng {run:.0f}% tải mà vẫn giữ N+{red}."),
+                            (f"Ngoài +{vn_g(params.growth_pct)}% đã dự phòng, cụm không nhận thêm được tải nào mà vẫn giữ N+{red}."
+                             if run < 1 else f"Ngoài +{vn_g(params.growth_pct)}% đã dự phòng, cụm chỉ nhận thêm khoảng {vn_num(run)}% tải mà vẫn giữ N+{red}."),
                             "Thêm RAM/CPU mỗi host hoặc thêm 1 host nếu ứng dụng có kế hoạch mở rộng."))
     et = expand_text(proj)
     if proj and proj.get("expandYear") is not None:
@@ -662,7 +664,7 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
     # Licensing
     lic = a["license"]
     if lic["paddedCores"] > 0 and lic.get("unit", "core") == "core":
-        out.append(_finding("info", "License", f"{lic['paddedCores']} core license không dùng tới",
+        out.append(_finding("info", "License", f"{vn_num(lic['paddedCores'])} core license không dùng tới",
                             (f"License tính tối thiểu {params.license_min_cores_per_socket} core mỗi CPU"
                              + (f" và {pf['license_min_per_host']} core mỗi host" if pf.get("license_min_per_host") else "")
                              + f", cấu hình chỉ có {prof['coresPerSocket']} core/CPU."),
@@ -689,21 +691,21 @@ def findings(demand, params, best, workload, proj, results=None) -> List[Dict[st
         min_nodes = max(int(pf.get("hci_min_nodes", 3)), 4 if 1.0 < prot < 1.9 else 0)
         if best["hostsTotal"] < min_nodes:
             out.append(_finding("warning", "Lưu trữ", f"{hci} cần tối thiểu {min_nodes} host",
-                                f"Mức bảo vệ ×{prot:g} trên {hci} yêu cầu từ {min_nodes} host.", f"Nâng cụm lên {min_nodes} host."))
+                                f"Mức bảo vệ ×{vn_g(prot)} trên {hci} yêu cầu từ {min_nodes} host.", f"Nâng cụm lên {min_nodes} host."))
         elif best["hostsTotal"] == min_nodes and prot >= 1.9:
             out.append(_finding("warning", "Lưu trữ", f"{hci} {min_nodes} host: không còn chỗ dựng lại dữ liệu khi 1 host bảo trì",
                                 "Với mức bảo vệ chịu lỗi 1 host (2 bản sao), khi 1 host bảo trì hoặc hỏng, dữ liệu chỉ còn một bản cho đến khi host trở lại.",
                                 f"Khuyến nghị {min_nodes + 1} host để {hci} tự dựng lại dữ liệu; nếu giữ {min_nodes} host, lên lịch bảo trì ngắn và theo dõi chặt."))
         if params.storage_overhead_pct < th.vsan_free_min_pct:
-            out.append(_finding("warning", "Lưu trữ", f"Dự trữ dung lượng {hci} {params.storage_overhead_pct:g}% thấp hơn khuyến nghị",
-                                f"Lưu trữ HCI cần khoảng {th.vsan_free_min_pct:g}–30% dung lượng trống cho snapshot, dựng lại dữ liệu và bảo trì.",
-                                f"Tăng mức dự trữ lên ≥ {th.vsan_free_min_pct:g}% khi chốt số lượng ổ đĩa."))
+            out.append(_finding("warning", "Lưu trữ", f"Dự trữ dung lượng {hci} {vn_g(params.storage_overhead_pct)}% thấp hơn khuyến nghị",
+                                f"Lưu trữ HCI cần khoảng {vn_g(th.vsan_free_min_pct)}–30% dung lượng trống cho snapshot, dựng lại dữ liệu và bảo trì.",
+                                f"Tăng mức dự trữ lên ≥ {vn_g(th.vsan_free_min_pct)}% khi chốt số lượng ổ đĩa."))
         out.append(_finding("info", "Lưu trữ", f"{pf['ha']} cần lưu trữ dùng chung",
                             f"Thiết kế giả định ổ đĩa trên host được gộp thành {pf['hci_long']}. Nếu chỉ dùng đĩa cục bộ độc lập, HA không khởi động lại được VM trên host khác.",
                             f"Chốt {hci} hoặc SAN dùng chung trước khi báo giá."))
     else:
         out.append(_finding("info", "Lưu trữ", f"Cần {_gb_txt(demand['storageNeededGB'])} trên SAN",
-                            f"Đã gồm +{params.growth_pct:g}% tăng trưởng và +{params.storage_overhead_pct:g}% dự trữ (snapshot, swap, vùng trống).",
+                            f"Đã gồm +{vn_g(params.growth_pct)}% tăng trưởng và +{vn_g(params.storage_overhead_pct)}% dự trữ (snapshot, swap, vùng trống).",
                             "Xác nhận dung lượng trống, hiệu năng (IOPS) và chính sách sao lưu / nhân bản trên SAN."))
 
     out.sort(key=lambda x: SEVERITY_ORDER.get(x["severity"], 9))
@@ -719,7 +721,7 @@ def next_steps(demand, params, best, n_findings_crit: int) -> List[Dict[str, str
     p = best["profile"]
     steps = [
         {"phase": "1. Thống nhất yêu cầu", "when": "Tuần 1",
-         "what": f"Rà soát danh sách {demand['vmCount']} VM và các giả định (tỷ lệ chia sẻ, tăng trưởng {params.growth_pct:g}%, dự phòng N+{params.redundancy}) với khách hàng."},
+         "what": f"Rà soát danh sách {vn_num(demand['vmCount'])} VM và các giả định (tỷ lệ chia sẻ, tăng trưởng {vn_g(params.growth_pct)}%, dự phòng N+{params.redundancy}) với khách hàng."},
         {"phase": "2. Chốt cấu hình & báo giá", "when": "Tuần 2",
          "what": f"Hoàn thiện cấu hình {best['hostsTotal']} host {p['name']}, gửi báo giá gồm phần cứng, license, bảo hành, dịch vụ triển khai và TCO {params.horizon_years} năm."},
         {"phase": "3. Phê duyệt", "when": "Tuần 3–4", "what": "Khách hàng phê duyệt phương án và ngân sách; báo cáo này dùng làm thuyết minh kỹ thuật."},

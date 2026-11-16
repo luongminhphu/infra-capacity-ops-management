@@ -27,7 +27,8 @@ Bố cục / văn phong báo cáo PDF: xem thêm skill `pdf-report`.
 - **Số trong chữ viết kiểu vi-VN** (`1.234.567`, `1.234,5`, `9,6%`, `0,64x`): dùng `fmt_num` / `fmt_int` / `fmt_pct` của
   `report_pdf.py` hoặc `vn_num` / `vn_g` (`backend/app/shared/text.py`). Không dùng `f"{x:,.1f}"` cho chữ người đọc.
   Giữ số thuần cho toạ độ SVG, độ rộng CSS, công thức Excel; ô số Excel vẫn là số (`number_format`).
-  Báo cáo Sizing: `report_sizing_full.vn()` đổi số kiểu Anh của engine và bỏ qua số đã viết kiểu Việt.
+  Câu do engine Sizing sinh ra (`sizing.py`, `sizing_advisory.py`) đã viết số vi-VN; báo cáo in nguyên văn, không đổi dấu
+  bằng regex. Mã / khoá (vd `2x32x1024`) giữ số thuần.
 
 ## Trạng thái
 
