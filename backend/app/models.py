@@ -641,5 +641,26 @@ class PasskeyInvite(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
 
+# SCH-10: JSON / CSV kept in Text columns are checked on every ORM write (type stays Text, rule 4).
+from .shared.stored_text import csv_column as _csv, json_column as _json  # noqa: E402
+
+_json(AuditLog.detail, None, "Chi tiết nhật ký")
+_json(PerfBucket.histogram, list, "Histogram độ trễ", nullable=False)
+_json(LicenseRuleSet.params_json, dict, "Tham số rule license", nullable=False)
+_json(LicenseAssessment.scope_json, dict, "Phạm vi snapshot license", nullable=False)
+_json(LicenseAssessment.inputs_json, dict, "Dữ liệu đầu vào snapshot license", nullable=False)
+_json(LicenseAssessment.result_json, dict, "Kết quả snapshot license", nullable=False)
+_json(BackupPolicySnapshot.clients_json, list, "Danh sách client của policy")
+_json(BackupPolicySnapshot.schedules_json, list, "Danh sách schedule của policy")
+_csv(BackupScheduleRule.full_days, "Ngày chạy Full", item=r"[0-6]", nullable=False)
+_csv(BackupScheduleRule.incr_days, "Ngày chạy Incremental", item=r"[0-6]", nullable=False)
+_json(DataSource.options, dict, "Tuỳ chọn nguồn dữ liệu")
+_json(UserPref.data, dict, "Tuỳ chọn người dùng", nullable=False)
+_csv(OpsAlertState.sent_channels, "Kênh đã gửi cảnh báo", item=r"[^\s,]+")
+_json(AiCache.output, None, "Kết quả AI lưu đệm", nullable=False)
+_json(ImportMapping.headers_json, list, "Tiêu đề cột của file nhập", nullable=False)
+_json(ImportMapping.mapping_json, dict, "Ánh xạ cột", nullable=False)
+
+
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
 from .spend import models as _spend_models  # noqa: E402,F401

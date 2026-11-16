@@ -384,8 +384,10 @@ def _handle(msg: Dict[str, Any], db: Session, user: User, tok: ApiToken, request
         tool = TOOLS.get(name)
         if not tool or not isinstance(args, dict):
             return _rpc_error(id_, -32602, f"Unknown tool: {name}")
-        db.add(AuditLog(username=user.username, action="mcp.tool", client_ip=_client_ip(request),
-                        detail=json.dumps({"tool": name, "args": args, "token": tok.prefix}, default=str)[:2000]))
+        detail = json.dumps({"tool": name, "args": args, "token": tok.prefix}, default=str)
+        if len(detail) > 2000:   # keep the audit row valid JSON (slicing the text cut it mid-string, SCH-10)
+            detail = json.dumps({"tool": name, "argsTruncated": json.dumps(args, default=str)[:1500], "token": tok.prefix})
+        db.add(AuditLog(username=user.username, action="mcp.tool", client_ip=_client_ip(request), detail=detail))
         db.commit()
         try:
             data = tool["fn"](db, args)

@@ -17,6 +17,7 @@ from . import mcp_server, observability
 from .routers import admin, ai_admin, ai_data as ai_data_router, report_archive as report_archive_router, users_admin as users_admin_router, bom as bom_router, exports as exports_router, appconfig, entities, home, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, spend_capex, spend_contracts, spend_import, spend_plans, spend_payments, spend_proposals, spend_quotes, spend_renovations, spend_reports, vcenters
 from .spend import reminders as spend_reminders, service as spend_service
 from .security import ensure_bootstrap_admin
+from .shared.stored_text import InvalidStoredValue
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s [%(request_id)s]: %(message)s")
 for _h in logging.getLogger().handlers:   # request id on every line (audit OBS-02); "-" outside a request
@@ -81,6 +82,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Infra Capacity Ops Management API", lifespan=lifespan)
+
+
+@app.exception_handler(InvalidStoredValue)
+async def _invalid_stored_value(request: Request, exc: InvalidStoredValue):
+    """SCH-10: a JSON / CSV text column got a value of the wrong shape — refuse with 422, nothing saved."""
+    logger.warning("Rejected write on %s %s: %s", request.method, request.url.path, exc.label)
+    return JSONResponse(status_code=422, content={"detail": exc.message})
 
 settings = get_settings()
 

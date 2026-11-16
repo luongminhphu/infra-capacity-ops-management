@@ -23,18 +23,30 @@ ADMIN = {"username": "admin", "password": "Admin12345!"}
 PW = "User12345!"
 
 
+_SPEND_WIPE = (BudgetPlanLine, BudgetPlan, EvaluationScore, EvaluationCriterion, QuotationFinding, QuotationLine, Quotation,
+               QuoteRequest, RenovationCost, RenovationProject, RenovationCostGroup, PaymentDocument, ContractPayment,
+               ProposalContract, ProposalOpex, Proposal, ProposalTemplate, ProposalRecipient, SpendAiConfig, ContractVersion,
+               Contract, SpendReminderLog, OpexAttachment, OpexAsset, SpendFile, SpendNotifyChannel, SpendSmtpConfig,
+               SpendSavedFilter, OpexItem, CapexItem, CapexProject, SpendVendor, SpendCostCenter, SpendSequence)
+
+
 def _wipe():
+    """Children before parents (SCH-11: the test SQLite enforces foreign keys like PostgreSQL)."""
+    from app.database import Base
+    tables = {m.__table__ for m in _SPEND_WIPE}
     db = SessionLocal()
-    for model in (BudgetPlanLine, BudgetPlan, EvaluationScore, EvaluationCriterion, QuotationFinding, QuotationLine, Quotation, QuoteRequest, RenovationCost, RenovationProject, RenovationCostGroup, PaymentDocument, ContractPayment, ProposalContract, ProposalOpex, Proposal, ProposalTemplate, ProposalRecipient, SpendAiConfig,
-                  ContractVersion, Contract, SpendReminderLog, OpexAttachment, OpexAsset, SpendFile, SpendNotifyChannel, SpendSmtpConfig, SpendSavedFilter):
-        db.query(model).delete()
-    db.query(OpexItem).update({OpexItem.renewed_from_id: None})
-    for model in (OpexItem, CapexItem, CapexProject, SpendVendor, SpendCostCenter, SpendSequence):
-        db.query(model).delete()
-    db.query(AppSetting).filter(AppSetting.key.like("spend.%")).delete(synchronize_session=False)
-    db.query(AppSetting).filter(AppSetting.key == "feature.spend").delete()
-    db.commit()
-    db.close()
+    try:
+        db.query(OpexItem).update({OpexItem.renewed_from_id: None})
+        db.query(BudgetPlan).update({BudgetPlan.revised_from_id: None})
+        for table in reversed(Base.metadata.sorted_tables):
+            if table in tables:
+                db.execute(table.delete())
+        db.query(AppSetting).filter(AppSetting.key.like("spend.%")).delete(synchronize_session=False)
+        db.query(AppSetting).filter(AppSetting.key == "feature.spend").delete()
+        db.commit()
+    finally:
+        db.rollback()
+        db.close()
 
 
 def _user(name: str, role: str) -> None:

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from .. import data_access, report_license
 from ..config import get_settings
 from ..database import get_db
-from ..shared.money import to_minor
+from ..shared.money import from_minor, to_minor
 from ..licensing import assess as assess_mod
 from ..licensing import os_classify, rules as rules_mod, whatif as whatif_mod
 from ..models import LicenseAssessment, LicenseEntitlement, LicenseRuleSet, ReportLogo, User, VmOsOverride
@@ -43,10 +43,19 @@ license_router = APIRouter(prefix="/api/licensing", tags=["licensing"], dependen
 
 
 
+def _ent_minor(e: LicenseEntitlement) -> Optional[int]:
+    """DAT-10 release 2: the integer column is the source of truth. A row saved by an old pod
+    (Float only, not yet backfilled) is converted the same way ensure_schema() backfills it."""
+    if e.unit_price_minor is not None:
+        return int(e.unit_price_minor)
+    return to_minor(e.unit_price, e.currency)
+
+
 def _ent_dict(e: LicenseEntitlement) -> Dict[str, Any]:
+    minor = _ent_minor(e)
     return {"id": e.id, "product": e.product, "label": assess_mod.PRODUCT_LABEL.get(e.product, e.product),
             "metric": e.metric, "quantity": e.quantity, "kind": e.kind or "owned",
-            "unitPrice": e.unit_price, "currency": e.currency,
+            "unitPrice": from_minor(minor, e.currency), "unitPriceMinor": minor, "currency": e.currency,
             "hasSa": bool(e.has_sa), "scopeVcenter": e.scope_vcenter, "scopeCluster": e.scope_cluster,
             "validTo": to_iso_utc(e.valid_to) if e.valid_to else None, "note": e.note,
             "updatedBy": e.updated_by, "updatedAt": to_iso_utc(e.updated_at)}
@@ -318,8 +327,9 @@ def _apply_ent(row: LicenseEntitlement, p: EntitlementIn, user: User):
         raise HTTPException(400, "Số lượng entitlement phải lớn hơn 0 (hoặc chọn 'Chưa có' nếu chưa mua license)")
     row.kind = p.kind
     row.product, row.metric, row.quantity = p.product, p.metric, (0.0 if p.kind == "none" else p.quantity)
-    row.unit_price, row.currency, row.has_sa = p.unitPrice, (p.currency or "VND").upper()[:8], p.hasSa
-    row.unit_price_minor = to_minor(p.unitPrice, row.currency)          # DAT-10: integer twin, written alongside
+    row.currency, row.has_sa = (p.currency or "VND").upper()[:8], p.hasSa
+    row.unit_price_minor = to_minor(p.unitPrice, row.currency)          # DAT-10: source of truth
+    row.unit_price = from_minor(row.unit_price_minor, row.currency)     # still written for release-1 pods during rollout
     row.scope_vcenter = p.scopeVcenter or None
     row.scope_cluster = p.scopeCluster or None
     row.valid_to = datetime.fromisoformat(p.validTo[:10]) if p.validTo else None

@@ -845,3 +845,13 @@ class BudgetPlanLine(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     updated_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(255), nullable=True)
+
+
+# SCH-10: JSON / CSV kept in Text columns are checked on every ORM write (type stays Text, rule 4).
+from ..shared.stored_text import csv_column as _csv, json_column as _json  # noqa: E402
+
+_csv(SpendNotifyChannel.recipients, "Email người nhận", item=r"[^@\s,]+@[^@\s,]+")
+_json(SpendSavedFilter.filters_json, dict, "Bộ lọc đã lưu", nullable=False)
+_json(ContractVersion.text_content, list, "Nội dung văn bản hợp đồng")
+_json(ProposalTemplate.outline_json, dict, "Cấu trúc mẫu tờ trình", nullable=False)
+_json(SpendAiConfig.tasks_json, dict, "Danh sách tác vụ AI")

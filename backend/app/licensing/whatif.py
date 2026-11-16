@@ -8,6 +8,7 @@ or removes HA survivability that existed before, the result is marked
 saving is still shown, but explicitly labelled as not actionable.
 """
 import copy
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from .. import capacity
@@ -217,7 +218,10 @@ def _delta(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
     for key, path in (("wsStandardCost", ["windowsServer", "standard", "cost", "demandCost"]),
                       ("wsDatacenterCost", ["windowsServer", "datacenter", "cost", "demandCost"]),
                       ("vmwareCost", ["vmware", "cost", "demandCost"])):
-        out[key] = d(path)
+        row = d(path)
+        if row["delta"] is not None:   # money: exact decimal difference (DAT-10), not a float subtraction
+            row["delta"] = float(Decimal(str(row["after"])) - Decimal(str(row["before"])))
+        out[key] = row
     return out
 
 
