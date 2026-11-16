@@ -40,13 +40,13 @@ function historyVcenterParam() {
 function fmtDeltaPts(v, unit = ' điểm') {
   if (v === null || v === undefined || !isFinite(v)) return '—';
   const sign = v > 0 ? '+' : (v < 0 ? '−' : '±');
-  return `${sign}${Math.abs(v).toFixed(1)}${unit}`;
+  return `${sign}${fmtNum(Math.abs(v), 1)}${unit}`;
 }
 
 function fmtDeltaInt(v) {
   if (v === null || v === undefined || !isFinite(v)) return '—';
   const sign = v > 0 ? '+' : (v < 0 ? '−' : '±');
-  return `${sign}${Math.abs(Math.round(v)).toLocaleString('en-US')}`;
+  return `${sign}${fmtInt(Math.abs(v))}`;
 }
 
 function deltaTone(v, invert = false) {
@@ -193,7 +193,7 @@ function renderHistoryCharts(mountId, data) {
           tooltip: {
             callbacks: {
               title: items => items.length ? fmtShortDate(items[0].label) : '',
-              label: item => `${item.dataset.label}: ${item.parsed.y === null ? '—' : item.parsed.y.toFixed(1) + '%'}`,
+              label: item => `${item.dataset.label}: ${item.parsed.y === null ? '—' : fmtPct(item.parsed.y)}`,
             },
           },
           annotationThreshold: { value: 100, color: colors.crit, label: 'Ngưỡng 100%' },

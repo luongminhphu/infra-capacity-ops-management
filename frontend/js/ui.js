@@ -129,11 +129,6 @@ function uiDateTime(iso, style = 'full') {
     ? d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
     : d.toLocaleString('vi-VN', { hour12: false });
 }
-function uiDate(iso) {
-  if (!iso) return UI_DASH;
-  const d = new Date(iso);
-  return isNaN(d) ? String(iso) : d.toLocaleDateString('vi-VN');
-}
 /* Shared by several modules (Trang chủ, AI, Passkey…): kept under the old name. */
 const spTimeSafe = (iso) => uiDateTime(iso);
 
@@ -267,7 +262,7 @@ function uiEntityLink(type, name, vcenterKey, strong = true) {
 function chartPalette() {
   const cs = getComputedStyle(document.documentElement);
   const g = (name) => cs.getPropertyValue(name).trim();
-  return { text:g('--text'), muted:g('--muted'), divider:g('--divider'), primary:g('--primary'), accent:g('--accent'), ok:g('--status-ok'), warn:g('--status-warn'), bad:g('--status-bad'), crit:g('--status-crit'), faint:g('--faint'),
+  return { text:g('--text-primary'), muted:g('--text-secondary'), divider:g('--border-subtle'), primary:g('--brand'), accent:g('--accent'), ok:g('--status-ok'), warn:g('--status-warn'), bad:g('--status-bad'), crit:g('--status-crit'), faint:g('--text-tertiary'),
     // Series / sequential colours for multi-line or stacked charts.
     series: [1, 2, 3, 4, 5, 6, 7, 8].map(i => g(`--chart-s${i}`)), deep: g('--chart-deep'), amber: g('--chart-index'),
     seq: [1, 2, 3, 4, 5].map(i => g(`--chart-seq-${i}`)),
@@ -316,6 +311,7 @@ function highlightSortHeaders(tableId, tableKey) {
 /* Charts use the product font (self-hosted Be Vietnam Pro) instead of Chart.js' Helvetica default. */
 if (window.Chart) {
   Chart.defaults.font.family = '"Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+  Chart.defaults.locale = 'vi-VN';   // axis ticks / tooltips: 1.234,5 like every other number (Q7)
 }
 
 /* ---------- Data marks (MASTER.md §7–8) ----------

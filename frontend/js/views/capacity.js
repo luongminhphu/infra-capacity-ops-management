@@ -24,17 +24,17 @@ function renderCapacityKpis() {
 
   const cards = [
     {
-      label: 'CPU — Tổng / Đã dùng / Còn trống', value: `${fmtInt(model.usedVcpu)} / ${fmtInt(model.totalLogicalCores)} <span class="mono" style="font-size:.6em;color:var(--muted)">pCPU logic</span>`,
-      sub: `Còn trống: ${fmtInt(model.freeLogicalCores)} pCPU (${fmtInt(model.totalCores)} core vật lý × HT${fmtNum(model.htFactor,0)}) · Overcommit ${isFinite(model.cpuOvercommit) ? model.cpuOvercommit.toFixed(2)+'x' : 'NA'}`,
+      label: 'CPU — Tổng / Đã dùng / Còn trống', value: `${fmtInt(model.usedVcpu)} / ${fmtInt(model.totalLogicalCores)} <span class="mono" style="font-size:.6em;color:var(--text-secondary)">pCPU logic</span>`,
+      sub: `Còn trống: ${fmtInt(model.freeLogicalCores)} pCPU (${fmtInt(model.totalCores)} core vật lý × HT${fmtNum(model.htFactor,0)}) · Overcommit ${fmtX(model.cpuOvercommit)}`,
       pct: model.cpuPct, status: cpuStatus
     },
     {
-      label: 'RAM — Tổng / Đã dùng / Còn trống', value: `${fmtNum(model.usedRamGB,0)} / ${fmtNum(model.totalRamGB,0)} <span class="mono" style="font-size:.6em;color:var(--muted)">GB</span>`,
-      sub: `Còn trống: ${fmtNum(model.freeRamGB,0)} GB · Overcommit ${isFinite(model.ramOvercommit) ? model.ramOvercommit.toFixed(2)+'x' : 'NA'}`,
+      label: 'RAM — Tổng / Đã dùng / Còn trống', value: `${fmtNum(model.usedRamGB,0)} / ${fmtNum(model.totalRamGB,0)} <span class="mono" style="font-size:.6em;color:var(--text-secondary)">GB</span>`,
+      sub: `Còn trống: ${fmtNum(model.freeRamGB,0)} GB · Overcommit ${fmtX(model.ramOvercommit)}`,
       pct: model.ramPct, status: ramStatus
     },
     appState.policy.includeStorage ? {
-      label: 'Storage — Cấp phát / Đã dùng / Còn trống', value: `${fmtNum(model.usedStorageGB,0)} / ${fmtNum(model.provStorageGB,0)} <span class="mono" style="font-size:.6em;color:var(--muted)">GB</span>`,
+      label: 'Storage — Cấp phát / Đã dùng / Còn trống', value: `${fmtNum(model.usedStorageGB,0)} / ${fmtNum(model.provStorageGB,0)} <span class="mono" style="font-size:.6em;color:var(--text-secondary)">GB</span>`,
       sub: `Còn trống: ${fmtNum(model.freeStorageGB,0)} GB`,
       pct: model.storagePct, status: dsStatus
     } : {
@@ -43,7 +43,7 @@ function renderCapacityKpis() {
       pct: null, status: null, muted: true
     },
     {
-      label: 'Hosts / VMs', value: `${fmtInt(model.hostCount)} <span class="mono" style="font-size:.6em;color:var(--muted)">hosts</span>`,
+      label: 'Hosts / VMs', value: `${fmtInt(model.hostCount)} <span class="mono" style="font-size:.6em;color:var(--text-secondary)">hosts</span>`,
       sub: `${fmtInt(model.vmCount)} VM tổng · ${fmtInt(model.poweredOnCount)} on / ${fmtInt(model.poweredOffCount)} off`,
       pct: null, status: null
     }
@@ -84,8 +84,8 @@ function renderClusterTable() {
       <td>${barCellHtml(r.model.cpuPct)}</td>
       <td>${barCellHtml(r.model.ramPct)}</td>
       ${showStorage ? `<td>${barCellHtml(r.model.storagePct)}</td>` : ''}
-      <td class="mono">${isFinite(r.model.cpuOvercommit) ? r.model.cpuOvercommit.toFixed(2)+'x' : 'NA'}</td>
-      <td class="mono">${isFinite(r.model.ramOvercommit) ? r.model.ramOvercommit.toFixed(2)+'x' : 'NA'}</td>
+      <td class="mono">${fmtX(r.model.cpuOvercommit)}</td>
+      <td class="mono">${fmtX(r.model.ramOvercommit)}</td>
       <td><span class="pill ${r.overall.cls}">${esc(r.overall.text)}</span></td>
     </tr>
   `).join('');
@@ -175,7 +175,6 @@ function renderDashboardCharts() {
    ========================================================= */
 
 /* ---------- Compliance ---------- */
-const SEVERITY_PILL = { critical:'crit', warning:'warn', info:'na' };
 const SEVERITY_LABEL = { critical:'Nghiêm trọng', warning:'Cảnh báo', info:'Thông tin' };   // same words as the PDF (SEVERITY_LABEL_VI)
 
 function renderComplianceKpis() {
@@ -450,7 +449,7 @@ function exportCsv() {
 
   sections.push('=== HOSTS ===');
   sections.push(['Cluster','Host','CPU Cores','RAM GB','vCPU Used','CPU % (overcommit)','RAM Used GB','RAM % (overcommit)','VM Count','Status'].join(','));
-  hostRows.forEach(h => sections.push([h.cluster,h.host,h.cores,h.ramGB,h.vcpuUsed,fmtNum(h.cpuPct),h.ramUsedGB.toFixed(1),fmtNum(h.ramPct),h.vmCount,h.overall.text].map(csvEscape).join(',')));
+  hostRows.forEach(h => sections.push([h.cluster,h.host,h.cores,h.ramGB,h.vcpuUsed,(h.cpuPct||0).toFixed(1),h.ramUsedGB.toFixed(1),(h.ramPct||0).toFixed(1),h.vmCount,h.overall.text].map(csvEscape).join(',')));
 
   sections.push('');
   sections.push('=== VMS ===');
