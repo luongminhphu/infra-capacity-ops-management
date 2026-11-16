@@ -465,7 +465,8 @@ async function renderHistoryPanel(mountId, opts = {}) {
   const ins = document.getElementById(`${mountId}Insights`);
   if (ins) {
     // Backend-generated sentences (trusted HTML: only <b> tags around numbers/labels, labels escaped server-side).
-    ins.innerHTML = (data.insights || []).map(t => `<div>${t}</div>`).join('');
+    // Backend sentences carry only <b>…</b> around numbers / labels: escape everything, then restore that tag (FE-40).
+    ins.innerHTML = (data.insights || []).map(t => `<div>${esc(t).replace(/&lt;(\/?)b&gt;/g, '<$1b>')}</div>`).join('');
     ins.classList.toggle('hidden', !(data.insights || []).length);
   }
   renderHistoryTable(mountId, data);

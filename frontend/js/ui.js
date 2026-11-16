@@ -117,14 +117,14 @@ function uiMoney(v, currency = 'VND', digits) {
   const d = digits !== undefined ? digits : (cur === 'USD' ? 2 : 0);
   const n = uiNumber(v, d, cur === 'USD' ? d : 0);
   if (cur === 'VND') return `${n} đ`;
-  return cur && cur !== 'mixed' ? `${n} ${cur}` : n;
+  return cur && cur !== 'mixed' ? `${n} ${esc(cur)}` : n;
 }
 
 /* "15/11/2026 09:30:00" (full) or "15/11 09:30" (short). Unparsable input is returned as text. */
 function uiDateTime(iso, style = 'full') {
   if (!iso) return UI_DASH;
   const d = new Date(iso);
-  if (isNaN(d)) return String(iso);
+  if (isNaN(d)) return esc(String(iso));          // never hand raw input back into HTML (FE-41)
   return style === 'short'
     ? d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
     : d.toLocaleString('vi-VN', { hour12: false });
@@ -387,3 +387,58 @@ function uiAutoLabel(root) {
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+
+/* ---------- "Xem bảng" under every chart (MASTER §8; ui-ux-pro-max chart A11y Fallback) ----------
+   One Chart.js plugin for all charts: after each update it (re)builds a collapsed <details> with the
+   chart's own labels × datasets, so the numbers are readable without the picture (screen readers,
+   colour blindness, copy / paste). Text only (textContent), never HTML from the data. A chart can opt
+   out with options.plugins.icoDataTable = false (e.g. sparklines whose numbers are printed beside). */
+function uiChartTableFormat(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'object') v = v.y !== undefined ? v.y : (v.r !== undefined ? v.r : v.x);
+  const n = Number(v);
+  return isFinite(n) ? n.toLocaleString('vi-VN', { maximumFractionDigits: 2 }) : String(v);
+}
+const uiChartTablePlugin = {
+  id: 'icoDataTable',
+  afterUpdate(chart, _args, opts) {
+    if (opts === false || (opts && opts.enabled === false)) return;
+    const canvas = chart.canvas;
+    const host = canvas && canvas.parentElement;
+    if (!host || !host.parentElement) return;
+    const sets = (chart.data.datasets || []).filter(d => !d.hidden && Array.isArray(d.data));
+    const labels = chart.data.labels || [];
+    let box = host.nextElementSibling;
+    if (!box || !box.classList.contains('chart-table')) {
+      box = document.createElement('details');
+      box.className = 'chart-table';
+      box.innerHTML = '<summary>Xem bảng</summary><div class="table-scroll table-scroll-flat"><table class="data-table"><caption class="sr-only"></caption><thead></thead><tbody></tbody></table></div>';
+      host.insertAdjacentElement('afterend', box);
+    }
+    if (!sets.length) { box.hidden = true; return; }
+    box.hidden = false;
+    const title = (chart.options.plugins && chart.options.plugins.title && chart.options.plugins.title.text) || canvas.getAttribute('aria-label') || 'Dữ liệu biểu đồ';
+    box.querySelector('caption').textContent = String(title);
+    const thead = box.querySelector('thead'), tbody = box.querySelector('tbody');
+    thead.textContent = ''; tbody.textContent = '';
+    const hr = document.createElement('tr');
+    for (const h of ['', ...sets.map(d => d.label || '')]) { const th = document.createElement('th'); th.textContent = h; th.scope = 'col'; hr.appendChild(th); }
+    thead.appendChild(hr);
+    const rows = Math.max(labels.length, ...sets.map(d => d.data.length));
+    for (let i = 0; i < Math.min(rows, 400); i++) {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th'); th.scope = 'row';
+      th.textContent = Array.isArray(labels[i]) ? labels[i].join(' ') : (labels[i] ?? String(i + 1));
+      tr.appendChild(th);
+      for (const d of sets) { const td = document.createElement('td'); td.className = 'num'; td.textContent = uiChartTableFormat(d.data[i]); tr.appendChild(td); }
+      tbody.appendChild(tr);
+    }
+  },
+  afterDestroy(chart) {
+    const host = chart.canvas && chart.canvas.parentElement;
+    const box = host && host.nextElementSibling;
+    if (box && box.classList.contains('chart-table')) box.remove();
+  },
+};
+if (typeof Chart !== 'undefined') Chart.register(uiChartTablePlugin);

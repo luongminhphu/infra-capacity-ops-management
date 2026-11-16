@@ -40,12 +40,12 @@ window.addEventListener('hashchange', () => {
 const SP_RANK = { none: 0, viewer: 1, editor: 2, approver: 3, admin: 4 };
 const spCan = (min) => SP_RANK[(spState.meta && spState.meta.role) || 'none'] >= SP_RANK[min];
 const spMoney = (v) => uiMoney(v, 'VND', 3);
-const spDate = (iso) => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—';
+const spDate = (iso) => iso ? esc(String(iso).slice(0, 10).split('-').reverse().join('/')) : '—';
 // API timestamps are UTC (offset attached); a bare one is UTC too. Shown in the viewer's local time.
 const spTime = (iso) => {
   if (!iso) return '—';
   const s = String(iso), d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(s) ? s : `${s}Z`);
-  return isNaN(d) ? s : d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return isNaN(d) ? esc(s) : d.toLocaleString('vi-VN', { hour12: false, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 const spPill = (tone, label) => uiPill(tone, label);
 const spOpt = (value, label, sel) => `<option value="${esc(value)}"${String(sel) === String(value) ? ' selected' : ''}>${esc(label)}</option>`;
