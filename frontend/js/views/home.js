@@ -46,7 +46,8 @@ async function renderHomeView(fresh) {
   await homeLoadPrefs();
   if (!homeState.data) mount.innerHTML = uiNote('Đang tải…');
   homeState.show = homeState.view === 'done' ? 'done' : 'open';
-  const [inbox, brief, ai] = await Promise.allSettled([apiRequest(`/inbox?show=${homeState.show}${fresh ? '&fresh=true' : ''}`), apiRequest('/reports/brief'),
+  const inboxReq = homeState.show === 'open' && !fresh ? homeInboxOpen() : apiRequest(`/inbox?show=${homeState.show}${fresh ? '&fresh=true' : ''}`);
+  const [inbox, brief, ai] = await Promise.allSettled([inboxReq, apiRequest('/reports/brief'),
     typeof aiStatus === 'function' ? aiStatus() : Promise.resolve({ tasks: {} })]);
   homeState.aiOn = ai.status === 'fulfilled' && !!(ai.value.tasks || {}).home_brief;
   homeState.data = inbox.status === 'fulfilled' ? inbox.value : { items: [], counts: {}, sources: {}, unavailable: [], error: inbox.reason.message };
@@ -188,6 +189,7 @@ function homeSelect(key, focusList) {
 
 async function homeAck(key, action) {
   await apiRequest('/inbox/ack', { method: 'POST', body: JSON.stringify({ key, action, days: 7 }) });
+  homeInboxShared = null;   // the shared copy predates this change
   const items = homeVisibleItems(), idx = items.findIndex(i => i.key === key);
   const next = items[idx + 1] || items[idx - 1];
   homeState.selected = next ? next.key : '';
@@ -220,8 +222,20 @@ function homeNavBadges(d) {
 
 /* Badges without opening the home page: once after sign-in, then every 5 minutes (server caches 60 s). */
 let homeBadgeTimer = null;
+/* One /inbox?show=open shared by the badges and the home page when both ask within 30 s
+   (after sign-in both did, audit API-03). The server caches 60 s anyway. */
+let homeInboxShared = null;
+function homeInboxOpen() {
+  const now = Date.now();
+  if (!homeInboxShared || now - homeInboxShared.at > 30000) {
+    const p = apiRequest('/inbox?show=open');
+    homeInboxShared = { at: now, p };
+    p.catch(() => { if (homeInboxShared && homeInboxShared.p === p) homeInboxShared = null; });
+  }
+  return homeInboxShared.p;
+}
 function homeRefreshBadges() {
-  const run = () => apiRequest('/inbox?show=open').then(homeNavBadges).catch(() => { /* badges are optional */ });
+  const run = () => homeInboxOpen().then(homeNavBadges).catch(() => { /* badges are optional */ });
   run();
   if (!homeBadgeTimer) homeBadgeTimer = setInterval(run, 5 * 60 * 1000);
 }

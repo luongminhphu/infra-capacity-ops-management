@@ -190,6 +190,7 @@ def test_list_filters_and_derived_status(app_, editor):
     assert editor.get("/api/spend/opex?status=overdue").json()["total"] == 1
     r = editor.get("/api/spend/opex?q=hpe").json()
     assert r["total"] == 1 and r["sumGross"] == 132_000_000
+    assert r["counts"] == {"expiring": 1, "overdue": 1}          # whole register, not the filtered page (API-04)
     assert editor.get("/api/spend/opex?q=SN-R750").json()["total"] == 3
     assert editor.get("/api/spend/opex?status=bogus").status_code == 400
 

@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -269,7 +269,15 @@ def list_opex(fy: Optional[int] = None, status: Optional[str] = None, category: 
         s = service.serialize(r, lk, today, cfg, preds, successors.get(r.id))
         s["capexProjectCode"] = cpx.get(r.capex_project_id)
         items.append(s)
-    return {"total": total, "page": page, "size": size, "sumNet": int(net), "sumGross": int(gross), "items": items}
+    # Whole-register counters for the list header (independent of the filters above), in the same
+    # request instead of two extra calls with status=expiring / overdue (audit API-04).
+    active = OpexItem.status == "active"
+    expiring_n, overdue_n = db.query(
+        func.coalesce(func.sum(case((and_(active, OpexItem.end_date >= today, OpexItem.end_date <= horizon), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((and_(active, OpexItem.end_date < today), 1), else_=0)), 0),
+    ).one()
+    return {"total": total, "page": page, "size": size, "sumNet": int(net), "sumGross": int(gross), "items": items,
+            "counts": {"expiring": int(expiring_n), "overdue": int(overdue_n)}}
 
 
 @router.post("/opex")

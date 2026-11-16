@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import hashlib
@@ -17,7 +18,9 @@ from .routers import admin, ai_admin, ai_data as ai_data_router, report_archive 
 from .spend import reminders as spend_reminders, service as spend_service
 from .security import ensure_bootstrap_admin
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s [%(request_id)s]: %(message)s")
+for _h in logging.getLogger().handlers:   # request id on every line (audit OBS-02); "-" outside a request
+    _h.addFilter(observability.RequestIdLogFilter())
 logger = logging.getLogger("vco.main")
 observability.install(engine)
 
@@ -138,6 +141,9 @@ app.include_router(mcp_server.router)
 app.add_middleware(observability.TimingMiddleware)
 from .report_archive import ArchiveMiddleware  # noqa: E402
 app.add_middleware(ArchiveMiddleware)
+# Compress JSON / HTML / JS / CSS above 1 KB (audit API-01: /data/latest 150 KB -> 15 KB).
+# Inside the archive middleware's caller chain so archived PDFs are stored uncompressed.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 from .http_guard import BodyLimitMiddleware, SecurityHeadersMiddleware  # noqa: E402
 # Added last = outermost: oversize bodies are refused before any route reads them, and every
 # response (API, static, errors) carries the security headers.

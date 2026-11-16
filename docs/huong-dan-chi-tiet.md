@@ -1470,6 +1470,17 @@ AI (Claude Code + MCP ico) ─ đọc log/hiệu suất ─▶ đề xuất + s�
 MCP **không** có công cụ ghi / sửa / chạy lệnh, **không** trả dữ liệu hạ tầng (VM, host, policy backup,
 license…). Hostname / IP nội bộ trong log được thay bằng mã `<host:a1b2c3>` / `<ip:…>` (`MCP_MASK_HOSTS`).
 
+### Log của container: mã yêu cầu và dòng tổng kết mỗi lượt poll
+
+- Mỗi dòng log có mã trong ngoặc vuông: `[a1b2c3d4e5f6a7b8]` là một request API (cũng trả về ở header
+  `X-Request-ID`; proxy gửi sẵn `X-Request-ID` hợp lệ thì app dùng lại mã đó), `[job-poll-…]` là một lượt
+  poll nền, `[-]` là log ngoài request. Lọc theo mã để xem trọn một request hoặc một lượt poll.
+- Cuối mỗi lượt poll có một dòng `job=poll sources=… ok=… failed=… skipped=… duration_ms=… alerts_…=… purged_…=…`
+  để đếm / vẽ biểu đồ bằng công cụ log mà không cần đọc chữ tự do.
+- API nén gzip các phản hồi trên 1 KB (vd `/api/data/latest` 150 KB → 15 KB trên DEMO).
+- Hỏi ICO dừng sau 120 giây tổng; mỗi pod gửi tối đa 4 yêu cầu AI cùng lúc, yêu cầu thứ 5 chờ 30 giây rồi báo
+  "AI đang bận".
+
 ### Dữ liệu app tự thu thập
 
 | Nguồn | Lưu ở đâu | Thời gian giữ |
