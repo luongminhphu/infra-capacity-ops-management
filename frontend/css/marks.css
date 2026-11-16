@@ -1,0 +1,70 @@
+/* ICO web styles — part 7/8: Data marks (MASTER §7–8): bullet, KPI strip, small multiples, split bar, verdict block.
+   Files load in this order from index.html (cascade order matters; see MASTER.md). */
+/* ── Data marks: bullet, KPI strip, small multiples, split bar (MASTER.md §7–8) ─ */
+.bullet{position:relative;display:block;height:10px;min-width:72px;border-radius:2px;background:var(--bg-surface-2);box-shadow:inset 0 0 0 1px var(--border);}
+.bullet i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--chart-s1);}
+/* notches on a 0–120 % scale: 80 % at 66.67 %, 100 % at 83.33 % */
+.bullet::before,.bullet::after{content:"";position:absolute;top:-3px;bottom:-3px;width:2px;border-radius:1px;}
+.bullet::before{left:calc(66.667% - 1px);background:var(--text-tertiary);}
+.bullet::after{left:calc(83.333% - 1px);background:var(--text-primary);}
+.bullet.over i{box-shadow:inset -3px 0 0 var(--status-bad);}
+.mini-bar-cell{flex-direction:column;gap:4px;min-width:96px;}
+.kpi-strip-wrap{margin-bottom:var(--space-4);}
+.kpi-strip{margin-bottom:var(--space-4);}
+.kpi-strip-wrap>.kpi-strip,.kpi-grid>.kpi-strip,.hm-detail .kpi-strip:last-child{margin-bottom:0;}
+.kpi-strip{display:grid;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-surface);overflow:hidden;}
+.kpi-cell{display:grid;gap:6px;align-content:start;padding:var(--space-4);border-right:1px solid var(--border);min-width:0;}
+.kpi-cell:last-child{border-right:0;}
+.kpi-cell.muted{background:transparent;}
+.kpi-l{color:var(--text-secondary);font-size:var(--fs-caption);font-weight:var(--fw-medium);}
+.kpi-v{font-size:var(--fs-body-lg);line-height:1.15;font-weight:var(--fw-semibold);letter-spacing:-.01em;font-variant-numeric:var(--numeric-features);}
+.kpi-v small{margin-left:6px;font-size:var(--fs-caption);font-weight:var(--fw-regular);color:var(--text-secondary);letter-spacing:0;}
+.kpi-cell.muted .kpi-v{font-size:var(--fs-body);font-weight:var(--fw-medium);}
+.kpi-s{color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.kpi-b{display:grid;grid-template-columns:1fr auto;gap:var(--space-3);align-items:center;margin-top:2px;}
+.panel-flush{padding:0;overflow:hidden;margin-bottom:var(--space-4);}
+.panel-flush>.panel-head{padding:var(--space-4) var(--space-4) var(--space-3);margin:0;}
+.sm-grid{display:grid;border-top:1px solid var(--border);}
+.chart-card .sm-grid{border-top:0;}
+.sm-cell{display:grid;gap:var(--space-2);align-content:start;padding:var(--space-3) var(--space-4);border-right:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);}
+.sm-cell h4,.sm-cell .sm-h{display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);}
+.sm-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sm-row{display:grid;gap:var(--space-2);align-items:center;font-size:var(--fs-caption);color:var(--text-secondary);}
+.sm-row b{text-align:right;color:var(--text-primary);font-weight:var(--fw-medium);}
+.sm-sub{color:var(--text-tertiary);font-size:var(--fs-caption);}
+.sm-legend{padding:var(--space-2) var(--space-4) var(--space-3);color:var(--text-tertiary);font-size:var(--fs-caption);margin:0;}
+.split-bar{position:relative;height:14px;border-radius:3px;background:var(--chart-s4);margin:var(--space-3) 0;overflow:hidden;}
+.split-bar i{position:absolute;inset:0 auto 0 0;background:var(--chart-s1);box-shadow:2px 0 0 var(--bg-surface);}
+.split-legend{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin:0;}
+.split-legend dt{display:flex;align-items:center;gap:6px;color:var(--text-secondary);font-size:var(--fs-caption);}
+.split-legend dd{margin:2px 0 0;font-size:var(--fs-body-lg);font-weight:var(--fw-semibold);font-variant-numeric:var(--numeric-features);}
+.split-legend dd small{font-size:var(--fs-caption);font-weight:var(--fw-regular);color:var(--text-secondary);}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;}
+.sw.s1{background:var(--chart-s1);} .sw.s4{background:var(--chart-s4);}
+.chart-grid-host{grid-template-columns:minmax(0,2fr) minmax(0,1fr);}
+.chart-wrap-tall{min-height:340px;}
+.exec-forecasts{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-top:var(--space-3);}
+.exec-forecasts .insight-card{margin:0;}
+
+/* Verdict block (pages/dieu-hanh.md) — same shape as the home verdict and the PDF summary box */
+.verdict{position:relative;padding:var(--space-1) 0 var(--space-1) var(--space-5);margin-bottom:var(--space-5);}
+.verdict::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px;background:var(--border-strong);}
+.verdict.tone-rule-ok::before{background:var(--status-ok);}
+.verdict.tone-rule-warn::before{background:var(--status-warn);}
+.verdict.tone-rule-bad::before{background:var(--status-bad);}
+.verdict.tone-rule-crit::before{background:var(--status-crit-solid);}
+.verdict-meta{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;color:var(--text-secondary);font-size:var(--fs-caption);margin-bottom:var(--space-2);}
+.verdict h2{font-size:clamp(22px,2.4vw,28px);line-height:1.25;font-weight:var(--fw-semibold);letter-spacing:-.015em;max-width:44ch;text-wrap:balance;}
+.verdict-points{margin:var(--space-3) 0 0 18px;color:var(--text-secondary);display:grid;gap:4px;max-width:90ch;}
+.verdict-decision{margin-top:var(--space-3);max-width:90ch;}
+@media (max-width:1023px){
+  .chart-grid-host,.exec-forecasts{grid-template-columns:1fr;}
+  .kpi-cell{border-right:0;border-bottom:1px solid var(--border);}
+}
+
+/* MASTER.md §4: no ALL-CAPS 10 px labels (status pills keep their uppercase words); min 12 px. */
+.brand-sub,.data-table th,.side-card h4,.side-card h3,.compare-col h5,.rec-card-web .rec-label,.sz-section-title,.lic-dist-label,.lic-kv td.lic-sep,.lic-h4,.lic-scope-label,.ct-who{text-transform:none;letter-spacing:0;font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.data-table th{color:var(--text-secondary);font-weight:var(--fw-semibold);}
+/* tone-* on a card colors its border only; text stays ink */
+.rec-card-web.tone-ok,.rec-card-web.tone-opportunity,.rec-card-web.prio-cao,.rec-card-web.prio-tb{color:var(--text-primary);}
+

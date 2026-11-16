@@ -99,7 +99,7 @@ def test_chart_colours_come_from_tokens():
     """Chart colours are CSS tokens read by chartPalette() — no hex literals in the chart code."""
     import re
     js = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "js")
-    for name in ("views/sizing.js", "views/history.js", "views/backup.js", "views/executive.js", "views/capacity.js"):
+    for name in ("views/sizing.js", "views/sizing_result.js", "views/history.js", "views/backup.js", "views/executive.js", "views/capacity.js"):
         src = open(os.path.join(js, name), encoding="utf-8").read()
         assert not re.findall(r"'#[0-9a-fA-F]{6}'", src), name
 

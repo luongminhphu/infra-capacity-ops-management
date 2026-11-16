@@ -1,0 +1,385 @@
+/* ICO web styles — part 5/8: Modules: Backup, report centre, settings switches / sources, Chi phí & Hợp đồng, super-app shell (SA1–SA6), BOM, SSO.
+   Files load in this order from index.html (cascade order matters; see MASTER.md). */
+/* ── Backup (NetBackup) ─────────────────────────────────────────────── */
+#bkHead .bk-chips{display:inline-flex;gap:var(--space-1);flex-wrap:wrap;}
+#bkHead .bk-chips .pill{max-width:420px;overflow:hidden;text-overflow:ellipsis;}
+.muted-sub.bk-wrap{white-space:normal;max-width:520px;}
+.bk-th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--space-3) var(--space-4);}
+.bk-th-grid .field .muted-sub{white-space:normal;}
+.bk-scope-summary{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;font-size:var(--fs-body-sm);}
+.bk-sc-mode{display:flex;flex-direction:column;gap:var(--space-1);margin-bottom:var(--space-3);font-size:var(--fs-body-sm);}
+.bk-sc-mode label{display:flex;gap:var(--space-2);align-items:center;cursor:pointer;}
+.bk-sc-tools{margin-bottom:var(--space-3);}
+.bk-sc-tree{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);max-height:460px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-3);}
+.bk-sc-tree.is-disabled{opacity:.5;}
+.bk-sc-vc{border:1px solid var(--border-subtle);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);}
+.bk-sc-clusters{margin:var(--space-1) 0 0 var(--space-4);}
+.bk-sc-cluster{display:flex;flex-wrap:wrap;align-items:flex-start;gap:2px;}
+.bk-sc-caret{background:none;border:0;color:var(--text-secondary);cursor:pointer;width:18px;padding:3px 0;}
+.bk-sc-item{display:flex;gap:var(--space-2);align-items:center;cursor:pointer;padding:2px 0;font-size:var(--fs-body-sm);flex:1;min-width:0;}
+.bk-sc-item input{flex:none;}
+.bk-sc-item>span:not(.muted-sub){white-space:nowrap;}
+.bk-sc-item .muted-sub{display:inline;margin:0 0 0 var(--space-1);overflow:hidden;text-overflow:ellipsis;}
+.bk-sc-hosts{flex-basis:100%;margin-left:40px;}
+.bk-sc-foot{display:flex;justify-content:space-between;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-top:var(--space-3);font-size:var(--fs-caption);}
+.bk-sched-table td.bk-night,.bk-sched-table th.bk-night-h{text-align:center;padding:4px 2px;min-width:34px;}
+.bk-sched-table td.bk-night.off{background:repeating-linear-gradient(45deg,transparent 0 4px,var(--border-subtle) 4px 5px);}
+.bk-cell{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;border-radius:var(--radius-xs);font-weight:var(--fw-semibold);font-size:var(--fs-caption);border:1px solid color-mix(in srgb,currentColor 28%,transparent);}
+.bk-cell.ok{background:var(--status-ok-bg);color:var(--status-ok);}
+.bk-cell.warn{background:var(--status-warn-bg);color:var(--status-warn);}
+.bk-cell.crit{background:var(--status-crit-bg);color:var(--status-crit);}
+.bk-cell.na{background:var(--na-bg);color:var(--text-secondary);}
+.bk-cell.is-full{border:2px solid currentColor;}
+.bk-legend{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-2);font-size:var(--fs-caption);color:var(--text-secondary);}
+.bk-legend-item{display:inline-flex;align-items:center;gap:6px;}
+.bk-sched-edit input[type=text]{width:100%;min-width:140px;}
+.bk-sched-edit input.bk-hhmm{width:72px;min-width:72px;}
+.bk-days{white-space:nowrap;}
+.bk-day{display:inline-flex;align-items:center;gap:2px;margin-right:6px;font-size:var(--fs-caption);cursor:pointer;}
+
+/* ── Trung tâm báo cáo ──────────────────────────────────────────────── */
+.rpt-filter{display:flex;flex-wrap:wrap;gap:var(--space-2);}
+.rpt-chip{display:inline-flex;align-items:center;gap:6px;height:var(--control-h-sm);padding:0 var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface-2);color:var(--text-secondary);font-size:var(--fs-caption);cursor:pointer;}
+.rpt-chip svg{width:var(--icon-sm);height:var(--icon-sm);}
+.rpt-chip:hover{color:var(--text-primary);}
+.rpt-chip.active{background:var(--selected-bg);border-color:var(--brand);color:var(--text-brand);font-weight:var(--fw-semibold);}
+.rpt-group .panel-title{display:flex;align-items:center;gap:var(--space-2);}
+.rpt-group .panel-title svg{width:var(--icon-lg);height:var(--icon-lg);color:var(--brand);}
+.rpt-state{margin-top:var(--space-2);font-size:var(--fs-caption);color:var(--text-secondary);}
+.report-card-actions .btn svg{width:var(--icon-sm);height:var(--icon-sm);}
+.report-card .btn:disabled{opacity:.5;cursor:not-allowed;}
+.rpt-opts{border:1px dashed var(--border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--fs-caption);}
+.rpt-opts>summary{cursor:pointer;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px;font-weight:var(--fw-medium);}
+.rpt-opts>summary svg{width:var(--icon-sm);height:var(--icon-sm);}
+.rpt-opts[open]>summary{margin-bottom:var(--space-2);color:var(--text-primary);}
+.rpt-opts .field{margin-bottom:var(--space-2);}
+.rpt-opts .field span{font-size:var(--fs-caption);color:var(--text-secondary);}
+.rpt-opts select,.rpt-opts input[type=text],.rpt-opts input[type=number]{height:var(--control-h-sm);font-size:var(--fs-caption);}
+.rpt-opt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--space-3);}
+.rpt-opt-note{font-size:var(--fs-caption);color:var(--text-secondary);margin:2px 0 0;}
+.rpt-batch .rpt-batch-on{display:none;}
+.rpt-batch.is-on .rpt-batch-on{display:inline-flex;}
+.rpt-batch-mode [data-report]{outline:1px dashed var(--border-strong);outline-offset:2px;}
+.rpt-batch-mode [data-report].rpt-picked{outline:2px solid var(--brand);background:var(--selected-bg);color:var(--text-brand);}
+.rpt-batch-mode [data-report].rpt-picked::before{content:"✓ ";}
+
+/* ---------- Settings: feature switches (iOS style), login logo, MCP ---------- */
+.feature-list{display:flex;flex-direction:column;}
+.feature-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-3) 0;border-bottom:1px solid var(--border);}
+.feature-row:last-child{border-bottom:0;}
+.feature-row .feature-name{font-weight:var(--fw-medium);}
+.feature-row .feature-desc{color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.switch{position:relative;display:inline-block;width:51px;height:31px;flex:0 0 auto;}
+.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1;}
+.switch .slider{position:absolute;inset:0;border-radius:31px;background:var(--border-strong);transition:background-color .2s ease;}
+.switch .slider::before{content:"";position:absolute;width:27px;height:27px;left:2px;top:2px;border-radius:50%;background:var(--white);box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform .2s ease;}
+.switch input:checked + .slider{background:var(--status-ok);}
+.switch input:checked + .slider::before{transform:translateX(20px);}
+.switch input:focus-visible + .slider{outline:2px solid var(--btn-primary-bg);outline-offset:2px;}
+.switch input:disabled{cursor:not-allowed;}
+.switch input:disabled + .slider{opacity:.5;}
+.login-logo{display:block;max-width:240px;max-height:64px;margin-bottom:var(--space-4);object-fit:contain;}
+.login-logo.hidden,#loginBrandMark.hidden{display:none;}
+.login-logo-preview img{max-height:64px;}
+.badge-admin{display:inline-block;margin-left:var(--space-2);padding:0 6px;border-radius:999px;font-size:11px;line-height:18px;background:var(--btn-primary-bg);color:var(--btn-primary-fg);vertical-align:middle;}
+.mcp-create{display:flex;gap:var(--space-2);flex-wrap:wrap;margin:var(--space-3) 0;}
+.mcp-create input{flex:1 1 200px;min-width:0;}
+.mcp-new-token{margin:var(--space-3) 0;padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);}
+.mcp-new-token code{display:block;word-break:break-all;white-space:pre-wrap;margin:var(--space-1) 0 var(--space-2);font-size:12px;}
+.mcp-new-token.hidden,#mcpPanel.hidden{display:none;}
+.mcp-state{font-size:var(--fs-caption);color:var(--text-secondary);}
+.mcp-audit{margin-top:var(--space-3);}
+.mcp-audit summary{cursor:pointer;color:var(--text-secondary);font-size:var(--fs-caption);}
+.feature-off{display:none !important;}
+#loginLogoPanel .logo-upload-actions{display:flex;flex-direction:row;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-3);}
+#loginLogoPanel .logo-upload-actions .btn{width:auto;}
+#loginLogoPanel .logo-upload-actions.hidden{display:none;}
+#mcpPanel{grid-column:1 / -1;}
+
+/* ---------- Settings: data source connections ---------- */
+#sourcesPanel{grid-column:1 / -1;}
+#sourcesPanel.hidden,.src-warning.hidden,.src-ca.hidden,.src-nbu.hidden{display:none;}
+.src-warning{margin-bottom:var(--space-3);}
+.src-dialog{margin:auto;width:min(720px,94vw);max-height:92vh;padding:var(--space-5);border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-surface);color:var(--text-primary);}
+.src-dialog::backdrop{background:var(--scrim);}
+.src-dialog-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);}
+.src-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3) var(--space-4);margin-bottom:var(--space-3);}
+.src-grid .field input,.src-grid .field select{width:100%;}
+.src-ca textarea{width:100%;font-family:var(--font-mono,monospace);font-size:12px;}
+.src-dialog .finding-filter-item{margin:var(--space-2) 0;}
+.src-dialog-actions{display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-4);}
+.src-spacer{flex:1;}
+.src-result{min-height:18px;font-size:var(--fs-caption);line-height:var(--lh-caption);margin-top:var(--space-2);white-space:pre-wrap;}
+.src-result.ok{color:var(--status-ok);}
+.src-result.err,.src-result.error{color:var(--status-crit);}
+.ui-dialog-narrow{width:min(480px,94vw);}
+.sp-import-dlg{width:min(1180px,96vw);}
+.sp-imp-sum{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:var(--space-3) 0;font-size:var(--fs-caption);color:var(--text-secondary);}
+.sp-imp-table{max-height:52vh;overflow:auto;}
+
+@media (max-width:640px){.src-grid{grid-template-columns:1fr;}}
+.muted-row td{opacity:.6;}
+
+/* ---------- Chi phí & Hợp đồng (spend.js) ---------- */
+.settings-grid .panel.panel-wide{grid-column:1 / -1;}
+.data-table th.num,.data-table td.num{text-align:right;}
+.sp-filters{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--space-2) var(--space-3);margin-bottom:var(--space-2);}
+.sp-filters .field span,.sp-form .field span,.sp-settings-grid .field span{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);font-weight:var(--fw-medium);}
+.sp-filters select,.sp-filters input{height:var(--control-h-sm);width:100%;}
+.sp-row{cursor:pointer;}
+.sp-row:focus-visible td{background:var(--overlay-hover);outline:none;}
+.sp-pager{display:flex;gap:var(--space-2);}
+.sp-dialog{width:min(920px,96vw);}
+.sp-dialog-body{max-height:calc(92vh - 160px);overflow:auto;padding-right:var(--space-1);}
+.sp-span2{grid-column:1 / -1;}
+.sp-detail-head{display:flex;gap:var(--space-2);margin-bottom:var(--space-3);}
+.sp-dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2) var(--space-5);margin:0 0 var(--space-3);}
+.sp-dl-item{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.sp-dl dt{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);}
+.sp-dl dd{margin:0;font-size:var(--fs-body-sm);line-height:var(--lh-body-sm);font-variant-numeric:var(--numeric-features);overflow-wrap:anywhere;}
+.sp-desc{white-space:pre-wrap;font-size:var(--fs-body-sm);color:var(--text-secondary);margin:0 0 var(--space-3);}
+.sp-h{font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);margin:var(--space-4) 0 var(--space-2);}
+.sp-link{padding:0 var(--space-1);height:auto;min-height:24px;color:var(--text-brand);}
+.sp-files{list-style:none;margin:0 0 var(--space-3);padding:0;display:flex;flex-direction:column;gap:var(--space-1);}
+.sp-files li{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;font-size:var(--fs-body-sm);}
+.sp-files a{color:var(--text-brand);}
+.sp-files .muted-sub{margin-top:0;}
+.sp-history summary{cursor:pointer;font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);margin-top:var(--space-3);}
+.sp-history-list{margin:var(--space-2) 0 0;padding-left:var(--space-5);font-size:var(--fs-caption);line-height:var(--lh-caption);display:flex;flex-direction:column;gap:var(--space-1);}
+.sp-asset-row{display:grid;grid-template-columns:1fr 1.4fr 1.4fr auto;gap:var(--space-2);margin-bottom:var(--space-2);}
+.sp-asset-row input{width:100%;}
+.sp-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-5);align-items:start;}
+.sp-settings-grid .settings-form select,.sp-settings-grid .settings-form input{width:100%;}
+.sp-cat-table input[type="text"]{width:100%;min-width:140px;height:var(--control-h-sm);}
+.sp-cat-table input[type="number"]{width:80px;height:var(--control-h-sm);}
+.sp-cat-table select{height:var(--control-h-sm);}
+.sp-inline{display:flex;gap:var(--space-2);flex-wrap:wrap;align-items:center;}
+.sp-inline input{height:var(--control-h-sm);flex:1 1 120px;}
+.sp-cc{list-style:none;margin:0 0 var(--space-2);padding:0;font-size:var(--fs-body-sm);display:flex;flex-direction:column;gap:2px;}
+@media (max-width:1240px){.sp-filters{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media (max-width:1024px){.sp-settings-grid{grid-template-columns:1fr;}}
+@media (max-width:640px){.sp-filters,.sp-dl{grid-template-columns:1fr;}.sp-asset-row{grid-template-columns:1fr auto;}}
+.cpx-item{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);margin-bottom:var(--space-3);background:var(--bg-surface-2);}
+.cpx-item-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2) var(--space-3);}
+.cpx-item-grid .field span{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);font-weight:var(--fw-medium);}
+.cpx-item-grid input,.cpx-item-grid select{width:100%;height:var(--control-h-sm);}
+.cpx-span2{grid-column:span 2;}
+.cpx-item-foot{display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);margin-top:var(--space-2);}
+.cpx-item-foot [data-i-preview]{color:var(--text-brand);font-size:var(--fs-caption);}
+@media (max-width:760px){.cpx-item-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+/* Tổng quan chi phí (spend_report.js) */
+.sr-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--space-2) var(--space-3);}
+.sr-grid .field > span{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);font-weight:var(--fw-medium);}
+.sr-grid select[multiple]{height:auto;padding:var(--space-1);}
+.sr-grid input{height:var(--control-h-sm);width:100%;}
+.sr-grid input[type="checkbox"]{width:16px;height:16px;flex:0 0 auto;}
+.sr-grid .finding-filter-item{padding:0;min-height:24px;}
+.sr-grid .field input + input{margin-top:var(--space-1);}
+.sr-filters .sim-actions input[type="text"]{height:var(--control-h-sm);width:180px;}
+.sr-decisions{margin:var(--space-3) 0 0;padding-left:var(--space-5);display:flex;flex-direction:column;gap:var(--space-2);font-size:var(--fs-body-sm);}
+.sr-inline{display:inline;}
+.sr-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:var(--space-4);}
+.sr-legend{display:flex;gap:var(--space-4);font-size:var(--fs-caption);color:var(--text-secondary);margin:var(--space-2) 0 var(--space-3);}
+.sr-dot{display:inline-block;width:10px;height:10px;border-radius:var(--radius-xs);margin-right:var(--space-1);vertical-align:middle;}
+.sr-opex{background:var(--chart-s1);}
+.sr-capex{background:var(--chart-s2);}
+.sr-year{display:grid;grid-template-columns:80px minmax(0,1fr) 170px;gap:var(--space-3);align-items:center;margin-bottom:var(--space-3);}
+.sr-year-label{font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);}
+.sr-year-bars{display:flex;height:18px;background:var(--track-bg);border-radius:var(--radius-xs);overflow:hidden;}
+.sr-seg{display:block;height:100%;}
+.sr-year-val{font-size:var(--fs-body-sm);text-align:right;font-variant-numeric:var(--numeric-features);}
+.bp-out td{color:var(--text-tertiary);}
+.bp-out td b{color:var(--text-secondary);}
+.rpt-chips{display:flex;flex-wrap:wrap;gap:var(--space-2);}
+.sr-bar{display:inline-block;width:80px;height:8px;background:var(--track-bg);border-radius:var(--radius-xs);overflow:hidden;vertical-align:middle;}
+.sr-bar > span{display:block;height:100%;background:var(--chart-s1);}
+.data-table tr.sr-group td{background:var(--bg-surface-2);}
+@media (max-width:1240px){.sr-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.sr-two{grid-template-columns:1fr;}}
+@media (max-width:640px){.sr-grid{grid-template-columns:1fr;}.sr-year{grid-template-columns:64px minmax(0,1fr);}.sr-year-val{grid-column:1 / -1;text-align:left;}}
+/* Hợp đồng (spend_contract.js): colour = party that made the change (not a status) */
+.ct-party-legal{--ct-c:var(--chart-s1);}
+.ct-party-finance{--ct-c:var(--chart-s3);}   /* a party is a series, not a status (MASTER §8) */
+.ct-party-partner{--ct-c:var(--chart-s2);}
+.ct-timeline{list-style:none;margin:0;padding:0 0 0 var(--space-2);border-left:2px solid var(--border);}
+.ct-tl-item{position:relative;padding:0 0 var(--space-3) var(--space-4);font-size:var(--fs-body-sm);}
+.ct-tl-dot{position:absolute;left:calc(-1 * var(--space-2) - 6px);top:5px;width:10px;height:10px;border-radius:50%;background:var(--ct-c);box-shadow:0 0 0 3px var(--bg-surface);}
+.ct-party-tag{color:var(--ct-c);font-weight:var(--fw-semibold);}
+.ct-tl-note{color:var(--text-secondary);white-space:pre-wrap;}
+.ct-tl-body a,.ct-upload a{color:var(--text-brand);}
+.ct-legend{display:flex;gap:var(--space-4);flex-wrap:wrap;font-size:var(--fs-caption);color:var(--text-secondary);margin-bottom:var(--space-2);}
+.ct-swatch{display:inline-block;width:10px;height:10px;border-radius:var(--radius-xs);background:var(--ct-c);margin-right:var(--space-1);vertical-align:middle;}
+.ct-compare-bar{align-items:flex-end;margin-bottom:var(--space-3);}
+.ct-compare-bar select{height:var(--control-h-sm);}
+.ct-diff{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);max-height:420px;overflow:auto;font-size:var(--fs-body-sm);line-height:var(--lh-body-sm);}
+.ct-eq{margin:0 0 var(--space-2);color:var(--text-secondary);}
+.ct-skip{margin:0 0 var(--space-2);font-size:var(--fs-caption);color:var(--text-tertiary);text-align:center;}
+.ct-chg{margin:0 0 var(--space-2);padding:var(--space-1) var(--space-2);border-left:3px solid var(--ct-c);background:color-mix(in srgb,var(--ct-c) 10%,transparent);border-radius:0 var(--radius-xs) var(--radius-xs) 0;}
+.ct-chg ins{text-decoration:underline;text-decoration-color:var(--ct-c);text-decoration-thickness:2px;background:color-mix(in srgb,var(--ct-c) 18%,transparent);}
+.ct-chg del{color:var(--text-secondary);}
+.ct-who{display:block;font-size:var(--fs-caption);line-height:var(--lh-micro);font-weight:var(--fw-semibold);color:var(--ct-c);text-transform:uppercase;letter-spacing:.04em;}
+.ct-upload{border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:var(--space-3);margin:var(--space-3) 0;}
+.ct-upload input[type="text"]{width:100%;}
+/* Tờ trình (spend_proposal.js) */
+.pp-rec-title{font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);margin:var(--space-3) 0 var(--space-2);}
+.pp-rec-row{display:grid;grid-template-columns:120px 80px minmax(0,1fr) minmax(0,1.2fr) auto;gap:var(--space-2);margin-bottom:var(--space-2);}
+.pp-rec-row select,.pp-rec-row input{height:var(--control-h-sm);width:100%;}
+.sp-form select[multiple]{height:auto;padding:var(--space-1);}
+@media (max-width:640px){.pp-rec-row{grid-template-columns:1fr 1fr;}}
+/* Thanh toán hợp đồng (spend_payment.js) */
+.pay-summary{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);font-size:var(--fs-body-sm);margin-bottom:var(--space-2);font-variant-numeric:var(--numeric-features);}
+.pay-item{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:var(--space-2);}
+.pay-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.1fr);gap:var(--space-3);align-items:center;padding:var(--space-2) var(--space-3);cursor:pointer;font-size:var(--fs-body-sm);}
+.pay-row:hover,.pay-row:focus-visible{background:var(--overlay-hover);outline:none;}
+.pay-row .num{text-align:right;}
+.pay-row > div:nth-child(4){white-space:nowrap;}
+.pay-row .muted-sub{white-space:normal;}
+.pay-body{display:none;padding:0 var(--space-3) var(--space-3);border-top:1px solid var(--border-subtle);}
+.pay-item.open .pay-body{display:block;}
+.pay-docs{list-style:none;margin:var(--space-2) 0;padding:0;display:flex;flex-direction:column;gap:var(--space-1);}
+.pay-doc{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;font-size:var(--fs-body-sm);}
+.pay-doc a{color:var(--text-brand);}
+.pay-doc .muted-sub{margin-top:0;}
+.pay-file{cursor:pointer;}
+.pay-form{border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:var(--space-3);margin:var(--space-2) 0;}
+.pay-paid-form{align-items:flex-end;margin:var(--space-2) 0;}
+.pay-paid-form input{height:var(--control-h-sm);}
+.pay-def-row{grid-template-columns:minmax(0,1fr) auto auto auto;}
+@media (max-width:760px){.pay-row{grid-template-columns:1fr 1fr;}}
+/* inside the contract pane (container: .hm-detail) the 5-column row does not fit */
+@container (max-width:760px){.pay-row{grid-template-columns:minmax(0,1fr) auto;row-gap:var(--space-1);}.pay-row > div:nth-child(4){white-space:normal;}}
+
+/* ---------- Chi phí & Hợp đồng — so sánh báo giá ---------- */
+.qt-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-3);margin-bottom:var(--space-3);}
+.qt-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);min-width:0;}
+.qt-card-head{display:flex;align-items:center;gap:var(--space-2);justify-content:space-between;font-size:var(--fs-body);}
+.qt-card .sp-dl{margin:0;}
+.qt-findings{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--space-1);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.qt-findings li{padding:var(--space-1) var(--space-2);border-radius:var(--radius-xs);overflow-wrap:anywhere;}
+.qt-findings li.crit{background:var(--status-crit-bg);color:var(--status-crit);}
+.qt-findings li.warn{background:var(--status-warn-bg);color:var(--status-warn);}
+.qt-ok{margin:0;font-size:var(--fs-caption);color:var(--status-ok);}
+.qt-bar{margin-bottom:var(--space-2);}
+.qt-matrix td,.qt-matrix th{white-space:nowrap;}
+.qt-matrix td.wrap{white-space:normal;min-width:220px;}
+.qt-matrix .qt-min{background:var(--status-ok-bg);color:var(--status-ok);font-weight:var(--fw-semibold);}
+.qt-matrix .qt-missing{color:var(--text-tertiary);font-style:italic;}
+.qt-foot td{background:var(--bg-surface-2);}
+.qt-eval input{height:var(--control-h-sm);width:100%;}
+.qt-eval .qt-w,.qt-eval .qt-score{width:80px;text-align:right;}
+.qt-eval .qt-crit-name{min-width:280px;}
+.qt-sec td{background:var(--bg-surface-2);color:var(--text-brand);}
+.qt-choices{display:flex;flex-direction:column;gap:var(--space-2);margin:var(--space-2) 0 var(--space-3);}
+.qt-choice{display:flex;align-items:center;gap:var(--space-2);font-size:var(--fs-body-sm);flex-wrap:wrap;}
+.qt-head-grid{grid-template-columns:repeat(4,minmax(0,1fr));}
+.qt-lines input,.qt-lines select{height:var(--control-h-sm);width:100%;}
+.qt-lines .ql-desc{min-width:240px;}
+.qt-lines .num{text-align:right;min-width:100px;}
+.qt-lines tr.qt-bad td{background:var(--status-crit-bg);}
+.sp-dialog.qt-wide{width:min(1280px,98vw);}
+@media (max-width:760px){.qt-head-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.qt-cards{grid-template-columns:1fr;}}
+
+/* ---------- Chi phí & Hợp đồng — cải tạo văn phòng ---------- */
+.rn-scale{grid-template-columns:repeat(7,minmax(0,1fr));}
+.rn-hist{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;margin:var(--space-2) 0 var(--space-3);}
+.rn-chip{display:inline-flex;align-items:center;gap:var(--space-1);padding:2px var(--space-2);border:1px solid var(--border);border-radius:var(--radius-pill);font-size:var(--fs-caption);}
+.rn-block{margin-top:var(--space-4);}
+.rn-table td,.rn-table th{white-space:nowrap;}
+.rn-table td.wrap{white-space:normal;min-width:220px;}
+.rn-table .rn-amt{width:140px;height:var(--control-h-sm);text-align:right;}
+@media (max-width:900px){.rn-scale{grid-template-columns:repeat(3,minmax(0,1fr));}}
+.qt-ai{border:1px solid var(--border);border-left:3px solid var(--brand);border-radius:var(--radius-sm);padding:var(--space-3);margin-bottom:var(--space-3);}
+.qt-ai .sp-h{margin-top:var(--space-2);}
+
+/* ---------- Super-app shell (SA1): in-page tabs of a menu entry, settings tabs ---------- */
+.page-tabs{display:flex;margin:var(--space-3) var(--space-5) 0;width:fit-content;max-width:calc(100% - 2 * var(--space-5));}
+.page-tabs.hidden{display:none;}
+#viewSettings .set-off{display:none;}
+.ui-confirm{width:min(460px,94vw);}
+.ui-confirm-text{margin:0 0 var(--space-4);font-size:var(--fs-body);line-height:var(--lh-body);white-space:pre-wrap;}
+#szPdfStatus.error{color:var(--status-crit);font-weight:var(--fw-semibold);}
+#viewSettings .settings-grid .panel:not(.set-off){grid-column:1 / -1;}
+@media (max-width:760px){.page-tabs{margin:var(--space-2) var(--space-4) 0;max-width:calc(100% - 2 * var(--space-4));overflow-x:auto;flex-wrap:nowrap;}}
+
+/* ---------- Trang chủ, lịch việc (SA2) ---------- */
+#homeMount,#agendaMount{display:flex;flex-direction:column;gap:var(--space-4);}
+.home-brief{border:1px solid var(--border);border-left:3px solid var(--brand);border-radius:var(--radius-sm);padding:var(--space-3) var(--space-4);background:var(--bg-surface);}
+.home-brief-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-1);}
+.home-brief-text{margin:0 0 var(--space-2);font-size:var(--fs-body);line-height:var(--lh-body);}
+.home-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;}
+.home-item{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--border);align-items:flex-start;}
+.home-item:last-child{border-bottom:0;}
+.home-item-main{min-width:0;flex:1;}
+.home-item-title{display:block;margin-top:2px;color:var(--text-primary);font-weight:var(--fw-medium);text-decoration:none;overflow-wrap:anywhere;}
+.home-item-title:hover{color:var(--text-brand);text-decoration:underline;}
+.home-item-detail{margin:2px 0 0;font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);overflow-wrap:anywhere;}
+.planning-result{margin-top:var(--space-4);}
+@media (max-width:760px){.home-item{flex-direction:column;}}
+
+/* ---------- Tìm kiếm Ctrl + K, thẻ đối tượng (SA3) ---------- */
+.topbar-search kbd{margin-left:var(--space-2);padding:0 var(--space-1);border:1px solid var(--border);border-radius:var(--radius-xs);font-size:var(--fs-caption);color:var(--text-secondary);font-family:inherit;}
+.pal-dialog{width:min(680px,96vw);padding:var(--space-3);top:12vh;margin-top:0;}
+.pal-dialog input{width:100%;height:40px;font-size:var(--fs-body);}
+.pal-list{list-style:none;margin:var(--space-2) 0 0;padding:0;max-height:56vh;overflow:auto;}
+.pal-item{display:grid;grid-template-columns:96px minmax(0,1fr);gap:0 var(--space-2);padding:var(--space-2);border-radius:var(--radius-xs);cursor:pointer;}
+.pal-item.active,.pal-item:hover{background:var(--overlay-hover);box-shadow:inset 2px 0 0 var(--brand);}
+.pal-type{grid-row:span 2;font-size:var(--fs-caption);color:var(--text-secondary);align-self:center;}
+.pal-label{font-size:var(--fs-body-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pal-sub{font-size:var(--fs-caption);color:var(--text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pal-empty{padding:var(--space-3);color:var(--text-secondary);font-size:var(--fs-body-sm);}
+.pal-hint{margin:var(--space-2) 0 0;font-size:var(--fs-caption);color:var(--text-tertiary);}
+.entity-mount{display:flex;flex-direction:column;gap:var(--space-4);}
+.en-dl{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}
+.entity-link{color:inherit;text-decoration:none;border-bottom:1px dotted var(--text-tertiary);}
+.entity-link:hover{color:var(--text-brand);border-bottom-color:var(--text-brand);}
+@media (max-width:760px){.topbar-search span,.topbar-search kbd{display:none;}}
+
+/* ---------- AI dùng chung (SA4) ---------- */
+.ai-usage{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-4);margin-bottom:var(--space-4);}
+.ai-usage-value{font-size:var(--fs-h4,18px);font-weight:var(--fw-semibold);margin:2px 0 var(--space-2);}
+.ai-bar{position:relative;height:8px;width:min(420px,70vw);border-radius:var(--radius-pill);background:var(--bg-surface-2);overflow:visible;}
+.ai-bar-fill{position:absolute;left:0;top:0;bottom:0;border-radius:var(--radius-pill);background:var(--status-ok);}
+.ai-bar-fill.tone-bad{background:var(--status-bad);}
+.ai-bar-fill.tone-crit{background:var(--status-crit);}
+.ai-bar-mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--status-warn);}
+.home-ai{border:1px solid var(--border);border-left:3px solid var(--brand);border-radius:var(--radius-sm);padding:var(--space-3) var(--space-4);background:var(--bg-surface);}
+.home-ai-dec{margin:0 0 0 var(--space-5);padding:0;font-size:var(--fs-body-sm);}
+.ai-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--space-2) var(--space-3);}
+.ai-checks{display:flex;flex-direction:column;gap:var(--space-1);margin:var(--space-3) 0;}
+.ai-checks .finding-filter-item{align-items:flex-start;}
+
+/* ---------- SA5: AI cho dữ liệu nhiều biến số ---------- */
+.ai-out:empty{display:none;}
+#licAiOs:not(:empty){margin:var(--space-3) 0;}
+
+/* ---------- SA6: AI nâng cao, Hỏi ICO, Kho báo cáo ---------- */
+.ai-quote{margin:var(--space-2) 0;padding:var(--space-3) var(--space-4);border-left:3px solid var(--border-strong);background:var(--bg-elevated);color:var(--text-primary);}
+#sizingAiOut:not(:empty),#ctAiDiff:not(:empty){margin-top:var(--space-4);}
+.pay-ai:not(:empty){flex-basis:100%;margin-top:var(--space-2);}
+.ask-dlg{width:min(760px,94vw);}
+.ask-log{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:var(--space-2);margin:var(--space-3) 0;}
+.ask-q{align-self:flex-end;max-width:85%;padding:var(--space-2) var(--space-3);border-radius:var(--radius-lg);background:var(--bg-elevated);border:1px solid var(--border);}
+.ask-a{max-width:95%;line-height:1.55;}
+.ask-links{margin-top:var(--space-2);font-size:.9em;}
+.ask-form{display:flex;gap:var(--space-2);}
+.ask-form input{flex:1;}
+
+/* ---------- Chuẩn hoá BOM ---------- */
+.bom-form{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
+.bom-cat .panel-title{color:var(--text-brand);}
+.bom-config{border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-4);margin:var(--space-3) 0;background:var(--bg-surface);}
+.bom-config-head{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-end;margin-bottom:var(--space-3);}
+.bom-title{flex:1 1 280px;font-weight:600;font-size:1rem;}
+.bom-mini{min-width:140px;max-width:220px;}
+.bom-total{margin-left:auto;font-weight:700;color:var(--text-primary);white-space:nowrap;}
+.bom-summary th{width:220px;text-align:left;color:var(--text-secondary);font-weight:600;background:var(--bg-elevated);}
+.bom-summary td input{width:100%;border:1px solid transparent;background:transparent;color:var(--text-primary);padding:2px 4px;}
+.bom-summary td input:hover,.bom-summary td input:focus{border-color:var(--field-border);background:var(--field-bg);}
+.bom-model td{font-weight:600;}
+
+/* ---------- Đăng nhập: SSO Entra ID + Passkey ---------- */
+.login-hint{margin:6px 0 10px;font-size:12px;line-height:1.45;color:var(--text-secondary);text-align:center;}
+.login-invite{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;}
+#btnLoginPasskey{width:100%;justify-content:center;gap:8px;margin-top:4px;}
+.ap-guide ol{margin:8px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;line-height:1.5;}
+.ap-guide code{font-size:12px;}
+
