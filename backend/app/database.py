@@ -46,8 +46,9 @@ def ensure_schema() -> None:
             ("cpu_threads", "INTEGER"), ("cluster_ha", "BOOLEAN"), ("cluster_drs", "BOOLEAN"),
         ],
         "license_entitlements": [
-            ("kind", "VARCHAR(16) NOT NULL DEFAULT 'owned'"),
+            ("kind", "VARCHAR(16) NOT NULL DEFAULT 'owned'"), ("unit_price_minor", "BIGINT"),
         ],
+        "ai_runs": [("cost_usd_micros", "BIGINT")],
         "spend_vendors": [
             ("short_name", "VARCHAR(64)"), ("aliases", "TEXT"), ("address", "VARCHAR(500)"),
             ("contact_name", "VARCHAR(128)"), ("contact_email", "VARCHAR(255)"), ("contact_phone", "VARCHAR(64)"),
@@ -94,9 +95,19 @@ def ensure_schema() -> None:
         for name, table, cols in (
             ("ix_vm_snapshots_vc_captured", "vm_snapshots", "vcenter_key, captured_at"),
             ("ix_snapshot_runs_latest", "snapshot_runs", "vcenter_key, status, source, finished_at"),
+            ("ix_backup_jobs_nbu_start", "backup_jobs", "nbu_key, start_time"),        # purge + job window (SCH-05)
         ):
             if table in insp.get_table_names():
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
+        # DAT-10 release 1: copy the Float money columns into their integer twins (idempotent: only rows
+        # not copied yet). Writers fill both from now on; reads switch in release 2.
+        if "license_entitlements" in insp.get_table_names() and "unit_price_minor" in {c["name"] for c in insp.get_columns("license_entitlements")}:
+            conn.execute(text("UPDATE license_entitlements SET unit_price_minor = "
+                              "CASE WHEN upper(currency) IN ('VND', 'JPY', 'KRW') THEN ROUND(unit_price) ELSE ROUND(unit_price * 100) END "
+                              "WHERE unit_price IS NOT NULL AND unit_price_minor IS NULL"))
+        if "ai_runs" in insp.get_table_names() and "cost_usd_micros" in {c["name"] for c in insp.get_columns("ai_runs")}:
+            conn.execute(text("UPDATE ai_runs SET cost_usd_micros = ROUND(cost_usd * 1000000) "
+                              "WHERE cost_usd IS NOT NULL AND cost_usd_micros IS NULL"))
         # NULL in a flag that has a safe default is read as that default by the code, but backfill it so
         # every reader agrees (SCH-08). Idempotent; matches no row after the first run.
         for table, col, val in (("spend_ai_config", "mask_names", "TRUE"), ("spend_notify_channels", "ops_alerts", "FALSE"),

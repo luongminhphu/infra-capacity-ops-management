@@ -305,6 +305,7 @@ class LicenseEntitlement(Base):
     quantity = Column(Float, nullable=False, default=0)
     kind = Column(String(16), nullable=False, default="owned")   # owned = đang sở hữu · none = xác nhận CHƯA có license (quantity 0, unit_price = báo giá nếu có)
     unit_price = Column(Float, nullable=True)
+    unit_price_minor = Column(BigInteger, nullable=True)  # DAT-10: integer minor units (VND = đồng); release 2 reads it
     currency = Column(String(8), nullable=False, default="VND")
     has_sa = Column(Boolean, nullable=False, default=False)      # Software Assurance / subscription (license mobility)
     scope_vcenter = Column(String(64), nullable=True)            # null = all vCenters
@@ -554,6 +555,7 @@ class AiRun(Base):
     input_tokens = Column(Integer, nullable=True)
     output_tokens = Column(Integer, nullable=True)
     cost_usd = Column(Float, nullable=False, default=0.0)
+    cost_usd_micros = Column(BigInteger, nullable=True)  # DAT-10: integer micro-USD; release 2 reads it
     input_hash = Column(String(64), nullable=True)
     latency_ms = Column(Integer, nullable=True)
     message = Column(String(300), nullable=True)

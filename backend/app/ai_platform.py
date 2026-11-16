@@ -25,6 +25,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .models import AiCache, AiRun, User
+from .shared.money import usd_to_micros
 
 logger = logging.getLogger("vco.ai")
 
@@ -255,9 +256,10 @@ def record(db: Session, task: str, user: Optional[User], status: str, h: Optiona
             AiRun.task == task, AiRun.status == "blocked", AiRun.username == (user.username if user else None),
             AiRun.created_at >= dt.datetime.utcnow() - dt.timedelta(minutes=1)).first():
         return                                             # at most one "blocked" row per user / task / minute
+    cost = price(usage.get("model"), usage.get("in"), usage.get("out")) if status in ("ok", "error") else 0.0
     db.add(AiRun(task=task, username=user.username if user else None, model=usage.get("model"), status=status,
                  input_tokens=usage.get("in") or None, output_tokens=usage.get("out") or None,
-                 cost_usd=price(usage.get("model"), usage.get("in"), usage.get("out")) if status in ("ok", "error") else 0.0,
+                 cost_usd=cost, cost_usd_micros=usd_to_micros(cost),       # DAT-10: integer twin
                  input_hash=h, latency_ms=int((time.monotonic() - started) * 1000), message=message[:300] or None))
     db.commit()
 

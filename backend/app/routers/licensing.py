@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from .. import data_access, report_license
 from ..config import get_settings
 from ..database import get_db
+from ..shared.money import to_minor
 from ..licensing import assess as assess_mod
 from ..licensing import os_classify, rules as rules_mod, whatif as whatif_mod
 from ..models import LicenseAssessment, LicenseEntitlement, LicenseRuleSet, ReportLogo, User, VmOsOverride
@@ -318,6 +319,7 @@ def _apply_ent(row: LicenseEntitlement, p: EntitlementIn, user: User):
     row.kind = p.kind
     row.product, row.metric, row.quantity = p.product, p.metric, (0.0 if p.kind == "none" else p.quantity)
     row.unit_price, row.currency, row.has_sa = p.unitPrice, (p.currency or "VND").upper()[:8], p.hasSa
+    row.unit_price_minor = to_minor(p.unitPrice, row.currency)          # DAT-10: integer twin, written alongside
     row.scope_vcenter = p.scopeVcenter or None
     row.scope_cluster = p.scopeCluster or None
     row.valid_to = datetime.fromisoformat(p.validTo[:10]) if p.validTo else None

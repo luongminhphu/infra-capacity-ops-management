@@ -276,3 +276,27 @@ def test_sync_uses_admin_saved_ht_factor_like_dashboard():
         db.query(AppSetting).filter_by(key="ht_factor").delete()
         db.commit()
         db.close()
+
+
+
+def test_enrich_activity_matches_by_uuid_rename_and_duplicate_names():
+    """DAT-06: a renamed VM keeps its off-streak (same uuid); another VM with the same name but a
+    different uuid does not inherit it."""
+    key = "vc-uuid-test"
+    t0 = dt.datetime(2026, 2, 1)
+    db = SessionLocal()
+    try:
+        run = SnapshotRun(vcenter_key=key, source="live", status="ok", started_at=t0, finished_at=t0)
+        db.add(run)
+        db.flush()
+        db.add(VmSnapshot(run_id=run.id, vcenter_key=key, cluster="c", vm="app-01", instance_uuid="u-1",
+                          is_powered_on=False, power_off_days=3, captured_at=t0))
+        db.commit()
+        now = t0 + dt.timedelta(days=2)
+        rows = [{"vm": "app-01-renamed", "instanceUuid": "u-1", "isPoweredOn": False},   # same VM, new name
+                {"vm": "app-01", "instanceUuid": "u-2", "isPoweredOn": False}]           # new VM reusing the name
+        scheduler._enrich_activity(db, key, rows, now)
+        assert rows[0]["powerOffDays"] == pytest.approx(5.0)      # 3 days before t0 + 2 days since
+        assert rows[1]["powerOffDays"] == 0
+    finally:
+        db.close()

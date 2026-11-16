@@ -96,7 +96,7 @@ services:
 
       # Veritas NetBackup (module Backup) — thêm khối 3/4 theo cùng mẫu nếu cần
       BACKUP_INITIAL_DAYS: ${BACKUP_INITIAL_DAYS:-14}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-183}
       NETBACKUP_1_KEY: ${NETBACKUP_1_KEY:-}
       NETBACKUP_1_NAME: ${NETBACKUP_1_NAME:-}
       NETBACKUP_1_HOST: ${NETBACKUP_1_HOST:-}

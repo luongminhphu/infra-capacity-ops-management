@@ -55,21 +55,37 @@ def _enrich_activity(db: Session, vcenter_key: str, vm_rows: List[Dict[str, Any]
                .filter(SnapshotRun.vcenter_key == vcenter_key, SnapshotRun.source == "live",
                        SnapshotRun.status == "ok", SnapshotRun.finished_at.isnot(None))
                .order_by(SnapshotRun.started_at.desc()).limit(PREVIOUS_RUNS)]
-    previous: Dict[str, Any] = {}
+    # Previous state of each VM, matched by instance UUID when vCenter gives one (a renamed VM keeps its
+    # history; two VMs with the same name in different clusters no longer share it — DAT-06), by name otherwise.
+    by_uuid: Dict[str, Any] = {}
+    by_name: Dict[str, Any] = {}
     if run_ids:
-        rows = (db.query(VmSnapshot.vm, VmSnapshot.captured_at, VmSnapshot.is_powered_on, VmSnapshot.cpu_usage_pct_raw,
-                         VmSnapshot.last_activity_days, VmSnapshot.power_off_days)
+        rows = (db.query(VmSnapshot.vm, VmSnapshot.instance_uuid, VmSnapshot.captured_at, VmSnapshot.is_powered_on,
+                         VmSnapshot.cpu_usage_pct_raw, VmSnapshot.last_activity_days, VmSnapshot.power_off_days)
                 .filter(VmSnapshot.run_id.in_(run_ids)).all())
         for r in rows:
-            p = previous.get(r.vm)
-            if p is None or r.captured_at > p.captured_at:
-                previous[r.vm] = r
+            for index, key in ((by_uuid, r.instance_uuid), (by_name, r.vm)):
+                if not key:
+                    continue
+                p = index.get(key)
+                if p is None or r.captured_at > p.captured_at:
+                    index[key] = r
+
+    def previous_of(v: Dict[str, Any]) -> Any:
+        uuid = v.get("instanceUuid")
+        if uuid:
+            p = by_uuid.get(uuid)
+            if p is not None:
+                return p
+            q = by_name.get(v.get("vm"))         # legacy snapshot stored before uuids: same name, no uuid
+            return q if q is not None and not q.instance_uuid else None
+        return by_name.get(v.get("vm"))
 
     def days_since(start: dt.datetime) -> float:
         return max(0.0, (now - start).total_seconds() / 86400.0)
 
     for v in vm_rows:
-        p = previous.get(v.get("vm"))
+        p = previous_of(v)
         if v.get("isPoweredOn"):
             cpu = v.get("cpuUsagePctRaw")
             if cpu is not None and cpu >= IDLE_CPU_PCT:
