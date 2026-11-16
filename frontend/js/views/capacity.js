@@ -86,7 +86,7 @@ function renderClusterTable() {
       ${showStorage ? `<td>${barCellHtml(r.model.storagePct)}</td>` : ''}
       <td class="mono">${fmtX(r.model.cpuOvercommit)}</td>
       <td class="mono">${fmtX(r.model.ramOvercommit)}</td>
-      <td><span class="pill ${r.overall.cls}">${esc(r.overall.text)}</span></td>
+      <td>${uiPill(r.overall.cls, r.overall.text)}</td>
     </tr>
   `).join('');
 }

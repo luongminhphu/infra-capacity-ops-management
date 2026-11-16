@@ -37,7 +37,7 @@ function vdRender() {
   const rows = list.map(v => `<tr data-vd-id="${esc(v.id)}" class="sp-row" tabindex="0">
       <td><b>${esc(v.shortName || '—')}</b></td>
       <td class="wrap">${esc(v.name)}${v.aliases.length ? `<span class="muted-sub">Tên khác: ${esc(v.aliases.join(' · '))}</span>` : ''}</td>
-      <td class="wrap">${v.tags.map(t => `<span class="pill na">${esc(t)}</span>`).join(' ') || '—'}</td>
+      <td class="wrap">${v.tags.map(t => `${uiTag(t)}`).join(' ') || '—'}</td>
       <td>${spPill(...(VD_STATUS[v.status] || ['na', v.statusLabel]))}</td>
       <td class="num">${esc(v.quotes)}<span class="muted-sub">chọn ${esc(v.won)}</span></td>
       <td class="num">${esc(v.contracts)}</td>
@@ -100,7 +100,7 @@ async function vdOpen(id) {
       <label class="field"><span>Lý do (khi tạm ngừng / không hợp tác)</span><input name="statusReason" maxlength="500" value="${esc(v.statusReason || '')}"${ro}></label>
       <label class="field sp-span2"><span>Ghi chú</span><textarea name="notes" rows="2" maxlength="5000"${ro}>${esc(v.notes || '')}</textarea></label>
     </div></form>
-    ${hist('Báo giá', v.quotes.map(q => `<li><b>${esc(q.code)}</b> — ${esc(q.title)} · ${spMoney(q.total)}${q.won ? ' · <span class="pill ok">Được chọn</span>' : ''}${q.evalTotal !== null ? ` · điểm ${esc(qtNum(q.evalTotal, 2))} (${esc(q.evalClass)})` : ''}</li>`), 'Chưa có báo giá.')}
+    ${hist('Báo giá', v.quotes.map(q => `<li><b>${esc(q.code)}</b> — ${esc(q.title)} · ${spMoney(q.total)}${q.won ? ' · ' + uiPill('ok', 'Được chọn') : ''}${q.evalTotal !== null ? ` · điểm ${esc(qtNum(q.evalTotal, 2))} (${esc(q.evalClass)})` : ''}</li>`), 'Chưa có báo giá.')}
     ${hist('Hợp đồng', v.contracts.map(c => `<li><b>${esc(c.code)}</b> — ${esc(c.title)}</li>`), 'Chưa có hợp đồng.')}
     ${hist('Opex', v.opex.map(o => `<li><b>${esc(o.code)}</b> — ${esc(o.title)} · FY ${esc(o.fiscalYear)} · ${spMoney(o.amountGross)}</li>`), 'Chưa có khoản Opex.')}
     ${hist('Hạng mục Capex', v.capexItems.map(i => `<li><b>${esc(i.projectCode)}</b> — ${esc(i.description)} · ${spMoney(i.amountGross)}</li>`), 'Chưa có hạng mục Capex.')}`;
@@ -348,8 +348,8 @@ function qtTabDecide(d) {
       </dl>${d.selectionReason ? `<p class="sp-desc">${esc(d.selectionReason)}</p>` : ''}
       <div class="sp-h">Bước tiếp theo</div>
       <div class="sp-inline">
-        ${d.capex ? `<span class="pill ok">Capex ${esc(d.capex.code)}</span>` : (spCan('editor') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-capex"><i data-lucide="package-plus"></i>Tạo dự án Capex</button>' : '')}
-        ${d.contracts.length ? d.contracts.map(c => `<span class="pill ok">HĐ ${esc(c.code)}</span>`).join(' ') : (spCan('editor') && d.capex ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-contract"><i data-lucide="scroll-text"></i>Tạo hợp đồng</button>' : '')}
+        ${d.capex ? `${uiPill('ok', `Capex ${d.capex.code}`)}` : (spCan('editor') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-capex"><i data-lucide="package-plus"></i>Tạo dự án Capex</button>' : '')}
+        ${d.contracts.length ? d.contracts.map(c => `${uiPill('ok', `HĐ ${c.code}`)}`).join(' ') : (spCan('editor') && d.capex ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-contract"><i data-lucide="scroll-text"></i>Tạo hợp đồng</button>' : '')}
         ${spCan('editor') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="to-proposal"><i data-lucide="file-text"></i>Soạn tờ trình Mẫu B</button>' : ''}
         <span class="src-spacer"></span>
         ${spCan('approver') ? '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="reopen"><i data-lucide="rotate-ccw"></i>Mở lại để sửa</button>' : ''}
@@ -528,7 +528,7 @@ async function qtOpenPrices() {
       $('#qpOut').innerHTML = `${stats ? `<div class="sp-h">Theo model và năm (thấp nhất – trung vị – cao nhất)</div><div class="table-scroll"><table class="data-table"><tbody>${stats}</tbody></table></div>` : ''}
         <div class="sp-h">Chi tiết (${esc(r.items.length)}${r.truncated ? '+' : ''} dòng)</div>
         <div class="table-scroll"><table class="data-table"><thead><tr><th>Ngày</th><th>NCC</th><th>Gói</th><th>Hàng</th><th class="num">SL</th><th class="num">Đơn giá (VND)</th></tr></thead><tbody>
-        ${r.items.map(i => `<tr><td>${esc(spDate(i.date))}</td><td>${esc(i.vendor)}${i.selected ? ' <span class="pill ok">chọn</span>' : ''}</td><td>${esc(i.request)}<span class="muted-sub">${esc(i.requestTitle)}</span></td>
+        ${r.items.map(i => `<tr><td>${esc(spDate(i.date))}</td><td>${esc(i.vendor)}${i.selected ? ' ' + uiPill('ok', 'chọn') : ''}</td><td>${esc(i.request)}<span class="muted-sub">${esc(i.requestTitle)}</span></td>
           <td class="wrap">${esc(i.description)}${i.model ? `<span class="muted-sub">${esc(i.model)}</span>` : ''}</td><td class="num">${esc(qtNum(i.qty, 3))} ${esc(i.unit || '')}</td><td class="num">${esc(qtNum(i.unitPriceVnd))}</td></tr>`).join('') || uiEmptyRow(6, 'Không có dòng nào.')}
         </tbody></table></div>`;
       spMsg('');

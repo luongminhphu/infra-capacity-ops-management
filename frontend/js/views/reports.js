@@ -75,8 +75,8 @@ function rptRenderState() {
     const n = rptSizingVmCount();
     const st = typeof sizingState === 'function' ? sizingState() : null;
     const env = st && st.params && st.params.environment ? ` · ${st.params.environment}` : '';
-    el.innerHTML = n ? `<span class="pill ok">Sẵn sàng</span> ${n} dòng VM${esc(env)}${st && st.result ? ' · đã tính' : ' · báo cáo tự tính khi xuất'}`
-      : '<span class="pill na">Chưa có dữ liệu</span> Mở Sizing để nhập danh sách VM.';
+    el.innerHTML = n ? `${uiPill('ok', 'Sẵn sàng')} ${n} dòng VM${esc(env)}${st && st.result ? ' · đã tính' : ' · báo cáo tự tính khi xuất'}`
+      : uiPill('na', 'Chưa có dữ liệu') + ' Mở Sizing để nhập danh sách VM.';
     $$('#viewReports [data-report^="sizing-"]').forEach(b => { if (b.dataset.report !== 'sizing-template') b.disabled = !n; });
   }
   const sel = $('#rptBkServer');

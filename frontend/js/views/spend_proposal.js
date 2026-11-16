@@ -122,12 +122,12 @@ async function ppOpenDetail(code, note) {
         <label class="field sp-span2"><span>Bối cảnh (AI dùng để viết)</span><textarea id="ppNote" rows="4" maxlength="8000">${esc(p.contextNote || '')}</textarea></label>
       </div><button class="btn btn-secondary btn-sm" type="button" id="ppSaveEdit">Lưu</button></details>` : '';
   const body = `
-    <div class="sp-detail-head">${spPill(...(PP_STATUS[p.status] || ['na', p.statusLabel]))} <span class="pill na">${esc(p.kindLabel)}</span></div>
+    <div class="sp-detail-head">${spPill(...(PP_STATUS[p.status] || ['na', p.statusLabel]))} ${uiTag(p.kindLabel)}</div>
     ${note ? `<div class="insight-box">${esc(note)}</div>` : ''}
     <dl class="sp-dl">
       ${dl('Về việc', esc(p.subject))}
       ${dl('Đề xuất bởi', esc(p.department || '—'))}
-      ${dl('Mẫu', `${esc(p.template ? p.template.name : '—')}${p.template && !p.template.active ? ' <span class="pill na">Đã tắt</span>' : ''}`)}
+      ${dl('Mẫu', `${esc(p.template ? p.template.name : '—')}${p.template && !p.template.active ? ' ' + uiPill('na', 'Đã tắt') : ''}`)}
       ${dl('File tờ trình', file)}
       ${dl('Tạo', `${esc(p.createdBy)} · ${esc(spTime(p.createdAt))}`)}
     </dl>

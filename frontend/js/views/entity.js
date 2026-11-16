@@ -85,7 +85,7 @@ function entityVmHtml(d) {
       ${enDl([['vCPU', enVal(c.vcpu)], ['RAM (GB)', enVal(c.ramGB)], ['Disk cấp / dùng (GB)', `${enVal(c.diskProvGB)} / ${enVal(c.diskUsedGB)}`],
               ['Datastore', enVal(c.datastore)], ['IP', enVal(c.ipAddress)], ['Hostname guest', enVal(c.guestHostname)],
               ['VMware Tools', enVal(c.toolsStatus)], ['Không hoạt động (ngày)', enVal(c.lastActivityDays)], ['Tắt (ngày)', enVal(c.powerOffDays)],
-              ...(os ? [['Hệ điều hành', `${enVal(os.label)} ${os.version ? esc(os.version) : ''} ${os.edition ? esc(os.edition) : ''}${os.overridden ? ' <span class="pill na">ghi đè</span>' : ''}`]] : [])])}
+              ...(os ? [['Hệ điều hành', `${enVal(os.label)} ${os.version ? esc(os.version) : ''} ${os.edition ? esc(os.edition) : ''}${os.overridden ? ' ' + uiTag('ghi đè') : ''}`]] : [])])}
     </section>
     ${backup}
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
