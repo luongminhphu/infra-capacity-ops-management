@@ -152,6 +152,8 @@ async function ctOpenCreate(prefill) {
 /* ---------- Detail ---------- */
 async function ctOpenDetail(code, focus) {
   let c;
+  // Payments start loading together with the contract, not after it rendered (audit API-06): one round trip.
+  if (typeof payPrefetch === 'function') payPrefetch(code);
   try { await spLoadMeta(); c = await apiRequest(`/spend/contracts/${encodeURIComponent(code)}`); }
   catch (err) { uiAlert(err.message); return; }
   const open = ['draft', 'negotiating'].includes(c.status);
