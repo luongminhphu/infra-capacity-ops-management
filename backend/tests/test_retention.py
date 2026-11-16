@@ -95,3 +95,30 @@ def test_composite_history_indexes():
     assert vm["ix_vm_snapshots_vc_captured"] == ["vcenter_key", "captured_at"]
     assert runs["ix_snapshot_runs_latest"] == ["vcenter_key", "status", "source", "finished_at"]
     ensure_schema()   # idempotent
+
+
+
+def test_purge_time_budget_leaves_the_rest_for_next_pass():
+    """SCH-06: a pass stops after its time budget and says there is more."""
+    db = SessionLocal()
+    try:
+        counts = retention.purge_snapshots(db, 36, now=NOW, budget_s=-1, pause_s=0)
+        assert counts["more"] == 1 and counts["snapshot_runs"] == 0
+    finally:
+        db.close()
+
+
+def test_ensure_schema_restores_model_indexes_on_old_tables():
+    """SCH-04 / SCH-09: an index declared on the model but missing in an existing database is created."""
+    from sqlalchemy import inspect, text
+    from app.database import engine, ensure_schema
+    ensure_schema()
+    with engine.begin() as conn:
+        conn.execute(text("DROP INDEX IF EXISTS ix_contracts_status"))
+        conn.execute(text("DROP INDEX IF EXISTS ix_contract_payment_status_due"))
+    assert "ix_contracts_status" not in {i["name"] for i in inspect(engine).get_indexes("contracts")}
+    ensure_schema()
+    insp = inspect(engine)
+    assert "ix_contracts_status" in {i["name"] for i in insp.get_indexes("contracts")}
+    assert "ix_contract_payment_status_due" in {i["name"] for i in insp.get_indexes("contract_payments")}
+    assert "ix_snapshot_runs_started_at" in {i["name"] for i in insp.get_indexes("snapshot_runs")}

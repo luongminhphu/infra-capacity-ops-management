@@ -333,13 +333,13 @@ class Contract(_Audited, Base):
     vendor_id = Column(Integer, ForeignKey("spend_vendors.id", ondelete="RESTRICT"), nullable=True, index=True)
     opex_id = Column(Integer, ForeignKey("opex_items.id", ondelete="RESTRICT"), nullable=True, index=True)
     capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
-    status = Column(String(12), nullable=False, default="draft")
+    status = Column(String(12), nullable=False, default="draft", index=True)   # contracts list filter (SCH-09)
     note = Column(Text, nullable=True)
     current_version_no = Column(Integer, nullable=False, default=0)
     final_version_no = Column(Integer, nullable=True)
     finalized_at = Column(DateTime, nullable=True)
     finalized_by = Column(String(255), nullable=True)
-    signed_file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    signed_file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True, index=True)
     signed_at = Column(DateTime, nullable=True)
     signed_by = Column(String(255), nullable=True)
     purge_due_at = Column(DateTime, nullable=True, index=True)
@@ -362,7 +362,7 @@ class ContractVersion(Base):
     contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="RESTRICT"), nullable=False, index=True)
     version_no = Column(Integer, nullable=False)
     editor_party = Column(String(8), nullable=False)
-    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=False)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=False, index=True)
     text_content = Column(Text, nullable=True)        # JSON list of paragraphs, for comparing versions
     note = Column(String(1000), nullable=True)
     uploaded_by = Column(String(255), nullable=False)
@@ -385,7 +385,7 @@ class ProposalTemplate(Base):
     kind = Column(String(1), nullable=False)
     name = Column(String(128), nullable=False)
     description = Column(String(500), nullable=True)
-    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=False)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=False, index=True)
     outline_json = Column(Text, nullable=False)
     active = Column(Boolean, nullable=False, default=True)
     uploaded_by = Column(String(255), nullable=False)
@@ -428,7 +428,7 @@ class Proposal(_Audited, Base):
     status = Column(String(10), nullable=False, default="draft")
     capex_project_id = Column(Integer, ForeignKey("capex_projects.id", ondelete="RESTRICT"), nullable=True, index=True)
     quote_request_id = Column(Integer, ForeignKey("quote_requests.id", ondelete="RESTRICT"), nullable=True, index=True)
-    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True, index=True)
     ai_provider_used = Column(String(16), nullable=True)
     ai_model = Column(String(64), nullable=True)
     generated_at = Column(DateTime, nullable=True)
@@ -491,6 +491,7 @@ class ContractPayment(_Audited, Base):
         CheckConstraint(_in("status", PAYMENT_STATUSES), name="ck_payment_status"),
         CheckConstraint("(status = 'paid') = (paid_at IS NOT NULL)", name="ck_payment_paid"),
         CheckConstraint("paid_amount IS NULL OR paid_amount >= 0", name="ck_payment_paid_amount"),
+        Index("ix_contract_payment_status_due", "status", "due_date"),     # agenda / payments list (SCH-09)
     )
 
     id = Column(Integer, primary_key=True)
@@ -527,7 +528,7 @@ class PaymentDocument(Base):
     done_at = Column(DateTime, nullable=True)
     done_by = Column(String(255), nullable=True)
     note = Column(String(500), nullable=True)
-    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True, index=True)
     sort_order = Column(Integer, nullable=False, default=0)
 
 
@@ -600,7 +601,7 @@ class Quotation(_Audited, Base):
     id = Column(Integer, primary_key=True)
     request_id = Column(Integer, ForeignKey("quote_requests.id", ondelete="RESTRICT"), nullable=False, index=True)
     vendor_id = Column(Integer, ForeignKey("spend_vendors.id", ondelete="RESTRICT"), nullable=False, index=True)
-    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True)
+    file_id = Column(Integer, ForeignKey("spend_files.id", ondelete="RESTRICT"), nullable=True, index=True)
     quote_no = Column(String(64), nullable=True)
     quote_date = Column(Date, nullable=True)
     valid_until = Column(Date, nullable=True)
@@ -638,7 +639,7 @@ class QuotationLine(Base):
     unit_price = Column(Numeric(18, 2), nullable=True)            # in the quotation currency
     amount = Column(Numeric(18, 2), nullable=True)                # "thành tiền" as printed
     match_key = Column(String(255), nullable=True)                # manual alignment across vendors
-    cost_group_id = Column(Integer, ForeignKey("renovation_cost_groups.id", ondelete="SET NULL"), nullable=True)
+    cost_group_id = Column(Integer, ForeignKey("renovation_cost_groups.id", ondelete="SET NULL"), nullable=True, index=True)
 
 
 class QuotationFinding(Base):
@@ -796,7 +797,7 @@ class BudgetPlan(_Audited, Base):
     submitted_by = Column(String(255), nullable=True)
     approved_at = Column(DateTime, nullable=True)
     approved_by = Column(String(255), nullable=True)
-    revised_from_id = Column(Integer, ForeignKey("budget_plans.id", ondelete="SET NULL"), nullable=True)
+    revised_from_id = Column(Integer, ForeignKey("budget_plans.id", ondelete="SET NULL"), nullable=True, index=True)
     row_version = Column(Integer, nullable=False, default=1)
 
 
@@ -825,8 +826,8 @@ class BudgetPlanLine(Base):
     source_code = Column(String(20), nullable=True)     # OPX-… / CPX-… shown to the user
     kind = Column(String(5), nullable=False)
     category_id = Column(Integer, ForeignKey("spend_categories.id", ondelete="RESTRICT"), nullable=False, index=True)
-    vendor_id = Column(Integer, ForeignKey("spend_vendors.id", ondelete="SET NULL"), nullable=True)
-    cost_center_id = Column(Integer, ForeignKey("spend_cost_centers.id", ondelete="SET NULL"), nullable=True)
+    vendor_id = Column(Integer, ForeignKey("spend_vendors.id", ondelete="SET NULL"), nullable=True, index=True)
+    cost_center_id = Column(Integer, ForeignKey("spend_cost_centers.id", ondelete="SET NULL"), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     start_date = Column(Date, nullable=True)            # first payment / start in the year -> quarter
     terms = Column(Integer, nullable=False, default=1)  # renewals starting inside the year

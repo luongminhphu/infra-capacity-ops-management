@@ -72,33 +72,24 @@ def ensure_schema() -> None:
         ],
     }
     indexed = {"instance_uuid", "external_id", "renovation_project_id", "quote_request_id"}
-    insp = inspect(engine)
+    pg = engine.dialect.name == "postgresql"
     with engine.begin() as conn:
+        if pg:
+            # Old and new pod start together during a rollout (rule 4): one migrates at a time (SCH-02),
+            # and a DDL waiting behind a long transaction gives up instead of queueing every query
+            # behind its lock; the pod then restarts and tries again.
+            conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": MIGRATION_LOCK_KEY})
+            conn.execute(text("SET LOCAL lock_timeout = '10s'"))
+        insp = inspect(conn)                     # read after the lock: the other pod may just have migrated
         for table, cols in additive.items():
             if table not in insp.get_table_names():
                 continue
             existing = {c["name"] for c in insp.get_columns(table)}
             for name, ddl in cols:
                 if name not in existing:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {'IF NOT EXISTS ' if pg else ''}{name} {ddl}"))
                     if name in indexed:
                         conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table}_{name} ON {table} ({name})"))
-        # Composite indexes for the hot history queries (audit QRY-03):
-        # * vm_snapshots: history.py filters vcenter_key = ? AND captured_at >= ? (VM changes window);
-        # * snapshot_runs: data_access.latest_run_for_key / scheduler._enrich_activity filter
-        #   vcenter_key, status, source and take the newest finished_at.
-        # Plain CREATE INDEX on purpose: ensure_schema runs inside engine.begin() and PostgreSQL
-        # refuses CREATE INDEX CONCURRENTLY in a transaction. On a large existing vm_snapshots table
-        # the first start blocks writes to it while the index builds (reads are unaffected); for a
-        # very large table create it beforehand by hand with CONCURRENTLY and the same name —
-        # IF NOT EXISTS then makes this a no-op.
-        for name, table, cols in (
-            ("ix_vm_snapshots_vc_captured", "vm_snapshots", "vcenter_key, captured_at"),
-            ("ix_snapshot_runs_latest", "snapshot_runs", "vcenter_key, status, source, finished_at"),
-            ("ix_backup_jobs_nbu_start", "backup_jobs", "nbu_key, start_time"),        # purge + job window (SCH-05)
-        ):
-            if table in insp.get_table_names():
-                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
         # DAT-10 release 1: copy the Float money columns into their integer twins (idempotent: only rows
         # not copied yet). Writers fill both from now on; reads switch in release 2.
         if "license_entitlements" in insp.get_table_names() and "unit_price_minor" in {c["name"] for c in insp.get_columns("license_entitlements")}:
@@ -139,6 +130,104 @@ def ensure_schema() -> None:
             col = next((c for c in insp.get_columns("users") if c["name"] == "username"), None)
             if col is not None and getattr(col["type"], "length", None) and col["type"].length < 255:
                 conn.execute(text("ALTER TABLE users ALTER COLUMN username TYPE VARCHAR(255)"))
+    _ensure_indexes()
+    _ensure_checks()
+
+
+MIGRATION_LOCK_KEY = 7_410_316                 # arbitrary constant shared by every ICO pod
+# Composite indexes for the hot history queries (audit QRY-03, SCH-05):
+# * vm_snapshots: history.py filters vcenter_key = ? AND captured_at >= ? (VM changes window);
+# * snapshot_runs: data_access.latest_run_for_key / scheduler._enrich_activity filter vcenter_key,
+#   status, source and take the newest finished_at;
+# * backup_jobs: purge and job window by server and start time.
+BIG_INDEXES = (
+    ("ix_vm_snapshots_vc_captured", "vm_snapshots", "vcenter_key, captured_at"),
+    ("ix_snapshot_runs_latest", "snapshot_runs", "vcenter_key, status, source, finished_at"),
+    ("ix_backup_jobs_nbu_start", "backup_jobs", "nbu_key, start_time"),
+)
+
+
+def _ensure_indexes() -> None:
+    """Indexes declared on the models (Index(...), Column(index=True)) plus BIG_INDEXES, created when
+    missing — create_all() never adds them to a table that already exists, so old databases drifted
+    from new ones (SCH-04).
+
+    PostgreSQL: CREATE INDEX CONCURRENTLY in autocommit mode, outside the startup transaction, so a
+    build on a large table never blocks the collector's writes (SCH-03). A build interrupted earlier
+    leaves an INVALID index: it is dropped and rebuilt. A unique index that cannot be built because
+    of existing duplicates is logged and skipped, never fatal.
+    SQLite: plain CREATE INDEX IF NOT EXISTS."""
+    import logging
+
+    from sqlalchemy import inspect, text
+    from sqlalchemy.schema import CreateIndex
+
+    log = logging.getLogger("vco.database")
+    pg = engine.dialect.name == "postgresql"
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    wanted = []                                  # (name, table, sql)
+    for name, table, cols in BIG_INDEXES:
+        if table in tables:
+            wanted.append((name, table, f"CREATE INDEX {{c}}IF NOT EXISTS {name} ON {table} ({cols})"))
+    for table in Base.metadata.sorted_tables:
+        if table.name not in tables:
+            continue
+        have = {i["name"] for i in insp.get_indexes(table.name)}
+        for idx in table.indexes:
+            if idx.name and idx.name not in have:
+                ddl = str(CreateIndex(idx, if_not_exists=True).compile(dialect=engine.dialect))
+                wanted.append((idx.name, table.name, ddl.replace("CREATE INDEX ", "CREATE INDEX {c}", 1)
+                               .replace("CREATE UNIQUE INDEX ", "CREATE UNIQUE INDEX {c}", 1)))
+    if not wanted:
+        return
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        for name, table, sql in wanted:
+            try:
+                if pg:
+                    bad = conn.execute(text("SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+                                            "WHERE c.relname = :n AND NOT i.indisvalid"), {"n": name}).first()
+                    if bad:
+                        conn.execute(text(f"DROP INDEX CONCURRENTLY IF EXISTS {name}"))
+                conn.execute(text(sql.replace("{c}", "CONCURRENTLY " if pg else "")))
+            except Exception as exc:  # noqa: BLE001 — a missing index must not stop the app
+                log.warning("Index %s on %s not created (%s); the app works without it, only slower",
+                            name, table, type(exc).__name__)
+
+
+def _ensure_checks() -> None:
+    """PostgreSQL only: CHECK constraints declared on the models but missing on a table created by an
+    older release (SCH-04). Added NOT VALID (new rows are checked at once, no table scan under lock),
+    then VALIDATE; old rows that break it are logged, never fatal. SQLite cannot add constraints to
+    an existing table: it keeps the app-level validation."""
+    if engine.dialect.name != "postgresql":
+        return
+    import logging
+
+    from sqlalchemy import CheckConstraint, inspect, text
+
+    log = logging.getLogger("vco.database")
+    tables = set(inspect(engine).get_table_names())
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        conn.execute(text("SET lock_timeout = '10s'"))
+        have = {r[0] for r in conn.execute(text("SELECT conname FROM pg_constraint WHERE contype = 'c'"))}
+        for table in Base.metadata.sorted_tables:
+            if table.name not in tables:
+                continue
+            for ck in table.constraints:
+                if not isinstance(ck, CheckConstraint) or not ck.name or ck.name in have:
+                    continue
+                expr = str(ck.sqltext.compile(dialect=engine.dialect, compile_kwargs={"literal_binds": True}))
+                try:
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD CONSTRAINT {ck.name} CHECK ({expr}) NOT VALID'))
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("CHECK %s on %s not added (%s)", ck.name, table.name, type(exc).__name__)
+                    continue
+                try:
+                    conn.execute(text(f"ALTER TABLE {table.name} VALIDATE CONSTRAINT {ck.name}"))
+                except Exception as exc:  # noqa: BLE001 — existing rows break it: new rows are still checked
+                    log.warning("CHECK %s on %s added but old rows do not satisfy it (%s); fix them, then "
+                                "ALTER TABLE ... VALIDATE CONSTRAINT", ck.name, table.name, type(exc).__name__)
 
 
 def get_db():
