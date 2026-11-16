@@ -545,7 +545,7 @@ Storage · Độ phủ VM · Job (toàn bộ job trong kỳ) — mỗi bảng l�
 lấn (và từ job cũ nhất còn đang chạy) rồi **upsert theo (server, jobId)** — job thấy ACTIVE ở lần này sẽ
 được cập nhật kết quả cuối ở lần sau; policy và disk pool lưu thành snapshot theo lần đồng bộ (đủ cho
 xu hướng dung lượng). Lần đầu lấy `BACKUP_INITIAL_DAYS` ngày (mặc định 14); job cũ hơn
-`BACKUP_RETENTION_DAYS` (400) bị dọn. API được gọi (chỉ GET):
+`BACKUP_RETENTION_DAYS` (183 ngày = 6 tháng; gồm job, lượt đồng bộ, snapshot storage; luôn giữ lượt thành công mới nhất) bị dọn. API được gọi (chỉ GET):
 `/netbackup/admin/jobs`, `/netbackup/config/policies` (+ chi tiết từng policy),
 `/netbackup/storage/disk-pools`. Thiếu quyền Policy/Storage chỉ làm mất phần tương ứng (ghi cảnh báo),
 không làm hỏng cả lần đồng bộ.

@@ -239,7 +239,7 @@ class Settings(BaseSettings):
     # First sync pulls this many days of job history; later syncs are incremental.
     backup_initial_days: int = Field(default=14)
     # Job rows older than this are purged after each sync (keeps the table bounded).
-    backup_retention_days: int = Field(default=400)
+    backup_retention_days: int = Field(default=183)   # 6 months of job / run / pool history (decision 16/11/2026)
 
     # Empty = no cross-origin access: the frontend is served by this app on the same origin.
     cors_origins: str = Field(default="")

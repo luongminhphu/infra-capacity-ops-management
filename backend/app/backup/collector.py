@@ -151,13 +151,46 @@ def _demo_backfill_storage(db: Session, cfg: NetBackupConfig, now: dt.datetime, 
         r.pool_count = len(pools)
 
 
+PURGE_BATCH = 5000
+
+
+def _delete_in_batches(db: Session, model, *conds) -> int:
+    """DELETE in id batches: short statements and row locks even when a lot of history goes at once
+    (first run after the retention changed) — SCH-05. Same transaction as the sync."""
+    total = 0
+    while True:
+        ids = [r[0] for r in db.query(model.id).filter(*conds).limit(PURGE_BATCH).all()]
+        if not ids:
+            return total
+        db.query(model).filter(model.id.in_(ids)).delete(synchronize_session=False)
+        total += len(ids)
+
+
 def _purge(db: Session, cfg: NetBackupConfig, settings: Settings, now: dt.datetime) -> None:
+    """Keep BACKUP_RETENTION_DAYS of backup history (default 183 = 6 months, decision 16/11/2026):
+    jobs, sync runs and storage snapshots older than that go; policy snapshots after 14 days (only
+    the latest is read). The newest successful run of the server is always kept, whatever its age —
+    the pages read the current policies / pools from it."""
     cutoff = now - dt.timedelta(days=max(30, settings.backup_retention_days))
-    db.query(BackupJob).filter(BackupJob.nbu_key == cfg.key, BackupJob.start_time < cutoff).delete(synchronize_session=False)
-    old_runs = [r[0] for r in db.query(BackupSyncRun.id).filter(BackupSyncRun.nbu_key == cfg.key,
-                                                                 BackupSyncRun.started_at < now - POLICY_SNAPSHOT_KEEP).all()]
-    if old_runs:
-        db.query(BackupPolicySnapshot).filter(BackupPolicySnapshot.run_id.in_(old_runs)).delete(synchronize_session=False)
+    jobs = _delete_in_batches(db, BackupJob, BackupJob.nbu_key == cfg.key, BackupJob.start_time < cutoff)
+    latest_ok = (db.query(BackupSyncRun.id).filter(BackupSyncRun.nbu_key == cfg.key, BackupSyncRun.status == "ok")
+                 .order_by(BackupSyncRun.started_at.desc(), BackupSyncRun.id.desc()).limit(1).scalar())
+    keep = [latest_ok] if latest_ok else []
+    old_policy_runs = db.query(BackupSyncRun.id).filter(BackupSyncRun.nbu_key == cfg.key,
+                                                        BackupSyncRun.started_at < now - POLICY_SNAPSHOT_KEEP,
+                                                        BackupSyncRun.id.notin_(keep))
+    policies = _delete_in_batches(db, BackupPolicySnapshot, BackupPolicySnapshot.run_id.in_(old_policy_runs.scalar_subquery()))
+    old_runs = db.query(BackupSyncRun.id).filter(BackupSyncRun.nbu_key == cfg.key, BackupSyncRun.started_at < cutoff,
+                                                 BackupSyncRun.id.notin_(keep))
+    pools = _delete_in_batches(db, BackupStorageSnapshot, BackupStorageSnapshot.run_id.in_(old_runs.scalar_subquery()))
+    # a run still referenced by a policy snapshot (kept run) is not old; children are gone for the rest
+    runs = _delete_in_batches(db, BackupSyncRun, BackupSyncRun.nbu_key == cfg.key, BackupSyncRun.started_at < cutoff,
+                              BackupSyncRun.id.notin_(keep),
+                              ~BackupSyncRun.id.in_(db.query(BackupPolicySnapshot.run_id).filter(
+                                  BackupPolicySnapshot.nbu_key == cfg.key).scalar_subquery()))
+    if jobs or policies or pools or runs:
+        logger.info("Backup purge %s: %d jobs, %d policy snapshots, %d storage snapshots, %d runs older than %s",
+                    cfg.key, jobs, policies, pools, runs, cutoff.date().isoformat())
 
 
 def sync_netbackup(db: Session, cfg: NetBackupConfig, settings: Optional[Settings] = None,

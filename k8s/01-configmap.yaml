@@ -95,7 +95,7 @@ data:
   # k8s/nbu-ca.sh vào ConfigMap ico-nbu-ca, mount tại /etc/netbackup-ca (xem 04-app.yaml).
   # KEY không đổi sau khi đã chạy (lịch sử job lưu theo KEY).
   BACKUP_INITIAL_DAYS: "14"
-  BACKUP_RETENTION_DAYS: "400"
+  BACKUP_RETENTION_DAYS: "183"
   NETBACKUP_1_KEY: "nbu-hsc"
   NETBACKUP_1_NAME: "NetBackup HSC"
   NETBACKUP_1_HOST: "nbu-primary.hsc.com.vn"   # FQDN trùng tên trong chứng chỉ, không dùng IP

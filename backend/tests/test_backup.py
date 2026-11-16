@@ -489,3 +489,69 @@ def test_schedule_from_real_policy_payload():
         {"scheduleName": "incr", "backupType": "Differential Incremental Backup", "scheduleType": "Frequency",
          "frequencySeconds": 86400, "startWindow": win(8040, 11759), "includeDates": empty}]}}}))
     assert bs.expected_type(monthly, dt.date(2026, 10, 31)) == "full" and bs.expected_type(monthly, dt.date(2026, 11, 1)) == "incr"
+
+
+
+def test_purge_keeps_six_months_and_latest_ok_run():
+    """Decision Q5 (16/11): 6 months of jobs, sync runs and storage snapshots; the newest successful
+    run survives whatever its age; batches do not change the result."""
+    from app.backup import collector
+    from app.config import get_settings
+    from app.database import SessionLocal
+    from app.database import ensure_schema
+    from app.models import BackupJob, BackupPolicySnapshot, BackupStorageSnapshot, BackupSyncRun
+    ensure_schema()
+    assert get_settings().backup_retention_days == 183
+    key = "nbu-purge-test"
+    now = dt.datetime(2026, 11, 16)
+    cfg = type("C", (), {"key": key})()
+    db = SessionLocal()
+    try:
+        def run(days_ago, status="ok"):
+            r = BackupSyncRun(nbu_key=key, source="live", status=status, started_at=now - dt.timedelta(days=days_ago))
+            db.add(r)
+            db.flush()
+            db.add(BackupStorageSnapshot(run_id=r.id, nbu_key=key, name="pool", captured_at=r.started_at))
+            db.add(BackupPolicySnapshot(run_id=r.id, nbu_key=key, name="P", captured_at=r.started_at))
+            return r
+        old_id, recent_id = run(400).id, run(10).id
+        for i, days in enumerate((200, 184, 182, 1)):
+            db.add(BackupJob(nbu_key=key, job_id=900000 + i, start_time=now - dt.timedelta(days=days)))
+        db.commit()
+        monkey = collector.PURGE_BATCH
+        collector.PURGE_BATCH = 1                     # force several batches
+        try:
+            collector._purge(db, cfg, get_settings(), now)
+        finally:
+            collector.PURGE_BATCH = monkey
+        db.commit()
+        jobs = sorted((now - j.start_time).days for j in db.query(BackupJob).filter_by(nbu_key=key))
+        assert jobs == [1, 182]
+        runs = {r.id for r in db.query(BackupSyncRun).filter_by(nbu_key=key)}
+        assert runs == {recent_id}
+        assert db.query(BackupStorageSnapshot).filter_by(nbu_key=key, run_id=old_id).count() == 0
+        assert db.query(BackupStorageSnapshot).filter_by(nbu_key=key, run_id=recent_id).count() == 1
+        # alone and old: the latest ok run is kept with its snapshots
+        db.query(BackupSyncRun).filter_by(id=recent_id).update({"started_at": now - dt.timedelta(days=500)})
+        db.commit()
+        collector._purge(db, cfg, get_settings(), now)
+        db.commit()
+        assert {r.id for r in db.query(BackupSyncRun).filter_by(nbu_key=key)} == {recent_id}
+    finally:
+        db.query(BackupJob).filter_by(nbu_key=key).delete()
+        db.query(BackupStorageSnapshot).filter_by(nbu_key=key).delete()
+        db.query(BackupPolicySnapshot).filter_by(nbu_key=key).delete()
+        db.query(BackupSyncRun).filter_by(nbu_key=key).delete()
+        db.commit()
+        db.close()
+
+
+def test_money_to_integer_minor_units():
+    """DAT-10 step 1: integer twins of the Float money columns."""
+    from app.shared.money import to_minor, usd_to_micros
+    assert to_minor(1_234_567.5, "VND") == 1_234_568
+    assert to_minor("1234.5", "usd") == 123450
+    assert to_minor(0.1 + 0.2, "USD") == 30
+    assert to_minor(None) is None and to_minor("", "VND") is None
+    assert usd_to_micros(0.0123456789) == 12346
+    assert usd_to_micros(None) == 0

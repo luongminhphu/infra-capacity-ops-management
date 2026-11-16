@@ -395,3 +395,21 @@ def test_mcp_ip_ignores_forwarded_for_unless_trusted(monkeypatch):
     assert mcp_server._client_ip(req) == "10.0.0.5"
     monkeypatch.setattr(get_settings(), "trust_forwarded_for", True)
     assert mcp_server._client_ip(req) == "6.6.6.6"
+
+
+
+def test_entitlement_price_written_as_integer_too(client):
+    """DAT-10 step 1: the Float price gets an integer twin in minor units."""
+    from app.models import LicenseEntitlement
+    r = client.post("/api/licensing/entitlements", json={"product": "ws_dc", "metric": "core", "quantity": 16,
+                                                         "unitPrice": 1234567.6, "currency": "VND"})
+    assert r.status_code == 200, r.text
+    ent_id = r.json()["id"]
+    db = SessionLocal()
+    try:
+        row = db.get(LicenseEntitlement, ent_id)
+        assert row.unit_price_minor == 1234568
+        db.delete(row)
+        db.commit()
+    finally:
+        db.close()
