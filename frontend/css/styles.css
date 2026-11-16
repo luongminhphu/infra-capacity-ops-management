@@ -1425,3 +1425,26 @@ summary{min-height:24px;}
 .chart-table thead th:not(:first-child){text-align:right;}
 .chart-table tbody th{position:static;background:none;text-transform:none;letter-spacing:0;font-size:var(--fs-caption);font-weight:var(--fw-medium);color:var(--text-primary);cursor:default;}
 .chart-table table{width:auto;min-width:min(100%,420px);}
+
+/* ── Round 2 PR8: interaction ─ */
+.scope-toggle{display:none;}
+@media (max-width:640px){
+  /* Phones: the 3 scope selects collapse behind one button showing the current scope (was 3 stacked rows). */
+  .scope-toggle{display:inline-flex;}
+  .topbar-scope .scope-label{display:none;}
+  .topbar-scope:not(.is-open) select,.topbar-scope:not(.is-open) #dataFootprint{display:none;}
+  .topbar-scope.is-open select{flex:1 1 100%;max-width:none;}
+}
+/* Page tabs that scroll sideways on small screens show that more tabs exist. */
+@media (max-width:760px){
+  .page-tabs{scroll-snap-type:x proximity;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);}
+  .page-tabs.at-end{-webkit-mask-image:none;mask-image:none;}
+}
+/* Data source line: one short summary, details on demand (not a banner). */
+.src-meta summary{cursor:pointer;display:inline-flex;align-items:center;min-height:24px;}
+.src-meta[open] summary{margin-bottom:var(--space-1);}
+.scenario-panel{margin-top:var(--space-4,16px);}
+.scenario-panel>summary{list-style:none;cursor:pointer;}
+.scenario-panel>summary::-webkit-details-marker{display:none;}
+.scenario-panel>summary .panel-title::after{content:" ▸";color:var(--text-tertiary);}
+.scenario-panel[open]>summary .panel-title::after{content:" ▾";}

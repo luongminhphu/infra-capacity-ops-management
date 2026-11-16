@@ -98,6 +98,7 @@
       </div>
       <div class="topbar-scope" id="topbarScope" aria-label="Phạm vi dữ liệu">
         <span class="scope-label"><i data-lucide="filter"></i>Phạm vi</span>
+        <button class="btn btn-secondary btn-sm scope-toggle" id="scopeToggle" type="button" aria-expanded="false" aria-controls="topbarScope"><i data-lucide="filter"></i><span id="scopeToggleText">Phạm vi</span></button>
         <select id="vcenterSelect" title="Chọn vCenter" data-scope="vcenter"></select>
         <select id="filterCluster" data-scope="cluster" aria-label="Phạm vi: cluster"><option value="all">Tất cả cluster</option></select>
         <select id="filterHost" data-scope="host" aria-label="Phạm vi: host"><option value="all">Tất cả host</option></select>
@@ -328,12 +329,6 @@
 
       <!-- ================= QUY HOẠCH · WHAT-IF CAPACITY ================= -->
       <section id="viewWhatif" class="view-section hidden">
-        <section class="panel">
-          <div class="panel-head">
-            <div><div class="panel-title" role="heading" aria-level="2">Kịch bản mẫu</div><p class="panel-sub">Chọn nhanh một kịch bản chuẩn để mô phỏng tác động lên capacity.</p></div>
-          </div>
-          <div class="scenario-grid" id="scenarioTemplates"></div>
-        </section>
 
         <div class="layout-2col">
           <aside class="side-card">
@@ -346,8 +341,8 @@
               <div class="legend-item"><span class="legend-dot" style="background:var(--status-warn)"></span>Theo dõi (80–100% ngưỡng overcommit)</div>
               <div class="legend-item"><span class="legend-dot" style="background:var(--status-crit)"></span>Vượt ngưỡng (&gt;100% ngưỡng overcommit)</div>
             </div>
-            <h3 class="side-card-h4-gap">Lịch sử simulation</h3>
-            <div class="sim-list" id="simHistoryList"><div class="empty-note">Chưa có simulation nào.</div></div>
+            <h3 class="side-card-h4-gap">Lịch sử mô phỏng</h3>
+            <div class="sim-list" id="simHistoryList"><div class="empty-note">Chưa có lần mô phỏng nào.</div></div>
             <button class="btn btn-secondary btn-sm btn-block" id="btnClearSimHistory" type="button">Xoá lịch sử</button>
           </aside>
 
@@ -366,6 +361,10 @@
             <div class="sim-card sim-result hidden" id="simResultArea"></div>
           </div>
         </div>
+        <details class="panel scenario-panel">
+          <summary class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Kịch bản mẫu</div><p class="panel-sub">Chọn nhanh một kịch bản chuẩn để mô phỏng tác động lên capacity (mùa cao điểm, diễn tập DR, mất 1 host…).</p></div></summary>
+          <div class="scenario-grid" id="scenarioTemplates"></div>
+        </details>
       </section>
 
       <!-- ================= QUY HOẠCH · SIZING MÁY CHỦ ================= -->

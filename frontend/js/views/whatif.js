@@ -111,7 +111,7 @@ function renderSimResult(clusterName, before, after, extraRows, title) {
 
 function renderSimHistory() {
   const list = $('#simHistoryList');
-  if (!appState.simHistory.length) { list.innerHTML = `<div class="empty-note">Chưa có simulation nào.</div>`; return; }
+  if (!appState.simHistory.length) { list.innerHTML = `<div class="empty-note">Chưa có lần mô phỏng nào.</div>`; return; }
   list.innerHTML = appState.simHistory.map(h => `
     <div class="sim-log-item">
       <strong>${esc(h.title)}</strong> · ${esc(h.cluster)}<br>

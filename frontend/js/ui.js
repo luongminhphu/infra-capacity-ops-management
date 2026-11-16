@@ -238,6 +238,14 @@ function uiEmpty(text, action) {
 function uiNote(text, tone) {
   return `<div class="empty-note${tone ? ` tone-${tone}` : ''}">${esc(text)}</div>`;
 }
+/* Loading / error states shared by every page (FE-22 / FE-31): one look, announced to screen readers.
+   uiError keeps the server message (already written for users) and can offer one retry action. */
+function uiLoading(text = 'Đang tải…') {
+  return `<div class="empty-note ui-loading" role="status" aria-busy="true">${esc(text)}</div>`;
+}
+function uiError(text, retryAttr) {
+  return `<div class="empty-note tone-crit ui-error" role="alert">${esc(text)}${retryAttr ? ` <button class="btn btn-secondary btn-sm" type="button" ${retryAttr}>Thử lại</button>` : ''}</div>`;
+}
 /* Empty table body: one full-width row. */
 function uiEmptyRow(colspan, text) {
   return `<tr><td colspan="${Number(colspan) || 1}" class="empty-note">${esc(text)}</td></tr>`;
