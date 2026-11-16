@@ -55,6 +55,8 @@ const PAGES = [
       desc: 'Đối chiếu VM trong vCenter với client backup: VM chưa có backup hoặc backup lỗi.', scope: [] },
     { id: 'bk-storage', feature: 'backup', view: 'backup', sub: 'storage', icon: 'hard-drive', label: 'Storage & policy', title: 'Storage & policy',
       desc: 'Dung lượng disk pool, xu hướng và số ngày tới ngưỡng high-water; tình trạng từng policy.', scope: [] },
+    { id: 'bk-size', feature: 'backup', view: 'backup', sub: 'size', icon: 'chart-bar-big', label: 'Dung lượng', title: 'Dung lượng backup theo máy chủ',
+      desc: 'Top máy chủ có dung lượng lớn nhất (bản Full gần nhất) và backup nhiều dữ liệu nhất trong kỳ; sắp xếp theo từng cột.', scope: [] },
     { id: 'bk-config', feature: 'backup', view: 'backup', sub: 'config', icon: 'sliders-horizontal', label: 'Nguồn & ngưỡng', title: 'Nguồn backup & ngưỡng',
       desc: 'Trạng thái kết nối máy chủ backup, hướng dẫn tài khoản chỉ đọc và ngưỡng giám sát backup.', scope: [] },
     { id: 'spend-overview', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'overview', icon: 'landmark', label: 'Tổng quan chi phí', title: 'Kế hoạch ngân sách IT',
@@ -112,7 +114,7 @@ const MENU = [
       ['dashboard', '', 'Capacity'], ['compliance', 'compliance', 'Compliance'], ['history', 'trends', 'Xu hướng & biến động']] },
     { key: 'backup', label: 'Backup', icon: 'database-backup', tabs: [
       ['bk-overview', '', 'Tổng quan'], ['bk-clients', 'clients', 'Client & RPO'], ['bk-jobs', 'jobs', 'Job'],
-      ['bk-schedule', 'schedule', 'Lịch & tuân thủ'], ['bk-coverage', 'coverage', 'Độ phủ VM'], ['bk-storage', 'storage', 'Storage & policy']] },
+      ['bk-schedule', 'schedule', 'Lịch & tuân thủ'], ['bk-coverage', 'coverage', 'Độ phủ VM'], ['bk-size', 'size', 'Dung lượng'], ['bk-storage', 'storage', 'Storage & policy']] },
     { key: 'agenda', label: 'Lịch việc & nhắc hạn', icon: 'calendar-clock', tabs: [['agenda', '', 'Lịch việc']] },
     { key: 'simulate', label: 'Mô phỏng & quy hoạch', icon: 'git-branch', tabs: [
       ['whatif', '', 'What-if capacity'], ['planning', 'planning', 'Quy hoạch tài nguyên'], ['lic-whatif', 'license', 'What-if license']] },

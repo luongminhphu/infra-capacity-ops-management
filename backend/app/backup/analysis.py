@@ -467,6 +467,7 @@ def analyze(jobs: List[Dict[str, Any]], policies: List[Dict[str, Any]], storage:
         "clients": clients, "policies": policy_rows, "storage": storage_rows,
         "storageTrend": {"dates": trend_dates, "series": trend_series},
         "longJobs": long_jobs, "coverage": coverage, "schedule": {k: v for k, v in sched.items() if k != "findings"},
+        "sizeStats": size_stats(backup, vms),
         "findings": findings, "findingCounts": counts,
         "readiness": readiness, "headline": _headline(kpis, th, coverage, days),
         "failedJobs": [_job_brief(j) for j in sorted(failed, key=lambda j: j["startTime"], reverse=True)[:500]],
@@ -512,6 +513,68 @@ def scope_label(rules: Optional[List[Dict[str, Any]]], limit: int = 6) -> str:
         parts.append(p)
     more = f" và {len(parts) - limit} mục khác" if len(parts) > limit else ""
     return "; ".join(parts[:limit]) + more
+
+
+SIZE_TOP_MAX = 50   # rows returned per ranking; the page shows top 10 / 20 / 50
+
+
+def _gb(kb: Optional[float]) -> float:
+    return (kb or 0) / 1024 ** 2
+
+
+def size_stats(backup: List[Dict[str, Any]], vms: Optional[List[Dict[str, Any]]], top: int = SIZE_TOP_MAX) -> Dict[str, Any]:
+    """Data-size statistics per backup client over the period (successful leaf backup jobs, status 0 / 1).
+
+    - sizeGB: size of the client's most recent successful FULL job — the best estimate of how much data the
+      server holds for backup. No full in the period → the largest successful job, flagged sizeBasis = "job".
+    - totalGB: everything backed up for the client in the period (full + incremental …).
+    - largestJob: the biggest single job (GB, schedule, start).
+    - vmDiskUsedGB / vmDiskProvGB: the matching vCenter VM (by name, guest hostname or IP), when there is one.
+    Returns both rankings (bySize, byTotal) and totals for the share of the top 10."""
+    per: Dict[str, Dict[str, Any]] = {}
+    for j in backup:
+        if j["status"] is None or j["status"] > 1 or not j["clientKey"]:
+            continue
+        c = per.setdefault(j["clientKey"], {"client": j["clientName"] or j["clientKey"], "jobs": 0, "totalKB": 0.0,
+                                            "full": None, "largest": None, "policies": set()})
+        kb = float(j["kbytes"] or 0)
+        c["jobs"] += 1
+        c["totalKB"] += kb
+        c["policies"].add(j["policyName"] or "")
+        if c["largest"] is None or kb > float(c["largest"]["kbytes"] or 0):
+            c["largest"] = j
+        if (j.get("scheduleType") or "").upper() == "FULL" and (c["full"] is None or j["startTime"] > c["full"]["startTime"]):
+            c["full"] = j
+    vm_by_key: Dict[str, Dict[str, Any]] = {}
+    for v in vms or []:
+        for k in (client_key(v.get("vm")), client_key(v.get("guestHostname")), v.get("ipAddress")):
+            if k:
+                vm_by_key.setdefault(k, v)
+    rows = []
+    for key, c in per.items():
+        basis = c["full"] or c["largest"]
+        vm = vm_by_key.get(key)
+        lg = c["largest"]
+        rows.append({
+            "client": c["client"], "clientKey": key, "jobs": c["jobs"],
+            "sizeGB": round(_gb(basis["kbytes"]), 1), "sizeBasis": "full" if c["full"] else "job",
+            "sizeAt": basis["startTime"],
+            "totalGB": round(_gb(c["totalKB"]), 1),
+            "largestJob": {"jobId": lg["jobId"], "gb": round(_gb(lg["kbytes"]), 1), "schedule": sc.schedule_label(lg.get("scheduleType")),
+                           "policy": lg["policyName"], "startTime": lg["startTime"]},
+            "policies": sorted(p for p in c["policies"] if p),
+            "vm": vm.get("vm") if vm else None, "vcenterKey": vm.get("vcenterKey") if vm else None,
+            "vmDiskUsedGB": round(vm["diskUsedGB"], 1) if vm and vm.get("diskUsedGB") is not None else None,
+            "vmDiskProvGB": round(vm["diskProvGB"], 1) if vm and vm.get("diskProvGB") is not None else None,
+        })
+    total = sum(r["totalGB"] for r in rows)
+    by_size = sorted(rows, key=lambda r: (-r["sizeGB"], r["client"]))
+    by_total = sorted(rows, key=lambda r: (-r["totalGB"], r["client"]))
+    return {
+        "clients": len(rows), "totalGB": round(total, 1),
+        "top10SharePct": _pct(sum(r["totalGB"] for r in by_total[:10]), total),
+        "bySize": by_size[:top], "byTotal": by_total[:top],
+    }
 
 
 def _coverage(vms: Optional[List[Dict[str, Any]]], backup_all: List[Dict[str, Any]], policies: List[Dict[str, Any]],

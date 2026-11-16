@@ -555,3 +555,41 @@ def test_money_to_integer_minor_units():
     assert to_minor(None) is None and to_minor("", "VND") is None
     assert usd_to_micros(0.0123456789) == 12346
     assert usd_to_micros(None) == 0
+
+
+def _sized(jid, name, kb_gb, hours_ago, stype="FULL", status=0):
+    j = _job(jid, name, status, hours_ago)
+    j.update(scheduleType=stype, kbytes=kb_gb * 1024 ** 2)
+    return j
+
+
+def test_size_stats_rank_servers_by_last_full_and_by_total():
+    jobs = [
+        # db01: full 500 GB 3 days ago, newer full 520 GB yesterday, 2 incrementals of 30 GB → size 520, total 1080
+        _sized(1, "db01", 500, 72), _sized(2, "db01", 520, 20), _sized(3, "db01", 30, 44, "DIFFERENTIAL_INCREMENTAL"),
+        _sized(4, "db01", 30, 10, "DIFFERENTIAL_INCREMENTAL"),
+        # fs01: no full in the period → size = largest job (300 GB incremental), flagged "job"; total 450
+        _sized(5, "fs01", 300, 30, "DIFFERENTIAL_INCREMENTAL"), _sized(6, "fs01", 150, 6, "DIFFERENTIAL_INCREMENTAL"),
+        # app01: one full of 100 GB plus a FAILED 900 GB full that must not count
+        _sized(7, "app01", 100, 12), _sized(8, "app01", 900, 8, status=58),
+    ]
+    vms = [{"vm": "db01", "vcenterKey": "vc1", "diskUsedGB": 610.25, "diskProvGB": 1024.0}]
+    st = analysis.size_stats(analysis._leaf_jobs(jobs), vms)
+    assert (st["clients"], st["totalGB"]) == (3, 1630.0)
+    assert [(r["client"], r["sizeGB"], r["sizeBasis"]) for r in st["bySize"]] == [("db01", 520.0, "full"), ("fs01", 300.0, "job"), ("app01", 100.0, "full")]
+    assert [(r["client"], r["totalGB"], r["jobs"]) for r in st["byTotal"]] == [("db01", 1080.0, 4), ("fs01", 450.0, 2), ("app01", 100.0, 1)]
+    db = st["bySize"][0]
+    assert (db["vm"], db["vmDiskUsedGB"], db["vmDiskProvGB"]) == ("db01", 610.2, 1024.0)
+    assert (db["largestJob"]["gb"], db["largestJob"]["schedule"], db["largestJob"]["jobId"]) == (520.0, "Full", 2)
+    assert st["bySize"][1]["vm"] is None
+    assert st["top10SharePct"] == 100.0
+
+
+def test_size_stats_in_summary_and_capped():
+    jobs = [_sized(i, f"srv{i:02d}", i, 5) for i in range(1, 61)]   # 60 clients of 1 … 60 GB
+    rep = analysis.analyze(jobs, [], [], [], None, analysis.BackupThresholds(), NOW, days=7)
+    st = rep["sizeStats"]
+    assert st["clients"] == 60 and len(st["bySize"]) == analysis.SIZE_TOP_MAX == 50
+    assert st["bySize"][0]["client"] == "srv60" and st["bySize"][-1]["client"] == "srv11"
+    # top 10 = 51 … 60 GB = 555 of 1 830 GB
+    assert st["totalGB"] == 1830.0 and st["top10SharePct"] == 30.3
