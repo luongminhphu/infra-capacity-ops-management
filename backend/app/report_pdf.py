@@ -547,7 +547,7 @@ def _fmt_delta(v: Optional[float], decimals: int = 1, unit: str = "") -> str:
     if not _finite(v):
         return "—"
     sign = "+" if v > 0 else ("−" if v < 0 else "±")
-    return f"{sign}{abs(v):.{decimals}f}{unit}"
+    return f"{sign}{vn_num(abs(v), decimals)}{unit}"
 
 
 def _delta_color(v: Optional[float]) -> str:

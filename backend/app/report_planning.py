@@ -176,7 +176,7 @@ def _assumptions_html(plan: Dict[str, Any]) -> str:
       <div><b>Thời gian:</b> {p['horizonMonths']} tháng · mốc {', '.join(str(m) for m in p['checkpoints'])} tháng.</div>
       <div><b>Tăng trưởng cấp phát (vCPU, RAM):</b> {esc(sc_txt)}, lãi kép theo quý.</div>
       <div><b>{esc(trend_txt)}</b></div>
-      <div><b>Điều kiện đủ năng lực:</b> mức dùng ≤ {p['targetPct']:.0f}% ngưỡng overcommit (CPU {pol['cpuOvercommitMax']:.1f}x, RAM {pol['ramOvercommitMax']:.1f}x, HT {pol['htFactor']:.1f}x) <u>và</u> vẫn ≤ 100% khi mất 1 host lớn nhất (N+1).</div>
+      <div><b>Điều kiện đủ năng lực:</b> mức dùng ≤ {p['targetPct']:.0f}% ngưỡng overcommit (CPU {vn_num(pol['cpuOvercommitMax'], 1)}x, RAM {vn_num(pol['ramOvercommitMax'], 1)}x, HT {vn_num(pol['htFactor'], 1)}x) <u>và</u> vẫn ≤ 100% khi mất 1 host lớn nhất (N+1).</div>
       <div><b>Node bổ sung:</b> {esc(node_txt)}. <b>Thời gian mua sắm/triển khai:</b> {p['leadMonths']} tháng → "đặt hàng trước" = thời điểm cần − {p['leadMonths']} tháng.</div>
       <div class="small-note" style="margin-top:4px;">Dự phóng dựa trên tài nguyên <i>đã cấp phát</i> cho VM đang bật (không phải mức dùng thực), nhất quán với chính sách overcommit của hệ thống. Storage không nằm trong phạm vi (SAN dùng chung).</div>
     </div>"""
