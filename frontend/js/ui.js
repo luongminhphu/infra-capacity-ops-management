@@ -268,11 +268,35 @@ function chartPalette() {
   const cs = getComputedStyle(document.documentElement);
   const g = (name) => cs.getPropertyValue(name).trim();
   return { text:g('--text-primary'), muted:g('--text-secondary'), divider:g('--border-subtle'), primary:g('--brand'), accent:g('--accent'), ok:g('--status-ok'), warn:g('--status-warn'), bad:g('--status-bad'), crit:g('--status-crit'), faint:g('--text-tertiary'),
-    // Series / sequential colours for multi-line or stacked charts.
-    series: [1, 2, 3, 4, 5, 6, 7, 8].map(i => g(`--chart-s${i}`)), deep: g('--chart-deep'), amber: g('--chart-index'),
+    // MASTER §8 (FE-06): at most 3 categorical series colours + `other` grey ("Khác" / total / not emphasised).
+    // More categories → chartSeriesColor(i) greys out everything after the third. `seq` = one hue, light → dark,
+    // only for ordered buckets (sizes, steps), never for unrelated categories.
+    series: [1, 2, 3].map(i => g(`--chart-s${i}`)), other: g('--chart-s4'), deep: g('--chart-deep'),
     seq: [1, 2, 3, 4, 5].map(i => g(`--chart-seq-${i}`)),
     // MASTER.md §Biểu đồ: grid / axis ink and threshold bands (80–100 % THEO DÕI, > 100 % VƯỢT NGƯỠNG).
     grid: g('--chart-grid'), axis: g('--chart-axis'), bandWarn: g('--chart-band-warn'), bandBad: g('--chart-band-bad') };
+}
+
+/* Colour of the i-th categorical series: s1–s3, then grey (emphasise the first three, MASTER §8). */
+function chartSeriesColor(i, palette) {
+  const c = palette || chartPalette();
+  return i < c.series.length ? c.series[i] : c.other;
+}
+
+/* Same colour at alpha a (0–1) for fills; works for #rgb / #rrggbb / rgb() tokens (replaces `color + '22'`). */
+function chartAlpha(color, a) {
+  const s = String(color || '').trim();
+  let r, g, b;
+  const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const h = hex[1].length === 3 ? hex[1].split('').map(x => x + x).join('') : hex[1];
+    [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+  } else {
+    const m = s.match(/rgba?\(([^)]+)\)/i);
+    if (!m) return s;
+    [r, g, b] = m[1].split(',').map(x => parseFloat(x));
+  }
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
 function destroyChart(key) {

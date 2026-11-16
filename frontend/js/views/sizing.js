@@ -88,7 +88,7 @@ function sizingApplyPlatform(platform) {
 
 const SIZING_DEFAULT_DOC = { customerName: '', customerContact: '', preparedOrg: '', preparedBy: '', approvedBy: '', documentCode: '',
   version: '1.0', versionNote: '', inputSource: '', inputDate: '', outOfScope: '' };
-// Series colours: chartPalette().series (tokens --chart-s1…8).
+// Series colours: chartPalette().series (s1–s3) + .other grey; chartSeriesColor(i) greys out series after the 3rd.
 const SIZING_DEFAULT_PROFILES = [
   { name: '2×16C / 512 GB', sockets: 2, coresPerSocket: 16, ramGB: 512, diskGB: 0, unitPrice: null },
   { name: '2×24C / 768 GB', sockets: 2, coresPerSocket: 24, ramGB: 768, diskGB: 0, unitPrice: null },
@@ -794,8 +794,8 @@ function renderSizingCharts(result) {
   const top = a.workload.topGroups.slice(0, 8);
   mk('szTop', 'szChartTop', { type: 'bar',
     data: { labels: top.map(g => g.name), datasets: [
-      { label: '% vCPU', data: top.map(g => +g.vcpuShare.toFixed(1)), backgroundColor: c.primary, borderRadius: 3 },
-      { label: '% RAM', data: top.map(g => +g.ramShare.toFixed(1)), backgroundColor: c.accent, borderRadius: 3 }] },
+      { label: '% vCPU', data: top.map(g => +g.vcpuShare.toFixed(1)), backgroundColor: c.series[0], borderRadius: 3 },
+      { label: '% RAM', data: top.map(g => +g.ramShare.toFixed(1)), backgroundColor: c.series[1], borderRadius: 3 }] },
     options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend }, scales: scales({ x: { ticks: { color: c.muted, callback: v => v + '%' } } }) } });
 
   // Floating-bar waterfall (RAM)
@@ -804,27 +804,30 @@ function renderSizingCharts(result) {
   const wfData = steps.map((st, i) => { const last = i === steps.length - 1; const v = (i === 0 || last) ? [0, st.value] : [Math.min(prev, st.value), Math.max(prev, st.value)]; prev = st.value; return v; });
   mk('szWaterfall', 'szChartWaterfall', { type: 'bar',
     data: { labels: steps.map(st => st.label), datasets: [{ label: 'GB RAM', data: wfData, borderRadius: 3,
-      backgroundColor: steps.map((_, i) => i === 0 ? c.primary : i === steps.length - 1 ? c.deep : c.warn) }] },
+      backgroundColor: steps.map((_, i) => i === 0 ? c.series[0] : i === steps.length - 1 ? c.deep : c.series[1]) }] },   // start · added steps · total — no status colour (MASTER §8)
     options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const [lo, hi] = ctx.raw; const i = ctx.dataIndex; return (i === 0 || i === steps.length - 1) ? `${szGB(hi)}` : `+${szGB(hi - lo)} → ${szGB(steps[i].value)}`; } } } }, scales: scales() } });
 
   mk('szHosts', 'szChartHosts', { type: 'bar',
     data: { labels: rows.map(r => r.profile.name), datasets: [
-      { label: 'Theo CPU', data: rows.map(r => r.hostsForCpu), backgroundColor: c.primary, borderRadius: 4 },
-      { label: 'Theo RAM', data: rows.map(r => r.hostsForRam), backgroundColor: c.accent, borderRadius: 4 },
-      { label: 'Tổng (gồm N+x)', data: rows.map(r => r.hostsTotal), backgroundColor: c.deep, borderRadius: 4 }] },
+      { label: 'Theo CPU', data: rows.map(r => r.hostsForCpu), backgroundColor: c.series[0], borderRadius: 4 },
+      { label: 'Theo RAM', data: rows.map(r => r.hostsForRam), backgroundColor: c.series[1], borderRadius: 4 },
+      { label: 'Tổng (gồm N+x)', data: rows.map(r => r.hostsTotal), backgroundColor: c.other, borderRadius: 4 }] },
     options: { maintainAspectRatio: false, plugins: { legend }, scales: scales({ y: { ticks: { color: c.muted, precision: 0 } } }) } });
 
   const axes = a.scoreAxes || [];
   mk('szRadar', 'szChartRadar', { type: 'radar',
-    data: { labels: axes.map(x => x.label), datasets: rows.filter(r => r.advisory && r.advisory.scores).slice(0, 5).map((r, i) => ({
+    // Recommended profile first so it gets the first colour; profiles after the 3rd are grey (MASTER §8).
+    data: { labels: axes.map(x => x.label), datasets: rows.filter(r => r.advisory && r.advisory.scores).slice(0, 5)
+      .sort((x, y) => (y.recommended ? 1 : 0) - (x.recommended ? 1 : 0)).map((r, i) => ({
       label: `${r.profile.name}${r.recommended ? ' ★' : ''} (${szNum(r.advisory.scoreTotal)})`, data: axes.map(x => +r.advisory.scores[x.key].toFixed(0)),
-      borderColor: c.series[i % c.series.length], backgroundColor: c.series[i % c.series.length] + '22', borderWidth: r.recommended ? 2.5 : 1.5, pointRadius: 2 })) },
+      borderColor: chartSeriesColor(i, c), backgroundColor: chartAlpha(chartSeriesColor(i, c), 0.13), borderWidth: r.recommended ? 2.5 : 1.5, pointRadius: 2 })) },
     options: { maintainAspectRatio: false, plugins: { legend: { ...legend, position: 'bottom' } },
       scales: { r: { min: 0, max: 100, ticks: { display: false, stepSize: 25 }, grid: { color: c.divider }, angleLines: { color: c.divider }, pointLabels: { color: c.text, font: { size: 11 } } } } } });
 
   if (best) {
     const seg = sizingCapacitySegments(best, d, p);
-    const segColors = [c.series[0], c.seq[1], c.series[5], c.series[3], c.series[4], c.series[7]];
+    // Parts of one whole: demand (2 tones of s1), free room (s2), reserves in grey tones — 3 hues max (MASTER §8).
+    const segColors = [c.series[0], c.seq[1], c.series[1], c.other, chartAlpha(c.other, 0.6), chartAlpha(c.other, 0.3)];
     const pct = (arr) => { const t = arr.reduce((s, x) => s + Math.max(0, x[1]), 0) || 1; return arr.map(x => +(Math.max(0, x[1]) / t * 100).toFixed(1)); };
     const cpuPct = pct(seg.cpu), ramPct = pct(seg.ram);
     mk('szAlloc', 'szChartAlloc', { type: 'bar',
@@ -836,8 +839,9 @@ function renderSizingCharts(result) {
     if (pr) {
       mk('szProjection', 'szChartProjection', { type: 'bar',
         data: { labels: pr.points.map(pt => pt.year === 0 ? 'Hiện tại' : `Năm ${pt.year}`), datasets: [
-          { type: 'line', label: `Đã lắp (${pr.installed})`, data: pr.points.map(() => pr.installed), borderColor: c.ok, borderDash: [6, 4], pointRadius: 0, borderWidth: 2 },
-          { label: 'Host cần', data: pr.points.map(pt => pt.hosts), backgroundColor: pr.points.map(pt => pt.hosts > pr.installed ? c.crit : c.primary), borderRadius: 4 }] },
+          { type: 'line', label: `Đã lắp (${pr.installed})`, data: pr.points.map(() => pr.installed), borderColor: c.other, borderDash: [6, 4], pointRadius: 0, borderWidth: 2 },
+          // red only where the data IS a status: the year needs more hosts than installed
+          { label: 'Host cần', data: pr.points.map(pt => pt.hosts), backgroundColor: pr.points.map(pt => pt.hosts > pr.installed ? c.crit : c.series[0]), borderRadius: 4 }] },
         options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { afterLabel: ctx => ctx.datasetIndex === 1 ? `Tải +${szNum(pr.points[ctx.dataIndex].growthPct)}% so với hiện tại` : '' } } },
           scales: scales({ y: { ticks: { color: c.muted, precision: 0 } } }) } });
     }
@@ -849,7 +853,7 @@ function renderSizingCharts(result) {
       if (!sw) return;
       const fmt = key === 'cpuRatio' ? (x => `${x}x`) : (x => `${x}%`);
       mk('szSens', 'szChartSens', { type: 'line',
-        data: { labels: sw.x.map(fmt), datasets: sw.series.map((s, i) => ({ label: s.name, data: s.hosts, borderColor: c.series[i % c.series.length], backgroundColor: c.series[i % c.series.length], stepped: false, tension: 0, pointRadius: sw.x.map(x => x === sw.current ? 5 : 2.5) })) },
+        data: { labels: sw.x.map(fmt), datasets: sw.series.map((s, i) => ({ label: s.name, data: s.hosts, borderColor: chartSeriesColor(i, c), backgroundColor: chartSeriesColor(i, c), borderWidth: i < c.series.length ? 2 : 1.25, stepped: false, tension: 0, pointRadius: sw.x.map(x => x === sw.current ? 5 : 2.5) })) },
         options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { title: items => `${items[0].label}${sw.x[items[0].dataIndex] === sw.current ? ' (hiện tại)' : ''}` } } },
           scales: scales({ y: { ticks: { color: c.muted, precision: 0 }, title: { display: true, text: 'host', color: c.muted } } }) } });
     };
@@ -862,9 +866,9 @@ function renderSizingCharts(result) {
     if (costRows.length) {
       mk('szCost', 'szChartCost', { type: 'bar',
         data: { labels: costRows.map(r => r.profile.name + (r.recommended ? ' ★' : '')), datasets: [
-          { label: 'Phần cứng', data: costRows.map(r => r.advisory.costs.hardware || 0), backgroundColor: c.primary, borderRadius: 3 },
-          { label: 'Gia hạn bảo hành', data: costRows.map(r => r.advisory.costs.warranty || 0), backgroundColor: c.amber, borderRadius: 3 },
-          { label: `License ${costRows[0].advisory.costs.years} năm`, data: costRows.map(r => r.advisory.costs.license || 0), backgroundColor: c.accent, borderRadius: 3 }] },
+          { label: 'Phần cứng', data: costRows.map(r => r.advisory.costs.hardware || 0), backgroundColor: c.series[0], borderRadius: 3 },
+          { label: 'Gia hạn bảo hành', data: costRows.map(r => r.advisory.costs.warranty || 0), backgroundColor: c.series[2], borderRadius: 3 },
+          { label: `License ${costRows[0].advisory.costs.years} năm`, data: costRows.map(r => r.advisory.costs.license || 0), backgroundColor: c.series[1], borderRadius: 3 }] },
         options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${szMoney(ctx.raw)}`, footer: items => `TCO: ${szMoney(costRows[items[0].dataIndex].advisory.costs.tco)}` } } },
           scales: { x: { stacked: true, ticks: { color: c.muted, callback: v => szMoneyShort(v) }, grid: { color: c.divider } }, y: { stacked: true, ticks: { color: c.text }, grid: { display: false } } } } });
     }
@@ -873,14 +877,14 @@ function renderSizingCharts(result) {
       const ys = bc.yearly;
       mk('szTcoYear', 'szChartTcoYear', { type: 'bar',
         data: { labels: ys.map(y => `Năm ${y.year}`), datasets: [
-          { type: 'line', label: 'Lũy kế', data: ys.map(y => y.cumulative), borderColor: c.deep, borderDash: [5, 3], pointRadius: 3, yAxisID: 'y2', order: 0 },
-          { label: 'Phần cứng', data: ys.map(y => y.hardware || 0), backgroundColor: c.primary, stack: 's', order: 1 },
-          { label: 'License', data: ys.map(y => y.license || 0), backgroundColor: c.accent, stack: 's', order: 1 },
-          { label: 'Dịch vụ bảo hành HW', data: ys.map(y => y.warranty || 0), backgroundColor: c.amber, stack: 's', order: 1 }] },
-        options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${szMoney(ctx.raw)}` } } },
+          { label: 'Phần cứng', data: ys.map(y => y.hardware || 0), backgroundColor: c.series[0], stack: 's' },
+          { label: 'License', data: ys.map(y => y.license || 0), backgroundColor: c.series[1], stack: 's' },
+          { label: 'Dịch vụ bảo hành HW', data: ys.map(y => y.warranty || 0), backgroundColor: c.series[2], stack: 's' }] },
+        // one Y axis (MASTER §8): the running total moves from a 2nd axis to the tooltip footer
+        options: { maintainAspectRatio: false, plugins: { legend, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${szMoney(ctx.raw)}`,
+          footer: items => `Lũy kế đến năm ${ys[items[0].dataIndex].year}: ${szMoney(ys[items[0].dataIndex].cumulative)}` } } },
           scales: { x: { stacked: true, ticks: { color: c.muted }, grid: { display: false } },
-            y: { stacked: true, beginAtZero: true, ticks: { color: c.muted, callback: v => szMoneyShort(v) }, grid: { color: c.divider } },
-            y2: { position: 'right', beginAtZero: true, ticks: { color: c.deep, callback: v => szMoneyShort(v) }, grid: { display: false } } } } });
+            y: { stacked: true, beginAtZero: true, ticks: { color: c.muted, callback: v => szMoneyShort(v) }, grid: { color: c.divider } } } } });
     }
   }
 }

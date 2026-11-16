@@ -169,9 +169,9 @@ function renderHistoryCharts(mountId, data) {
     const datasets = data.groups.map((g, i) => ({
       label: g.label,
       data: byDate(g.series, field),
-      borderColor: colors.series[i % colors.series.length],
-      backgroundColor: colors.series[i % colors.series.length] + '22',
-      borderWidth: 2, pointRadius: dates.length > 40 ? 0 : 2.5, pointHoverRadius: 4,
+      borderColor: chartSeriesColor(i, colors),
+      backgroundColor: chartAlpha(chartSeriesColor(i, colors), 0.13),
+      borderWidth: i < colors.series.length ? 2 : 1.25,   // groups after the 3rd: grey and thinner (MASTER §8) pointRadius: dates.length > 40 ? 0 : 2.5, pointHoverRadius: 4,
       tension: 0.25, spanGaps: true, fill: false,
     }));
     if (data.groups.length !== 1) {

@@ -22,9 +22,11 @@
 
 ## 2. Màu web (“Phòng máy”)
 
-Token: `frontend/css/styles.css` (`:root` = theme dark, `[data-theme="light"]`). Alias HSC cũ đã gỡ ở vòng 2 (FE-02 / FE-03):
-chỉ còn nhóm tint `--blue-a8…32`, `--green-a8`, `--red-a24`, `--yellow-a24`, `--neutral-a4/8`, `--sc40`, `--sr40/80` chờ
-3 token vai trò (FE-04, cần duyệt) — không dùng cho code mới.
+Token: `frontend/css/styles.css` (`:root` = theme dark, `[data-theme="light"]`). Alias HSC cũ đã gỡ hết ở vòng 2
+(FE-02 / FE-03 / FE-04). Nền nhạt theo vai trò: `--selected-bg` (mục đang chọn: menu, dòng danh sách, chip), `--brand-tint`
++ `--brand-tint-border` (hộp ghi chú), `--selection-bg` (bôi chữ), `--row-hover`, `--row-best` (dòng đề xuất), `--track-bg`
+(rãnh thanh), `--status-warn-border` / `--status-crit-border` (viền hộp cảnh báo), `--danger-fg` (chữ nút xoá).
+Nguồn: `--domain ux` “Active State”; audit FE-04, duyệt 16/11/2026.
 
 | Vai trò | Token | Dark | Light | Nguồn |
 |---|---|---|---|---|
@@ -135,8 +137,9 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 
 - Series web: `--chart-s1` cyan · `--chart-s2` tím · `--chart-s3` hồng (dark `#1FA3BA #8070F0 #D45EA3`, light
   `#0089A6 #6A5AE0 #C2468E` — qua cả 6 bài kiểm của validator `dataviz`) + `--chart-s4` xám cho “Khác / tổng”.
-  PDF dùng series HSC (`COLORS["series1…3"]`). Nhiều hơn 3 series → small multiples. `s5–s8` chỉ còn cho
-  biểu đồ cũ chưa vẽ lại.
+  PDF dùng series HSC (`COLORS["series1…3"]`). Nhiều hơn 3 series → small multiples, hoặc chỉ tô 3 series nhấn
+  và để các series còn lại xám (`chartSeriesColor(i)`), nét mảnh hơn. `s5–s8` đã bỏ (FE-06). Phần của một tổng
+  (cột chồng 100 %): tối đa 3 sắc + các bậc xám (`chartAlpha(other, a)`). Tô màu trong suốt bằng `chartAlpha`, không nối chuỗi hex.
 - **Không dùng màu trạng thái cho series.** Màu trạng thái chỉ khi dữ liệu *là* trạng thái (thành công / lỗi).
 - Một trục Y. Ngưỡng vẽ bằng vạch + dải nền (`--chart-band-warn` 80–100 %, `--chart-band-bad` > 100 %).
 - Nhãn trực tiếp trên đường khi ≤ 4 series; luôn có chú giải khi ≥ 2 series; luôn có “Xem bảng”.
@@ -145,7 +148,9 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
 - **“Xem bảng”**: plugin `icoDataTable` (ui.js) dựng bảng thu gọn dưới mọi biểu đồ từ chính dữ liệu biểu đồ. Nguồn:
   `--domain chart` — mọi loại có *A11y Fallback* = bảng dữ liệu (Q8).
 - KPI so với ngưỡng: bullet bar (`--domain chart` “KPI target progress” → bullet chart khi ≥ 3 KPI).
-- `chartPalette()` (ui.js) là cửa duy nhất lấy màu biểu đồ trong JS; PDF dùng `COLORS["series1…3"]`.
+- `chartPalette()` (ui.js) là cửa duy nhất lấy màu biểu đồ trong JS: `series` (3), `other`, `seq` (một sắc, cho nhóm có thứ tự),
+  `deep`, `grid`, `axis`, `bandWarn`, `bandBad`; PDF dùng `COLORS["series1…3"]`. Nguồn: `--domain chart` “Compare Categories”
+  (không mã hoá hạng mục chỉ bằng màu), `--domain ux` “Color Only”; FE-06 duyệt 16/11/2026.
 
 ## 9. PDF / Excel — giữ HSC Design System
 

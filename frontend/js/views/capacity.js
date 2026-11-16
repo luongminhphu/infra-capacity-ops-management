@@ -148,7 +148,7 @@ function renderDashboardCharts() {
     data: {
       labels: dsRows.map(d => d.name),
       datasets: [
-        { label:'Provisioned GB', data: dsRows.map(d => Number(d.provGB.toFixed(1))), backgroundColor: colors.series[3], borderRadius: 3 },
+        { label:'Provisioned GB', data: dsRows.map(d => Number(d.provGB.toFixed(1))), backgroundColor: colors.other, borderRadius: 3 },
         { label:'Used GB', data: dsRows.map(d => Number(d.usedGB.toFixed(1))), backgroundColor: colors.series[0], borderRadius: 3 }
       ]
     },
