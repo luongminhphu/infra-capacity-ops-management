@@ -22,7 +22,7 @@
 
 ## 2. Màu web (“Phòng máy”)
 
-Token: `frontend/css/styles.css` (`:root` = theme dark, `[data-theme="light"]`). Alias HSC cũ đã gỡ hết ở vòng 2
+Token: `frontend/css/tokens.css` (`:root` = theme dark, `[data-theme="light"]`). Alias HSC cũ đã gỡ hết ở vòng 2
 (FE-02 / FE-03 / FE-04). Nền nhạt theo vai trò: `--selected-bg` (mục đang chọn: menu, dòng danh sách, chip), `--brand-tint`
 + `--brand-tint-border` (hộp ghi chú), `--selection-bg` (bôi chữ), `--row-hover`, `--row-best` (dòng đề xuất), `--track-bg`
 (rãnh thanh), `--status-warn-border` / `--status-crit-border` (viền hộp cảnh báo), `--danger-fg` (chữ nút xoá).

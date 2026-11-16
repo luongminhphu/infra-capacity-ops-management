@@ -343,7 +343,7 @@ function uiEntityLink(type, name, vcenterKey, strong = true) {
   return `<a class="entity-link" href="${esc(uiEntityHref(type, name, vcenterKey))}" title="Mở trang ${type === 'host' ? 'host' : 'VM'}">${label}</a>`;
 }
 
-/* ---------- Charts: colours from the HSC tokens (styles.css), one Chart instance per key ---------- */
+/* ---------- Charts: colours from the tokens (css/tokens.css), one Chart instance per key ---------- */
 function chartPalette() {
   const cs = getComputedStyle(document.documentElement);
   const g = (name) => cs.getPropertyValue(name).trim();

@@ -1,0 +1,137 @@
+/* ICO web styles — part 8/8: Later page refinements (Backup / License, Opex list → detail, BOM / settings, round-2 a11y and interaction).
+   Files load in this order from index.html (cascade order matters; see MASTER.md). */
+/* ── Backup & License (PR 3/6) ─ */
+/* Neutral fact tag (HA, DRS, SA, edition): not a status, so no glyph and no status color */
+.tag.tag-on{border-color:var(--brand);}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);font-size:var(--fs-caption);font-weight:var(--fw-medium);color:var(--text-primary);white-space:nowrap;}
+.note-line{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:0 0 var(--space-4);color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.chart-wrap-split{min-height:220px;}
+.chart-wrap-mini{min-height:120px;margin-top:var(--space-2);}
+details.lic-scope{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-surface);}
+details.lic-scope>summary{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);cursor:pointer;list-style:none;min-height:40px;}
+details.lic-scope>summary::-webkit-details-marker{display:none;}
+details.lic-scope>summary::after{content:"";width:8px;height:8px;margin-left:auto;border-right:2px solid var(--text-secondary);border-bottom:2px solid var(--text-secondary);transform:rotate(45deg);transition:transform var(--transition);}
+details.lic-scope[open]>summary::after{transform:rotate(-135deg);}
+.lic-scope-hint{color:var(--text-brand);font-size:var(--fs-caption);}
+.lic-scope-body{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:0 var(--space-3) var(--space-3);}
+.lic-scope-body .lic-scope-note{flex-basis:100%;margin:var(--space-1) 0 0;}
+.lic-scope-bar{display:block;}
+.kpi-strip{grid-template-columns:repeat(auto-fit,minmax(176px,1fr));}
+.kpi-st{margin-top:2px;}
+
+/* ── Chi phí: Opex list → detail (pages/danh-sach.md) ─ */
+.sp-split.panel{grid-template-columns:minmax(360px,42%) minmax(0,1fr);min-height:560px;}
+.sp-li{position:relative;display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:2px var(--space-3);align-items:start;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--border-subtle);cursor:pointer;}
+.sp-li:hover{background:var(--overlay-hover);}
+.sp-li[aria-selected="true"]{background:var(--selected-bg);}
+.sp-li[aria-selected="true"]::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--brand);}
+.sp-li-t{font-weight:var(--fw-semibold);overflow-wrap:anywhere;min-width:0;}
+.sp-li-m{grid-column:2;color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);overflow-wrap:anywhere;min-width:0;}
+.sp-li-r{grid-row:span 2;text-align:right;color:var(--text-secondary);font-size:var(--fs-caption);white-space:nowrap;}
+.sp-li-r b{display:block;color:var(--text-primary);font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);}
+.hm-group .num{font-variant-numeric:var(--numeric-features);}
+.sp-search-row{display:flex;gap:var(--space-2);align-items:flex-start;flex-wrap:wrap;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border);}
+.sp-search-row input[type="search"]{flex:1 1 200px;height:var(--control-h-md);padding:0 var(--space-3);border:1px solid var(--field-border);border-radius:var(--radius-sm);background:var(--field-bg);color:var(--field-fg);}
+details.sp-more{flex:0 0 auto;}
+details.sp-more[open]{flex-basis:100%;order:3;}
+details.sp-more>summary{display:inline-flex;align-items:center;gap:6px;height:var(--control-h-md);padding:0 var(--space-3);border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;list-style:none;font-weight:var(--fw-medium);}
+details.sp-more>summary::-webkit-details-marker{display:none;}
+details.sp-more>summary .n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--radius-pill);background:var(--btn-primary-bg);color:var(--btn-primary-fg);font-size:var(--fs-caption);line-height:18px;text-align:center;}
+.sp-filters-pop{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-top:var(--space-2);}
+.sp-pager{align-items:center;}
+.sp-pager .btn{height:28px;}
+.sp-detail{padding:var(--space-5) var(--space-5);}
+.sp-pane-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2) var(--space-3);margin-bottom:var(--space-3);}
+.sp-pane-head h3{font-size:var(--fs-body-lg);line-height:var(--lh-body-lg);font-weight:var(--fw-semibold);letter-spacing:-.01em;text-wrap:balance;}
+.qt-list-panel .hm-rows{border-block:1px solid var(--border);margin-top:var(--space-3);}
+.sp-pane-actions:empty{display:none;}
+.sp-pane-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-3) 0;border-block:1px solid var(--border);margin-bottom:var(--space-3);flex-direction:row-reverse;justify-content:flex-end;}
+@media (max-width:1023px){ .sp-split.panel{grid-template-columns:1fr;} .sp-split .sp-detail{display:none;} }
+/* Destructive text on secondary buttons: sr80 on dark (≈5:1), sr40 on light (≈5:1); #FF0011 on grey failed AA */
+.btn-danger{color:var(--danger-fg);}
+/* KPI numbers never break mid-number; narrow cells use a smaller size instead */
+.kpi-cell{container-type:inline-size;}
+.kpi-v{overflow-wrap:normal;white-space:nowrap;}
+.kpi-cell.muted .kpi-v{white-space:normal;overflow-wrap:anywhere;}   /* a sentence, not a number: wrap (overlapped the next cell at 820 / 390 px) */
+@container (width < 230px){ .kpi-v{font-size:var(--fs-body);} }
+
+/* ── BOM & Cài đặt (PR 5/6) ─ */
+/* File drop zone: native file input stays focusable (sr-only) inside the label → keyboard + screen reader work */
+.dropzone{position:relative;display:grid;grid-template-columns:auto 1fr;gap:2px var(--space-3);align-items:center;padding:var(--space-4);min-height:88px;border:1.5px dashed var(--border-strong);border-radius:var(--radius-md);background:var(--bg-surface-2);cursor:pointer;transition:border-color var(--transition),background-color var(--transition);}
+.dropzone>svg{grid-row:span 2;width:var(--icon-lg);height:var(--icon-lg);color:var(--text-brand);}
+.dropzone .dz-main{font-size:var(--fs-body);}
+.dropzone .dz-main b{color:var(--text-brand);font-weight:var(--fw-semibold);}
+.dropzone .dz-sub{color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.dropzone:hover,.dropzone.over{border-color:var(--brand);background:var(--brand-tint);}
+.dropzone:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;}
+/* Grouped in-page tabs (Cài đặt) */
+.page-tabs.page-tabs-grouped{display:flex;padding:var(--space-2);width:auto;max-width:none;margin-right:var(--space-5);background:var(--bg-surface);}
+.tab-group{flex-wrap:wrap;align-items:center;gap:2px;border-right:1px solid var(--border);}
+.tab-group:last-child{border-right:0;padding-right:0;}
+.tab-group-label{padding:0 var(--space-2) 2px;font-size:var(--fs-caption);color:var(--text-tertiary);font-weight:var(--fw-medium);}
+@media (max-width:760px){
+  .page-tabs.page-tabs-grouped{flex-wrap:nowrap;overflow-x:auto;}
+  .tab-group{flex-wrap:nowrap;}
+}
+/* Disabled buttons: readable label (was 50 % opacity → white on half-transparent blue) */
+.btn:disabled,.btn-primary:disabled{opacity:1;background:var(--bg-elevated);color:var(--text-tertiary);box-shadow:none;}
+
+.tab-group-label{grid-column:1 / span 9;width:auto;}
+.page-tabs.page-tabs-grouped{flex-wrap:wrap;gap:var(--space-2) var(--space-3);}
+.tab-group{flex:0 0 auto;display:grid;grid-auto-flow:column;grid-template-rows:auto auto;justify-content:start;padding-right:var(--space-3);}
+.page-tabs-grouped .sim-tab{padding:0 var(--space-2);}
+/* Be Vietnam Pro is wider than Inter: give data cells room so numbers never overlap */
+.sm-grid{grid-template-columns:repeat(auto-fill,minmax(270px,1fr));}
+.sm-row{grid-template-columns:40px minmax(0,1fr) 62px;}
+.hm-domains{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));}
+code,.code,.ref-code,td.code-cell{font-family:var(--font-mono);font-size:max(12px,.92em);}   /* never under 12 px (MASTER §4) */
+
+/* UI 11 (ui-ux-pro-max review): disclosure targets ≥ 24 px, file input kept inside its dropzone */
+summary{min-height:24px;}
+.dropzone input[type="file"].sr-only{inset:0 auto auto 0;}
+
+/* VM change cards: grid items may shrink; their inner tables scroll inside the card, not the page (375 px) */
+.history-vm-grid > *{min-width:0;}
+.history-vm-card{overflow-x:auto;}
+
+/* ── Round 2 a11y (validation 16/11, decision Q8) ─ */
+/* Phones: 16 px in form fields so iOS does not zoom on focus (quick-reference readable-font-size). */
+@media (max-width:640px){
+  select,textarea,input:not([type="checkbox"]):not([type="radio"]):not([type="range"]){font-size:var(--fs-body);}
+}
+/* Touch layouts: main targets 44 px high (MASTER §5) — buttons, fields, tabs, view chips, list rows. */
+@media (max-width:1023px){
+  .btn,.btn-sm,.sim-tab,.hm-view,.view-toggle button,select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]){height:auto;min-height:var(--control-h-lg);}
+  .hm-row,.sp-li{min-height:var(--control-h-lg);}
+  .nav-item{min-height:var(--control-h-lg);}
+}
+.chart-table{margin-top:var(--space-2);font-size:var(--fs-caption);}
+.chart-table>summary{cursor:pointer;color:var(--text-brand);font-weight:var(--fw-medium);min-height:24px;display:inline-flex;align-items:center;}
+.chart-table .table-scroll{max-height:320px;margin-top:var(--space-2);}
+.chart-table thead th:not(:first-child){text-align:right;}
+.chart-table tbody th{position:static;background:none;text-transform:none;letter-spacing:0;font-size:var(--fs-caption);font-weight:var(--fw-medium);color:var(--text-primary);cursor:default;}
+.chart-table table{width:auto;min-width:min(100%,420px);}
+
+/* ── Round 2 PR8: interaction ─ */
+.scope-toggle{display:none;}
+@media (max-width:640px){
+  /* Phones: the 3 scope selects collapse behind one button showing the current scope (was 3 stacked rows). */
+  .scope-toggle{display:inline-flex;}
+  .topbar-scope .scope-label{display:none;}
+  .topbar-scope:not(.is-open) select,.topbar-scope:not(.is-open) #dataFootprint{display:none;}
+  .topbar-scope.is-open select{flex:1 1 100%;max-width:none;}
+}
+/* Page tabs that scroll sideways on small screens show that more tabs exist. */
+@media (max-width:760px){
+  .page-tabs{scroll-snap-type:x proximity;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);}
+  .page-tabs.at-end{-webkit-mask-image:none;mask-image:none;}
+}
+/* Data source line: one short summary, details on demand (not a banner). */
+.src-meta summary{cursor:pointer;display:inline-flex;align-items:center;min-height:24px;}
+.src-meta[open] summary{margin-bottom:var(--space-1);}
+.scenario-panel{margin-top:var(--space-4,16px);}
+.scenario-panel>summary{list-style:none;cursor:pointer;}
+.scenario-panel>summary::-webkit-details-marker{display:none;}
+.scenario-panel>summary .panel-title::after{content:" ▸";color:var(--text-tertiary);}
+.scenario-panel[open]>summary .panel-title::after{content:" ▾";}
