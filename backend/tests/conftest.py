@@ -12,3 +12,14 @@ os.environ.setdefault("ENABLE_SCHEDULER", "false")
 os.environ.setdefault("NETBACKUP_1_DEMO", "true")
 os.environ.setdefault("NETBACKUP_1_KEY", "nbu-test")
 os.environ.setdefault("NETBACKUP_1_HOST", "nbu-master.test.local")
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_throttle():
+    """Every test starts with a clean failed-login counter (app/login_guard.py)."""
+    from app import login_guard
+    login_guard.reset()
+    yield

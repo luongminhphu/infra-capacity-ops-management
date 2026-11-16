@@ -104,8 +104,11 @@ def test_startup_check(caplog):
     assert any("SECRETS_KEY" in r.getMessage() for r in caplog.records)
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="vco.main"):
-        check_startup_secrets(Settings(jwt_secret="a" * 40, secrets_key="b" * 40))
+        check_startup_secrets(Settings(jwt_secret="a" * 40, secrets_key="b" * 40, cookie_secure=True))
     assert not caplog.records
+    with caplog.at_level(logging.WARNING, logger="vco.main"):                        # SEC2-04: plain-HTTP cookie warned
+        check_startup_secrets(Settings(jwt_secret="a" * 40, secrets_key="b" * 40, cookie_secure=False, public_url=""))
+    assert any("Secure" in r.getMessage() for r in caplog.records)
 
 
 # ---------------------------------------------------------------- SEC-03: CORS
@@ -318,3 +321,77 @@ def test_sizing_pdf_header_cannot_close_style():
     from app.report_sizing_full import _css
     css = _css('ACME</style><h1>x</h1>', 'v"1\nnext', "16/11/2026")
     assert "</style>" not in css and "<h1>" not in css and "\\3C " in css
+
+
+
+# ---------------------------------------------------------------- Round 2 PR2: session & HTTP surface
+
+def _fresh_client():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    return TestClient(app)
+
+
+def test_login_is_throttled_after_repeated_failures():
+    with _fresh_client() as c:
+        for _ in range(5):
+            assert c.post("/api/auth/login", json={"username": "admin", "password": "wrong"}).status_code == 401
+        r = c.post("/api/auth/login", json={"username": "admin", "password": "wrong"})
+        assert r.status_code == 429 and int(r.headers["Retry-After"]) >= 1
+        # the right password is also refused while locked (no oracle), other names are not affected
+        assert c.post("/api/auth/login", json=ADMIN).status_code == 429
+        assert c.post("/api/auth/login", json={"username": "nobody", "password": "x"}).status_code == 401
+
+
+def test_login_guard_backoff_grows_and_success_clears():
+    from app import login_guard as g
+    g.reset()
+    t0 = 1_000_000.0
+    for i in range(5):
+        g.failed("1.2.3.4", "bob", now=t0 + i)
+    assert 55 <= g.retry_after("1.2.3.4", "bob", now=t0 + 5) <= 61          # 60 s after the 5th failure
+    g.failed("1.2.3.4", "bob", now=t0 + 70)
+    assert 115 <= g.retry_after("1.2.3.4", "bob", now=t0 + 71) <= 121       # then 120 s
+    g.succeeded("1.2.3.4", "bob")
+    assert g.retry_after("1.2.3.4", "bob", now=t0 + 72) == 0
+    g.reset()
+
+
+def test_logout_revokes_the_session_on_the_server():
+    with _fresh_client() as c:
+        assert c.post("/api/auth/login", json=ADMIN).status_code == 200
+        stolen = c.cookies.get("vco_session")
+        assert c.post("/api/auth/logout").status_code == 200
+        c.cookies.set("vco_session", stolen)
+        assert c.get("/api/auth/me").status_code == 401
+
+
+def test_security_headers_on_api_and_static(client):
+    for path in ("/api/health", "/"):
+        h = client.get(path).headers
+        assert "frame-ancestors 'none'" in h["content-security-policy"] and "script-src 'self'" in h["content-security-policy"]
+        assert h["x-content-type-options"] == "nosniff" and h["x-frame-options"] == "DENY"
+        assert h["referrer-policy"] == "same-origin"
+
+
+def test_oversized_body_is_refused(client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "max_request_mb", 1)
+    big = b"x" * (1024 * 1024 + 10)
+    r = client.post("/api/bom/parse", content=big, headers={"content-type": "application/octet-stream"})
+    assert r.status_code == 413
+    def chunks():                                  # no Content-Length: counted while the route reads the JSON
+        yield b'{"hosts": [], "vms": [], "label": "'
+        for _ in range(3):
+            yield b"y" * (512 * 1024)
+        yield b'"}'
+    r = client.post("/api/import", content=chunks(), headers={"content-type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_mcp_ip_ignores_forwarded_for_unless_trusted(monkeypatch):
+    from types import SimpleNamespace
+    from app import mcp_server
+    req = SimpleNamespace(headers={"x-forwarded-for": "6.6.6.6"}, client=SimpleNamespace(host="10.0.0.5"))
+    assert mcp_server._client_ip(req) == "10.0.0.5"
+    monkeypatch.setattr(get_settings(), "trust_forwarded_for", True)
+    assert mcp_server._client_ip(req) == "6.6.6.6"

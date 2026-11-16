@@ -193,3 +193,13 @@ def test_entra_only_mode_disables_local_login_except_breakglass(client, entra, m
     assert client.get("/api/auth/config").json()["breakglass"] is True
     assert client.post("/api/auth/login", json=creds).status_code == 200
     assert client.get("/api/auth/me").status_code == 200
+
+
+
+def test_same_upn_new_object_id_does_not_take_over(client, entra):
+    """SEC-13: a recycled UPN (new directory object) must not inherit the old account."""
+    _finish(client, _start(client, entra))                     # alice, original oid
+    client.cookies.clear()
+    q = _start(client, entra)
+    entra.claims = {"oid": str(uuid.uuid4())}                  # same preferred_username, other object
+    assert "Entra khác" in _error(_finish(client, q))

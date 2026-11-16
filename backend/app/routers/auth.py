@@ -1,4 +1,5 @@
 import datetime as dt
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Body, Cookie, Depends, HTTPException, Query, Request, Response, status
@@ -6,14 +7,17 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import auth_entra, passkeys
+from .. import auth_entra, login_guard, passkeys
 from ..config import get_settings
 from ..database import get_db
 from ..models import ApiToken, User, UserPasskey
 from ..schemas import LoginRequest, UserOut
 from ..spend.roles import apply_entra_roles, effective_role
 from ..security import (COOKIE_NAME, create_access_token, decode_session, get_current_user, is_admin, local_login_allowed,
-                        recently_authenticated, session_user, verify_password)
+                        hash_password, recently_authenticated, session_user, verify_password)
+
+logger = logging.getLogger("vco.routers.auth")
+_DUMMY_HASH = hash_password("timing-equaliser-not-a-real-password")   # bcrypt work when the account does not exist
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -46,14 +50,20 @@ def auth_config():
 
 
 @router.post("/login", response_model=UserOut)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    ip = login_guard.client_ip(request)
+    login_guard.check(ip, payload.username or "")
     if not get_settings().password_enabled_for(payload.username or ""):
         # Same answer for every name: does not reveal which accounts exist.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Tài khoản cục bộ đăng nhập bằng Passkey (Face ID / Touch ID), không dùng mật khẩu")
     user = db.query(User).filter(User.username == payload.username).first()
-    if not user or (user.auth_source or "local") != "local" or not verify_password(payload.password, user.password_hash):
+    # bcrypt runs whether or not the account exists: response time does not reveal valid names (SEC2-01)
+    ok = verify_password(payload.password, user.password_hash if user else _DUMMY_HASH)
+    if not user or (user.auth_source or "local") != "local" or not ok:
+        login_guard.failed(ip, payload.username or "")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sai tên đăng nhập hoặc mật khẩu")
+    login_guard.succeeded(ip, payload.username or "")
     if not local_login_allowed(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Đăng nhập bằng mật khẩu đã bị tắt — dùng tài khoản Microsoft")
     user.last_login_at = dt.datetime.utcnow()
@@ -108,6 +118,10 @@ def oidc_callback(request: Request, code: Optional[str] = None, state: Optional[
     if user and (user.auth_source or "local") == "local" and user.external_id is None:
         # Never take over a local (password) account that happens to share the UPN.
         return _fail(f"Tên đăng nhập {upn} đang là tài khoản cục bộ — liên hệ quản trị để chuyển sang Entra ID.")
+    if user and user.external_id and user.external_id != oid:
+        # Same UPN, different directory object (e.g. a recycled name): do not hand over the old account (SEC-13).
+        logger.warning("Entra sign-in refused: UPN matches an account bound to another object id")
+        return _fail(f"Tên đăng nhập {upn} đã gắn với một tài khoản Entra khác — liên hệ quản trị.")
     if not user:
         user = User(username=upn, password_hash="!entra", auth_source="entra")
         db.add(user)
@@ -271,10 +285,15 @@ def delete_my_passkey(passkey_id: int, request: Request, response: Response, use
 @router.post("/reauth")
 def reauth_password(request: Request, response: Response, data: dict = Body(...), user: User = Depends(get_current_user),
                     db: Session = Depends(get_db)):
-    """Step-up with the password (accounts without a passkey yet)."""
+    """Step-up with the password (accounts without a passkey yet). Throttled like /login: a stolen
+    session cookie must not allow unlimited password guesses."""
+    ip = login_guard.client_ip(request)
+    login_guard.check(ip, user.username)
     if (user.auth_source or "local") != "local" or not get_settings().password_enabled_for(user.username) \
             or not verify_password(str(data.get("password") or ""), user.password_hash):
+        login_guard.failed(ip, user.username)
         raise HTTPException(401, "Mật khẩu không đúng.")
+    login_guard.succeeded(ip, user.username)
     _set_session(response, user)
     return {"ok": True}
 
@@ -296,8 +315,14 @@ def passkey_reauth_verify(request: Request, response: Response, data: dict = Bod
 
 
 @router.post("/logout")
-def logout(response: Response, vco_session: Optional[str] = Cookie(default=None)):
+def logout(response: Response, vco_session: Optional[str] = Cookie(default=None), db: Session = Depends(get_db)):
     response.delete_cookie(COOKIE_NAME, path="/")
+    # Revoke on the server too (SEC-11 / SEC2-04): a copied cookie stops working now, not at expiry.
+    # session_version is per account, so this signs the user out on every device.
+    user = session_user(db, vco_session) if vco_session else None
+    if user is not None:
+        user.session_version = (user.session_version or 0) + 1
+        db.commit()
     s = get_settings()
     out = {"ok": True}
     if s.entra_enabled() and vco_session:

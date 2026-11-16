@@ -34,6 +34,9 @@ def check_startup_secrets(settings) -> None:
         logger.critical("Từ chối khởi động: JWT_SECRET không an toàn — đặt chuỗi ngẫu nhiên dài "
                         "(openssl rand -hex 32). / Refusing to start: %s.", problem)
         raise RuntimeError(f"Unsafe JWT_SECRET: {problem}. Set a long random value (openssl rand -hex 32).")
+    if not settings.secure_cookies():
+        logger.warning("Cookie phiên không có cờ Secure (COOKIE_SECURE=false và PUBLIC_URL không phải https): "
+                       "chỉ chấp nhận khi chạy thử. / Session cookie is not Secure.")
     if not (settings.secrets_key or "").strip():
         logger.warning("Chưa đặt SECRETS_KEY: mật khẩu nguồn lưu trong DB đang mã hoá bằng khoá suy ra từ "
                        "JWT_SECRET. / SECRETS_KEY is not set; stored secrets use a key derived from JWT_SECRET.")
@@ -135,6 +138,11 @@ app.include_router(mcp_server.router)
 app.add_middleware(observability.TimingMiddleware)
 from .report_archive import ArchiveMiddleware  # noqa: E402
 app.add_middleware(ArchiveMiddleware)
+from .http_guard import BodyLimitMiddleware, SecurityHeadersMiddleware  # noqa: E402
+# Added last = outermost: oversize bodies are refused before any route reads them, and every
+# response (API, static, errors) carries the security headers.
+app.add_middleware(SecurityHeadersMiddleware, https=lambda: get_settings().secure_cookies())
+app.add_middleware(BodyLimitMiddleware, max_bytes=lambda: max(1, get_settings().max_request_mb) * 1024 * 1024)
 
 
 @app.get("/api/health")

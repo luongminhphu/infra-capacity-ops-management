@@ -163,6 +163,11 @@ class Settings(BaseSettings):
     # ---- Module Chi phí & Hợp đồng IT (spend) ----
     spend_files_dir: str = Field(default="/data/files")     # volume (PVC ico-files / compose ico_files)
     spend_max_upload_mb: int = Field(default=20)
+    # Any request body above this is refused with 413 before a route reads it (chunked uploads included).
+    # Keep it above SPEND_MAX_UPLOAD_MB.
+    max_request_mb: int = Field(default=32)
+    # Use X-Forwarded-For for the client IP in logs / audit only when a trusted proxy sets it.
+    trust_forwarded_for: bool = Field(default=False)
     # Entra app role values giving a spend role (checked at every Microsoft sign-in).
     entra_spend_viewer_roles: str = Field(default="ICO.Spend.Viewer")
     entra_spend_editor_roles: str = Field(default="ICO.Spend.Editor")
