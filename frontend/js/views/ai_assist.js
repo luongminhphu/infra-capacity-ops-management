@@ -124,7 +124,7 @@ async function renderArchiveView() {
   let d;
   try { d = await apiRequest(`/report-archive?${new URLSearchParams({ ...(archState.kind ? { kind: archState.kind } : {}), mine: archState.mine ? 'true' : 'false' })}`); }
   catch (err) { mount.innerHTML = `<p class="criteria-status error">${esc(err.message)}</p>`; return; }
-  const size = (b) => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+  const size = (b) => b >= 1048576 ? `${fmtNum(b / 1048576, 1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
   mount.innerHTML = `<section class="table-card">
     <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Kho báo cáo</div>
       <p class="panel-sub">Bản PDF đúng như lúc xuất. Bật “Lưu vào kho” ở <a href="#/docs/reports">Trung tâm báo cáo</a> để mỗi lần xuất được lưu một bản. Mỗi người giữ tối đa ${esc(d.maxPerUser)} bản, ${esc(d.retentionDays)} ngày.</p></div>

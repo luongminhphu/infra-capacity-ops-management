@@ -109,8 +109,6 @@ async function homeAiBrief(btn) {
 function reportAiOn() {
   return uiPref('reportAi', false) === true;
 }
-function reportAiParam(prefix = '&') { return reportAiOn() ? `${prefix}ai=1` : ''; }
-
 (function bindReportAiToggle() {
   const cb = $('#rptAi');
   if (!cb) return;

@@ -25,15 +25,6 @@ function toggleChartEmptyState(canvasId, hasData, emptyMessage) {
   note.classList.toggle('hidden', hasData);
 }
 
-function execKpiCard(label, value, sub, tone) {
-  return `
-    <article class="card exec-kpi">
-      <div class="exec-label">${esc(label)}</div>
-      <div class="exec-value ${tone || ''}">${value}</div>
-      <div class="exec-sub">${esc(sub || '')}</div>
-    </article>`;
-}
-
 function renderExecutiveKpis() {
   const clusters = buildClusterRows();
   const model = buildCapacityModel(appState.hosts, appState.vms);

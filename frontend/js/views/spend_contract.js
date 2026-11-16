@@ -165,7 +165,7 @@ async function ctOpenDetail(code, focus) {
         <div><b>v${esc(v.versionNo)}</b> · <span class="ct-party-tag">${esc(v.partyLabel)}</span>${v.isFinal ? ` ${spPill('ok', 'Final')}` : ''}</div>
         <div class="muted-sub sr-inline">${esc(v.uploadedBy)} · ${esc(spTime(v.uploadedAt))}</div>
         ${v.note ? `<div class="ct-tl-note">${esc(v.note)}</div>` : ''}
-        <div>${v.file && !v.file.purged ? `<a href="/api/spend/files/${encodeURIComponent(v.file.id)}" download>${esc(v.file.name)}</a> <span class="muted-sub sr-inline">${(v.file.sizeBytes / 1024).toFixed(0)} KB</span>`
+        <div>${v.file && !v.file.purged ? `<a href="/api/spend/files/${encodeURIComponent(v.file.id)}" download>${esc(v.file.name)}</a> <span class="muted-sub sr-inline">${fmtInt(v.file.sizeBytes / 1024)} KB</span>`
           : `<span class="muted-sub sr-inline">File đã xoá theo chính sách lưu trữ (còn giữ thông tin kiểm toán)</span>`}</div>
       </div></li>`).join('');
   const comparable = c.versions.filter(v => v.hasText).map(v => v.versionNo).sort((a, b) => a - b);

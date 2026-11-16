@@ -35,7 +35,7 @@ function licState() {
   return appState.licensing;
 }
 
-const licNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+const licNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d, minimumFractionDigits: d });
 const licMoney = (v, cur) => uiMoney(v, cur && cur !== 'mixed' ? cur : '', 0);
 const licPill = (status) => { const s = LIC_STATUS[status] || { cls: 'na', label: status || '—' }; return uiPill(s.cls, s.label); };
 const licRulePill = (status) => { const s = LIC_RULE_STATUS[status] || { cls: 'na', label: status }; return `<span class="pill ${s.cls}">${esc(s.label)}</span>`; };
@@ -376,7 +376,6 @@ function renderLicAssess() {
   const ruleWarn = [a.rules.windows_server, a.rules.vmware, a.rules.vmware_cpu_legacy].filter(Boolean).filter(r => r.status !== 'verified');
   const scp = a.scope || {};
   const scopeBanner = scp.partial ? `<div class="insight-box"><strong>Phạm vi mua đợt này:</strong> ${a.clusters.length} cluster (${esc(a.clusters.map(c => `${c.cluster} (${c.vcenterKey})`).join(', '))}). Chưa tính ${scp.excludedClusterKeys.length} cluster: ${esc(scp.excludedClusterKeys.map(licKeyLabel).join(', '))}.</div>` : '';
-  const ruleBanner = '' && ruleWarn.length ? `<div class="insight-box lic-warn-box"><strong>Rule chưa xác minh:</strong> ${ruleWarn.map(r => `${esc(r.name)} v${r.version}`).join('; ')}. Kết quả chỉ mang tính tham khảo cho tới khi rule được đối chiếu với tài liệu nguồn và ghi nhận người/ngày xác minh (mục Rule licensing bên dưới).</div>` : '';
 
   const wsCard = (opt, title) => {
     const c = opt.cost;

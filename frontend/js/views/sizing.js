@@ -129,7 +129,7 @@ function persistSizing() {
 }
 
 /* ---------- Formatting helpers ---------- */
-const szNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+const szNum = (v, d = 0) => (v === null || v === undefined || !isFinite(v)) ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d, minimumFractionDigits: d });
 const szGB = (gb) => (gb === null || gb === undefined || !isFinite(gb)) ? '—' : (gb >= 1024 ? `${szNum(gb / 1024, 1)} TB` : `${szNum(gb)} GB`);
 const szMoney = (v) => uiNumber(v, 3);
 const szOptNum = (v) => { const s = String(v ?? '').trim(); if (!s) return null; const n = cleanNum(s); return isFinite(n) && n > 0 ? n : null; };
@@ -339,7 +339,7 @@ function renderSizingProfiles() {
       p.diskGB = cleanNum(el.querySelector('.pDisk').value);
       p.unitPrice = szOptNum(el.querySelector('.pPrice').value);
       const typed = el.querySelector('.pName').value.trim();
-      p.name = typed || `${p.sockets}×${p.coresPerSocket}C / ${p.ramGB >= 1024 ? (p.ramGB / 1024).toLocaleString('en-US', { maximumFractionDigits: 1 }) + ' TB' : p.ramGB + ' GB'}`;
+      p.name = typed || `${p.sockets}×${p.coresPerSocket}C / ${p.ramGB >= 1024 ? (p.ramGB / 1024).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' TB' : p.ramGB + ' GB'}`;
       persistSizing();
     };
     el.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => { sync(); renderSizingProfiles(); }));

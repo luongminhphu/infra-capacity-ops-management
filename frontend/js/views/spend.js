@@ -14,7 +14,6 @@ const spState = {
 // The code prefix decides which detail opens; kept before the router rewrites the hash.
 const SP_LINK_RE = /[?&](code|vendor)=([A-Za-z0-9-]{1,30})/;
 let spPendingLink = (() => { const m = SP_LINK_RE.exec(location.hash || ''); return m ? { kind: m[1], value: m[2] } : null; })();
-let spPendingCode = null;   // kept for older callers
 function spOpenLink(link) {
   if (!link) return;
   const v = link.value;
@@ -329,7 +328,7 @@ async function spOpenDetail(code) {
     </tbody></table></div>` : '<p class="muted-sub">Chưa gắn thiết bị.</p>';
   const filesHtml = `<ul class="sp-files">${it.attachments.map(f => `<li>
       <a href="/api/spend/files/${encodeURIComponent(f.id)}" download>${esc(f.name)}</a>
-      <span class="muted-sub">${(f.sizeBytes / 1024).toFixed(0)} KB · ${esc(f.uploadedBy)} · ${esc(spTime(f.uploadedAt))}</span>
+      <span class="muted-sub">${fmtInt(f.sizeBytes / 1024)} KB · ${esc(f.uploadedBy)} · ${esc(spTime(f.uploadedAt))}</span>
       ${spCan('editor') ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" data-sp-detach="${esc(f.id)}">Xoá</button>` : ''}</li>`).join('') || '<li class="muted-sub">Chưa có file.</li>'}</ul>
     ${spCan('editor') ? '<label class="field"><span>Thêm file (PDF, .docx, .xlsx)</span><input type="file" id="spAttach" accept=".pdf,.docx,.xlsx"></label>' : ''}`;
   const body = `
@@ -675,7 +674,7 @@ async function spRenderAdmin() {
       <td>${esc(r.threshold)} ngày<span class="muted-sub">hết hạn ${spDate(r.endDate)}</span></td><td>${esc(r.channel)}</td>
       <td>${spPill(...(STATUS[r.status] || ['na', r.status]))}${r.error ? `<span class="muted-sub bk-wrap">${esc(r.error)}</span>` : ''}</td>
       <td>${['failed', 'unknown'].includes(r.status) ? `<button class="btn btn-ghost btn-sm" type="button" data-log-retry="${esc(r.id)}">Gửi lại</button>` : ''}</td></tr>`).join('');
-  const free = log.storage && log.storage.freeBytes !== null ? `${(log.storage.freeBytes / 1073741824).toFixed(1)} GB trống` : 'không đọc được';
+  const free = log.storage && log.storage.freeBytes !== null ? `${fmtNum(log.storage.freeBytes / 1073741824, 1)} GB trống` : 'không đọc được';
   const userRows = users.items.map(u => {
     const locked = u.isAdmin || u.roleSource === 'entra';
     return `<tr><td><b>${esc(u.displayName || u.username)}</b><span class="muted-sub">${esc(u.username)}</span></td><td>${u.authSource === 'entra' ? 'Entra ID' : 'Cục bộ'}</td>

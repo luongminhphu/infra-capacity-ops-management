@@ -25,13 +25,15 @@ const appState = {
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 const deepClone = (o) => JSON.parse(JSON.stringify(o));
 const cleanNum = (v) => { const n = parseFloat(String(v ?? '').replace(/,/g, '').trim()); return isFinite(n) ? n : 0; };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));   // ' too: safe in single-quoted attributes
-const fmtPct = (v) => isFinite(v) ? v.toFixed(1) + '%' : 'NA';
-const fmtNum = (v, d = 1) => isFinite(v) ? Number(v).toFixed(d) : '0.0';
-const fmtInt = (v) => isFinite(v) ? Math.round(v).toLocaleString('en-US') : '0';
+// Display formatting is vi-VN everywhere: 1.234,5 (decision Q7, audit FE-24). Numbers handed to charts,
+// CSS widths and CSV keep plain JS numbers / toFixed — only text shown to people goes through these.
+const fmtNum = (v, d = 1) => Number(isFinite(v) ? v : 0).toLocaleString('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtPct = (v) => isFinite(v) ? fmtNum(v, 1) + '%' : 'NA';
+const fmtInt = (v) => Math.round(isFinite(v) ? v : 0).toLocaleString('vi-VN');
+const fmtX = (v, d = 2) => isFinite(v) ? fmtNum(v, d) + 'x' : 'NA';   // overcommit ratio
 
 function formatReportTime(value) {
   if (!value) return '--';
@@ -302,14 +304,6 @@ function combineStatus(...statuses) {
   return { text:'NA', cls:'na' };
 }
 
-function getBarColor(pct) {
-  if (!isFinite(pct)) return 'var(--faint)';
-  if (pct > 100) return 'var(--status-crit)';
-  if (pct >= 80) return 'var(--status-bad)';
-  if (pct >= 50) return 'var(--status-warn)';
-  return 'var(--status-ok)';
-}
-
 /** Apply what-if deltas (host adds/removes, vm adds/resizes) to base hosts/vms for a target cluster. */
 function getEffectiveData(overrides) {
   overrides = overrides || {};
@@ -540,7 +534,7 @@ function buildComplianceFindings() {
         type: 'overcommit_cpu',
         typeLabel: 'Overcommit ratio vượt ngưỡng (CPU)',
         entity: c.name, cluster: c.name,
-        metric: `CPU overcommit ${cpuOc.toFixed(2)}x (ngưỡng ${fmtNum(P.cpuOvercommitMax,1)}x)`,
+        metric: `CPU overcommit ${fmtX(cpuOc)} (ngưỡng ${fmtNum(P.cpuOvercommitMax,1)}x)`,
         recommendation: 'Tỷ lệ vCPU:pCPU vượt ngưỡng khuyến nghị — cân nhắc bổ sung host hoặc giảm vCPU cấp phát cho VM trong cluster.'
       });
     }
@@ -551,7 +545,7 @@ function buildComplianceFindings() {
         type: 'overcommit_ram',
         typeLabel: 'Overcommit ratio vượt ngưỡng (RAM)',
         entity: c.name, cluster: c.name,
-        metric: `RAM overcommit ${ramOc.toFixed(2)}x (ngưỡng ${fmtNum(P.ramOvercommitMax,1)}x)`,
+        metric: `RAM overcommit ${fmtX(ramOc)} (ngưỡng ${fmtNum(P.ramOvercommitMax,1)}x)`,
         recommendation: 'Tỷ lệ vRAM:pRAM vượt ngưỡng khuyến nghị — cân nhắc bổ sung RAM vật lý hoặc giảm RAM cấp phát cho VM trong cluster.'
       });
     }
@@ -589,7 +583,7 @@ function buildComplianceFindings() {
         type: 'vm_overprovision',
         typeLabel: 'VM over-provision (vCPU)',
         entity: v.vm, cluster: v.cluster, vcenterKey: v.vcenterKey || '',
-        metric: `${fmtInt(v.vcpu)} vCPU cấp phát, CPU usage chỉ ${fmtPct(v.cpuUsagePctRaw)} (ngưỡng ${vmOverprovisionUsageThreshold.toFixed(1)}% theo overcommit ${fmtNum(P.cpuOvercommitMax,1)}x)`,
+        metric: `${fmtInt(v.vcpu)} vCPU cấp phát, CPU usage chỉ ${fmtPct(v.cpuUsagePctRaw)} (ngưỡng ${fmtPct(vmOverprovisionUsageThreshold)} theo overcommit ${fmtNum(P.cpuOvercommitMax,1)}x)`,
         recommendation: 'vCPU cấp phát dư nhiều so với usage thực tế và ngưỡng overcommit CPU cấu hình; cân nhắc resize giảm vCPU.'
       });
     }

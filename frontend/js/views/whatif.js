@@ -40,7 +40,7 @@ function deltaBadge(before, after, higherIsWorse = true) {
   const delta = after - before;
   if (!isFinite(delta) || Math.abs(delta) < 0.05) return `<span class="delta-badge delta-flat">±0.0</span>`;
   const worse = higherIsWorse ? delta > 0 : delta < 0;
-  return `<span class="delta-badge ${worse ? 'delta-up' : 'delta-down'}">${delta >= 0 ? '+' : ''}${delta.toFixed(1)}</span>`;
+  return `<span class="delta-badge ${worse ? 'delta-up' : 'delta-down'}">${delta >= 0 ? '+' : ''}${fmtNum(delta, 1)}</span>`;
 }
 
 function renderCompareBlock(label, before, after, unit, higherIsWorse = true) {
@@ -116,7 +116,7 @@ function renderSimHistory() {
     <div class="sim-log-item">
       <strong>${esc(h.title)}</strong> · ${esc(h.cluster)}<br>
       CPU ${fmtPct(h.before.cpuPct)} → ${fmtPct(h.after.cpuPct)} · RAM ${fmtPct(h.before.ramPct)} → ${fmtPct(h.after.ramPct)}
-      <div style="color:var(--faint);margin-top:.2rem;">${formatReportTime(h.time)}</div>
+      <div style="color:var(--text-tertiary);margin-top:.2rem;">${formatReportTime(h.time)}</div>
     </div>
   `).join('');
 }
