@@ -1,10 +1,13 @@
 # Làm mới giao diện ICO — Giai đoạn 1: rà soát và 3 hướng thiết kế
 
-> Trạng thái: **CHỜ CHỌN HƯỚNG.** Chưa sửa code app. Rà soát backend nằm riêng ở [`docs/audit-2026-11-15.md`](../../audit-2026-11-15.md).
+> Trạng thái: **đã chọn hướng C (16/11/2026), đã triển khai; vòng 2 kiểm chứng xong.** Tài liệu dưới đây giữ làm bối cảnh.
+> (Bản gốc vòng 1: “CHỜ CHỌN HƯỚNG”.) Rà soát backend nằm riêng ở [`docs/audit-2026-11-15.md`](../../audit-2026-11-15.md).
 >
 > Ràng buộc đã chốt (15/11): **giữ bảng màu và font của HSC Design System** (primitive màu HSC, Inter). Phần làm mới là
 > bố cục, mật độ, điều hướng, thành phần, trạng thái, biểu đồ, chuyển động, chữ trên giao diện — và **bậc màu HSC nào được
 > dùng cho vai trò nào**, để đạt WCAG 2.2 AA.
+> **Thay bằng quyết định 16/11/2026:** web dùng bộ nhận diện riêng “Phòng máy” (Be Vietnam Pro); HSC chỉ còn cho PDF / Excel
+> (MASTER §1, §9).
 
 Mở bản mẫu trực tiếp từ repo (cần thư mục `frontend/vendor/` để có icon): `docs/design/redesign/<hướng>/trang-chu.html`,
 `dieu-hanh.html`, `opex.html`. Nút mặt trời / mặt trăng góc trên đổi dark / light. Ảnh chụp sẵn ở `previews/`.
@@ -19,16 +22,36 @@ Mở bản mẫu trực tiếp từ repo (cần thư mục `frontend/vendor/` đ
 
 ## 1. Cách làm và nguồn
 
-- `ui-ux-pro-max`: skill trong môi trường này **chỉ có `SKILL.md`, không có `scripts/search.py` và `references/`**. Vì vậy
-  không chạy được `--design-system`, `--domain`, các dial `--variance / --motion / --density`. Mọi chấm điểm và quyết định
-  dưới đây **theo quy tắc mặc định của skill** (bảng 10 nhóm ưu tiên trong `SKILL.md`); giá trị dial ghi ở mỗi hướng là
-  *ý định thiết kế*, không phải kết quả tra cứu.
+### Từ vòng 2 (16/11/2026) — tra cứu thật bằng `ui-ux-pro-max`
+
+Skill đã cài đủ (`npx skills add nextlevelbuilder/ui-ux-pro-max-skill`, mã ở `.agents/skills/ui-ux-pro-max/`, phiên bản ghim
+trong `skills-lock.json`). Mọi quyết định màu / chữ / mật độ / thành phần đi qua `search.py`:
+
+```bash
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<2–5 từ khoá, một ý>" --domain <ux|color|style|typography|google-fonts|chart|product>
+```
+
+- **Một truy vấn, một ý, 2–5 từ khoá**; không đưa dữ liệu thật (tên host, số tiền) vào truy vấn; không dùng `--stack`.
+- **Kiểm độ phù hợp**: loại kết quả dành cho landing page / marketing / thương mại điện tử (ICO là app nội bộ dày dữ liệu).
+  Không khớp → thử lại **một lần** với từ khoá khác; vẫn không có → ghi “**không có kết quả phù hợp trong dữ liệu**” và nêu
+  nguồn thay thế (quyết định đã duyệt, WCAG, `modern-web-guidance`).
+- **Font** phải có subset `vietnamese` (`--domain google-fonts`); bộ không có (vd Fira Code) bị loại.
+- **Không** chạy `--persist --force` lên `design-system/ico/MASTER.md`. Kết quả tra cứu là *đề xuất*; MASTER chỉ đổi sau khi
+  chủ sản phẩm duyệt, và mỗi quy tắc ghi cột / dòng **Nguồn** (truy vấn + domain + tên mục, hoặc mã quyết định Q1–Q10).
+- Bằng chứng: [`validation-2026-11-16.md`](validation-2026-11-16.md) (truy vấn đã chạy, bảng Giữ / Chỉnh, độ tương phản đo được,
+  điểm vòng 2) và ảnh trước / sau từng PR ở [`previews/r2-*`](previews/).
+
+### Vòng 1 (15/11/2026) — đã thay thế
+
+- `ui-ux-pro-max` lúc đó **chỉ có `SKILL.md`, không có `scripts/search.py`**, nên chấm điểm và quyết định vòng 1 theo
+  *quy tắc mặc định* của skill. Các quyết định này đã được kiểm lại bằng tra cứu thật ở vòng 2 — giữ hoặc chỉnh theo
+  `validation-2026-11-16.md`; MASTER chỉ còn quy tắc có nguồn.
 - `dataviz`: bảng màu biểu đồ được kiểm bằng `scripts/validate_palette.js` của skill (kết quả thật, mục 4).
 - `modern-web-guidance`: đã tra `dialog`, `navigation-drawer`, `size-aware-styling`, `responsive-table`,
   `same-document-transitions`, `visually-stable-font-fallbacks`, `sortable-table` (áp dụng ở mục 5).
 - `frontend-design`: dùng để soát "dấu hiệu template" (nhãn ALL CAPS trên mọi khối, thẻ giống hệt nhau, số to + nhãn nhỏ
-  mặc định) — app hiện tại mắc cả ba.
-- Ảnh chụp app hiện tại ở chế độ DEMO (2 vCenter, 1 NetBackup), 1440 px và 820 px, dark và light. Số liệu trong bản mẫu
+  mặc định) — app vòng 1 mắc cả ba.
+- Ảnh chụp app ở chế độ DEMO (2 vCenter, 1 NetBackup), 1440 px và 820 px, dark và light. Số liệu trong bản mẫu
   lấy từ API DEMO; **khoản Opex là dữ liệu mẫu** vì DEMO chưa có Opex (ghi rõ trên từng trang).
 
 ## 2. Chấm điểm giao diện hiện tại (1 = kém, 5 = tốt)
