@@ -9,14 +9,14 @@
    ========================================================= */
 
 const SCENARIO_TEMPLATES = [
-  { id:'peakSeason', title:'Peak season', desc:'Tăng tải VM 30% (vCPU & RAM) để mô phỏng cao điểm kinh doanh.' },
-  { id:'drDrill', title:'DR drill', desc:'Bật toàn bộ VM đang tắt để mô phỏng kích hoạt DR site.' },
+  { id:'peakSeason', title:'Mùa cao điểm', desc:'Tăng tải VM 30% (vCPU & RAM) để mô phỏng cao điểm kinh doanh.' },
+  { id:'drDrill', title:'Diễn tập DR', desc:'Bật toàn bộ VM đang tắt để mô phỏng kích hoạt DR site.' },
   { id:'lostHost', title:'Mất 1 host', desc:'Loại bỏ host lớn nhất khỏi cluster để kiểm tra khả năng chịu lỗi N+1.' },
-  { id:'migration', title:'Migration', desc:'Di chuyển 30% VM từ cluster tải cao nhất sang cluster tải thấp nhất.' },
-  { id:'costOpt', title:'Cost optimization', desc:'Decommission toàn bộ VM idle/tắt lâu để giải phóng tài nguyên.' },
-  { id:'expansion', title:'Expansion plan', desc:'Thêm 1 host mới (trung bình cấu hình hiện có) vào cluster mục tiêu.' },
-  { id:'hostUpgrade', title:'Host upgrade', desc:'Nâng cấp tại chỗ toàn bộ host hiện hữu: RAM ×2, CPU cores giữ nguyên (so sánh với phương án mua host mới).' },
-  { id:'upgradeAndExpand', title:'Upgrade + expansion', desc:'Kết hợp: RAM ×2 cho host hiện hữu và thêm 1 host mới (cấu hình bằng host lớn nhất sau nâng cấp).' }
+  { id:'migration', title:'Di chuyển VM', desc:'Di chuyển 30% VM từ cluster tải cao nhất sang cluster tải thấp nhất.' },
+  { id:'costOpt', title:'Tối ưu chi phí', desc:'Decommission toàn bộ VM idle/tắt lâu để giải phóng tài nguyên.' },
+  { id:'expansion', title:'Kế hoạch mở rộng', desc:'Thêm 1 host mới (trung bình cấu hình hiện có) vào cluster mục tiêu.' },
+  { id:'hostUpgrade', title:'Nâng cấp host', desc:'Nâng cấp tại chỗ toàn bộ host hiện hữu: RAM ×2, CPU cores giữ nguyên (so sánh với phương án mua host mới).' },
+  { id:'upgradeAndExpand', title:'Nâng cấp + mở rộng', desc:'Kết hợp: RAM ×2 cho host hiện hữu và thêm 1 host mới (cấu hình bằng host lớn nhất sau nâng cấp).' }
 ];
 
 function currentWhatifCluster() {
@@ -147,7 +147,7 @@ function renderAddHostForm(cluster, area, opts) {
       `).join('')}
     </div>
     <div class="multi-row-add"><button class="btn btn-secondary btn-sm" id="btnAddHostRow" type="button">+ Thêm host</button></div>
-    ${opts.embedded ? '' : `<div class="sim-actions"><button class="btn btn-primary" id="btnRunAddHost" type="button">Chạy simulation (${rows.length} host)</button></div>`}
+    ${opts.embedded ? '' : `<div class="sim-actions"><button class="btn btn-primary" id="btnRunAddHost" type="button">Chạy mô phỏng (${rows.length} host)</button></div>`}
   `;
 
   const syncRowsFromDom = () => {
@@ -189,7 +189,7 @@ function renderAddHostForm(cluster, area, opts) {
     const extra = addHosts.length > 1
       ? `<p class="panel-sub" style="margin-top:.5rem;">Thêm ${addHosts.length} host mới: tổng +${fmtInt(totalCores)} cores, +${fmtNum(totalRam,0)} GB RAM.</p>`
       : '';
-    renderSimResult(cluster, before, after, extra, addHosts.length > 1 ? `Add Host (${addHosts.length} host)` : 'Add Host');
+    renderSimResult(cluster, before, after, extra, addHosts.length > 1 ? `Thêm host (${addHosts.length} host)` : 'Thêm host');
   };
 }
 
@@ -219,7 +219,7 @@ function renderAddVmForm(cluster, area) {
       `).join('')}
     </div>
     <div class="multi-row-add"><button class="btn btn-secondary btn-sm" id="btnAddVmRow" type="button">+ Thêm nhóm VM</button></div>
-    <div class="sim-actions"><button class="btn btn-primary" id="btnRunAddVm" type="button">Chạy simulation</button></div>
+    <div class="sim-actions"><button class="btn btn-primary" id="btnRunAddVm" type="button">Chạy mô phỏng</button></div>
   `;
 
   const syncRowsFromDom = () => {
@@ -267,7 +267,7 @@ function renderAddVmForm(cluster, area) {
     const totalVcpu = addVms.reduce((a,v)=>a+v.vcpu,0), totalRam = addVms.reduce((a,v)=>a+v.ramGB,0);
     const groupSummary = rows.map(r => `${Math.round(r.count)}× (${fmtNum(r.vcpu,0)} vCPU/${fmtNum(r.ramGB,0)}GB)`).join(', ');
     const extra = `<p class="panel-sub" style="margin-top:.5rem;">Thêm ${addVms.length} VM mới từ ${rows.length} nhóm [${esc(groupSummary)}], tổng +${fmtInt(totalVcpu)} vCPU, +${fmtNum(totalRam,0)} GB RAM.</p>`;
-    renderSimResult(cluster, before, after, extra, rows.length > 1 ? `Add VM (${rows.length} nhóm, ${addVms.length} VM)` : 'Add VM');
+    renderSimResult(cluster, before, after, extra, rows.length > 1 ? `Thêm VM (${rows.length} nhóm, ${addVms.length} VM)` : 'Thêm VM');
   };
 }
 
@@ -308,7 +308,7 @@ function buildUpgradeExtra(cluster, hosts, upgradeHosts, addHosts) {
   const n1 = modelWithOverrides(cluster, { upgradeHosts, addHosts, removeHostNames: biggest ? [biggest.host] : [] });
   const n1Ok = upgraded.length >= 2 && isFinite(n1.cpuPct) && isFinite(n1.ramPct) && n1.cpuPct <= 100 && n1.ramPct <= 100;
   const addCores = addHosts.reduce((a, h) => a + h.cores, 0), addRam = addHosts.reduce((a, h) => a + h.ramGB, 0);
-  const addRows = addHosts.map(h => `<tr><td><strong>${esc(h.host)}</strong> <span class="pill-mini" style="color:var(--ok)">mới</span></td>
+  const addRows = addHosts.map(h => `<tr><td><strong>${esc(h.host)}</strong> <span class="pill-mini" style="color:var(--status-ok)">mới</span></td>
       <td class="mono">— → <strong>${fmtInt(h.cores)}</strong></td><td class="mono">— → <strong>${fmtNum(h.ramGB, 0)}</strong> GB</td>
       <td class="mono">+${fmtInt(h.cores)}</td><td class="mono">+${fmtNum(h.ramGB, 0)} GB</td></tr>`).join('');
   const combinedLine = addHosts.length
@@ -334,7 +334,7 @@ function buildUpgradeExtra(cluster, hosts, upgradeHosts, addHosts) {
     </div>
     <p class="panel-sub" style="margin-top:.5rem;">${combinedLine}Nâng cấp <strong>${changed.length}/${hosts.length}</strong> host hiện hữu: <strong>${dCores >= 0 ? '+' : ''}${fmtInt(dCores)} cores</strong>, <strong>${dRam >= 0 ? '+' : ''}${fmtNum(dRam, 0)} GB RAM</strong>
       — tương đương ${fmtNum(eqCpu, 1)} host (CPU) / ${fmtNum(eqRam, 1)} host (RAM) so với host trung bình hiện có (${fmtInt(avgCores)} cores / ${fmtInt(avgRam)} GB).
-      N+1 sau thay đổi (mất ${biggest ? esc(biggest.host) : 'host lớn nhất'}): <strong style="color:${n1Ok ? 'var(--ok)' : 'var(--crit)'}">${n1Ok ? 'Đạt' : 'Không đạt'}</strong>
+      N+1 sau thay đổi (mất ${biggest ? esc(biggest.host) : 'host lớn nhất'}): <strong style="color:${n1Ok ? 'var(--status-ok)' : 'var(--status-crit)'}">${n1Ok ? 'Đạt' : 'Không đạt'}</strong>
       (CPU ${fmtPct(n1.cpuPct)} · RAM ${fmtPct(n1.ramPct)}). ${addHosts.length ? 'Host mới làm tăng số host nên cải thiện dự phòng N+1; phần nâng cấp tại chỗ chỉ tăng năng lực.' : 'Lưu ý: nâng cấp tại chỗ không tăng số host nên không cải thiện dự phòng N+1.'} Cần xác nhận slot DIMM / socket CPU còn trống và downtime bảo trì từng host.</p>`;
 }
 
@@ -375,7 +375,7 @@ function renderUpgradeHostForm(cluster, area, opts) {
         <tbody>${preview}</tbody>
       </table>
     </div>
-    ${opts.embedded ? '' : `<div class="sim-actions"><button class="btn btn-primary" id="btnRunUpgrade" type="button" ${u.selected.size ? '' : 'disabled'}>Chạy simulation (${u.selected.size} host)</button></div>`}
+    ${opts.embedded ? '' : `<div class="sim-actions"><button class="btn btn-primary" id="btnRunUpgrade" type="button" ${u.selected.size ? '' : 'disabled'}>Chạy mô phỏng (${u.selected.size} host)</button></div>`}
   `;
   const sync = () => {
     u.cpuMode = $('#upgCpuMode').value; u.cpuVal = $('#upgCpuVal').value;
@@ -394,7 +394,7 @@ function renderUpgradeHostForm(cluster, area, opts) {
     if (!changed.length) { showValidationBanner([], ['Chưa có thay đổi cấu hình nào: chọn "Đặt thành", "Cộng thêm" hoặc "Tăng theo %" cho CPU hoặc RAM.']); return; }
     const before = baseModelForCluster(cluster);
     const after = modelWithOverrides(cluster, { upgradeHosts });
-    renderSimResult(cluster, before, after, buildUpgradeExtra(cluster, hosts, upgradeHosts), `Upgrade Host (${changed.length} host)`);
+    renderSimResult(cluster, before, after, buildUpgradeExtra(cluster, hosts, upgradeHosts), `Nâng cấp host (${changed.length} host)`);
   };
 }
 
@@ -418,7 +418,7 @@ function renderUpgradeAndAddForm(cluster, area) {
     <div id="combUpgradeBlock"></div>
     <h5 class="sim-step-title">2 · Bổ sung host mới</h5>
     <div id="combAddBlock"></div>
-    <div class="sim-actions"><button class="btn btn-primary" id="btnRunCombined" type="button">Chạy simulation kết hợp</button></div>
+    <div class="sim-actions"><button class="btn btn-primary" id="btnRunCombined" type="button">Chạy mô phỏng kết hợp</button></div>
   `;
   renderUpgradeHostForm(cluster, $('#combUpgradeBlock'), { embedded: true });
   renderAddHostForm(cluster, $('#combAddBlock'), { embedded: true });
@@ -433,7 +433,7 @@ function renderUpgradeAndAddForm(cluster, area) {
     if (!changed.length && !addHosts.length) { showValidationBanner([], ['Chưa có thay đổi nào: đặt quy tắc nâng cấp cho host đang tick hoặc nhập ít nhất một host mới.']); return; }
     const before = baseModelForCluster(cluster);
     const after = modelWithOverrides(cluster, { upgradeHosts, addHosts });
-    const title = `Upgrade + Add Host (nâng cấp ${changed.length} · thêm ${addHosts.length})`;
+    const title = `Nâng cấp + thêm host (nâng cấp ${changed.length} · thêm ${addHosts.length})`;
     renderSimResult(cluster, before, after, buildUpgradeExtra(cluster, hosts, upgradeHosts, addHosts), title);
   };
 }
@@ -463,14 +463,14 @@ function renderSimForm() {
         <div class="field"><label>vCPU mới</label><input id="simResizeVcpu" value="8"></div>
         <div class="field"><label>RAM GB mới</label><input id="simResizeRam" value="32"></div>
       </div>
-      <div class="sim-actions"><button class="btn btn-primary" id="btnRunResize" type="button">Chạy simulation</button></div>
+      <div class="sim-actions"><button class="btn btn-primary" id="btnRunResize" type="button">Chạy mô phỏng</button></div>
     `;
     $('#btnRunResize').onclick = () => {
       const name = $('#simResizeVmName').value;
       if (!name) return;
       const before = baseModelForCluster(cluster);
       const after = modelWithOverrides(cluster, { resizeVm: { cluster, name, vcpu: cleanNum($('#simResizeVcpu').value), ramGB: cleanNum($('#simResizeRam').value) } });
-      renderSimResult(cluster, before, after, '', `Resize VM — ${esc(name)}`);
+      renderSimResult(cluster, before, after, '', `Đổi cấu hình VM — ${esc(name)}`);
     };
   } else if (tab === 'decommission') {
     const idleVms = appState.vms.filter(v => v.cluster === cluster && ((v.isPoweredOn && isFinite(v.lastActivityDays) && v.lastActivityDays >= appState.policy.idleDays) || (!v.isPoweredOn && isFinite(v.powerOffDays) && v.powerOffDays >= appState.policy.idleDays)));
@@ -496,20 +496,20 @@ function runScenarioTemplate(id) {
     const vms = appState.vms.filter(v => v.cluster === cluster && v.isPoweredOn);
     const addVms = vms.map(v => ({ ...v, vm: 'PEAK-' + v.vm, vcpu: Math.round(v.vcpu * 0.3), ramGB: v.ramGB * 0.3, diskProvGB: 0, diskUsedGB: 0 }));
     after = modelWithOverrides(cluster, { addVms });
-    title = 'Scenario: Peak season (+30% tải)';
+    title = 'Kịch bản: Mùa cao điểm (+30% tải)';
   } else if (id === 'drDrill') {
     const offVms = appState.vms.filter(v => v.cluster === cluster && !v.isPoweredOn);
     const eff = getEffectiveData({});
     eff.vms = eff.vms.map(v => (v.cluster === cluster && !v.isPoweredOn) ? { ...v, isPoweredOn: true, powerState: 'Powered On' } : v);
     after = buildCapacityModel(eff.hosts.filter(h => h.cluster === cluster), eff.vms.filter(v => v.cluster === cluster));
-    title = 'Scenario: DR drill (bật toàn bộ VM tắt)';
+    title = 'Kịch bản: Diễn tập DR (bật toàn bộ VM tắt)';
     extra = `<p class="panel-sub" style="margin-top:.5rem;">Kích hoạt ${offVms.length} VM đang tắt.</p>`;
   } else if (id === 'lostHost') {
     const hosts = appState.hosts.filter(h => h.cluster === cluster);
     if (!hosts.length) return;
     const biggest = [...hosts].sort((a,b) => b.cores - a.cores)[0];
     after = modelWithOverrides(cluster, { removeHostNames: [biggest.host] });
-    title = `Scenario: Mất 1 host (${esc(biggest.host)})`;
+    title = `Kịch bản: Mất 1 host (${esc(biggest.host)})`;
     extra = `<p class="panel-sub" style="margin-top:.5rem;">Kiểm tra N+1: cluster có chịu được mất host lớn nhất (${fmtInt(biggest.cores)} cores, ${fmtNum(biggest.ramGB,0)} GB) không.</p>`;
   } else if (id === 'migration') {
     const rows = buildClusterRows();
@@ -524,7 +524,7 @@ function runScenarioTemplate(id) {
     const targetCluster = cluster === highest.name ? highest.name : (cluster === lowest.name ? lowest.name : highest.name);
     after = buildCapacityModel(eff.hosts.filter(h => h.cluster === targetCluster), eff.vms.filter(v => v.cluster === targetCluster));
     const beforeTarget = baseModelForCluster(targetCluster);
-    title = `Scenario: Migration ${esc(highest.name)} → ${esc(lowest.name)}`;
+    title = `Kịch bản: di chuyển VM ${esc(highest.name)} → ${esc(lowest.name)}`;
     extra = `<p class="panel-sub" style="margin-top:.5rem;">Di chuyển ${moveCount} VM từ cluster tải cao nhất (${esc(highest.name)}) sang cluster tải thấp nhất (${esc(lowest.name)}). Kết quả hiển thị cho cluster ${esc(targetCluster)}.</p>`;
     renderSimResult(targetCluster, beforeTarget, after, extra, title);
     return;
@@ -532,21 +532,21 @@ function runScenarioTemplate(id) {
     const P = appState.policy;
     const idleVms = appState.vms.filter(v => v.cluster === cluster && ((v.isPoweredOn && isFinite(v.lastActivityDays) && v.lastActivityDays >= P.idleDays) || (!v.isPoweredOn && isFinite(v.powerOffDays) && v.powerOffDays >= P.idleDays)));
     after = modelWithOverrides(cluster, { removeVmNames: idleVms.map(v => v.vm) });
-    title = 'Scenario: Cost optimization (decommission idle/off)';
+    title = 'Kịch bản: Tối ưu chi phí (decommission idle/off)';
     extra = `<p class="panel-sub" style="margin-top:.5rem;">Loại bỏ ${idleVms.length} VM idle/tắt lâu, giải phóng ${fmtNum(idleVms.reduce((a,v)=>a+v.diskProvGB,0),0)} GB storage.</p>`;
   } else if (id === 'expansion') {
     const hosts = appState.hosts.filter(h => h.cluster === cluster);
     const avgCores = hosts.length ? hosts.reduce((a,h)=>a+h.cores,0)/hosts.length : 32;
     const avgRam = hosts.length ? hosts.reduce((a,h)=>a+h.ramGB,0)/hosts.length : 256;
     after = modelWithOverrides(cluster, { addHosts: [{ cluster, host: 'EXPANSION-HOST', cores: Math.round(avgCores), ramGB: Math.round(avgRam) }] });
-    title = 'Scenario: Expansion plan (+1 host trung bình)';
+    title = 'Kịch bản: Kế hoạch mở rộng (+1 host trung bình)';
     extra = `<p class="panel-sub" style="margin-top:.5rem;">Host mới: ${fmtInt(avgCores)} cores, ${fmtInt(avgRam)} GB RAM (trung bình hosts hiện có).</p>`;
   } else if (id === 'hostUpgrade') {
     const hosts = appState.hosts.filter(h => h.cluster === cluster);
     if (!hosts.length) return;
     const upgradeHosts = hosts.map(h => ({ cluster, host: h.host, cores: h.cores, ramGB: h.ramGB * 2 }));
     after = modelWithOverrides(cluster, { upgradeHosts });
-    title = 'Scenario: Host upgrade (RAM ×2 toàn bộ host)';
+    title = 'Kịch bản: Nâng cấp host (RAM ×2 toàn bộ host)';
     extra = buildUpgradeExtra(cluster, hosts, upgradeHosts);
   } else if (id === 'upgradeAndExpand') {
     const hosts = appState.hosts.filter(h => h.cluster === cluster);
@@ -555,7 +555,7 @@ function runScenarioTemplate(id) {
     const maxCores = Math.max(...hosts.map(h => h.cores)), maxRam = Math.max(...upgradeHosts.map(h => h.ramGB));
     const addHosts = [{ cluster, host: 'EXPANSION-HOST', cores: maxCores, ramGB: maxRam }];
     after = modelWithOverrides(cluster, { upgradeHosts, addHosts });
-    title = 'Scenario: Upgrade + expansion (RAM ×2 + 1 host mới)';
+    title = 'Kịch bản: Nâng cấp + mở rộng (RAM ×2 + 1 host mới)';
     extra = buildUpgradeExtra(cluster, hosts, upgradeHosts, addHosts);
   }
 

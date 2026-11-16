@@ -22,7 +22,7 @@ const PAGES = [
     { id: 'dashboard', view: 'dashboard', icon: 'layout-dashboard', label: 'Capacity', title: 'Capacity',
       desc: 'Tổng / đã dùng / còn dư CPU, RAM, Storage và tỷ lệ overcommit theo cluster, host, datastore.', scope: ['vcenter', 'cluster', 'host', 'footprint'] },
     { id: 'compliance', view: 'compliance', icon: 'shield-alert', label: 'Compliance', title: 'Compliance',
-      desc: 'Findings theo ngưỡng đã cấu hình: host CPU/RAM, overcommit cluster, VM idle, tắt lâu, over-provision.', scope: ['vcenter', 'cluster', 'host', 'footprint'] },
+      desc: 'Phát hiện theo ngưỡng đã cấu hình: host CPU/RAM, overcommit cluster, VM idle, tắt lâu, over-provision.', scope: ['vcenter', 'cluster', 'host', 'footprint'] },
     { id: 'history', view: 'history', icon: 'trending-up', label: 'Xu hướng & biến động', title: 'Xu hướng & biến động',
       desc: 'Biến động CPU/RAM so với ngưỡng overcommit giữa các snapshot và danh sách VM thêm / bớt / đổi cấu hình.', scope: ['vcenter', 'cluster', 'host'] },
     { id: 'inventory', view: 'inventory', icon: 'server', label: 'Host & VM', title: 'Host & VM',

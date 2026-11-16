@@ -24,18 +24,18 @@ function renderCapacityKpis() {
 
   const cards = [
     {
-      label: 'CPU — Total / Used / Free', value: `${fmtInt(model.usedVcpu)} / ${fmtInt(model.totalLogicalCores)} <span class="mono" style="font-size:.6em;color:var(--muted)">pCPU logic</span>`,
-      sub: `Free: ${fmtInt(model.freeLogicalCores)} pCPU (${fmtInt(model.totalCores)} core vật lý × HT${fmtNum(model.htFactor,0)}) · Overcommit ${isFinite(model.cpuOvercommit) ? model.cpuOvercommit.toFixed(2)+'x' : 'NA'}`,
+      label: 'CPU — Tổng / Đã dùng / Còn trống', value: `${fmtInt(model.usedVcpu)} / ${fmtInt(model.totalLogicalCores)} <span class="mono" style="font-size:.6em;color:var(--muted)">pCPU logic</span>`,
+      sub: `Còn trống: ${fmtInt(model.freeLogicalCores)} pCPU (${fmtInt(model.totalCores)} core vật lý × HT${fmtNum(model.htFactor,0)}) · Overcommit ${isFinite(model.cpuOvercommit) ? model.cpuOvercommit.toFixed(2)+'x' : 'NA'}`,
       pct: model.cpuPct, status: cpuStatus
     },
     {
-      label: 'RAM — Total / Used / Free', value: `${fmtNum(model.usedRamGB,0)} / ${fmtNum(model.totalRamGB,0)} <span class="mono" style="font-size:.6em;color:var(--muted)">GB</span>`,
-      sub: `Free: ${fmtNum(model.freeRamGB,0)} GB · Overcommit ${isFinite(model.ramOvercommit) ? model.ramOvercommit.toFixed(2)+'x' : 'NA'}`,
+      label: 'RAM — Tổng / Đã dùng / Còn trống', value: `${fmtNum(model.usedRamGB,0)} / ${fmtNum(model.totalRamGB,0)} <span class="mono" style="font-size:.6em;color:var(--muted)">GB</span>`,
+      sub: `Còn trống: ${fmtNum(model.freeRamGB,0)} GB · Overcommit ${isFinite(model.ramOvercommit) ? model.ramOvercommit.toFixed(2)+'x' : 'NA'}`,
       pct: model.ramPct, status: ramStatus
     },
     appState.policy.includeStorage ? {
-      label: 'Storage — Provisioned / Used / Free', value: `${fmtNum(model.usedStorageGB,0)} / ${fmtNum(model.provStorageGB,0)} <span class="mono" style="font-size:.6em;color:var(--muted)">GB</span>`,
-      sub: `Free: ${fmtNum(model.freeStorageGB,0)} GB`,
+      label: 'Storage — Cấp phát / Đã dùng / Còn trống', value: `${fmtNum(model.usedStorageGB,0)} / ${fmtNum(model.provStorageGB,0)} <span class="mono" style="font-size:.6em;color:var(--muted)">GB</span>`,
+      sub: `Còn trống: ${fmtNum(model.freeStorageGB,0)} GB`,
       pct: model.storagePct, status: dsStatus
     } : {
       label: 'Storage — không đánh giá', value: 'Quản lý ở tầng SAN dùng chung',

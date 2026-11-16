@@ -9,7 +9,9 @@
 
 1. **Hai bộ nhận diện, tách bạch** (quyết định 16/11/2026):
    - **App web:** bảng màu và font riêng của ICO — *“Phòng máy”* (graphite ánh xanh lạnh, tín hiệu cyan; Be Vietnam Pro
-     + JetBrains Mono cho mã máy), chọn theo quy tắc mặc định của `ui-ux-pro-max`.
+     + JetBrains Mono cho mã máy). Kiểm chứng ngày 16/11/2026 bằng dữ liệu tra cứu của `ui-ux-pro-max`
+     (`docs/design/redesign/validation-2026-11-16.md`): phong cách Swiss + dày dữ liệu, nền tối trung tính, màu trạng thái
+     lục / hổ phách / đỏ và font tiếng Việt đều khớp. Nguồn từng quyết định ghi ở cột **Nguồn** bên dưới.
    - **Báo cáo PDF / Excel:** **HSC Design System** (màu HSC, Inter) — xem §9. Không chép màu web sang báo cáo và ngược lại.
    Cả hai đều phải đạt WCAG 2.2 AA.
 2. **Kết luận trước, bằng chứng sau.** Trang tổng quan và báo cáo mở bằng một câu kết luận + trạng thái.
@@ -23,21 +25,29 @@
 Token: `frontend/css/styles.css` (`:root` = dark mặc định, `[data-theme="light"]`). Tên token cũ của HSC (`--blue-a12`,
 `--sb60`…) chỉ còn là alias trỏ sang màu mới — không dùng cho code mới.
 
-| Vai trò | Token | Dark | Light |
-|---|---|---|---|
-| Nền / bề mặt / bề mặt 2 / nổi | `--bg-app` `--bg-surface` `--bg-surface-2` `--bg-elevated` | `#0E1319` `#151B23` `#1B2330` `#232D3B` | `#F5F7F9` `#FFFFFF` `#EEF2F5` `#E3E9EF` |
-| Chữ chính | `--text-primary` | `#E8EEF5` (14,8) | `#121A24` (17,5) |
-| Chữ phụ | `--text-secondary` | `#A9B6C6` (8,4) | `#3E4C5E` (8,75) |
-| Chữ mờ (thấp nhất cho chữ) | `--text-tertiary` | `#8C9AAC` (≥ 4,86 mọi bề mặt) | `#566579` (≥ 4,86) |
-| Link / thương hiệu (chữ) | `--text-brand` | `#5CD0E4` (9,56) | `#0E6A82` (6,17) |
-| Nhấn (không phải chữ) | `--brand` | cyan `#1FA3BA` | `#0E7490` |
-| Nút chính | `--btn-primary-bg` | `#0E7490`, chữ trắng 5,36 | `#0E6A82`, chữ trắng 6,17 |
+| Vai trò | Token | Dark | Light | Nguồn |
+|---|---|---|---|---|
+| Nền / bề mặt / bề mặt 2 / nổi | `--bg-app` `--bg-surface` `--bg-surface-2` `--bg-elevated` | `#0E1319` `#151B23` `#1B2330` `#232D3B` | `#F5F7F9` `#FFFFFF` `#EEF2F5` `#E3E9EF` | `--domain color` “dark operations dashboard”, `--domain style` “data-dense dashboard” (Q1, Q7, Q6) |
+| Chữ chính | `--text-primary` | `#E8EEF5` (14,8) | `#121A24` (17,5) | `--domain color` (foreground); đo 14,8 / 17,5 |
+| Chữ phụ | `--text-secondary` | `#A9B6C6` (8,4) | `#3E4C5E` (8,75) | đo ≥ 6,75 mọi bề mặt |
+| Chữ mờ (thấp nhất cho chữ) | `--text-tertiary` | `#8C9AAC` (≥ 4,86 mọi bề mặt) | `#566579` (≥ 4,86) | `--domain color` muted `#94A3B8`; đo ≥ 4,86 |
+| Link / thương hiệu (chữ) | `--text-brand` | `#5CD0E4` (9,56) | `#0E6A82` (6,17) | giữ cyan, không dùng nhấn xanh lá của Q1 (trùng màu AN TOÀN) |
+| Nhấn (không phải chữ) | `--brand` | cyan `#1FA3BA` | `#0E7490` | như trên |
+| Nút chính | `--btn-primary-bg` | `#0E7490`, chữ trắng 5,36 | `#0E6A82`, chữ trắng 6,17 | đo chữ trắng 5,36 / 6,17 |
 
 Tỉ lệ trong ngoặc đo trên `--bg-surface`.
+
+| Thêm từ vòng 2 (duyệt Q8, 16/11/2026) | Token | Dark | Light | Nguồn |
+|---|---|---|---|---|
+| Viền ô nhập (control) | `--field-border` | `#66768B` (≥ 3,00 mọi bề mặt) | `#768396` (≥ 3,15) | WCAG 1.4.11; `references/pro-rules.md` “Icon Contrast”; đo 66 / 72 màn hình < 3 : 1 trước khi sửa |
+| Chữ màu VƯỢT NGƯỠNG | `--status-crit` (`--rd5`) | `#F26B75` (≥ 4,73) | `#B42330` | `--domain ux` “dark mode contrast”; trước đó `#EF4E5A` = 3,91 trên bề mặt nổi |
 
 ## 3. Trạng thái (4 mức + NA)
 
 Nhãn và class lấy từ `getStatusForPct` / `combineStatus` (core.js) và `derived_status` (Chi phí). Không tự đặt nhãn.
+Token: `--status-ok` / `--status-warn` / `--status-bad` / `--status-crit` (+ `-bg`, `--status-crit-solid`, `--status-crit-ink`)
+— đổi tên ngày 16/11 (Q9); tên cũ `--ok` … `--status-success` / `--tone-bad` đã bỏ.
+Nguồn: `--domain product` “Status Page” (status green + incident red + maintenance amber), `--domain ux` “Color Only”.
 
 | Nhãn | class | Biểu tượng (lucide) | Hình thức | Màu glyph web dark / light |
 |---|---|---|---|---|
@@ -61,13 +71,21 @@ Nhãn và class lấy từ `getStatusForPct` / `combineStatus` (core.js) và `de
   `font-size-adjust: from-font` để không giật chữ khi đổi font.
 - **PDF:** Inter từ gói Debian `fonts-inter` (HSC), dự phòng Noto Sans; mã đối soát DejaVu Sans Mono. **Excel:** Calibri.
 - Thang web: 12 · 13 · **14 (thân)** · 16 · 18 · 20 · 22 · 28. Không dùng < 12 px. Số dùng `tabular-nums`.
+  Nguồn: `--domain style` “data-dense dashboard” (chữ 12–14 px), `--domain ux` “Line Height” 1,5–1,75 (thân 14 / 22 = 1,57).
+- **Ô nhập trên điện thoại (< 640 px): 16 px** để iOS không tự phóng to (quick-reference `readable-font-size`; Q8).
+- Font: `--domain typography` “vietnamese readable” → *Vietnamese Friendly* (Be Vietnam Pro); `--domain google-fonts`: Be Vietnam Pro,
+  JetBrains Mono có subset `vietnamese`. Bộ *Dashboard Data* (Fira Code + Fira Sans) bị loại vì Fira Code không có subset tiếng Việt.
 - Không viết hoa toàn bộ cho nhãn nhóm / tiêu đề bảng (ALL CAPS chỉ cho nhãn trạng thái).
 
 ## 5. Khoảng cách, bo góc, đổ bóng, chuyển động
 
 - Khoảng cách HSC: 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 (`--space-1…8`).
 - Bo góc web: 6 control · 10 khối · 14 lớp nổi (dialog, popover) · pill cho chip lọc / chế độ xem.
-- Control: 36 px mặc định, 44 px cho mục chạm chính trên < 1024 px; không dưới 28 px.
+- Control: 36 px mặc định; **< 1024 px: nút, ô nhập, tab, chế độ xem, dòng danh sách, mục sidebar ≥ 44 px** (`--control-h-lg`);
+  không dưới 24 px ở mọi nơi (WCAG 2.5.8). Nguồn: `--domain ux` “Touch Target Size”; Q8.
+- Icon (lucide): 3 cỡ token `--icon-sm` 14 · `--icon-md` 16 · `--icon-lg` 20 (pro-rules “Consistent Icon Sizing”; Q8).
+- Chuyển động: `--domain ux` “Duration Timing” — token chung, không coi 150–300 ms là chuẩn cứng; GSAP / scroll reveal
+  (gợi ý của `--design-system`) bị loại: app nội bộ, chỉ chuyển động khi thao tác.
 - Chuyển động: 120 / 160 / 200 ms, vào `cubic-bezier(.2,0,0,1)`, ra nhanh hơn. Chỉ chuyển động khi người dùng
   thao tác (mở chi tiết, đổi theme). Luôn tôn trọng `prefers-reduced-motion`.
 
@@ -101,6 +119,11 @@ Nhãn và class lấy từ `getStatusForPct` / `combineStatus` (core.js) và `de
 - **Không dùng màu trạng thái cho series.** Màu trạng thái chỉ khi dữ liệu *là* trạng thái (thành công / lỗi).
 - Một trục Y. Ngưỡng vẽ bằng vạch + dải nền (`--chart-band-warn` 80–100 %, `--chart-band-bad` > 100 %).
 - Nhãn trực tiếp trên đường khi ≤ 4 series; luôn có chú giải khi ≥ 2 series; luôn có “Xem bảng”.
+- **Biểu đồ đường ≥ 2 series: khác màu và khác kiểu nét + hình điểm** (liền / gạch / chấm). Plugin `icoSeriesStyle` (ui.js)
+  tự gán; đường ngưỡng tự đặt `borderDash` riêng. Nguồn: `--domain chart` “Trend Over Time” (Q8).
+- **“Xem bảng”**: plugin `icoDataTable` (ui.js) dựng bảng thu gọn dưới mọi biểu đồ từ chính dữ liệu biểu đồ. Nguồn:
+  `--domain chart` — mọi loại có *A11y Fallback* = bảng dữ liệu (Q8).
+- KPI so với ngưỡng: bullet bar (`--domain chart` “KPI target progress” → bullet chart khi ≥ 3 KPI).
 - `chartPalette()` (ui.js) là cửa duy nhất lấy màu biểu đồ trong JS; PDF dùng `COLORS["series1…3"]`.
 
 ## 9. PDF / Excel — giữ HSC Design System
@@ -120,6 +143,8 @@ suốt luồng. Lỗi nói chuyện gì xảy ra và cách sửa, không xin l�
 - [ ] Không mã màu / px mới ngoài token (`:root`, `COLORS`, `excel_style.py`); không chép màu web vào báo cáo.
 - [ ] Dark + light, ≥ 1440 px và < 1024 px; không cuộn ngang trang.
 - [ ] Chữ ≥ 4,5 : 1, glyph / viền điều khiển ≥ 3 : 1; focus nhìn thấy; dùng được hoàn toàn bằng bàn phím.
+- [ ] Quyết định mới về màu / font / mật độ: tra `ui-ux-pro-max` (`python3 .claude/skills/ui-ux-pro-max/scripts/search.py`),
+      kiểm độ phù hợp (loại mẫu landing / marketing), font phải có subset `vietnamese`, ghi nguồn vào bảng tương ứng.
 - [ ] `prefers-reduced-motion` tôn trọng; không chữ < 12 px.
 - [ ] Mọi ô nhập / chọn có nhãn (`<label>` hoặc `aria-label`; `uiAutoLabel` chỉ là lưới an toàn); vùng bấm ≥ 24 × 24 px.
 - [ ] Không cắt chữ bằng “…” ở dòng danh sách — cho xuống dòng; bảng rộng nằm trong vùng cuộn riêng; tiêu đề không nhảy bậc.

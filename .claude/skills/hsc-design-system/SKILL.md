@@ -12,7 +12,7 @@ Bối cảnh, chấm điểm và bản mẫu: `docs/design/redesign/`.
 ## Tóm tắt phải nhớ
 
 - **Web** dùng bảng màu “Phòng máy” + Be Vietnam Pro qua token ngữ nghĩa trong `frontend/css/styles.css`
-  (`--bg-*`, `--text-*`, `--brand`, `--ok/--warn/--bad/--crit`, `--chart-s*`). Tên HSC cũ (`--sb60`, `--blue-a12`…) chỉ là alias.
+  (`--bg-*`, `--text-*`, `--brand`, `--status-ok/-warn/-bad/-crit`, `--chart-s*`). Tên HSC cũ (`--sb60`, `--blue-a12`…) chỉ là alias.
   **PDF / Excel** giữ HSC (`COLORS` trong `report_pdf.py`, `excel_style.py`, Inter). Không hard-code mã màu trong JS / HTML.
 - **AA bắt buộc**: chữ phụ / chữ mờ dùng `--text-secondary` / `--text-tertiary`. Nút chính dùng `--btn-primary-bg`.
 - **Trạng thái**: chỉ nhãn từ `getStatusForPct` / `combineStatus` / `derived_status`; hiển thị bằng `uiPill(tone, label)`

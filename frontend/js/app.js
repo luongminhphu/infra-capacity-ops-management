@@ -516,7 +516,7 @@ function updatePdfFindingFilterSummary() {
   const checkedCount = all.filter(cb => cb.checked).length;
   const summary = $('#pdfFindingFilterSummary');
   if (!summary) return;
-  summary.textContent = checkedCount === all.length ? 'Tất cả loại finding' : `Đang chọn ${checkedCount}/${all.length} loại`;
+  summary.textContent = checkedCount === all.length ? 'Tất cả loại phát hiện' : `Đang chọn ${checkedCount}/${all.length} loại`;
   summary.classList.toggle('is-narrowed', checkedCount !== all.length);
   const allCb = $('#pdfFindingTypeAll');
   if (allCb) allCb.checked = checkedCount === all.length;
