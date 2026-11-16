@@ -428,12 +428,13 @@ function renderBackupBody() {
     body.innerHTML = `<section class="table-card"><div class="empty-state">Chưa có máy chủ backup. Thêm máy chủ ở <a href="#/settings/sources" data-nav-link="set-sources">Cài đặt → Kết nối nguồn dữ liệu</a> (bật DEMO để chạy thử).</div></section>`;
     return;
   }
-  const html = { overview: bkOverview, clients: bkClients, coverage: bkCoverage, storage: bkStorage, schedule: bkSchedule }[st.sub];
+  const html = { overview: bkOverview, clients: bkClients, coverage: bkCoverage, storage: bkStorage, schedule: bkSchedule, size: bkSizePage }[st.sub];
   body.innerHTML = st.sub === 'jobs' ? bkJobs() : html(s);
   body.querySelectorAll('input[data-tri="some"]').forEach(i => { i.indeterminate = true; });
   refreshIcons();
   if (st.sub === 'overview') { bkChartDaily(s); if (typeof aiGate === 'function') aiGate(body); }
   if (st.sub === 'storage') bkChartStorage(s);
+  if (st.sub === 'size') bkSizeBind(s);
   if (st.sub === 'jobs' && !st.jobs) bkLoadJobs();
 }
 

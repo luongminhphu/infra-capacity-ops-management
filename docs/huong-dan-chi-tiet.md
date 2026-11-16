@@ -21,7 +21,7 @@ Menu chia theo **công việc**, không theo nguồn dữ liệu: **Vận hành*
 |---|---|---|
 | — | **Trang chủ** | Hôm nay (hộp việc chung) · Điều hành (tóm tắt, KPI, xu hướng, nhận định & danh mục quyết định) |
 | Vận hành | **Capacity & Compliance** | Capacity · Compliance · Xu hướng & biến động |
-| | **Backup** | Tổng quan · Client & RPO · Job · Lịch & tuân thủ · Độ phủ VM · Storage & policy |
+| | **Backup** | Tổng quan · Client & RPO · Job · Lịch & tuân thủ · Độ phủ VM · Dung lượng · Storage & policy |
 | | **Lịch việc & nhắc hạn** | Mọi mốc có ngày của các module |
 | | **Mô phỏng & quy hoạch** | What-if capacity · Quy hoạch tài nguyên · What-if license |
 | | **Sizing máy chủ** | Bàn làm việc tài liệu sizing |
@@ -486,6 +486,7 @@ lưu lịch sử vào cùng database và làm báo cáo thống kê theo cùng c
 | **Client & RPO** | Mỗi client: job gần nhất, lần thành công gần nhất, số giờ đã qua, số lần lỗi liên tiếp, đánh giá RPO. |
 | **Job backup** | Activity monitor đã lưu: lọc theo kết quả, loại job (backup / nhân bản DR / restore), client, policy, mã lỗi. |
 | **Độ phủ VM** | **Phạm vi cần backup** (chọn nhiều vCenter / cluster / host, ví dụ chỉ production) và đối chiếu VM đang chạy trong phạm vi với client NetBackup (tên VM, hostname guest, IP): VM chưa có backup / có job nhưng lỗi, lọc theo vCenter / cluster. |
+| **Dung lượng** | Top 10 / 20 / 50 máy chủ theo **dung lượng** (bản Full thành công gần nhất trong kỳ — ước tính dữ liệu cần backup; chưa có Full thì lấy job thành công lớn nhất, ghi “Job lớn nhất”) và theo **dữ liệu đã backup trong kỳ** (tổng các job thành công, kèm số job và job lớn nhất). Có cột đĩa VM đã dùng / cấp phát từ vCenter khi khớp tên / IP. Bấm tiêu đề cột để sắp xếp; cột # giữ thứ hạng gốc. Kỳ theo bộ chọn ngày ở đầu trang. Báo cáo PDF có mục 7 (top 10 mỗi bảng), file Excel có sheet “Dung lượng” (top 50, số liệu dạng số, biểu đồ top 10). |
 | **Storage & policy** | Disk pool: % dùng, xu hướng 30 ngày, số ngày tới ngưỡng high-water; policy: bật/tắt, lần chạy gần nhất, tỷ lệ thành công. |
 | **Nguồn & ngưỡng** | Trạng thái kết nối từng primary server, hướng dẫn tài khoản chỉ đọc, ngưỡng giám sát (lưu server, dùng chung). |
 
