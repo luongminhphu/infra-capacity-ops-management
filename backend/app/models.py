@@ -1,7 +1,8 @@
 import datetime as dt
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
+    BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text,
+    UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -640,6 +641,40 @@ class PasskeyInvite(Base):
     used_at = Column(DateTime)
     created_by = Column(String(255), nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class MetricPoint(Base):
+    """Raw time series (one value per poll), kept METRICS_RAW_DAYS (app/metrics.py rolls them up).
+    kind = family of entity ("datastore", later "host" / "vm"…), entity = stable key, metric = name."""
+    __tablename__ = "metric_points"
+    __table_args__ = (Index("ix_metric_points_series", "kind", "entity", "metric", "at"),)
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False)
+    entity = Column(String(255), nullable=False)
+    metric = Column(String(32), nullable=False)
+    at = Column(DateTime, nullable=False, index=True)
+    value = Column(Float, nullable=False)
+
+
+class MetricRollup(Base):
+    """Hourly (kept METRICS_HOURLY_DAYS) and daily (kept METRICS_DAILY_DAYS) aggregates of metric_points."""
+    __tablename__ = "metric_rollups"
+    __table_args__ = (UniqueConstraint("kind", "entity", "metric", "period", "start", name="uq_metric_rollup"),
+                      CheckConstraint("period IN ('hour', 'day')", name="ck_metric_rollup_period"),
+                      Index("ix_metric_rollups_period_start", "period", "start"))
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), nullable=False)
+    entity = Column(String(255), nullable=False)
+    metric = Column(String(32), nullable=False)
+    period = Column(String(4), nullable=False)
+    start = Column(DateTime, nullable=False)
+    count = Column(Integer, nullable=False)
+    sum = Column(Float, nullable=False)
+    min = Column(Float, nullable=False)
+    max = Column(Float, nullable=False)
+    last = Column(Float, nullable=False)
 
 
 # SCH-10: JSON / CSV kept in Text columns are checked on every ORM write (type stays Text, rule 4).

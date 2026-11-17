@@ -355,7 +355,9 @@ def flush(force_all_buckets: bool = False) -> None:
                           exc_type=(e["exc_type"] or None) and e["exc_type"][:128], traceback=e["traceback"],
                           fingerprint=e["fingerprint"], app_version=s.app_version))
         for (start, method, route), b in done.items():
-            row = db.query(PerfBucket).filter_by(bucket_start=start, method=method, route=route[:255]).first()
+            # with_for_update: two pods merge into the same 5-minute row without losing counts
+            row = (db.query(PerfBucket).filter_by(bucket_start=start, method=method, route=route[:255])
+                   .with_for_update().first())
             if row is None:
                 row = PerfBucket(bucket_start=start, method=method, route=route[:255], count=0, errors_5xx=0,
                                  errors_4xx=0, total_ms=0, max_ms=0, db_ms=0, db_queries=0,
