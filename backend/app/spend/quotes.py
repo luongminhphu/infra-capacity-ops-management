@@ -219,6 +219,34 @@ def _read_docx(data: bytes) -> Extracted:
     return best or Extracted(message="File Word không có bảng nào.")
 
 
+# ---------------------------------------------------------------- column limits
+# What the columns hold (PostgreSQL rejects more with "numeric field overflow"; SQLite does not check).
+LIMITS = {"qty": Decimal("1e12"), "unit_price": Decimal("1e15"), "amount": Decimal("1e15"), "vat_amount": Decimal("1e15"),
+          "vat_pct": Decimal(100), "sets": Decimal(10_000)}
+
+
+def fit(v: Optional[Decimal], key: str) -> Optional[Decimal]:
+    """A number read from a file / the AI that cannot be right for its column (a tax amount read as a rate, a
+    misaligned scan cell read as a quantity) becomes empty: the person checking the quotation fills it in."""
+    if v is None:
+        return None
+    if key in ("vat_pct", "sets") and v < 0:
+        return None
+    return v if abs(v) < LIMITS[key] else None
+
+
+def fit_line(l: "Line") -> int:
+    """Fit every number of a line in place; returns how many were dropped."""
+    dropped = 0
+    for key in ("qty", "unit_price", "amount", "vat_amount", "vat_pct", "sets"):
+        v = getattr(l, key)
+        nv = fit(v, key)
+        if v is not None and nv is None:
+            dropped += 1
+        setattr(l, key, nv)
+    return dropped
+
+
 # ---------------------------------------------------------------- bundles ("Phòng họp × 2" + per-room breakdown)
 SUMMARY_TYPES = ("subtotal", "total", "vat", "discount")
 
@@ -250,7 +278,8 @@ def normalize_bundles(lines: List[Line], stated_subtotal: Optional[Decimal]) -> 
         return []
     plan = []                                   # (bundle index, [breakdown indexes], n)
     for i, b in enumerate(lines):
-        if b.line_type not in ("item", "note") or b.qty is None or b.qty < 2 or b.qty != b.qty.to_integral_value():
+        if (b.line_type not in ("item", "note") or b.qty is None or b.qty < 2 or b.qty >= LIMITS["sets"]
+                or b.qty != b.qty.to_integral_value()):
             continue
         unit = b.unit_price if b.unit_price is not None else (b.amount / b.qty if b.amount is not None else None)
         if not unit:

@@ -200,3 +200,29 @@ def test_ai_read_of_bundle_quote_lands_on_vendor_totals(admin, editor, monkeypat
     assert "SUBTOTAL" in {f["code"] for f in r.json()["findings"]}
     bad = dict(body, lines=[dict(lines[1], vatPct="25")], rowVersion=r.json()["rowVersion"])
     assert editor.put(f"/api/spend/quotes/{code}/quotations/{q['id']}", json=bad).status_code == 400
+
+
+def test_out_of_range_numbers_from_the_ai_are_dropped_not_a_500(admin, editor, monkeypatch):
+    """Production 500 (PostgreSQL "numeric field overflow"): the AI put the tax amount 126.446.400 in the quotation's
+    VAT rate (NUMERIC(5,2)), or a misaligned scan cell in a quantity. Such numbers are left empty for the checker."""
+    code = _new_request(editor, title="VC — số đọc sai", workstream="vc")["code"]
+    q = _upload(editor, code, "CMC", b"%PDF-1.7\n% scan", name="cmc.pdf").json()["quotations"][0]
+    assert admin.put("/api/spend/proposals/ai", json={"provider": "anthropic", "apiKey": KEY, "allowExternal": True}).status_code == 200
+    raw = _ai_svt_payload()
+    raw["vat_pct"] = "119.462.400"                     # tax amount read as the rate
+    raw["lines"][3]["qty"] = "98.765.432.100.000"      # amount column read as a quantity
+    raw["lines"][4]["vat_pct"] = "2.368.800"           # line tax read as a line rate
+    monkeypatch.setattr(ai, "QUOTE_CALL", lambda *a: json.dumps(raw))
+    r = editor.post(f"/api/spend/quotes/{code}/quotations/{q['id']}/extract")
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["computedSubtotal"] == 1_540_980_000 and out["vatPct"] == 8.0      # rate inferred from the lines
+    assert "không hợp lý" in out["message"]
+    assert out["lines"][3]["qty"] is None and "MISSING" in {f["code"] for f in out["findings"]}
+    # The same mistakes typed by hand get a 400 with a sentence, not a 500.
+    base = {"quoteNo": "", "currency": "VND", "lines": [], "rowVersion": out["rowVersion"]}
+    r = editor.put(f"/api/spend/quotes/{code}/quotations/{q['id']}", json={**base, "vatPct": "126.446.400"})
+    assert r.status_code == 400 and "thuế suất" in r.json()["detail"]
+    line = {"lineType": "item", "description": "Videobar", "qty": "98.765.432.100.000", "unitPrice": "1", "amount": "1"}
+    r = editor.put(f"/api/spend/quotes/{code}/quotations/{q['id']}", json={**base, "lines": [line]})
+    assert r.status_code == 400 and "SL quá lớn" in r.json()["detail"]
