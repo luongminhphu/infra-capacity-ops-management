@@ -49,3 +49,14 @@ description: Dùng khi đọc thêm dữ liệu từ vCenter, sửa backend/app/
 - [ ] Demo generator có field mới; app chạy được với `VCENTER_1_DEMO=true`.
 - [ ] Cột DB mới nằm trong `ensure_schema()`; chạy được trên SQLite (test) và PostgreSQL.
 - [ ] `python -m pytest tests -q` trong `backend/` pass (đặc biệt `test_sync.py`).
+
+## Dữ liệu vận hành (Giai đoạn 1)
+
+- `vcenter/extras.py` dựng datastore / snapshot / alarm / sức khoẻ host từ cùng các object đã đọc (`DATASTORE_PROPS` có
+  `summary`, `host`; `VM_PROPS` có `snapshot`; `HOST_PROPS` có `runtime.healthSystemRuntime`). `layoutEx` (nặng) chỉ đọc cho VM
+  đang có snapshot; tên alarm đọc theo lô từ `triggeredAlarmState`. Lỗi phần này không làm mất inventory (`extras["error"]`).
+- `collect_inventory_full()` trả `(hosts, vms, extras)`; `collect_inventory()` giữ chữ ký cũ. Demo: `demo_generator.collect_extras()`
+  cùng shape — thêm trường mới thì thêm ở cả hai.
+- `infra.store()` thay trạng thái của vCenter và ghi `metric_points` cho datastore; không truy vấn lịch sử từng datastore trong vòng lặp
+  (`metrics.series` đọc theo lô).
+

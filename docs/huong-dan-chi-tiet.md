@@ -556,6 +556,34 @@ API backend: `GET /api/backup/servers`, `POST /api/backup/servers/{key}/sync`, `
 `GET /api/backup/report/pdf`, `GET /api/backup/report/xlsx`, `GET|PUT /api/backup/schedules`,
 `POST /api/backup/schedules/import`.
 
+### Sức khoẻ hạ tầng — datastore, snapshot VM, alarm vCenter, sức khoẻ host
+
+Menu **Vận hành → Sức khoẻ hạ tầng**. Đọc trong cùng phiên vCenter của mỗi lượt poll (chỉ đọc, PropertyCollector):
+`Datastore.summary` / `host`, `VirtualMachine.snapshot` (+ `layoutEx` chỉ cho VM đang có snapshot), `rootFolder.triggeredAlarmState`
+(+ tên alarm), `HostSystem.runtime.healthSystemRuntime`. Role **Read-Only** mặc định của vCenter là đủ. Lưu *trạng thái hiện tại*
+theo từng vCenter (thay mới mỗi lần đồng bộ; đọc lỗi thì giữ trạng thái cũ, không coi là "hết alarm"); dung lượng datastore còn
+được ghi vào chuỗi thời gian (thô 7 ngày → theo giờ 90 ngày → theo ngày 3 năm) để vẽ xu hướng và dự báo.
+
+| Tab | Nội dung | Mức (4 mức chuẩn) |
+|---|---|---|
+| **Datastore** | Dung lượng, đã dùng (bullet), trống, cấp phát thin, tăng GB / ngày, **đầy sau N ngày** (xu hướng tuyến tính 30 ngày, cần ≥ 3 ngày lịch sử); bấm dòng để xem biểu đồ 30 ngày | ≥ 80% THEO DÕI · ≥ 90% CẢNH BÁO · ≥ 95% VƯỢT NGƯỠNG · đầy ≤ 30 ngày CẢNH BÁO · ≤ 7 ngày VƯỢT NGƯỠNG · thin ≥ 150% THEO DÕI · không truy cập được VƯỢT NGƯỠNG |
+| **Snapshot VM** | VM đang có snapshot: số lượng, tuổi snapshot cũ nhất, dung lượng ước tính (file delta / bộ nhớ), tên snapshot; snapshot của phần mềm backup được gắn nhãn | ≥ 24 giờ THEO DÕI · ≥ 3 ngày CẢNH BÁO · ≥ 7 ngày hoặc ≥ 200 GB VƯỢT NGƯỠNG · chuỗi ≥ 3 CẢNH BÁO |
+| **Alarm vCenter** | Alarm đỏ / vàng đang kích hoạt (mọi đối tượng), thời điểm, đã xác nhận chưa | Đỏ VƯỢT NGƯỠNG · vàng CẢNH BÁO |
+| **Sức khoẻ host** | Cảm biến phần cứng không xanh (nguồn, quạt, nhiệt độ, bộ nhớ, bộ điều khiển đĩa), trạng thái kết nối, chế độ bảo trì | Đỏ / mất kết nối VƯỢT NGƯỠNG · vàng CẢNH BÁO |
+
+Ngưỡng đổi được bằng biến môi trường (`DS_WATCH_PCT`, `DS_WARN_PCT`, `DS_CRIT_PCT`, `DS_FULL_WARN_DAYS`, `DS_FULL_CRIT_DAYS`,
+`DS_OVERPROV_PCT`, `SNAPSHOT_WATCH_HOURS`, `SNAPSHOT_WARN_DAYS`, `SNAPSHOT_CRIT_DAYS`, `SNAPSHOT_CRIT_GB`, `SNAPSHOT_CHAIN_WARN`).
+Mục cần xử lý vào **hộp việc Trang chủ** (alarm đã xác nhận, host đang bảo trì, snapshot mức THEO DÕI thì không). ICO không xoá
+snapshot hay xác nhận alarm — thao tác trên vCenter.
+
+### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
+
+Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**
+(VƯỢT NGƯỠNG / CẢNH BÁO trở lên / THEO DÕI trở lên) và **kênh** (để trống = mọi kênh Discord bật "Nhận cảnh báo vận hành" ở
+Cài đặt → Chi phí & nhắc hạn). Mặc định: Datastore và Sức khoẻ host từ CẢNH BÁO, còn lại VƯỢT NGƯỠNG; Capacity / Backup vẫn gửi
+khi chạm mốc 90 % như trước. **Giờ im lặng** (giờ Việt Nam, vd 22:00 – 07:00): chỉ gửi VƯỢT NGƯỠNG, các tin khác và tin "Đã hết"
+gửi khi hết giờ im lặng. Mỗi cảnh báo gửi một lần cho đến khi hết; thay đổi quy tắc được ghi nhật ký (`settings.alerts`).
+
 ### Mã đối soát (ticket code) — dẫn chứng cho từng khuyến nghị
 
 Mỗi compliance finding có một **mã đối soát ổn định** dạng `HRAM-C4C34`, `IDLE-F916A`… (tiền tố

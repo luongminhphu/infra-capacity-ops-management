@@ -149,8 +149,10 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
     try:
         if cfg.demo:
             host_rows, vm_rows = demo_generator.collect_inventory(cfg)
+            extras = demo_generator.collect_extras(cfg, host_rows, vm_rows)
         else:
-            host_rows, vm_rows = vcenter_client.collect_inventory(cfg)
+            # same session: inventory + datastores / snapshots / alarms / host health (read-only)
+            host_rows, vm_rows, extras = vcenter_client.collect_inventory_full(cfg)
         # The run row is written only once vCenter has answered: no DB transaction (and, on
         # SQLite, no database write lock) stays open while waiting on the network.
         run = SnapshotRun(vcenter_key=cfg.key, source="live", status="ok", started_at=started_at)
@@ -194,6 +196,9 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
             "type_label": f.get("typeLabel"), "entity": f.get("entity"), "cluster": f.get("cluster"),
             "metric": f.get("metric"), "recommendation": f.get("recommendation"),
         } for f in findings])
+
+        from .. import infra
+        infra.store(db, cfg.key, extras, now)      # latest state + datastore usage history (metric_points)
 
         run.status = "ok"
         run.finished_at = dt.datetime.utcnow()
@@ -424,9 +429,10 @@ async def scheduler_loop(app_settings: Settings):
             purge = await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
             from .. import metrics
             rolled = await asyncio.to_thread(metrics.maybe_rollup)     # raw → hourly / daily, at most hourly
+            line = round_summary(results, time.monotonic() - started, alerts, purge)
             if rolled:
-                purge = {**(purge or {}), **{f"metrics_{k}": v for k, v in rolled.items()}}
-            logger.info("%s", round_summary(results, time.monotonic() - started, alerts, purge))
+                line += " " + " ".join(f"metrics_{k}={v}" for k, v in sorted(rolled.items()))
+            logger.info("%s", line)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001

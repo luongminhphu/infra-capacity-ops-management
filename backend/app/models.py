@@ -677,6 +677,77 @@ class MetricRollup(Base):
     last = Column(Float, nullable=False)
 
 
+class DatastoreState(Base):
+    """Latest datastore capacity per vCenter (replaced at each sync); history goes to metric_points."""
+    __tablename__ = "datastore_states"
+    __table_args__ = (UniqueConstraint("vcenter_key", "ds_key", name="uq_datastore_state"),)
+
+    id = Column(Integer, primary_key=True)
+    vcenter_key = Column(String(64), nullable=False, index=True)
+    ds_key = Column(String(64), nullable=False)               # vCenter moId (datastore-123)
+    name = Column(String(255), nullable=False)
+    ds_type = Column(String(16), nullable=False, default="")
+    capacity_gb = Column(Float, nullable=False, default=0)
+    free_gb = Column(Float, nullable=False, default=0)
+    uncommitted_gb = Column(Float, nullable=False, default=0)
+    accessible = Column(Boolean, nullable=False, default=True)
+    maintenance = Column(String(32), nullable=False, default="normal")
+    clusters = Column(Text, nullable=False, default="[]")      # JSON list of cluster names
+    host_count = Column(Integer, nullable=False, default=0)
+    vm_count = Column(Integer, nullable=False, default=0)
+    captured_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class VmSnapshotState(Base):
+    """VMs that currently have snapshots (replaced at each sync)."""
+    __tablename__ = "vm_snapshot_states"
+
+    id = Column(Integer, primary_key=True)
+    vcenter_key = Column(String(64), nullable=False, index=True)
+    vm = Column(String(255), nullable=False)
+    instance_uuid = Column(String(64))
+    cluster = Column(String(255))
+    host = Column(String(255))
+    snapshot_count = Column(Integer, nullable=False, default=0)
+    oldest_at = Column(DateTime)
+    newest_at = Column(DateTime)
+    size_gb = Column(Float)
+    items = Column(Text, nullable=False, default="[]")         # JSON [{name, createdAt, description, quiesced, depth}]
+    captured_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class VcAlarmState(Base):
+    """Triggered vCenter alarms, red / yellow (replaced at each sync)."""
+    __tablename__ = "vc_alarm_states"
+
+    id = Column(Integer, primary_key=True)
+    vcenter_key = Column(String(64), nullable=False, index=True)
+    alarm_key = Column(String(255), nullable=False)
+    entity_type = Column(String(16), nullable=False)
+    entity = Column(String(255), nullable=False)
+    cluster = Column(String(255))
+    alarm = Column(String(255), nullable=False)
+    status = Column(String(8), nullable=False)
+    triggered_at = Column(DateTime)
+    acknowledged = Column(Boolean, nullable=False, default=False)
+    captured_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class HostHealthState(Base):
+    """Host hardware health: overall status and the sensors that are not green (replaced at each sync)."""
+    __tablename__ = "host_health_states"
+
+    id = Column(Integer, primary_key=True)
+    vcenter_key = Column(String(64), nullable=False, index=True)
+    host = Column(String(255), nullable=False)
+    cluster = Column(String(255))
+    overall_status = Column(String(8), nullable=False, default="gray")
+    connection = Column(String(32), nullable=False, default="connected")
+    maintenance = Column(Boolean, nullable=False, default=False)
+    issues = Column(Text, nullable=False, default="[]")        # JSON [{kind, name, state, reading}]
+    captured_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 # SCH-10: JSON / CSV kept in Text columns are checked on every ORM write (type stays Text, rule 4).
 from .shared.stored_text import csv_column as _csv, json_column as _json  # noqa: E402
 
@@ -696,6 +767,9 @@ _csv(OpsAlertState.sent_channels, "Kênh đã gửi cảnh báo", item=r"[^\s,]+
 _json(AiCache.output, None, "Kết quả AI lưu đệm", nullable=False)
 _json(ImportMapping.headers_json, list, "Tiêu đề cột của file nhập", nullable=False)
 _json(ImportMapping.mapping_json, dict, "Ánh xạ cột", nullable=False)
+_json(DatastoreState.clusters, list, "Cluster gắn datastore", nullable=False)
+_json(VmSnapshotState.items, list, "Danh sách snapshot", nullable=False)
+_json(HostHealthState.issues, list, "Cảm biến bất thường", nullable=False)
 
 
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
