@@ -638,6 +638,12 @@ class QuotationLine(Base):
     qty = Column(Numeric(16, 3), nullable=True)
     unit_price = Column(Numeric(18, 2), nullable=True)            # in the quotation currency
     amount = Column(Numeric(18, 2), nullable=True)                # "thành tiền" as printed
+    # Per-line VAT as printed: rate (0 for "KCT" / "-") and tax amount; NULL = the quotation's rate applies.
+    vat_pct = Column(Numeric(5, 2), nullable=True)
+    vat_amount = Column(Numeric(18, 2), nullable=True)
+    # Multiplier when the line prices ONE set of a bundle quoted N times ("Phòng họp × 2" with a per-room
+    # breakdown): the line counts amount × sets. NULL = 1.
+    sets = Column(Numeric(10, 3), nullable=True)
     match_key = Column(String(255), nullable=True)                # manual alignment across vendors
     cost_group_id = Column(Integer, ForeignKey("renovation_cost_groups.id", ondelete="SET NULL"), nullable=True, index=True)
 

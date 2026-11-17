@@ -62,7 +62,8 @@ def ensure_schema() -> None:
         "ops_alert_state": [("source", "VARCHAR(16)"), ("sent_channels", "TEXT")],
         "spend_ai_config": [("tasks_json", "TEXT"), ("mask_names", "BOOLEAN DEFAULT TRUE"), ("budget_usd", "INTEGER DEFAULT 100"),
                             ("alert_usd", "INTEGER DEFAULT 50"), ("alert_month", "VARCHAR(7)"), ("rate_per_hour", "INTEGER DEFAULT 30")],
-        "quotation_lines": [("cost_group_id", "INTEGER REFERENCES renovation_cost_groups(id) ON DELETE SET NULL")],
+        "quotation_lines": [("cost_group_id", "INTEGER REFERENCES renovation_cost_groups(id) ON DELETE SET NULL"),
+                            ("vat_pct", "NUMERIC(5, 2)"), ("vat_amount", "NUMERIC(18, 2)"), ("sets", "NUMERIC(10, 3)")],
         "users": [
             ("auth_source", "VARCHAR(16) NOT NULL DEFAULT 'local'"), ("external_id", "VARCHAR(64)"),
             ("email", "VARCHAR(255)"), ("last_login_at", "TIMESTAMP"),

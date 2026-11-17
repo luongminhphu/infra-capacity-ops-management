@@ -58,7 +58,12 @@ phải qua `uiRequire('spend').then(...)`.
     `hasPassword`; audit ghi "đã đổi", không ghi giá trị.
 11. **Audit** mọi thay đổi bằng `service.audit(...)` (`action="spend.*"`, `before/after` cho tiền, ngày,
     trạng thái) trong cùng transaction.
-12. **Schema**: không Alembic — bảng mới qua `create_all()`, cột thêm vào bảng cũ qua `additive` trong
+12. **Báo giá NCC — một dòng tính `thành tiền × số bộ`** (`quotes.line_total`), ở mọi nơi cộng tiền (thẻ NCC, so sánh,
+    kéo số sang cải tạo). NCC trình bày “gói × N phòng” theo 3 kiểu: dòng gói có giá + chi tiết cho 1 phòng (CMC), gói là
+    tiêu đề có giá (SVT), chi tiết đã nhân sẵn (HPT). `normalize_bundles` chỉ đổi khi chi tiết cộng đúng bằng đơn giá gói
+    **và** làm khớp tổng NCC ghi; VAT tính theo từng dòng khi báo giá in thuế từng dòng (phần mềm KCT = 0). AI chỉ chép số
+    như in (`QUOTE_SYSTEM`), mọi phép tính và nhận dạng do code; test số liệu thật ở `tests/test_spend_quote_bundles.py`.
+13. **Schema**: không Alembic — bảng mới qua `create_all()`, cột thêm vào bảng cũ qua `additive` trong
     `database.py::ensure_schema()` (nullable hoặc có DEFAULT, chạy cả SQLite và PostgreSQL).
 
 ## Giao diện (xem `design-system/ico/pages/danh-sach.md`)

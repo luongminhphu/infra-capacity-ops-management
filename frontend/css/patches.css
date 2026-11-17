@@ -230,3 +230,11 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 .qt-eval .qt-w::-webkit-outer-spin-button,.qt-eval .qt-score::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 .qt-eval th.num,.qt-eval tfoot td.num{padding-right:calc(var(--space-2) * 2 + 1px);}
 .qt-eval td.qt-act{text-align:center;}
+/* Dòng báo giá: per-line VAT % / Số bộ are short numbers; money columns hold 1.631.800.000. */
+.qt-lines .ql-vat,.qt-lines .ql-sets{min-width:64px;}
+.qt-lines .qt-money{min-width:128px;}
+.qt-lines .ql-type{min-width:156px;}
+.qt-lines .ql-model{min-width:120px;}
+.qt-lines .ql-unit{min-width:80px;}
+.qt-lines .ql-qty{min-width:64px;}
+.qt-lines .ql-desc{min-width:260px;}

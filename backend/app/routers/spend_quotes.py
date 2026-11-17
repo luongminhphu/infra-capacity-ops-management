@@ -206,7 +206,14 @@ def _lines(db: Session, q: Quotation) -> List[QuotationLine]:
 
 
 def _as_qm_lines(lines: List[QuotationLine]) -> List[qm.Line]:
-    return [qm.Line(l.line_type, l.description, l.model, l.unit, l.qty, l.unit_price, l.amount) for l in lines]
+    return [qm.Line(l.line_type, l.description, l.model, l.unit, _dec(l.qty), _dec(l.unit_price), _dec(l.amount),
+                    _dec(l.vat_pct), _dec(l.vat_amount), _dec(l.sets)) for l in lines]
+
+
+def _line_total(l: QuotationLine) -> Optional[Decimal]:
+    """Thành tiền × số bộ, in the quotation currency."""
+    return qm.line_total(qm.Line(l.line_type, l.description, qty=_dec(l.qty), unit_price=_dec(l.unit_price),
+                                 amount=_dec(l.amount), sets=_dec(l.sets)))
 
 
 def run_checks(db: Session, r: QuoteRequest, q: Quotation) -> Dict[str, Any]:
@@ -249,12 +256,14 @@ def _quotation_out(db: Session, q: Quotation, vendors: Dict[int, SpendVendor], w
     fs = db.query(QuotationFinding).filter_by(quotation_id=q.id).order_by(QuotationFinding.id).all()
     lines = _lines(db, q)
     items = [l for l in lines if l.line_type == "item"]
-    computed = sum((Decimal(l.amount) if l.amount is not None else (Decimal(l.qty) * Decimal(l.unit_price) if l.qty is not None and l.unit_price is not None else Decimal(0))) for l in items)
+    computed = sum((_line_total(l) or Decimal(0) for l in items), Decimal(0))
+    rates = sorted({float(r) for r in (qm.line_vat_pct(x) for x in _as_qm_lines(items)) if r is not None})
     f = db.get(SpendFile, q.file_id) if q.file_id else None
     out = {
         "id": q.id, "vendorId": q.vendor_id, "vendorLabel": service.vendor_label(v), "vendorName": v.name if v else None,
         "vendorHasShortName": bool(v and v.short_name), "quoteNo": q.quote_no, "quoteDate": _iso(q.quote_date),
         "validUntil": _iso(q.valid_until), "currency": q.currency, "fxRate": _num(q.fx_rate), "vatPct": _num(q.vat_pct),
+        "vatRates": rates,
         "statedSubtotal": q.stated_subtotal, "statedDiscount": q.stated_discount, "statedVat": q.stated_vat, "statedTotal": q.stated_total,
         "computedSubtotal": qm.to_int(computed) if items else None,
         "subtotalVnd": qm.to_int(computed * _fx(q)) if items else None, "totalVnd": _quote_total_vnd(q),
@@ -268,6 +277,7 @@ def _quotation_out(db: Session, q: Quotation, vendors: Dict[int, SpendVendor], w
     if with_lines:
         out["lines"] = [{"id": l.id, "seq": l.seq, "lineType": l.line_type, "description": l.description, "model": l.model,
                          "unit": l.unit, "qty": _num(l.qty), "unitPrice": _num(l.unit_price), "amount": _num(l.amount),
+                         "vatPct": _num(l.vat_pct), "vatAmount": _num(l.vat_amount), "sets": _num(l.sets),
                          "matchKey": l.match_key} for l in lines]
     return out
 
@@ -460,9 +470,14 @@ def delete_request(code: str, request: Request, user: User = Depends(require_spe
 # ================================================================ quotations
 def _store_extracted(db: Session, q: Quotation, ex: qm.Extracted) -> None:
     db.query(QuotationLine).filter_by(quotation_id=q.id).delete(synchronize_session=False)
-    for i, l in enumerate(ex.lines[:MAX_LINES], 1):
+    lines = ex.lines[:MAX_LINES]
+    bundles = qm.normalize_bundles(lines, ex.subtotal)        # "Phòng họp × 2" + per-room breakdown
+    for i, l in enumerate(lines, 1):
         db.add(QuotationLine(quotation_id=q.id, seq=i, line_type=l.line_type, description=(l.description or "—")[:2000],
-                             model=l.model, unit=l.unit, qty=l.qty, unit_price=l.unit_price, amount=l.amount))
+                             model=l.model, unit=l.unit, qty=l.qty, unit_price=l.unit_price, amount=l.amount,
+                             vat_pct=l.vat_pct, vat_amount=l.vat_amount, sets=l.sets))
+    if bundles:
+        ex.message = " ".join([ex.message or "", "Đã nhận dạng gói:", *bundles]).strip()
     q.vat_pct = ex.vat_pct
     q.stated_subtotal, q.stated_discount = qm.to_int(ex.subtotal), qm.to_int(ex.discount)
     q.stated_vat, q.stated_total = qm.to_int(ex.vat), qm.to_int(ex.total)
@@ -558,12 +573,26 @@ def extract_quotation(code: str, qid: int, request: Request, user: User = Depend
     return _quotation_out(db, q, {q.vendor_id: db.get(SpendVendor, q.vendor_id)}, with_lines=True)
 
 
+def _vat_cell(v: Any) -> Optional[Decimal]:
+    """Tax printed on a line: "-", "KCT", "không chịu thuế" mean 0; empty means not printed."""
+    s = str(v or "").strip()
+    if s in ("-", "–", "—") or qm.norm_text(s) in ("kct", "khong chiu thue", "mien thue"):
+        return Decimal(0)
+    return _d(s)
+
+
+def _vat_rate(v: Any) -> Optional[Decimal]:
+    r = _vat_cell(v)
+    return r if r is None or Decimal(0) <= r <= Decimal(20) else None
+
+
 def _from_ai(q: Quotation, raw: Dict[str, Any]) -> qm.Extracted:
     ex = qm.Extracted(message="Đọc bằng AI — đối chiếu với file gốc trước khi bấm “Đã kiểm tra”.")
     for l in raw.get("lines", []):
         t = l.get("line_type") if l.get("line_type") in ("item", "discount", "subtotal", "vat", "total", "note") else "item"
         ex.lines.append(qm.Line(t, str(l.get("description") or "")[:2000], str(l.get("model") or "")[:255] or None,
-                                str(l.get("unit") or "")[:32] or None, _d(l.get("qty")), _d(l.get("unit_price")), _d(l.get("amount"))))
+                                str(l.get("unit") or "")[:32] or None, _d(l.get("qty")), _d(l.get("unit_price")), _d(l.get("amount")),
+                                _vat_rate(l.get("vat_pct")), _vat_cell(l.get("vat_amount"))))
     ex.vat_pct, ex.subtotal, ex.discount = _d(raw.get("vat_pct")), _d(raw.get("subtotal")), _d(raw.get("discount"))
     ex.vat, ex.total = _d(raw.get("vat")), _d(raw.get("total"))
     q.quote_no = str(raw.get("quote_no") or "")[:64] or q.quote_no
@@ -580,6 +609,22 @@ def _from_ai(q: Quotation, raw: Dict[str, Any]) -> qm.Extracted:
         if val:
             setattr(q, attr, val)
     return ex
+
+
+def _line_vat_pct(v: Any, i: int) -> Optional[Decimal]:
+    r = _vat_cell(v)
+    if r is not None and not Decimal(0) <= r <= Decimal(20):
+        _bad(f"Dòng {i}: VAT % phải từ 0 đến 20 (KCT = 0).")
+    return r
+
+
+def _line_sets(v: Any, i: int) -> Optional[Decimal]:
+    n = _d(v)
+    if n is None or n == 1:
+        return None
+    if not Decimal(0) < n <= Decimal(10_000):
+        _bad(f"Dòng {i}: Số bộ phải lớn hơn 0.")
+    return n
 
 
 @router.put("/quotes/{code}/quotations/{qid}")
@@ -624,6 +669,8 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
                                  description=t(l.get("description"), f"mô tả dòng {i}", 2000, required=True),
                                  model=t(l.get("model"), "model", 255), unit=t(l.get("unit"), "đơn vị", 32),
                                  qty=_d(l.get("qty")), unit_price=_d(l.get("unitPrice")), amount=_d(l.get("amount")),
+                                 vat_pct=_line_vat_pct(l.get("vatPct"), i), vat_amount=_vat_cell(l.get("vatAmount")),
+                                 sets=_line_sets(l.get("sets"), i),
                                  match_key=t(l.get("matchKey"), "khoá ghép", 255)))
         if q.extraction_method is None:
             q.extraction_method = "manual"
@@ -680,9 +727,10 @@ def comparison(db: Session, r: QuoteRequest) -> Dict[str, Any]:
     per = []
     for q in quotations:
         fx = _fx(q)
-        lines = [{"id": l.id, "description": l.description, "model": l.model, "unit": l.unit, "qty": _num(l.qty),
-                  "unitPrice": _num(l.unit_price), "amount": _num(l.amount), "matchKey": l.match_key,
-                  "amountVnd": (Decimal(l.amount) * fx) if l.amount is not None else None,
+        lines = [{"id": l.id, "description": l.description, "model": l.model, "unit": l.unit,
+                  "qty": _num(Decimal(l.qty) * Decimal(l.sets or 1)) if l.qty is not None else None,
+                  "unitPrice": _num(l.unit_price), "amount": _num(_line_total(l)), "matchKey": l.match_key,
+                  "amountVnd": (_line_total(l) * fx) if _line_total(l) is not None else None,
                   "unitPriceVnd": (Decimal(l.unit_price) * fx) if l.unit_price is not None else None}
                  for l in _lines(db, q) if l.line_type == "item"]
         per.append((q.id, lines))
@@ -855,7 +903,7 @@ AI_LINES_PER_QUOTE = 150
 
 def _line_vnd(l: QuotationLine, q: Quotation) -> Dict[str, Optional[int]]:
     fx = _fx(q)
-    amount = l.amount if l.amount is not None else (Decimal(l.qty) * Decimal(l.unit_price) if l.qty is not None and l.unit_price is not None else None)
+    amount = _line_total(l)
     return {"unitPriceVnd": qm.to_int(Decimal(l.unit_price) * fx) if l.unit_price is not None else None,
             "amountVnd": qm.to_int(Decimal(amount) * fx) if amount is not None else None}
 
