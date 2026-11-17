@@ -12,6 +12,8 @@ const RN_STATUS = { planning: ['na', 'Lập kế hoạch'], executing: ['warn', 
 const RN_KPI = { perNode: 'đ / node', perHead: 'đ / nhân sự', perAp: 'đ / AP', perRoom: 'đ / phòng VC' };
 const rnUrl = (code, ...parts) => ['/spend/renovations', encodeURIComponent(code), ...parts].join('/');
 const rnMoney = (v) => (v === null || v === undefined) ? '<span class="muted-sub sr-inline">không có số liệu</span>' : esc(uiNumber(v, 3));
+/* Money in an input: grouped like the read-only cells (412.000.000); the backend parses 412.000.000 / 412000000. */
+const rnAmtText = (v) => { const t = String(v ?? '').trim(); if (!/^[\d.\s]+$/.test(t)) return t; return Number(t.replace(/[.\s]/g, '')).toLocaleString('vi-VN'); };
 const rnPct = (v) => (v === null || v === undefined) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
 
 async function renderRenovationsPage() {
@@ -61,6 +63,7 @@ function rnBind() {
     if (act) return rnAction(act.dataset.rnAct, act);
   });
   mount.addEventListener('change', (e) => {
+    if (e.target.matches && e.target.matches('.rn-amt')) { e.target.value = rnAmtText(e.target.value); return; }
     if (spState.sub !== 'renovations' || !e.target.closest('[data-rn-hist]')) return;
     rnState.history = $$('[data-rn-hist]').filter(x => x.checked).map(x => x.value);
     rnOpen(rnState.current.code);
@@ -142,19 +145,28 @@ function rnBlock(d, ws, ed) {
   const rows = groups.map(g => {
     const v = d.costs[String(g.id)] || {}, r = c.rows.find(x => x.groupId === g.id) || { history: [] };
     const cells = kinds.map(k => ed && (k !== 'actual' || canActual)
-      ? `<td><input class="num rn-amt" inputmode="numeric" data-g="${esc(g.id)}" data-k="${k}" value="${v[k] ? esc(v[k].amount) : ''}"${v[k] && v[k].source !== 'manual' ? ` title="${esc(v[k].note || v[k].source)}"` : ''}></td>`
+      ? `<td class="num in"><input class="rn-amt" inputmode="numeric" aria-label="${esc(RN_KIND[k])} — ${esc(g.name)}" data-g="${esc(g.id)}" data-k="${k}" value="${v[k] ? esc(rnAmtText(v[k].amount)) : ''}"${v[k] && v[k].source !== 'manual' ? ` title="${esc(v[k].note || v[k].source)}"` : ''}></td>`
       : `<td class="num">${v[k] ? rnMoney(v[k].amount) : '—'}</td>`).join('');
     const dev = r.deviationPct;
     return `<tr><td class="wrap">${esc(g.name)}</td>${cells}${hist.map((h, i) => `<td class="num">${r.history[i] !== null && r.history[i] !== undefined ? rnMoney(r.history[i]) : '—'}</td>`).join('')}
       <td class="num">${dev !== null && dev !== undefined ? spPill(Math.abs(dev) > 15 ? 'warn' : 'ok', rnPct(dev)) : '—'}</td></tr>`;
   }).join('');
-  const kpiRow = `<tr class="qt-foot"><td><b>Tổng</b><span class="muted-sub">${esc(RN_KPI[main])}</span></td><td colspan="3" class="num"><b>${rnMoney(c.total)}</b>${c.kinds.length ? `<span class="muted-sub">${esc(c.kinds.map(k => RN_KIND[k]).join(' + '))}</span>` : ''}<span class="muted-sub"><b>${c.kpi[main] !== null ? esc(Number(c.kpi[main]).toLocaleString('vi-VN')) : 'không có số liệu'}</b> ${esc(RN_KPI[main])}</span></td>
-    ${hist.map(h => `<td class="num"><b>${rnMoney(h.total)}</b><span class="muted-sub">${h.kpi[main] !== null ? esc(Number(h.kpi[main]).toLocaleString('vi-VN')) : 'không có số liệu'}</span></td>`).join('')}
-    <td class="num">${c.deviationPct !== null ? `<b>${esc(rnPct(c.deviationPct))}</b><span class="muted-sub">so trung vị ${esc(Number(c.median).toLocaleString('vi-VN'))}</span>` : '—'}</td></tr>`;
+  // Footer: one value per column, '—' when there is no figure (was one 3-column cell with two "không có số liệu").
+  const kpiOf = (v) => v !== null && v !== undefined ? esc(Number(v).toLocaleString('vi-VN')) : '—';
+  const totalOf = (v) => v !== null && v !== undefined ? esc(uiNumber(v, 3)) : '—';
+  const kpiRow = `<tr class="qt-foot"><td><b>Tổng</b>${c.kinds.length ? `<span class="muted-sub">${esc(c.kinds.map(k => RN_KIND[k]).join(' + '))}</span>` : ''}</td>
+      <td colspan="3" class="num"><b>${totalOf(c.total)}</b></td>
+      ${hist.map(h => `<td class="num"><b>${totalOf(h.total)}</b></td>`).join('')}
+      <td class="num">${c.deviationPct !== null ? `<b>${esc(rnPct(c.deviationPct))}</b>` : '—'}</td></tr>
+    <tr class="qt-foot"><td>Suất chi phí <span class="muted-sub sr-inline">(${esc(RN_KPI[main])})</span></td>
+      <td colspan="3" class="num">${kpiOf(c.kpi[main])}</td>
+      ${hist.map(h => `<td class="num">${kpiOf(h.kpi[main])}</td>`).join('')}
+      <td class="num">${c.deviationPct !== null ? `<span class="muted-sub sr-inline">trung vị</span> ${kpiOf(c.median)}` : '—'}</td></tr>`;
   return `<div class="rn-block">
     <div class="sp-h">${esc(RN_WS[ws])}</div>
     ${c.alerts.map(a => `<p class="criteria-status${a.level === 'crit' ? ' error' : ''}">${esc(a.message)}</p>`).join('')}
-    <div class="table-scroll"><table class="data-table rn-table">
+    <div class="table-scroll"><table class="data-table rn-table tbl-inputs" style="--tbl-first:260px;--tbl-col:136px;--tbl-n:${4 + hist.length}">
+      <colgroup><col>${'<col class="c-num">'.repeat(4 + hist.length)}</colgroup>
       <thead><tr><th>Nhóm chi phí</th>${kinds.map(k => `<th class="num">${RN_KIND[k]}</th>`).join('')}
         ${hist.map(h => `<th class="num">${esc(h.label)}${h.config ? `<span class="muted-sub">${esc(h.config)}${h.sameConfig ? '' : ' · khác cấu hình'}</span>` : ''}</th>`).join('')}<th class="num">So trung vị</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="${5 + hist.length}" class="empty-note">Chưa có nhóm chi phí.</td></tr>`}</tbody>
