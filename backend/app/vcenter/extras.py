@@ -2,7 +2,8 @@
 capacity, VM snapshots, triggered alarms, host hardware health. Read-only: PropertyCollector reads only.
 
 Row shapes (camelCase, like the inventory rows) — demo_generator.collect_extras returns the same:
-  datastores: {key, name, type, capacityGB, freeGB, uncommittedGB, accessible, maintenance, clusters[], hostCount, vmCount}
+  datastores: {key, name, type, capacityGB, freeGB, uncommittedGB, accessible, maintenance, clusters[], hostCount, vmCount,
+               naa[], nfsHost, nfsPath}
   snapshots:  {vm, instanceUuid, cluster, host, count, oldestAt, newestAt, sizeGB, items[{name, createdAt, description, quiesced}]}
   alarms:     {key, entityType, entity, cluster, alarm, status ('red'|'yellow'), at, acknowledged}
   health:     {host, cluster, overallStatus, connection, maintenance, issues[{kind, name, state, reading}]}
@@ -94,12 +95,16 @@ def build_extras(content, hosts, compute, vms, datastores, host_info: Dict[str, 
         mounts = props.get("host") or []
         clusters = sorted({host_info.get(_moid(_sa(m, "key")), (None, None))[1] for m in mounts} - {None, "UNKNOWN"})
         cap = (_sa(s, "capacity") or 0) / GB
+        info = props.get("info")
+        naa = sorted({_sa(e, "diskName") for e in (_sa(info, "vmfs", "extent") or []) if _sa(e, "diskName")})
         ds_rows.append({
             "key": moid, "name": props.get("name") or _sa(s, "name") or moid, "type": _sa(s, "type") or "",
             "capacityGB": round(cap, 2), "freeGB": round((_sa(s, "freeSpace") or 0) / GB, 2),
             "uncommittedGB": round((_sa(s, "uncommitted") or 0) / GB, 2),
             "accessible": bool(_sa(s, "accessible", default=True)), "maintenance": _sa(s, "maintenanceMode") or "normal",
             "clusters": clusters, "hostCount": len(mounts), "vmCount": ds_vms.get(moid, 0),
+            # storage correlation keys (storage/correlate.py): VMFS extents' NAA, or the NFS export
+            "naa": [n.lower() for n in naa], "nfsHost": _sa(info, "nas", "remoteHost"), "nfsPath": _sa(info, "nas", "remotePath"),
         })
     # ---- VM snapshots (+ size from layoutEx, read only for the VMs that have snapshots)
     with_snap = [(moid, obj, props) for moid, (obj, props) in vms.items() if _sa(props.get("snapshot"), "rootSnapshotList")]

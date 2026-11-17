@@ -263,3 +263,12 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 .alert-rules td{vertical-align:middle;}
 .alert-rules select{height:var(--control-h-sm);}
 .alert-quiet{grid-template-columns:repeat(2,minmax(0,180px));margin:var(--space-2) 0;}
+/* Sức khoẻ hạ tầng → Storage: one card per array */
+.infra-arrays{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:var(--space-3);margin-bottom:var(--space-4);}
+.infra-array{border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);display:grid;gap:var(--space-2);min-width:0;background:var(--bg-surface);}
+.infra-array header{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-2);}
+.infra-array header .muted-sub{white-space:normal;}
+.infra-array .infra-use{width:100%;}
+.infra-reasons{margin:0;padding-left:var(--space-4);font-size:var(--fs-caption);color:var(--text-secondary);}
+.infra-alerts summary{cursor:pointer;font-size:var(--fs-caption);color:var(--text-secondary);}
+.infra-alerts ul{list-style:none;margin:var(--space-2) 0 0;padding:0;display:grid;gap:var(--space-2);font-size:var(--fs-caption);}

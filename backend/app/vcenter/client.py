@@ -126,7 +126,7 @@ def _connect(cfg: VCenterConfig, timeout: Optional[int] = None):
 HOST_PROPS = ["name", "summary", "parent", "runtime.healthSystemRuntime"]   # + hardware sensors (extras)
 COMPUTE_PROPS = ["name", "configurationEx"]        # clusters and standalone compute resources
 VM_PROPS = ["name", "summary", "datastore", "guest.guestFamily", "snapshot"]   # + snapshot tree (extras)
-DATASTORE_PROPS = ["name", "summary", "host"]      # capacity / free / mounts (extras)
+DATASTORE_PROPS = ["name", "summary", "host", "info"]   # capacity / mounts / VMFS extents (NAA) or NFS export (extras)
 PAGE_SIZE = 1000
 
 Objs = Dict[str, Tuple[Any, Dict[str, Any]]]       # moId -> (managed object, {property path: value})

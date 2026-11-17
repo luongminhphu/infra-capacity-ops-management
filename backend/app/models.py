@@ -466,7 +466,7 @@ class DataSource(Base):
     __table_args__ = (UniqueConstraint("kind", "key", name="uq_data_source_kind_key"),)
 
     id = Column(Integer, primary_key=True)
-    kind = Column(String(16), nullable=False, index=True)          # vcenter | netbackup
+    kind = Column(String(16), nullable=False, index=True)          # vcenter | netbackup | pure | netapp
     key = Column(String(64), nullable=False)                       # history is stored under this key: never changes
     name = Column(String(128), nullable=False)
     host = Column(String(255), nullable=False)
@@ -693,6 +693,7 @@ class DatastoreState(Base):
     accessible = Column(Boolean, nullable=False, default=True)
     maintenance = Column(String(32), nullable=False, default="normal")
     clusters = Column(Text, nullable=False, default="[]")      # JSON list of cluster names
+    backing = Column(Text, nullable=True)                       # JSON {naa: [...], nfsHost, nfsPath} — storage correlation
     host_count = Column(Integer, nullable=False, default=0)
     vm_count = Column(Integer, nullable=False, default=0)
     captured_at = Column(DateTime, nullable=False, default=utcnow)
@@ -748,6 +749,66 @@ class HostHealthState(Base):
     captured_at = Column(DateTime, nullable=False, default=utcnow)
 
 
+class StorageArrayState(Base):
+    """Latest state of one storage array (Pure FlashArray / NetApp ONTAP), one row per source; also the last
+    sync result (an error keeps the previous figures and says since when they are stale)."""
+    __tablename__ = "storage_array_states"
+    __table_args__ = (UniqueConstraint("source_key", name="uq_storage_array_source"),)
+
+    id = Column(Integer, primary_key=True)
+    source_key = Column(String(64), nullable=False)
+    vendor = Column(String(16), nullable=False)
+    name = Column(String(255), nullable=False)
+    model = Column(String(64))
+    version = Column(String(128))
+    capacity_gb = Column(Float)
+    used_gb = Column(Float)
+    provisioned_gb = Column(Float)
+    data_reduction = Column(Float)
+    latency_read_ms = Column(Float)
+    latency_write_ms = Column(Float)
+    iops = Column(Float)
+    throughput_mbps = Column(Float)
+    controllers = Column(Text, nullable=False, default="[]")      # JSON [{name, model, status, mode, version}]
+    hardware_issues = Column(Text, nullable=False, default="[]")  # JSON [{name, type, status, details}]
+    nfs_endpoints = Column(Text, nullable=False, default="[]")    # JSON [{svm, ip}] (ONTAP data LIFs)
+    captured_at = Column(DateTime)
+    last_ok_at = Column(DateTime)
+    last_error = Column(Text)
+    last_error_at = Column(DateTime)
+
+
+class StorageVolumeState(Base):
+    """Volumes / LUNs of the arrays (replaced at each sync); naa / nfs_path join them to VMware datastores."""
+    __tablename__ = "storage_volume_states"
+
+    id = Column(Integer, primary_key=True)
+    source_key = Column(String(64), nullable=False, index=True)
+    name = Column(String(512), nullable=False)
+    container = Column(String(255))                 # ONTAP SVM / Pure pod
+    kind = Column(String(8), nullable=False)        # volume | lun
+    size_gb = Column(Float)
+    used_gb = Column(Float)
+    physical_gb = Column(Float)
+    naa = Column(String(64), index=True)
+    nfs_path = Column(String(512))
+    captured_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class StorageAlertState(Base):
+    """Open alerts of the arrays (Pure open alerts / ONTAP EMS error+ of the last 24 h), replaced at each sync."""
+    __tablename__ = "storage_alert_states"
+
+    id = Column(Integer, primary_key=True)
+    source_key = Column(String(64), nullable=False, index=True)
+    alert_id = Column(String(128), nullable=False)
+    severity = Column(String(8), nullable=False)    # critical | warning | info
+    summary = Column(String(300), nullable=False)
+    component = Column(String(255))
+    raised_at = Column(DateTime)
+    captured_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 # SCH-10: JSON / CSV kept in Text columns are checked on every ORM write (type stays Text, rule 4).
 from .shared.stored_text import csv_column as _csv, json_column as _json  # noqa: E402
 
@@ -768,6 +829,10 @@ _json(AiCache.output, None, "Kết quả AI lưu đệm", nullable=False)
 _json(ImportMapping.headers_json, list, "Tiêu đề cột của file nhập", nullable=False)
 _json(ImportMapping.mapping_json, dict, "Ánh xạ cột", nullable=False)
 _json(DatastoreState.clusters, list, "Cluster gắn datastore", nullable=False)
+_json(DatastoreState.backing, dict, "Thông tin LUN / NFS của datastore")
+_json(StorageArrayState.controllers, list, "Bộ điều khiển mảng lưu trữ", nullable=False)
+_json(StorageArrayState.hardware_issues, list, "Linh kiện lỗi của mảng lưu trữ", nullable=False)
+_json(StorageArrayState.nfs_endpoints, list, "Địa chỉ NFS của mảng lưu trữ", nullable=False)
 _json(VmSnapshotState.items, list, "Danh sách snapshot", nullable=False)
 _json(HostHealthState.issues, list, "Cảm biến bất thường", nullable=False)
 

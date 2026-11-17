@@ -39,7 +39,7 @@ TOOLS = [
     {"name": "vm_chua_backup", "description": "VM trong phạm vi backup nhưng chưa được bảo vệ / đang lỗi, lọc theo cluster.",
      "input_schema": {"type": "object", "properties": {"cluster": {"type": "string"}}}},
     {"name": "viec_can_lam", "description": "Hộp việc của người hỏi: cảnh báo capacity / backup / license / hạn Opex / thanh toán… (đã lọc theo quyền).",
-     "input_schema": {"type": "object", "properties": {"source": {"type": "string", "enum": ["all", "capacity", "backup", "datastore", "snapshot", "alarm", "health", "license", "spend", "system"]}}}},
+     "input_schema": {"type": "object", "properties": {"source": {"type": "string", "enum": ["all", "capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "license", "spend", "system"]}}}},
 ]
 TOOL_NAMES = {t["name"] for t in TOOLS}
 
@@ -143,7 +143,7 @@ class Toolbox:
     def viec_can_lam(self, a):
         from . import inbox
         items, _ = inbox.collect(self.db)
-        src = a.get("source") if a.get("source") in ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "license", "spend", "system") else None
+        src = a.get("source") if a.get("source") in ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "license", "spend", "system") else None
         vis = [i for i in items if inbox.visible(i, self.user, self.features) and (src is None or i["source"] == src)]
         return {"tong": len(vis), "viec": [{"muc": inbox.LEVEL_LABELS[i["level"]], "nguon": inbox.SOURCE_LABELS.get(i["source"], i["source"]),
                                             "noi_dung": i["title"], "chi_tiet": (i.get("detail") or "")[:200],

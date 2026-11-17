@@ -36,6 +36,31 @@ def datastore_history(vcenter_key: str, ds_key: str, days: int = 30, user: User 
     return infra.datastore_history(db, vcenter_key, ds_key, days)
 
 
+@router.get("/infra/storage")
+def storage(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return infra.storage(db)
+
+
+@router.post("/infra/storage/sync")
+def storage_sync(user: User = Depends(require_admin)):
+    """Read every storage array now (read-only), like the scheduler round does."""
+    from ..collectors.scheduler import sync_storages
+    from ..config import get_settings
+    return {"results": sync_storages(get_settings())}
+
+
+@router.get("/infra/storage/{source_key}/history")
+def storage_history(source_key: str, days: int = 30, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    import datetime as dt
+    from .. import metrics
+    now = dt.datetime.utcnow()
+    since = now - dt.timedelta(days=max(1, min(days, 1095)))
+    out = {}
+    for m in ("usedGB", "capacityGB", "latencyReadMs", "latencyWriteMs", "iops"):
+        out[m] = [[t.replace(microsecond=0).isoformat() + "Z", round(v, 2)] for t, v in metrics.series(db, "array", [source_key], m, since, now)[source_key]]
+    return out
+
+
 @router.get("/infra/snapshots")
 def snapshots(vcenter: Optional[str] = "all", clusters: Optional[str] = None, hosts: Optional[str] = None,
               user: User = Depends(get_current_user), db: Session = Depends(get_db)):

@@ -576,6 +576,29 @@ Ngưỡng đổi được bằng biến môi trường (`DS_WATCH_PCT`, `DS_WARN
 Mục cần xử lý vào **hộp việc Trang chủ** (alarm đã xác nhận, host đang bảo trì, snapshot mức THEO DÕI thì không). ICO không xoá
 snapshot hay xác nhận alarm — thao tác trên vCenter.
 
+### Storage — Pure FlashArray và NetApp ONTAP (tab Storage)
+
+**Vận hành → Sức khoẻ hạ tầng → Storage** gom mảng lưu trữ về cùng chỗ với datastore / VM:
+
+- **Thẻ mảng**: dung lượng vật lý đã dùng / tổng, tỉ lệ giảm dữ liệu, độ trễ đọc · ghi, IOPS, băng thông,
+  trạng thái controller / node, linh kiện hỏng (quạt, nguồn, ổ đĩa, nhiệt độ), alert đang mở. Mức của mảng
+  lấy mức xấu nhất trong các lý do:
+  - dung lượng % theo cùng ngưỡng datastore (Cài đặt → Cảnh báo);
+  - độ trễ ≥ 5 ms → CẢNH BÁO, ≥ 20 ms → VƯỢT NGƯỠNG (`STORAGE_LATENCY_WARN_MS` / `_CRIT_MS`);
+  - controller không `ready` / `up`, linh kiện hỏng, alert critical → VƯỢT NGƯỠNG;
+  - lỗi đồng bộ hoặc dữ liệu cũ hơn 60 phút (`STORAGE_STALE_MINUTES`) → CẢNH BÁO.
+- **Bảng Volume / LUN ↔ datastore ↔ VM**: mỗi volume / LUN kèm datastore VMware đang dùng nó và số VM.
+  Ghép theo:
+  - VMFS: mã NAA của extent (`naa.624a9370` + serial volume Pure; `naa.600a0980` + serial LUN ONTAP dạng hex);
+  - NFS: IP data LIF (theo SVM) + đường dẫn export của volume ONTAP; mount bằng tên host thì ghép theo đường
+    dẫn khi chỉ có một volume khớp.
+- Tab **Datastore** thêm cột **Storage** (mảng + LUN / volume phía sau từng datastore).
+- Mảng ở mức CẢNH BÁO trở lên vào hộp việc Trang chủ và cảnh báo Discord (nguồn "Storage" ở Cài đặt → Cảnh báo).
+- Đồng bộ chạy cùng chu kỳ vCenter; admin bấm **Đồng bộ storage** để đọc ngay. Chuỗi dung lượng / độ trễ / IOPS
+  lưu theo tầng thời gian như các chỉ số khác (`GET /api/infra/storage/{mã}/history`).
+- Đã kiểm với FlashArray//X20R3, FlashArray//RC20 (dòng Refurbished, Purity REST 2.x giống //C) và NetApp
+  AFF A300 (ONTAP 9.6+ REST). Model hiển thị lấy từ API của mảng.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**
@@ -963,7 +986,7 @@ Muốn thử trước khi có vCenter thật: đặt `VCENTER_i_DEMO=true` cho c
 docker compose exec app python -m app.seed --username <user> --password '<pass>' --display-name "Tên hiển thị"
 ```
 
-## Kết nối nguồn dữ liệu trên giao diện (vCenter, NetBackup)
+## Kết nối nguồn dữ liệu trên giao diện (vCenter, NetBackup, storage)
 
 **Cài đặt → Kết nối nguồn dữ liệu** (chỉ admin) cho phép thêm / sửa / tắt / xoá vCenter và máy chủ
 backup NetBackup ngay trên giao diện — mỗi môi trường triển khai tự khai báo nguồn của mình, không cần
@@ -994,6 +1017,28 @@ trị trống, ngắn hơn 16 ký tự hoặc trùng giá trị mẫu trong `.en
 bảng với nhãn "Biến môi trường". Nút **Chuyển cấu hình biến môi trường vào giao diện** sao chép chúng (kèm
 mật khẩu, API key, file CA) vào giao diện; nguồn trên giao diện cùng mã sẽ thay thế nguồn từ biến, sau đó có
 thể xoá các biến khỏi ConfigMap / Secret.
+
+## Kết nối Pure FlashArray và NetApp ONTAP (chỉ đọc)
+
+Thêm ở **Cài đặt → Kết nối nguồn dữ liệu → + Pure FlashArray / + NetApp ONTAP**. Ứng dụng chỉ gọi GET;
+ngoại lệ duy nhất là `POST /api/2.x/login` và `/logout` của Pure để mở / đóng phiên (giống NetBackup).
+
+**Pure FlashArray** (//X, //C, //RC — Purity 6.x, REST 2.x):
+
+1. Tạo user cục bộ role **readonly** (Settings → Access → Users, hoặc `pureadmin create --role readonly ico_ro`).
+2. Đăng nhập bằng user đó, tạo API token (`pureadmin create --api-token`; đặt thời hạn theo chính sách).
+3. Trên ICO: máy chủ = IP / FQDN quản trị của mảng, cổng 443, dán **API token**. Token lưu mã hoá; chỉ hiện "đã có".
+
+**NetApp ONTAP** (AFF A300 và cụm ONTAP 9.6+):
+
+1. Tạo user cấp cụm role **readonly**, ứng dụng **http**:
+   `security login create -user-or-group-name ico_ro -application http -authentication-method password -role readonly`.
+2. Trên ICO: máy chủ = LIF quản trị cụm, cổng 443, tài khoản `ico_ro` + mật khẩu.
+3. Đọc: cluster, node, aggregate, volume (rw), LUN, data LIF NFS, ổ hỏng, sự kiện EMS mức error trở lên trong 24 giờ.
+
+Cả hai: bật kiểm tra chứng chỉ và dán CA PEM khi mảng dùng chứng chỉ nội bộ; bấm **Kiểm tra kết nối** trước khi lưu.
+Nguồn storage chỉ khai báo trên giao diện (không có biến môi trường `PURE_i_*` / `NETAPP_i_*`). Chế độ DEMO
+sinh mảng giả lập ghép đúng với datastore của vCenter demo.
 
 ## Tạo tài khoản read-only trên vCenter (bắt buộc trước khi trỏ vào vCenter thật)
 
