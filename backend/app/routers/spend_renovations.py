@@ -383,6 +383,7 @@ def _line_amount_vnd(l: QuotationLine, q: Quotation) -> Optional[int]:
         a = Decimal(l.qty) * Decimal(l.unit_price)
     else:
         return None
+    a *= Decimal(l.sets) if l.sets is not None else 1          # breakdown of one room of a bundle × N
     return int((a * fx).quantize(Decimal(1)))
 
 

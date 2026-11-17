@@ -833,6 +833,16 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
     gửi ra ngoài; AI chỉ *chép* số, không tính lại). Sửa dòng cho khớp file gốc, rồi bấm **Đã kiểm tra**.
   - **Kiểm tra công thức** (bằng code): SL × Đơn giá ≠ Thành tiền, cộng dòng ≠ Cộng NCC ghi, VAT sai tỷ lệ, Tổng sai,
     thiếu số, thành tiền 0, dòng trùng, ngoại tệ thiếu tỷ giá. Cảnh báo khi giá trị báo giá được chọn lệch dự toán > 1%.
+  - **Gói × N phòng / bộ**: mỗi dòng tính *thành tiền × số bộ* (cột **Số bộ** trong *Dòng báo giá*, trống = 1). Báo giá
+    có dòng gói (“Phòng họp — SL 2 — đơn giá X”) và bên dưới là chi tiết cho **1** phòng thì khi đọc file hệ thống tự đổi
+    dòng gói thành *Tiêu đề nhóm* và đặt Số bộ = 2 cho các dòng chi tiết — chỉ khi chi tiết cộng đúng bằng đơn giá gói và
+    kết quả khớp số *Trước VAT* NCC ghi; thẻ NCC ghi rõ “Đã nhận dạng gói…”. Báo giá đã nhân sẵn SL ở từng dòng giữ nguyên.
+  - **VAT theo từng dòng**: báo giá in thuế từng dòng (phần cứng 8 %, phần mềm / license *KCT* hoặc “-”) thì VAT được
+    tính dòng theo dòng (cột **VAT %** / **Thuế GTGT**; KCT = 0), thẻ NCC hiện “VAT KCT / 8%”. Khi cộng dòng hoặc VAT
+    vẫn lệch, cảnh báo gợi ý nguyên nhân: báo giá gấp N lần (thiếu Số bộ), một dòng là dòng gói / dòng cộng nhóm bị tính
+    trùng, hoặc các dòng phần mềm có thể không chịu VAT.
+  - Ô tiền trong *Dòng báo giá* hiện kiểu `1.631.800.000` (phần lẻ sau dấu phẩy); gõ `1631800000` hay `1,631,800,000`
+    đều được, rời ô sẽ tự định dạng lại.
   - **So sánh**: ghép hạng mục giữa các NCC theo model → mô tả gần giống (ghép tay được), ô thấp nhất tô xanh, chênh %
     từng hàng, tổng trước VAT / hạng mục chung / tổng NCC ghi, xếp hạng, điều kiện thương mại. Xuất Excel có công thức.
   - **Phiếu đánh giá NCC** theo mẫu EVALUATION FORM: khung tiêu chuẩn 70% (6 tiêu chí cố định tỷ trọng), khung mở rộng

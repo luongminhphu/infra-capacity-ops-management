@@ -14,6 +14,30 @@ const QT_LINE = { item: 'Hàng / dịch vụ', note: 'Tiêu đề nhóm', discou
 const VD_STATUS = { active: ['ok', 'Đang dùng'], paused: ['warn', 'Tạm ngừng'], blocked: ['bad', 'Không hợp tác'] };
 const qtNum = (v, d = 0) => uiNumber(v, d);
 const qtRaw = (v) => (v === null || v === undefined) ? '' : String(v);
+/* Money typed in an input, read like the backend (parse_number): 1.631.800.000 / 1,631,800,000 / 1631800000 / 1.234,5. */
+function qtParseMoney(s) {
+  const t = String(s ?? '').replace(/\s/g, '');
+  if (!/^-?[\d.,]+$/.test(t)) return null;
+  const dot = t.lastIndexOf('.'), com = t.lastIndexOf(',');
+  let n;
+  if (dot >= 0 && com >= 0) n = dot > com ? t.replace(/,/g, '') : t.replace(/\./g, '').replace(',', '.');
+  else {
+    const sep = dot >= 0 ? '.' : (com >= 0 ? ',' : '');
+    const parts = sep ? t.split(sep) : [t];
+    n = parts.length > 1 && parts.slice(1).every(p => p.length === 3) ? parts.join('') : (sep ? t.replace(sep, '.') : t);
+  }
+  const v = Number(n);
+  return Number.isFinite(v) ? v : null;
+}
+/* Shown grouped vi-VN in inputs (1.631.800.000; decimals 1.234,56), like everywhere else in the app. */
+const qtMoneyIn = (v) => (v === null || v === undefined || v === '') ? '' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+function qtMoneyFix(input) {
+  const v = qtParseMoney(input.value);
+  if (v !== null) input.value = qtMoneyIn(v);
+}
+const qtVatLabel = (q) => (q.vatRates && q.vatRates.length > 1)
+  ? `VAT ${q.vatRates.map(r => r === 0 ? 'KCT' : `${qtNum(r, 2)}%`).join(' / ')}`
+  : (q.vatPct !== null ? `VAT ${qtNum(q.vatPct, 2)}%` : '');
 const qtUrl = (code, ...parts) => ['/spend/quotes', encodeURIComponent(code), ...parts.map(p => encodeURIComponent(p))].join('/');
 
 async function qtDownload(path, fallback, btn) {
@@ -251,7 +275,7 @@ function qtTabQuotes(d) {
         ${spPill(...(QT_STATE[q.state] || ['na', q.stateLabel]))}</div>
       <dl class="sp-dl">
         <div class="sp-dl-item"><dt>Trước VAT (cộng dòng)</dt><dd>${spMoney(q.subtotalVnd)}</dd></div>
-        <div class="sp-dl-item"><dt>Tổng NCC ghi</dt><dd>${spMoney(q.totalVnd)}${q.vatPct !== null ? ` <span class="muted-sub sr-inline">VAT ${esc(qtNum(q.vatPct, 2))}%</span>` : ''}</dd></div>
+        <div class="sp-dl-item"><dt>Tổng NCC ghi</dt><dd>${spMoney(q.totalVnd)}${qtVatLabel(q) ? ` <span class="muted-sub sr-inline">${esc(qtVatLabel(q))}</span>` : ''}</dd></div>
         <div class="sp-dl-item"><dt>Dòng hàng</dt><dd>${esc(q.itemCount)}${q.method ? ` <span class="muted-sub sr-inline">${esc({ excel: 'đọc Excel', docx: 'đọc Word', ai: 'đọc bằng AI', manual: 'nhập tay' }[q.method] || q.method)}</span>` : ''}</dd></div>
         <div class="sp-dl-item"><dt>File</dt><dd>${q.file ? `<a href="/api/spend/files/${encodeURIComponent(q.file.id)}" download>${esc(q.file.name)}</a>` : '—'}</dd></div>
       </dl>
@@ -449,8 +473,11 @@ function qtLineRow(l = {}, ro = '') {
     <td><input class="ql-model" maxlength="255" value="${esc(l.model || '')}"${ro}></td>
     <td><input class="ql-unit" maxlength="32" value="${esc(l.unit || '')}"${ro}></td>
     <td><input class="ql-qty num" inputmode="decimal" value="${esc(qtRaw(l.qty))}"${ro}></td>
-    <td><input class="ql-price num" inputmode="decimal" value="${esc(qtRaw(l.unitPrice))}"${ro}></td>
-    <td><input class="ql-amount num" inputmode="decimal" value="${esc(qtRaw(l.amount))}"${ro}></td>
+    <td><input class="ql-price num qt-money" inputmode="decimal" value="${esc(qtMoneyIn(l.unitPrice))}"${ro}></td>
+    <td><input class="ql-amount num qt-money" inputmode="decimal" value="${esc(qtMoneyIn(l.amount))}"${ro}></td>
+    <td><input class="ql-vat num" inputmode="decimal" value="${esc(qtRaw(l.vatPct))}" placeholder="theo BG" title="Thuế suất dòng: 8, 10… KCT = 0; để trống = VAT % của báo giá"${ro}></td>
+    <td><input class="ql-vatamt num qt-money" inputmode="decimal" value="${esc(qtMoneyIn(l.vatAmount))}"${ro}></td>
+    <td><input class="ql-sets num" inputmode="decimal" value="${esc(qtRaw(l.sets))}" placeholder="1" title="Dòng là chi tiết cho 1 phòng / bộ của một gói tính N lần: nhập N"${ro}></td>
     ${ro ? '' : '<td><button class="btn btn-ghost btn-sm" type="button" data-ql-del aria-label="Xoá dòng"><i data-lucide="x"></i></button></td>'}</tr>`;
 }
 
@@ -460,18 +487,18 @@ async function qtOpenLines(qid) {
   try { q = await apiRequest(qtUrl(code, 'quotations', qid)); } catch (err) { uiAlert(err.message); return; }
   const ro = !(spCan('editor') && !qtLocked()) ? ' disabled' : '';
   const bad = new Set(q.findings.filter(f => f.lineId).map(f => f.lineId));
-  const f = (name, label, val, attrs = '') => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(qtRaw(val))}"${attrs}${ro}></label>`;
+  const f = (name, label, val, attrs = '') => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(/qt-money/.test(attrs) ? qtMoneyIn(val) : qtRaw(val))}"${attrs}${ro}></label>`;
   const body = `<form id="qlForm" class="sp-form" novalidate><div class="src-grid qt-head-grid">
       ${f('quoteNo', 'Số báo giá', q.quoteNo, ' maxlength="64"')}${f('quoteDate', 'Ngày báo giá', q.quoteDate, ' type="date"')}
       ${f('validUntil', 'Hiệu lực đến', q.validUntil, ' type="date"')}${f('currency', 'Tiền tệ', q.currency, ' maxlength="3"')}
-      ${f('fxRate', 'Tỷ giá (nếu ngoại tệ)', q.fxRate, ' inputmode="decimal"')}${f('vatPct', 'VAT (%)', q.vatPct, ' inputmode="decimal"')}
-      ${f('statedSubtotal', 'Trước VAT — NCC ghi', q.statedSubtotal, ' inputmode="decimal"')}${f('statedDiscount', 'Chiết khấu — NCC ghi', q.statedDiscount, ' inputmode="decimal"')}
-      ${f('statedVat', 'VAT — NCC ghi', q.statedVat, ' inputmode="decimal"')}${f('statedTotal', 'Tổng — NCC ghi', q.statedTotal, ' inputmode="decimal"')}
+      ${f('fxRate', 'Tỷ giá (nếu ngoại tệ)', q.fxRate, ' inputmode="decimal" class="qt-money"')}${f('vatPct', 'VAT (%)', q.vatPct, ' inputmode="decimal"')}
+      ${f('statedSubtotal', 'Trước VAT — NCC ghi', q.statedSubtotal, ' inputmode="decimal" class="qt-money"')}${f('statedDiscount', 'Chiết khấu — NCC ghi', q.statedDiscount, ' inputmode="decimal" class="qt-money"')}
+      ${f('statedVat', 'VAT — NCC ghi', q.statedVat, ' inputmode="decimal" class="qt-money"')}${f('statedTotal', 'Tổng — NCC ghi', q.statedTotal, ' inputmode="decimal" class="qt-money"')}
       ${f('deliveryTerms', 'Giao hàng', q.deliveryTerms, ' maxlength="500"')}${f('warrantyTerms', 'Bảo hành', q.warrantyTerms, ' maxlength="500"')}
       ${f('paymentTerms', 'Thanh toán', q.paymentTerms, ' maxlength="500"')}
     </div></form>
     ${q.findings.length ? `<ul class="qt-findings">${q.findings.map(x => `<li class="${x.severity === 'crit' ? 'crit' : 'warn'}"><b>${esc(x.code)}</b> ${esc(x.message)}</li>`).join('')}</ul>` : ''}
-    <div class="table-scroll"><table class="data-table qt-lines"><thead><tr><th>Loại</th><th>Mô tả</th><th>Model</th><th>ĐVT</th><th class="num">SL</th><th class="num">Đơn giá</th><th class="num">Thành tiền</th>${ro ? '' : '<th></th>'}</tr></thead>
+    <div class="table-scroll"><table class="data-table qt-lines"><thead><tr><th>Loại</th><th>Mô tả</th><th>Model</th><th>ĐVT</th><th class="num">SL</th><th class="num">Đơn giá</th><th class="num">Thành tiền</th><th class="num">VAT %</th><th class="num">Thuế GTGT</th><th class="num">Số bộ</th>${ro ? '' : '<th></th>'}</tr></thead>
       <tbody id="qlBody">${(q.lines || []).map(l => qtLineRow(l, ro).replace('<tr data-line>', `<tr data-line${bad.has(l.id) ? ' class="qt-bad"' : ''}>`)).join('')}</tbody></table></div>
     ${ro ? '' : '<button class="btn btn-ghost btn-sm" type="button" id="qlAdd"><i data-lucide="plus"></i>Thêm dòng</button>'}
     <p class="muted-sub">Sửa cho khớp file gốc của NCC — không “sửa hộ” lỗi tính toán của NCC; lỗi đó cần NCC xác nhận lại. Lưu sẽ bỏ dấu “Đã kiểm tra”.</p>`;
@@ -479,6 +506,7 @@ async function qtOpenLines(qid) {
     ${ro ? '' : '<button class="btn btn-primary btn-sm" type="button" id="qlSave">Lưu &amp; kiểm tra lại</button>'}`);
   $('#spDialog').classList.add('qt-wide');
   $('#spDialog').addEventListener('close', () => $('#spDialog').classList.remove('qt-wide'), { once: true });
+  $('#spDialogBody').onchange = (e) => { if (e.target.matches('input.qt-money')) qtMoneyFix(e.target); };
   $('#spDialogBody').onclick = (e) => {
     if (e.target.closest('#qlAdd')) { $('#qlBody').insertAdjacentHTML('beforeend', qtLineRow()); refreshIcons(); }
     const del = e.target.closest('[data-ql-del]');
@@ -489,7 +517,8 @@ async function qtOpenLines(qid) {
     payload.lines = $$('#qlBody [data-line]').map(tr => ({
       lineType: tr.querySelector('.ql-type').value, description: tr.querySelector('.ql-desc').value, model: tr.querySelector('.ql-model').value,
       unit: tr.querySelector('.ql-unit').value, qty: tr.querySelector('.ql-qty').value, unitPrice: tr.querySelector('.ql-price').value,
-      amount: tr.querySelector('.ql-amount').value })).filter(l => l.description.trim());
+      amount: tr.querySelector('.ql-amount').value, vatPct: tr.querySelector('.ql-vat').value.trim(),
+      vatAmount: tr.querySelector('.ql-vatamt').value, sets: tr.querySelector('.ql-sets').value.trim() })).filter(l => l.description.trim());
     try {
       await apiRequest(qtUrl(code, 'quotations', qid), { method: 'PUT', body: JSON.stringify(payload) });
       $('#spDialog').close();

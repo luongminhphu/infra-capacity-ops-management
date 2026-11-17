@@ -233,3 +233,11 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 .tbl-inputs td .muted-sub,.tbl-inputs th .muted-sub{white-space:normal;}
 .tbl-inputs th .muted-sub{font-weight:var(--fw-regular);}
 .qt-eval .qt-crit-name{min-width:0;width:100%;}
+/* Dòng báo giá: per-line VAT % / Số bộ are short numbers; money columns hold 1.631.800.000. */
+.qt-lines .ql-vat,.qt-lines .ql-sets{min-width:64px;}
+.qt-lines .qt-money{min-width:128px;}
+.qt-lines .ql-type{min-width:156px;}
+.qt-lines .ql-model{min-width:120px;}
+.qt-lines .ql-unit{min-width:80px;}
+.qt-lines .ql-qty{min-width:64px;}
+.qt-lines .ql-desc{min-width:260px;}
