@@ -159,3 +159,63 @@ def test_redact_patterns():
                    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJlMTIz {\"api_key\": \"k123456\"}")
     assert "pa55word" not in s and "abc.def.ghijklmnop" not in s and "eyJhbGci" not in s and "k123456" not in s
     assert obs.normalize_sql("SELECT * FROM t WHERE a = 'x' AND b IN (?, ?, ?)") == "SELECT * FROM t WHERE a = '?' AND b IN (…)"
+
+
+# ---------------------------------------------------------------- Settings → AI / MCP server (stored in app_settings)
+@pytest.fixture()
+def clean_config(client):
+    client.delete("/api/admin/mcp/config")
+    yield client
+    client.delete("/api/admin/mcp/config")
+
+
+def test_settings_ui_overrides_configmap_and_reset_returns_to_it(clean_config, monkeypatch):
+    client = clean_config
+    monkeypatch.setattr(get_settings(), "mcp_enabled", False)          # ConfigMap says off
+    info = client.get("/api/admin/mcp").json()
+    assert info["enabled"] is False and info["saved"] == [] and info["defaults"]["enabled"] is False
+    tok = None
+    # Turn it on from the UI: endpoint and token creation follow at once in this pod.
+    r = client.put("/api/admin/mcp/config", json={"enabled": True, "tokenMaxDays": 30, "ratePerMinute": 60,
+                                                   "allowedOrigins": "https://ico.example.vn, http://localhost:8765/"})
+    assert r.status_code == 200, r.text
+    assert r.json()["allowedOrigins"] == ["https://ico.example.vn", "http://localhost:8765"]
+    assert set(r.json()["saved"]) == {"enabled", "tokenMaxDays", "ratePerMinute", "allowedOrigins"}
+    t = client.post("/api/admin/mcp/tokens", json={"name": "cfg", "days": 90}).json()
+    tok = t["token"]
+    assert dt.datetime.fromisoformat(t["expiresAt"].rstrip("Z")) < dt.datetime.utcnow() + dt.timedelta(days=31)   # capped at 30
+    assert _rpc(client, tok, "tools/list").status_code == 200
+    assert _rpc(client, tok, "tools/list", headers={"Origin": "https://ico.example.vn"}).status_code == 200
+    assert _rpc(client, tok, "tools/list", headers={"Origin": "https://evil.example"}).status_code == 403
+    # Every change is in the MCP audit trail.
+    assert any(a["action"] == "mcp.config" and a["detail"]["after"]["enabled"] for a in client.get("/api/admin/mcp/audit").json())
+    # Off from the UI → endpoint 404 even though the token is valid.
+    assert client.put("/api/admin/mcp/config", json={"enabled": False}).status_code == 200
+    assert _rpc(client, tok, "tools/list").status_code == 404
+    # Reset → back to the ConfigMap value (off), no saved key left.
+    r = client.delete("/api/admin/mcp/config")
+    assert r.status_code == 200 and r.json()["enabled"] is False
+    assert client.get("/api/admin/mcp").json()["saved"] == []
+
+
+def test_settings_validation_and_mask_off_confirmation(clean_config):
+    client = clean_config
+    for body, needle in (({"tokenMaxDays": 0}, "Hạn token"), ({"tokenMaxDays": 400}, "Hạn token"),
+                         ({"ratePerMinute": 5}, "Giới hạn"), ({"enabled": "yes"}, "bật / tắt"),
+                         ({"allowedOrigins": "*"}, "Origin không hợp lệ"),
+                         ({"allowedOrigins": "https://a.vn/path"}, "Origin không hợp lệ"),
+                         ({"allowedOrigins": "javascript:alert(1)"}, "Origin không hợp lệ")):
+        r = client.put("/api/admin/mcp/config", json=body)
+        assert r.status_code == 400 and needle in r.json()["detail"], (body, r.text)
+    # Host masking off sends internal names to the AI: refused without an explicit confirmation.
+    r = client.put("/api/admin/mcp/config", json={"maskHosts": False})
+    assert r.status_code == 400 and "xác nhận" in r.json()["detail"]
+    assert obs.mask_infra("db01.corp.local 10.1.2.3").count("<") == 2
+    assert client.put("/api/admin/mcp/config", json={"maskHosts": False, "confirmMaskOff": True}).status_code == 200
+    assert obs.mask_infra("db01.corp.local 10.1.2.3") == "db01.corp.local 10.1.2.3"
+
+
+def test_settings_admin_only(clean_config, monkeypatch):
+    monkeypatch.setattr(get_settings(), "admin_users", "someone-else")
+    assert clean_config.put("/api/admin/mcp/config", json={"enabled": True}).status_code == 403
+    assert clean_config.delete("/api/admin/mcp/config").status_code == 403

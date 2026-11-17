@@ -1534,7 +1534,13 @@ Mỗi bản ghi có `APP_VERSION` (commit của image) để gắn lỗi / chậ
 
 ### Bật và kết nối
 
-1. ConfigMap `ico-config`: `MCP_ENABLED: "true"` → apply → Redeploy `ico-app` trên Rancher.
+1. **Cài đặt → AI / MCP server** (admin): bật công tắc **Bật MCP server** → **Lưu cấu hình**. Không cần redeploy:
+   mọi pod đọc lại cấu hình trong khoảng 15 giây. Cùng chỗ đó chỉnh *Hạn token tối đa*, *Giới hạn yêu cầu / phút*,
+   *Origin trình duyệt được phép* (dạng `https://ten-may[:cổng]`, không `*`) và *Che host / IP trong log* (tắt phải
+   xác nhận vì tên máy chủ / IP nội bộ sẽ đi tới AI). Chỉ ô đã sửa được lưu (bảng `app_settings`, khoá `mcp.*`);
+   ô chưa sửa theo ConfigMap `ico-config` (`MCP_ENABLED`, `MCP_TOKEN_MAX_DAYS`, `MCP_RATE_PER_MINUTE`,
+   `MCP_ALLOWED_ORIGINS`, `MCP_MASK_HOSTS`) — giá trị ConfigMap hiện dưới từng ô. **Về mặc định ConfigMap** xoá các
+   giá trị đã lưu. Mọi thay đổi ghi vào **Nhật ký truy cập MCP** (`mcp.config`, trước → sau).
 2. Đăng nhập bằng tài khoản admin → **Cài đặt → AI / MCP server → Tạo token** (30/90/180 ngày). Token chỉ
    hiển thị **một lần**; app chỉ lưu SHA-256. Có thể thu hồi bất cứ lúc nào; mọi lần gọi công cụ được ghi
    vào **Nhật ký truy cập MCP**.
