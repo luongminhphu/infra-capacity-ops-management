@@ -25,7 +25,7 @@ Quy tắc gốc (có **Nguồn**) nằm ở [`design-system/ico/MASTER.md`](../.
 | L10 | **Không dùng ô chọn file gốc** (nút “Choose File” tiếng Anh) | `uiDropzone(id, title, sub, accept)` (ui.js) — giữ `id`, handler `change` cũ chạy nguyên; hoặc nút `.btn` bọc `<input type="file" hidden>` |
 | L11 | Nút: một dòng, động từ + tân ngữ ngắn (“Upload v3”, “Xem trước”) | Nhãn dài → `title` hoặc rút gọn |
 | L12 | Một hành động / trường giữ **một tên** ở mọi nơi (trang Quy hoạch và Tuỳ chọn báo cáo dùng cùng nhãn) | Sửa nhãn ở một chỗ thì `grep` chỗ còn lại (`index.html` + `js/views`) |
-| L13 | **Bảng có ô nhập** (phiếu đánh giá, checklist, kế hoạch): cột số có độ rộng cố định, ô nhập lấp đầy cột, số căn phải **cùng một mép** với tiêu đề và dòng tổng | `<colgroup>` + `table-layout:fixed`; `input{width:100%;text-align:right}` bỏ nút tăng giảm; `th.num, tfoot td.num` padding phải = padding ô + padding input + viền (xem `.qt-eval` trong patches.css). `ui_audit.js` báo cột lệch mép > 3 px |
+| L13 | **Bảng có ô nhập** (phiếu đánh giá, checklist, kế hoạch): cột số có độ rộng cố định, ô nhập lấp đầy cột, số căn phải **cùng một mép** với tiêu đề và dòng tổng | Lớp dùng chung `.tbl-inputs` (patches.css): `<colgroup>` với `col.c-num` / `col.c-act`, biến `--tbl-first` / `--tbl-col` / `--tbl-n`; ô có input là `td.num.in`, ô số chỉ đọc / tổng là `td.num` (tự cùng mép). Tiền trong ô nhập hiện kiểu vi-VN (`412.000.000`), chỉ định dạng lại khi giá trị toàn chữ số. Dòng tổng mỗi cột một giá trị, thiếu số liệu ghi “—”. Mẫu: `.qt-eval`, `.rn-table`. `ui_audit.js` báo cột lệch mép > 3 px |
 
 ## 2. Mẫu code
 

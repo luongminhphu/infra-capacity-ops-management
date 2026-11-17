@@ -333,9 +333,9 @@ function qtTabEval(d) {
   if (!cols.length) return '<p class="empty-note">Thêm báo giá trước khi đánh giá NCC.</p>';
   const crit = (sec) => ev.criteria.filter(c => c.section === sec).map(c => `<tr data-crit data-sec="${sec}">
       <td><input type="text" class="qt-crit-name" aria-label="Tiêu chí" value="${esc(c.name)}" maxlength="255"${ro}></td>
-      <td class="num"><input type="number" class="qt-w" aria-label="Tỷ trọng (%) — ${esc(c.name)}" min="1" max="70" step="0.5" value="${esc(Math.round(c.weight * 1000) / 10)}"${ro}></td>
-      ${cols.map(x => `<td class="num"><input type="number" class="qt-score" aria-label="${esc(x.label)} — ${esc(c.name)}" min="1" max="10" step="0.05" data-q="${esc(x.quotationId)}" value="${esc(qtRaw(c.scores[String(x.quotationId)]))}"${ro}></td>`).join('')}
-      ${ro ? '' : '<td class="qt-act"><button class="btn btn-ghost btn-sm icon-btn" type="button" data-qt-act="crit-del" aria-label="Bỏ tiêu chí"><i data-lucide="x"></i></button></td>'}</tr>`).join('');
+      <td class="num in"><input type="number" class="qt-w" aria-label="Tỷ trọng (%) — ${esc(c.name)}" min="1" max="70" step="0.5" value="${esc(Math.round(c.weight * 1000) / 10)}"${ro}></td>
+      ${cols.map(x => `<td class="num in"><input type="number" class="qt-score" aria-label="${esc(x.label)} — ${esc(c.name)}" min="1" max="10" step="0.05" data-q="${esc(x.quotationId)}" value="${esc(qtRaw(c.scores[String(x.quotationId)]))}"${ro}></td>`).join('')}
+      ${ro ? '' : '<td class="act"><button class="btn btn-ghost btn-sm icon-btn" type="button" data-qt-act="crit-del" aria-label="Bỏ tiêu chí"><i data-lucide="x"></i></button></td>'}</tr>`).join('');
   const sec = (s, label) => `<tr class="qt-sec"><td colspan="${2 + cols.length + (ro ? 0 : 1)}"><b>${label}</b>${ro || s === 'A' ? '' : ' <button class="btn btn-ghost btn-sm" type="button" data-qt-act="crit-add">+ tiêu chí</button>'}</td></tr>`;
   const hint = Object.keys(ev.priceScoreHint).length ? `Gợi ý điểm Giá thành (rẻ nhất 10, mỗi 5% cao hơn trừ 1): ${cols.map(x => `${esc(x.label)} ${esc(qtNum(ev.priceScoreHint[String(x.quotationId)], 1))}`).join(' · ')}` : '';
   return `<form id="qtEval" class="sp-form" novalidate><div class="src-grid">
@@ -346,8 +346,8 @@ function qtTabEval(d) {
       <label class="field"><span>Người thực hiện đánh giá</span><input name="evaluator" maxlength="128" value="${esc(ev.evaluator || '')}"${ro}></label>
       <label class="field"><span>Trưởng Bộ phận phê duyệt</span><input name="approver" maxlength="128" value="${esc(ev.approver || '')}"${ro}></label>
     </div></form>
-    <div class="table-scroll"><table class="data-table qt-eval" style="--qt-n:${cols.length}">
-      <colgroup><col class="qt-c-name"><col class="qt-c-num">${cols.map(() => '<col class="qt-c-num">').join('')}${ro ? '' : '<col class="qt-c-act">'}</colgroup>
+    <div class="table-scroll"><table class="data-table qt-eval tbl-inputs" style="--tbl-first:280px;--tbl-col:112px;--tbl-n:${cols.length + 1};--tbl-act:${ro ? 0 : 48}px">
+      <colgroup><col><col class="c-num">${cols.map(() => '<col class="c-num">').join('')}${ro ? '' : '<col class="c-act">'}</colgroup>
       <thead><tr><th>Tiêu chí đánh giá</th><th class="num">Tỷ trọng (%)</th>${cols.map(x => `<th class="num" title="${esc(x.label)}">${esc(x.label)}</th>`).join('')}${ro ? '' : '<th></th>'}</tr></thead>
       <tbody id="qtCrit">${sec('A', 'A. Khung đánh giá tiêu chuẩn — 70%')}${crit('A')}${sec('B', 'B. Khung đánh giá mở rộng — 30% (2–4 tiêu chí)')}${crit('B')}</tbody>
       <tfoot><tr class="qt-foot"><td><b>Tổng điểm</b></td><td></td>${cols.map(x => `<td class="num"><b>${esc(qtNum(ev.totals[String(x.quotationId)], 2))}</b></td>`).join('')}${ro ? '' : '<td></td>'}</tr>
