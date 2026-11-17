@@ -30,25 +30,28 @@ async function spRenderSettings() {
     <div class="sp-settings-grid">
       <div>
         <h4 class="sp-h">Năm tài chính &amp; mốc nhắc</h4>
-        <div class="settings-form">
-          <label class="field"><span>Tháng bắt đầu năm tài chính</span><select id="spSetMonth" ${dis}>${months}</select></label>
-          <label class="field"><span>Mốc nhắc (ngày trước hạn)</span><input type="text" id="spSetDays" value="${esc(s.reminderDays.join(', '))}" ${dis} placeholder="90, 60, 30"></label>
-          <label class="field"><span>Giờ gửi nhắc hằng ngày (giờ VN)</span><select id="spSetHour" ${dis}>${hours}</select></label>
-          <label class="field"><span>Địa chỉ ứng dụng (link trong tin nhắc)</span><input type="text" id="spSetUrl" value="${esc(s.appBaseUrl)}" ${dis} placeholder="https://ico.congty.vn"></label>
-          <label class="field"><span>Đơn vị đề xuất mặc định (tờ trình)</span><input type="text" id="spSetDept" maxlength="128" value="${esc(s.proposalDepartment || '')}" ${dis} placeholder="Phòng Hạ tầng IT"></label>
-          <label class="field"><span>Chờ xoá version hợp đồng cũ (ngày)</span><input type="number" id="spSetPurge" min="1" max="365" value="${esc(s.purgeDays)}" ${dis}></label>
+        <div class="settings-form form-grid-aligned sp-form-2">
+          <label class="field"><span>Tháng bắt đầu năm tài chính</span><select id="spSetMonth" ${dis}>${months}</select><span class="field-help"></span></label>
+          <label class="field"><span>Mốc nhắc (ngày trước hạn)</span><input type="text" id="spSetDays" value="${esc(s.reminderDays.join(', '))}" ${dis} placeholder="90, 60, 30" aria-describedby="spSetDaysH"><span class="field-help" id="spSetDaysH">Phân cách bằng dấu phẩy.</span></label>
+          <label class="field"><span>Giờ gửi nhắc (giờ VN)</span><select id="spSetHour" ${dis}>${hours}</select><span class="field-help">Gửi một lần mỗi ngày.</span></label>
+          <label class="field"><span>Địa chỉ ứng dụng</span><input type="text" id="spSetUrl" value="${esc(s.appBaseUrl)}" ${dis} placeholder="https://ico.congty.vn" aria-describedby="spSetUrlH"><span class="field-help" id="spSetUrlH">Dùng làm link trong tin nhắc.</span></label>
+          <label class="field"><span>Đơn vị đề xuất (tờ trình)</span><input type="text" id="spSetDept" maxlength="128" value="${esc(s.proposalDepartment || '')}" ${dis} placeholder="Phòng Hạ tầng IT"><span class="field-help">Mặc định khi soạn tờ trình.</span></label>
+          <label class="field"><span>Giữ version hợp đồng cũ (ngày)</span><input type="number" id="spSetPurge" min="1" max="365" value="${esc(s.purgeDays)}" ${dis} aria-describedby="spSetPurgeH"><span class="field-help" id="spSetPurgeH">Sau đó chỉ giữ bản Final và bản ký.</span></label>
         </div>
         <p class="panel-sub">Năm tài chính đặt tên theo năm bắt đầu (tháng 4: 04/2026–03/2027 = FY 2026). Đổi tháng bắt đầu không làm thay đổi năm tài chính của các khoản đã lưu.</p>
         ${admin ? '<div class="sim-actions"><button class="btn btn-primary btn-sm" type="button" id="spSetSave">Lưu cài đặt</button><span class="criteria-status" id="spSetStatus"></span></div>' : ''}
-        <h4 class="sp-h">Cost center</h4>
-        <ul class="sp-cc">${ccs}</ul>
-        ${spCan('editor') ? `<div class="sp-inline"><input type="text" id="spCcCode" maxlength="32" placeholder="Mã" aria-label="Mã cost center"><input type="text" id="spCcName" maxlength="128" placeholder="Tên bộ phận" aria-label="Tên cost center"><button class="btn btn-secondary btn-sm" type="button" id="spCcAdd">Thêm</button></div>` : ''}
       </div>
       <div>
+        <h4 class="sp-h">Cost center</h4>
+        <p class="panel-sub">Bộ phận chịu chi phí, dùng để lọc và tổng hợp Opex / Capex.</p>
+        <ul class="sp-cc">${ccs}</ul>
+        ${spCan('editor') ? `<div class="sp-add-row"><input type="text" id="spCcCode" maxlength="32" placeholder="Mã" aria-label="Mã cost center"><input type="text" id="spCcName" maxlength="128" placeholder="Tên bộ phận" aria-label="Tên cost center"><button class="btn btn-secondary btn-sm" type="button" id="spCcAdd">Thêm</button></div>` : ''}
+      </div>
+      <div class="sp-span-all">
         <h4 class="sp-h">Loại chi phí</h4>
         <p class="panel-sub">% gia hạn dùng để tự tính Opex dự kiến từ Capex (giai đoạn sau). Loại đã dùng không xoá được, chỉ bỏ chọn “Dùng”.</p>
         <div class="table-scroll table-scroll-flat"><table class="data-table sp-cat-table"><thead><tr><th>Mã</th><th>Tên</th><th>Nhóm</th><th>% gia hạn</th><th>Dùng</th><th></th></tr></thead><tbody>${cats}</tbody></table></div>
-        ${admin ? `<div class="sp-inline"><input type="text" id="spCatCode" maxlength="32" placeholder="MÃ_MỚI" aria-label="Mã loại"><input type="text" id="spCatName" maxlength="128" placeholder="Tên loại" aria-label="Tên loại mới"><button class="btn btn-secondary btn-sm" type="button" id="spCatAdd">Thêm loại</button></div>` : ''}
+        ${admin ? `<div class="sp-add-row"><input type="text" id="spCatCode" maxlength="32" placeholder="MÃ_MỚI" aria-label="Mã loại"><input type="text" id="spCatName" maxlength="128" placeholder="Tên loại" aria-label="Tên loại mới"><button class="btn btn-secondary btn-sm" type="button" id="spCatAdd">Thêm loại</button></div>` : ''}
       </div>
     </div>
     ${admin ? `<div id="spAdminMount">${uiLoading('Đang tải cấu hình kênh nhắc…')}</div>` : ''}
@@ -117,7 +120,7 @@ async function spRenderAdmin() {
       <div>
         <h4 class="sp-h">Máy chủ SMTP <span class="badge-admin">Admin</span></h4>
         ${smtp.secretsKeyConfigured ? '' : '<div class="insight-box src-warning"><strong>Chưa đặt SECRETS_KEY.</strong> Mật khẩu SMTP / webhook đang mã hoá bằng khoá suy ra từ JWT_SECRET.</div>'}
-        <div class="settings-form">
+        <div class="settings-form form-grid-aligned sp-form-2">
           <label class="field"><span>Máy chủ</span><input type="text" id="spSmtpHost" value="${esc(smtp.host)}" placeholder="smtp.congty.vn"></label>
           <label class="field"><span>Cổng</span><input type="number" id="spSmtpPort" min="1" max="65535" value="${esc(smtp.port)}"></label>
           <label class="field"><span>Bảo mật</span><select id="spSmtpSec">${spOpt('starttls', 'STARTTLS', smtp.security)}${spOpt('ssl', 'SSL/TLS', smtp.security)}${spOpt('none', 'Không (relay nội bộ)', smtp.security)}</select></label>

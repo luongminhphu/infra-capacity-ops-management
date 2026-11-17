@@ -221,8 +221,9 @@
 .ct-upload input[type="text"]{width:100%;}
 /* Tờ trình (spend_proposal.js) */
 .pp-rec-title{font-size:var(--fs-body-sm);font-weight:var(--fw-semibold);margin:var(--space-3) 0 var(--space-2);}
-.pp-rec-row{display:grid;grid-template-columns:120px 80px minmax(0,1fr) minmax(0,1.2fr) auto;gap:var(--space-2);margin-bottom:var(--space-2);}
-.pp-rec-row select,.pp-rec-row input{height:var(--control-h-sm);width:100%;}
+.pp-rec-row{display:grid;grid-template-columns:128px 104px minmax(0,1fr) minmax(0,1.2fr) auto;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);}
+.pp-rec-row select,.pp-rec-row input:not([type=checkbox]):not([type=radio]){height:var(--control-h-sm);width:100%;}
+.pp-rec-row .finding-filter-item{white-space:nowrap;}
 .sp-form select[multiple]{height:auto;padding:var(--space-1);}
 @media (max-width:640px){.pp-rec-row{grid-template-columns:1fr 1fr;}}
 /* Thanh toán hợp đồng (spend_payment.js) */

@@ -322,7 +322,7 @@ class ThresholdsIn(BaseModel):
 def _thresholds_out(th: analysis.BackupThresholds) -> Dict[str, Any]:
     vals = vars(th)
     return {"values": vals, "defaults": vars(analysis.BackupThresholds()),
-            "meta": [{"key": k, "label": lbl, "unit": u} for k, lbl, u in analysis.THRESHOLD_META]}
+            "meta": [{"key": k, "label": lbl, "unit": u, "hint": h} for k, lbl, u, h in analysis.THRESHOLD_META]}
 
 
 @router.get("/thresholds")

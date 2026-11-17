@@ -39,18 +39,18 @@ async function renderAiSettings(force) {
         <div class="ai-bar"><span class="ai-bar-fill tone-${tone}" style="width:${pct.toFixed(1)}%"></span><span class="ai-bar-mark" style="left:${Math.min(100, u.alertUsd * 100 / Math.max(1, u.budgetUsd)).toFixed(1)}%"></span></div></div>
       ${uiPill(d.enabled ? 'ok' : 'na', d.enabled ? 'AI đang bật' : 'AI đang tắt')}
     </div>
-    <div class="settings-form ai-grid">
+    <div class="settings-form ai-grid form-grid-aligned">
       <label class="field"><span>Nhà cung cấp</span><select id="aiProv">${opt('none', 'Không dùng AI', d.provider)}${opt('anthropic', 'Anthropic (Claude)', d.provider)}</select></label>
       <label class="field"><span>Model</span><input id="aiModel2" maxlength="64" value="${esc(d.model)}"></label>
-      <label class="field"><span>Mức suy luận (effort)</span><select id="aiEffort2">${['low', 'medium', 'high'].map(x => opt(x, x, d.effort)).join('')}</select></label>
-      <label class="field"><span>API key</span><input type="password" id="aiKey2" autocomplete="off" placeholder="${d.hasApiKey ? 'Đã lưu — để trống để giữ' : 'sk-ant-…'}"></label>
-      <label class="field"><span>Hạn mức / tháng (USD) — chạm là AI tạm dừng</span><input id="aiBudget" type="number" min="1" max="10000" value="${esc(d.budgetUsd)}"></label>
-      <label class="field"><span>Ngưỡng cảnh báo (USD) — Discord + hộp việc admin</span><input id="aiAlert" type="number" min="1" max="10000" value="${esc(d.alertUsd)}"></label>
-      <label class="field"><span>Lượt gọi tối đa / người / giờ</span><input id="aiRate" type="number" min="1" max="1000" value="${esc(d.ratePerHour)}"></label>
+      <label class="field"><span>Mức suy luận</span><select id="aiEffort2">${['low', 'medium', 'high'].map(x => opt(x, x, d.effort)).join('')}</select></label>
+      <label class="field"><span>API key</span><input type="password" id="aiKey2" autocomplete="off" aria-describedby="aiKeyH" placeholder="${d.hasApiKey ? '••••••••' : 'sk-ant-…'}"><span class="muted-sub field-help" id="aiKeyH">${d.hasApiKey ? 'Đã lưu; để trống để giữ.' : 'Chưa lưu key.'}</span></label>
+      <label class="field"><span>Hạn mức tháng (USD)</span><input id="aiBudget" type="number" min="1" max="10000" value="${esc(d.budgetUsd)}" aria-describedby="aiBudgetH"><span class="muted-sub field-help" id="aiBudgetH">Chạm hạn mức thì AI tạm dừng.</span></label>
+      <label class="field"><span>Ngưỡng cảnh báo (USD)</span><input id="aiAlert" type="number" min="1" max="10000" value="${esc(d.alertUsd)}" aria-describedby="aiAlertH"><span class="muted-sub field-help" id="aiAlertH">Báo Discord và hộp việc admin.</span></label>
+      <label class="field"><span>Lượt gọi / người / giờ</span><input id="aiRate" type="number" min="1" max="1000" value="${esc(d.ratePerHour)}"></label>
     </div>
     <div class="ai-checks">
-      <label class="finding-filter-item"><input type="checkbox" id="aiAllow2" ${d.allowExternal ? 'checked' : ''}><span>Cho phép gửi dữ liệu tới Anthropic (chỉ dữ kiện tối thiểu của từng tác vụ; không gửi mật khẩu, API key, email, file nội bộ)</span></label>
-      <label class="finding-filter-item"><input type="checkbox" id="aiMask" ${d.maskNames ? 'checked' : ''}><span>Che tên host, IP, tên VM / client backup trước khi gửi (thay bằng mã &lt;host:…&gt;, khôi phục trong kết quả)</span></label>
+      <label class="finding-filter-item"><input type="checkbox" id="aiAllow2" ${d.allowExternal ? 'checked' : ''}><span><b>Cho phép gửi dữ liệu tới Anthropic</b><span class="muted-sub">Chỉ dữ kiện tối thiểu của từng tác vụ; không gửi mật khẩu, API key, email, file nội bộ.</span></span></label>
+      <label class="finding-filter-item"><input type="checkbox" id="aiMask" ${d.maskNames ? 'checked' : ''}><span><b>Che tên host, IP, VM / client backup trước khi gửi</b><span class="muted-sub">Thay bằng mã &lt;host:…&gt;, khôi phục trong kết quả.</span></span></label>
       ${d.secretsKeyConfigured ? '' : '<p class="criteria-status">Chưa đặt SECRETS_KEY: API key đang mã hoá bằng khoá suy ra từ JWT_SECRET.</p>'}
       <div class="sp-h">Tác vụ AI</div>
       ${d.tasks.map(t => `<label class="finding-filter-item"><input type="checkbox" data-ai-task="${esc(t.key)}" ${t.on ? 'checked' : ''}><span><b>${esc(t.label)}</b> — ${esc(t.desc)}</span></label>`).join('')}

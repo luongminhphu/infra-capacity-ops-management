@@ -96,6 +96,37 @@ function uiPanelDialog(title, body, actions) {
   }
 }
 
+/* File pickers as a drop zone (no native "Choose File" button, which is English and unstyled):
+   <label class="dropzone" data-ui-drop="<idle text>"> wraps an sr-only <input type="file">. One document-level
+   binding shows the chosen file name and accepts drag & drop; the page keeps its own change handler. */
+function uiDropzone(id, title, sub, accept, extraCls = '') {
+  return `<label class="dropzone dropzone-sm ${extraCls}" data-ui-drop="${esc(title)}">
+      <input type="file" id="${esc(id)}" accept="${esc(accept)}" class="sr-only">
+      <i data-lucide="upload" aria-hidden="true"></i>
+      <span class="dz-main"><b>${esc(title)}</b> hoặc kéo thả vào đây</span>
+      ${sub ? `<span class="dz-sub">${esc(sub)}</span>` : ''}</label>`;
+}
+(function bindUiDropzones() {
+  const zoneOf = (e) => e.target && e.target.closest ? e.target.closest('.dropzone[data-ui-drop]') : null;
+  document.addEventListener('change', (e) => {
+    const i = e.target;
+    if (!(i instanceof HTMLInputElement) || i.type !== 'file') return;
+    const z = i.closest('.dropzone[data-ui-drop]'), m = z && z.querySelector('.dz-main');
+    if (m) m.innerHTML = i.files && i.files.length ? `<b>${esc(i.files[0].name)}</b> — chọn file khác` : `<b>${esc(z.dataset.uiDrop)}</b> hoặc kéo thả vào đây`;
+  });
+  ['dragenter', 'dragover'].forEach(t => document.addEventListener(t, (e) => { const z = zoneOf(e); if (z) { e.preventDefault(); z.classList.add('over'); } }));
+  ['dragleave', 'drop'].forEach(t => document.addEventListener(t, (e) => { const z = zoneOf(e); if (z) z.classList.remove('over'); }));
+  document.addEventListener('drop', (e) => {
+    const z = zoneOf(e);
+    if (!z) return;
+    e.preventDefault();
+    const i = z.querySelector('input[type="file"]');
+    if (!i || !e.dataTransfer || !e.dataTransfer.files.length) return;
+    i.files = e.dataTransfer.files;
+    i.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+})();
+
 /* Neutral label (kind, origin, "Lịch sử", "Demo"…): no status glyph, never one of the 4 levels. */
 function uiTag(label, title) {
   return `<span class="tag"${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</span>`;

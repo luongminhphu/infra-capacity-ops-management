@@ -221,7 +221,7 @@ async function ppRenderAdmin(mount) {
         <div class="settings-form">
           <label class="field"><span>Loại</span><select id="tplKind">${spOpt('A', PP_KIND.A, 'A')}${spOpt('B', PP_KIND.B, '')}</select></label>
           <label class="field"><span>Tên mẫu</span><input type="text" id="tplName" maxlength="128" placeholder="Vd: Mẫu A — trình TGĐ 2026"></label>
-          <label class="field sp-span2"><span>File .docx</span><input type="file" id="tplFile" accept=".docx"></label>
+          <div class="field sp-span2"><span class="field-label">File mẫu</span>${uiDropzone('tplFile', 'Chọn file .docx', 'Word (.docx)', '.docx')}</div>
         </div>
         <p class="panel-sub">Mẫu cần các tiêu đề mục đánh số (1., 2., …) như tờ trình hiện có; phụ lục bắt đầu bằng “Phụ lục …”. Hệ thống tự nhận mục nào soạn nội dung, mục nào giữ nguyên (xung đột lợi ích), mục để trống (Ý kiến …) và bảng ký.</p>
         <div class="sim-actions"><button class="btn btn-primary btn-sm" type="button" id="tplUpload">Tải mẫu lên</button></div>
