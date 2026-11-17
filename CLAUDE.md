@@ -83,6 +83,9 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
    `status_pill`); nhãn trung tính dùng `uiTag`. Số hiển thị kiểu vi-VN (`1.234,5`) qua helper (`fmtNum`, `uiNumber`,
    `vn_num`) — MASTER §4. Web: đọc MASTER; PDF / Excel: skill `hsc-design-system` và `pdf-report`.
    Quyết định design mới (màu, font, mật độ, thành phần) phải tra `ui-ux-pro-max` trước — xem mục Skill bên dưới.
+   Form / nhãn / nút / bố cục web theo MASTER §6 “Form, nhãn và độ dài chữ” (skill `web-layout`): ô cùng hàng thẳng hàng,
+   nhãn một dòng (tên + đơn vị, không “(tuỳ chọn)”), không cắt chữ thiết yếu, không cuộn ngang ở 390 px, chọn file qua
+   `uiDropzone`. Sửa giao diện thì chạy `ui_audit.js` của skill đó ở 1440 + 390 px.
 7. **Bảo mật**:
    - Endpoint mới phải chọn rõ `Depends(get_current_user)` hay `Depends(require_admin)`;
      thao tác thay đổi cấu hình hệ thống, user, tính năng nên dùng `require_admin`.
@@ -105,6 +108,8 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 - `vmware-collector` — đọc vCenter bằng pyVmomi, demo generator, scheduler.
 - `netbackup-api` — NetBackup REST chỉ đọc, parser, mã lỗi, RPO.
 - `capacity-math` — công thức overcommit, HT, ngưỡng, N+1, dự phóng, mã đối soát.
+- `web-layout` — bố cục web: căn hàng ô nhập, độ dài nhãn / tiêu đề / tuỳ chọn select, khổ 390 px, `uiDropzone`;
+  script `scripts/run_demo.sh` (demo) + `scripts/ui_audit.js` (Playwright, đo lệch hàng / cắt chữ / cuộn ngang).
 - `hsc-design-system` — chỉ cho báo cáo PDF / Excel (HSC, Inter, số vi-VN). Giao diện web: `design-system/ico/MASTER.md`.
 - `pdf-report` — quy ước báo cáo PDF A4 bằng WeasyPrint.
 - `spend-module` — module Chi phí & Hợp đồng: tiền VND số nguyên, năm tài chính, phân quyền 4 mức, trạng thái suy ra,

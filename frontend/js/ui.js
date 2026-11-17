@@ -97,7 +97,7 @@ function uiPanelDialog(title, body, actions) {
 }
 
 /* File pickers as a drop zone (no native "Choose File" button, which is English and unstyled):
-   <label class="dropzone" data-ui-drop="<idle text>"> wraps an sr-only <input type="file">. One document-level
+   <label class="dropzone" data-ui-drop="<idle text>"> wraps an sr-only file input. One document-level
    binding shows the chosen file name and accepts drag & drop; the page keeps its own change handler. */
 function uiDropzone(id, title, sub, accept, extraCls = '') {
   return `<label class="dropzone dropzone-sm ${extraCls}" data-ui-drop="${esc(title)}">

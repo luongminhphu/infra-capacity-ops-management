@@ -39,8 +39,8 @@ function renderSizingAdjust(result) {
   const curKey = rep.pick || '';
   const hostsMin = best ? (best.hostsComputed || best.hostsTotal) : 1;
   const tag = r => (r.suggested ? ' · tham khảo' : '') + (r.tight ? ' · sát ngưỡng' : '') + (!r.failure.ok ? ' · chưa đạt N+1' : '');
-  const opts = [`<option value="" ${!curKey ? 'selected' : ''}>Tự động — ${esc(sel.autoName || '—')} (${sel.autoHosts || '—'} host)</option>`]
-    .concat(rows.filter(r => r.hostsTotal).map(r => `<option value="${esc(r.key)}" ${r.key === curKey ? 'selected' : ''}>${esc(r.profile.name.replace(' (gợi ý)', ''))} — ${r.hostsComputed || r.hostsTotal} host${tag(r)}</option>`)).join('');
+  const opts = [`<option value="" ${!curKey ? 'selected' : ''}>Tự động: ${esc(sel.autoName || '—')} · ${sel.autoHosts || '—'} host</option>`]
+    .concat(rows.filter(r => r.hostsTotal).map(r => `<option value="${esc(r.key)}" ${r.key === curKey ? 'selected' : ''}>${esc(r.profile.name.replace(' (gợi ý)', ''))} · ${r.hostsComputed || r.hostsTotal} host${tag(r)}</option>`)).join('');
   const quick = SZ_QUICK.map(([k, label, min, max, step, fmt]) => `
     <div class="sz-adj-row"><span class="sz-adj-label">${label}</span>
       <input type="range" data-quick="${k}" min="${min}" max="${max}" step="${step}" value="${esc(p[k])}"><output data-out="${k}">${esc(fmt(p[k]))}</output></div>`).join('')

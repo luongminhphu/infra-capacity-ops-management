@@ -60,11 +60,16 @@ ngắn, nêu thẳng vấn đề → quyết định đề nghị → thời đi
 - Thiếu dữ liệu (chưa có lịch sử, không có cluster) → hiện trạng thái rỗng có giải thích, không
   để trang trắng hay lỗi.
 - Câu chữ tiếng Việt có dấu, câu ngắn, động từ hành động ("Duyệt", "Bổ sung", "Thu hồi").
+- Nhãn ngắn như web (MASTER §6 “Form, nhãn và độ dài chữ”, skill `web-layout`): tiêu đề cột / ô số / tiêu đề khối chỉ gồm
+  tên + đơn vị, một dòng; giải thích đưa xuống chú thích dưới bảng hoặc câu dẫn. Cùng một trường dùng **cùng tên** trên
+  web, PDF và Excel (VD “Tăng trưởng %/quý”, “Mua sắm + triển khai”, “Mục tiêu % ngưỡng”).
+- Không cắt tên đối tượng (VM, host, NCC) bằng “…”: cho xuống dòng (`overflow-wrap:anywhere`) hoặc thu hẹp cột khác.
 
 ## Kiểm tra trước khi xong
 
 - [ ] Xuất thử PDF ở chế độ DEMO (4 vCenter demo) với cả phạm vi `all` và một cluster; mở file,
       kiểm tra số trang, ngắt trang, không tràn bảng, dấu tiếng Việt hiển thị đúng.
 - [ ] Số liệu trên PDF khớp số trên web cho cùng phạm vi.
+- [ ] Tiêu đề cột không xuống quá 2 dòng; không tên đối tượng nào bị cắt; nhãn trùng tên với web.
 - [ ] Mọi chuỗi ngoài đã qua `esc()`; không có URL ngoài trong HTML.
 - [ ] Cập nhật mục báo cáo tương ứng trong `docs/huong-dan-chi-tiet.md` nếu đổi bố cục / tham số.

@@ -30,6 +30,13 @@ Bố cục / văn phong báo cáo PDF: xem thêm skill `pdf-report`.
   Câu do engine Sizing sinh ra (`sizing.py`, `sizing_advisory.py`) đã viết số vi-VN; báo cáo in nguyên văn, không đổi dấu
   bằng regex. Mã / khoá (vd `2x32x1024`) giữ số thuần.
 
+## Nhãn & độ dài chữ
+
+- Cùng nguyên tắc với web (MASTER §6 “Form, nhãn và độ dài chữ”): tiêu đề cột / nhãn ô số = tên + đơn vị, ngắn; giải thích
+  đưa xuống dòng chú thích (PDF) hoặc ô ghi chú / sheet “Giải thích” (Excel). Cùng trường, cùng tên trên web / PDF / Excel.
+- Excel: cột chứa tên / ghi chú bật `wrap_text` (tham số `wrap_cols` của helper trong `excel_style.py`), không để tên bị che
+  bởi ô bên cạnh; độ rộng cột đặt qua helper, không tự đặt rời từng file.
+
 ## Trạng thái
 
 - 4 mức AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG + NA, nhãn lấy từ `capacity.py` / `derived_status`, không tự đặt.
@@ -46,4 +53,5 @@ Bố cục / văn phong báo cáo PDF: xem thêm skill `pdf-report`.
 - [ ] Xuất PDF / Excel ở chế độ DEMO; số liệu khớp web (cùng giá trị, cùng cách viết vi-VN).
 - [ ] `pdftotext` không còn số thập phân kiểu Anh trong chữ (`grep -E "\b[0-9]+\.[0-9]{1,2}(%|x| GB)"`).
 - [ ] Không hex mới ngoài `COLORS` / `excel_style.py`; tương phản đạt AA trên nền trắng.
+- [ ] Tiêu đề cột ngắn, cùng tên trường với web; tên dài xuống dòng, không bị cắt.
 - [ ] `python -m pytest tests -q`.
