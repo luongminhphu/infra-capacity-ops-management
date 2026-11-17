@@ -7,7 +7,8 @@
 
 const bpState = { list: null, planId: null, plan: null, error: null, bound: false, group: 'all' };
 const BP_STATUS = { draft: ['na', 'Nháp'], submitted: ['warn', 'Chờ duyệt'], approved: ['ok', 'Đã duyệt'], superseded: ['na', 'Đã thay thế'] };
-const BP_SOURCE = { renewal: 'Gia hạn', committed: 'Đã ghi nhận', capex: 'Dự án Capex', new: 'Mới đề xuất' };
+const BP_SOURCE = { renewal: 'Gia hạn', committed: 'Đã ghi nhận', capex: 'Dự án Capex', replace: 'Thay thế thiết bị', extend: 'Dùng tiếp thiết bị', new: 'Mới đề xuất' };
+const BP_DEVICE = (l) => l.source === 'replace' || l.source === 'extend';
 const BP_PRIORITY = { must: 'Bắt buộc', should: 'Nên có', could: 'Tuỳ chọn' };
 
 async function bpLoad() {
@@ -61,7 +62,7 @@ function bpRender() {
     can.submit ? '<button class="btn btn-primary btn-sm" type="button" data-bp-act="submit">Gửi duyệt</button>' : '',
     can.return ? '<button class="btn btn-secondary btn-sm" type="button" data-bp-act="return">Trả lại</button>' : '',
     can.approve ? '<button class="btn btn-primary btn-sm" type="button" data-bp-act="approve">Duyệt kế hoạch</button>' : '',
-    can.apply ? '<button class="btn btn-secondary btn-sm" type="button" data-bp-act="apply" title="Tạo Opex (Dự kiến) / Capex (Nháp) cho các đề xuất mới chưa tạo">Tạo Opex / Capex từ đề xuất mới</button>' : '',
+    can.apply ? '<button class="btn btn-secondary btn-sm" type="button" data-bp-act="apply" title="Tạo Opex (Dự kiến) / Capex (Nháp) cho các đề xuất mới và dòng thay thế / dùng tiếp thiết bị chưa tạo">Tạo Opex / Capex từ đề xuất mới</button>' : '',
     can.revise ? '<button class="btn btn-secondary btn-sm" type="button" data-bp-act="revise">Sửa đổi (bản mới)</button>' : '',
     '<button class="btn btn-secondary btn-sm" type="button" data-bp-export><i data-lucide="sheet"></i>Excel</button>',
     editable ? '<button class="btn btn-ghost btn-sm btn-danger" type="button" data-bp-act="delete">Xoá bản nháp</button>' : '',
@@ -79,15 +80,16 @@ function bpRender() {
   const rows = lines.map(l => {
     const a = act && act.lines[l.id];
     const noVendor = l.source === 'new' && l.kind === 'opex' && !l.vendorId && !l.appliedCode && l.included;
+    const noPrice = BP_DEVICE(l) && !l.amountNet && l.included && !l.appliedCode;
     const flags = [l.stale ? spPill('warn', 'Nguồn đã thay đổi') : '', cut.has(l.id) ? spPill('crit', 'Vượt trần') : '',
-      noVendor ? spPill('warn', 'Thiếu nhà cung cấp') : '',
+      noVendor ? spPill('warn', 'Thiếu nhà cung cấp') : '', noPrice ? spPill('warn', 'Chưa có giá dự toán') : '',
       l.appliedCode ? spPill('ok', `Đã tạo ${l.appliedCode}`) : ''].join(' ');
     return `<tr class="sp-row${l.included ? '' : ' bp-out'}" data-bp-line="${esc(l.id)}" tabindex="0">
       <td>${editable ? `<input type="checkbox" data-bp-inc="${esc(l.id)}" ${l.included ? 'checked' : ''} aria-label="Đưa vào kế hoạch">` : (l.included ? '✓' : '—')}</td>
       <td><b>${esc(BP_SOURCE[l.source])}</b><span class="muted-sub">${esc(l.sourceCode || l.kind.toUpperCase())}</span></td>
-      <td class="wrap">${esc(l.title)}<span class="muted-sub">${esc([l.categoryName, l.vendorName].filter(Boolean).join(' · '))}</span>${flags ? `<span class="muted-sub">${flags}</span>` : ''}</td>
+      <td class="wrap">${esc(l.title)}<span class="muted-sub">${esc([l.categoryName, l.vendorName].filter(Boolean).join(' · '))}</span>${BP_DEVICE(l) && l.detail ? `<span class="muted-sub bp-detail">${esc(l.detail)}</span>` : ''}${flags ? `<span class="muted-sub">${flags}</span>` : ''}</td>
       <td>${spDate(l.startDate)}${l.terms > 1 ? `<span class="muted-sub">${esc(l.terms)} kỳ</span>` : ''}</td>
-      <td class="num">${l.source === 'new' ? '—' : spMoney(l.baseNet)}</td>
+      <td class="num">${l.source === 'new' || BP_DEVICE(l) ? '—' : spMoney(l.baseNet)}</td>
       <td class="num">${l.amountMode === 'manual' ? 'Nhập tay' : bpPct(l.effectiveUpliftPct)}</td>
       <td class="num"><b>${spMoney(l.amountGross)}</b><span class="muted-sub">trước VAT ${spMoney(l.amountNet)}</span></td>
       <td>${esc(BP_PRIORITY[l.priority])}</td>
@@ -109,10 +111,10 @@ function bpRender() {
             lập bởi ${esc(p.createdBy)}${p.approvedBy ? ` · duyệt bởi ${esc(p.approvedBy)} ${esc(spTimeSafe(p.approvedAt))}` : ''}</p></div>
         <div class="panel-toolbar">${picker}${newBtn}</div>
       </div>
-      <div class="sp-filters">
-        <label class="field"><span>% tăng giá gia hạn (mặc định)</span><input type="number" min="0" max="100" step="0.5" data-bp-set="upliftPct" value="${esc(p.upliftPct)}" ${editable ? '' : 'disabled'}></label>
-        <label class="field"><span>Trần ngân sách (sau VAT, đồng)</span><input type="number" min="0" step="1000000" data-bp-set="budgetCap" value="${esc(p.budgetCap ?? '')}" placeholder="Không đặt" ${editable ? '' : 'disabled'}></label>
-        <label class="field sp-search"><span>Ghi chú / giả định</span><input type="text" maxlength="5000" data-bp-set="notes" value="${esc(p.notes || '')}" placeholder="vd: tỷ giá 25.500, tăng giá license 8%" ${editable ? '' : 'disabled'}></label>
+      <div class="form-grid-aligned bp-head">
+        <label class="field"><span>% tăng giá gia hạn</span><input type="number" min="0" max="100" step="0.5" data-bp-set="upliftPct" value="${esc(p.upliftPct)}" ${editable ? '' : 'disabled'}></label>
+        <label class="field"><span>Trần ngân sách sau VAT (đ)</span><input type="number" min="0" step="1000000" data-bp-set="budgetCap" value="${esc(p.budgetCap ?? '')}" placeholder="Không đặt" ${editable ? '' : 'disabled'}></label>
+        <label class="field sp-span2"><span>Ghi chú / giả định</span><input type="text" maxlength="5000" data-bp-set="notes" value="${esc(p.notes || '')}" placeholder="vd: tỷ giá 25.500, tăng giá license 8%" ${editable ? '' : 'disabled'}></label>
       </div>
       <div class="sim-actions">${actions}</div>
       <p class="criteria-status" id="bpMsg" role="status"></p>
@@ -167,7 +169,11 @@ async function bpCall(path, opts, okText) {
 function bpLineForm(l) {
   const m = spState.meta, isNew = !l || l.source === 'new';
   const v = l || { kind: 'opex', priority: 'should', vatPct: 10, included: true };
-  const fixed = isNew ? '' : `<div class="insight-box">${esc(BP_SOURCE[l.source])} ${esc(l.sourceCode || '')}: hiện tại ${spMoney(l.baseNet)} trước VAT${l.terms > 1 ? ` (${esc(l.terms)} kỳ)` : ''}. Để trống “Số tiền kế hoạch” để tính theo % tăng.</div>`;
+  const fixed = isNew ? '' : l.source === 'extend'
+    ? `<div class="insight-box">Thiết bị dùng tiếp, không thay (Tài sản → Thiết bị Data Center), chưa có Opex bảo hành để gia hạn. Nhập “Giá dự toán” gia hạn bảo hành; khi kế hoạch được duyệt, dòng này tạo Opex Dự kiến kèm danh sách SN.${l.detail ? `<br>${esc(l.detail)}` : ''}</div>`
+    : l.source === 'replace'
+    ? `<div class="insight-box">Thay thế thiết bị dùng từ 5 năm (Tài sản → Thiết bị Data Center). Nhập “Giá dự toán”; khi kế hoạch được duyệt, dòng này tạo dự án Capex nháp.${l.detail ? `<br>${esc(l.detail)}` : ''}</div>`
+    : `<div class="insight-box">${esc(BP_SOURCE[l.source])} ${esc(l.sourceCode || '')}: hiện tại ${spMoney(l.baseNet)} trước VAT${l.terms > 1 ? ` (${esc(l.terms)} kỳ)` : ''}. Để trống “Số tiền kế hoạch” để tính theo % tăng.</div>`;
   return `${fixed}<div class="src-grid">
     ${isNew ? `<label class="field"><span>Loại</span><select id="bpKind">${spOpt('opex', 'Opex (chi phí vận hành)', v.kind)}${spOpt('capex', 'Capex (đầu tư)', v.kind)}</select></label>
       <label class="field"><span>Nội dung *</span><input id="bpTitle" maxlength="255" value="${esc(v.title || '')}" placeholder="vd: Dịch vụ SOC 24/7"></label>
@@ -177,8 +183,8 @@ function bpLineForm(l) {
     <label class="field"><span>Cost center</span><select id="bpCc">${spOpt('', '—', '')}${m.costCenters.map(x => spOpt(x.id, `${x.code} — ${x.name}`, v.costCenterId)).join('')}</select></label>
     <label class="field"><span>Ngày bắt đầu / thanh toán</span><input id="bpStart" type="date" value="${esc(v.startDate || '')}" min="${esc(bpState.plan.fiscalRange[0])}" max="${esc(bpState.plan.fiscalRange[1])}"></label>
     <label class="field"><span>VAT (%)</span><input id="bpVat" type="number" min="0" max="100" step="0.5" value="${esc(v.vatPct)}"></label>
-    <label class="field"><span>% tăng${isNew ? '' : ' (để trống = mặc định của kế hoạch)'}</span><input id="bpUplift" type="number" min="0" max="100" step="0.5" value="${esc(v.upliftPct ?? '')}"></label>
-    <label class="field"><span>Số tiền kế hoạch (trước VAT)</span><input id="bpAmount" type="number" min="0" step="1000" value="${esc(v.amountMode === 'manual' ? v.amountNet : '')}" placeholder="Tự tính"></label>
+    ${BP_DEVICE(v) ? '' : `<label class="field"><span>% tăng${isNew ? '' : ' (để trống = mặc định của kế hoạch)'}</span><input id="bpUplift" type="number" min="0" max="100" step="0.5" value="${esc(v.upliftPct ?? '')}"></label>`}
+    <label class="field"><span>${BP_DEVICE(v) ? 'Giá dự toán (trước VAT)' : 'Số tiền kế hoạch (trước VAT)'}</span><input id="bpAmount" type="number" min="0" step="1000" value="${esc(v.amountMode === 'manual' ? v.amountNet : '')}" placeholder="${BP_DEVICE(v) ? 'Nhập giá dự toán' : 'Tự tính'}"></label>
     <label class="field"><span>Ưu tiên</span><select id="bpPrio">${Object.entries(BP_PRIORITY).map(([k, t]) => spOpt(k, t, v.priority)).join('')}</select></label>
     <label class="field"><span>Đưa vào kế hoạch</span><select id="bpInc">${spOpt('1', 'Có', v.included ? '1' : '0')}${spOpt('0', 'Không', v.included ? '1' : '0')}</select></label>
   </div>
@@ -204,11 +210,14 @@ function bpOpenLine(id) {
       <div class="sp-dl-item"><dt>Hiện tại</dt><dd>${spMoney(l.baseNet)}</dd></div>
       <div class="sp-dl-item"><dt>Ưu tiên</dt><dd>${esc(BP_PRIORITY[l.priority])}</dd></div>
       <div class="sp-dl-item"><dt>Ghi chú</dt><dd>${esc(l.note || '—')}</dd></div>
+      ${l.detail ? `<div class="sp-dl-item"><dt>Chi tiết nguồn</dt><dd>${esc(l.detail)}</dd></div>` : ''}
       <div class="sp-dl-item"><dt>Cập nhật</dt><dd>${esc(l.updatedBy || '—')} ${esc(spTimeSafe(l.updatedAt))}</dd></div></dl>`);
     return;
   }
   const isNew = l.source === 'new';
+  const device = BP_DEVICE(l) && l.sourceId && !l.stale && typeof dcDecisionForm === 'function';
   uiPanelDialog(`Sửa dòng — ${esc(l.title)}`, bpLineForm(l), `${isNew || l.stale ? '<button class="btn btn-ghost btn-sm btn-danger" type="button" id="bpDel">Xoá dòng</button>' : ''}
+    ${device ? `<button class="btn btn-secondary btn-sm" type="button" id="bpKeep">${l.source === 'replace' ? 'Không thay — dùng tiếp' : 'Chuyển sang thay thế'}</button>` : ''}
     <span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
     <button class="btn btn-primary btn-sm" type="button" id="bpSave">Lưu</button>`);
   spOnce('#bpSave', async () => {
@@ -217,6 +226,15 @@ function bpOpenLine(id) {
       bpState.plan = r; $('#spDialog').close(); bpRender(); bpMsg('Đã lưu dòng.', true);
     } catch (err) { spMsg(err.message); }
   });
+  spOnce('#bpKeep', () => dcDecisionForm({
+    title: `${l.source === 'replace' ? 'Không thay, dùng tiếp' : 'Chuyển sang thay thế'} — ${l.title}`,
+    base: { groupOf: l.sourceId, fiscalYear: p.fiscalYear },
+    current: l.source === 'replace' ? { decision: 'extend' } : { decision: 'replace' },
+    defaultUntil: p.fiscalRange[1],
+    onDone: async () => {
+      bpState.plan = await apiRequest(`/spend/plans/${p.id}/refresh`, { method: 'POST' });
+      bpRender(); bpMsg('Đã lưu quyết định và làm mới gợi ý.', true);
+    } }));
   spOnce('#bpDel', async () => {
     if (!(await uiConfirm(`Xoá dòng “${l.title}” khỏi kế hoạch?`))) return;
     try { bpState.plan = await apiRequest(`/spend/plans/${p.id}/lines/${l.id}`, { method: 'DELETE' }); $('#spDialog').close(); bpRender(); }

@@ -460,6 +460,40 @@ API: `/api/licensing/clusters`, `/inventory`, `/overrides`, `/rules` (+`/version
 tắt rule và thêm / sửa / xoá entitlement chỉ dành cho **quản trị viên**; link nguồn của rule phải là
 `http://` hoặc `https://`.
 
+### Thiết bị Data Center — tuổi thiết bị, bảo hành và license theo số serial
+
+**Tài sản → Thiết bị Data Center** (tab đầu tiên của mục Tài sản) quản lý máy chủ, lưu trữ, thiết bị mạng của Data Center:
+
+- **Nhập Excel** (quản trị viên): mỗi sheet một nhóm (tên sheet có *Server* / *Storage* / *Network* → Máy chủ / Lưu trữ / Mạng).
+  - Dòng tiêu đề cần cột **SN** và vài cột trong số: No., BUSINESS FUNCTION, QTY, Type, Env, ID, BRAND, MODEL, ASSET TAG,
+    ACQUISITION DATE, LOCATION (có tên tiếng Việt tương đương). Bảng phụ bên phải (Green Policy) không bị đọc.
+  - Ô chức năng / Type / Env gộp (trống ở các dòng dưới) được điền xuống. Nhóm **REMOVED** = đã thanh lý (dòng đó và các dòng bên dưới).
+  - Cột tuổi trong file không dùng: tuổi tính lại từ ngày đưa vào dùng.
+  - **Kiểm tra** trước khi nhập: số dòng mới / cập nhật / không đổi, dòng lỗi (thiếu SN và asset tag, ngày sai), asset tag
+    trùng giữa hai thiết bị (khi đó hai thiết bị được nhận diện theo SN + ID, không mất dòng nào), SN trùng giữa các dòng.
+  - Nhập lại cùng file không tạo trùng (nhận diện theo asset tag). Tuỳ chọn *Đánh dấu đã thanh lý các thiết bị không có trong file*.
+- **Thêm thiết bị / Sửa** (quản trị viên): nhập tay từng thiết bị cùng các trường như file Excel. Cần tên (ID) và SN hoặc
+  asset tag. Thiết bị nhập tay không bị lần nhập Excel đánh dấu thanh lý.
+- **Mức trạng thái** (ngưỡng `ASSET_AGE_LIMIT_MONTHS` = 60, `ASSET_AGE_WARN_MONTHS` = 48):
+  - dùng từ 5 năm → CẢNH BÁO; từ 5 năm mà không còn bảo hành phần cứng (hết hạn hoặc chưa ghép) → VƯỢT NGƯỠNG;
+  - từ 4 năm → THEO DÕI (kèm tháng đủ 5 năm); hết bảo hành phần cứng (dưới 5 năm) hoặc hết license / firmware → THEO DÕI.
+- **Ghép với Opex theo số serial**: SN của thiết bị so với SN trong mục *Thiết bị* của Opex (bỏ khoảng trắng, dấu gạch,
+  không phân biệt hoa thường). Opex loại *Bảo hành* → cột Bảo hành HW; loại *License* → cột License / FW. Hiện trạng thái
+  (còn hiệu lực / chưa bắt đầu / hết hạn / chưa ghép), ngày hết hạn, mã Opex, số hợp đồng. Chi tiết Opex chỉ hiện với
+  người có quyền xem Chi phí.
+- Mức CẢNH BÁO trở lên vào hộp việc Trang chủ (gộp theo mức) và cảnh báo Discord (nguồn "Thiết bị Data Center",
+  mặc định chỉ VƯỢT NGƯỠNG).
+- **Kế hoạch thay thế**: thiết bị đủ 5 năm trong năm kế hoạch được gợi ý ở Kế hoạch năm sau, nhóm *Thay thế thiết bị* (Capex).
+- **Quyết định vòng đời — Thay thế / Dùng tiếp** (quản trị viên hoặc Biên tập Chi phí; ở thẻ thiết bị hoặc nút
+  *Không thay — dùng tiếp* trên dòng *Thay thế thiết bị* của kế hoạch). Dùng khi không thay được (vượt ngân sách, thiết
+  bị còn tốt, hãng còn hỗ trợ, chờ dự án khác):
+  - chọn lý do, ghi chú và *Dùng tiếp đến* (để trống = tới khi đổi quyết định);
+  - thiết bị rời dòng Capex; bảo hành được gia hạn ở Opex: Opex bảo hành đang có của SN đó ra dòng *Gia hạn* như thường,
+    thiết bị chưa có Opex bảo hành gom thành dòng *Dùng tiếp thiết bị* (Opex, nhập giá dự toán). Khi kế hoạch được duyệt,
+    dòng này tạo Opex *Dự kiến* kèm danh sách SN, nên thiết bị tự ghép bảo hành;
+  - *Dùng tiếp đến* rơi vào giữa năm kế hoạch → thiết bị quay lại dòng *Thay thế* từ ngày hôm sau;
+  - thiết bị dùng tiếp còn bảo hành phần cứng hạ xuống THEO DÕI; không có bảo hành vẫn VƯỢT NGƯỠNG. Mọi quyết định ghi nhật ký.
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh
@@ -807,7 +841,10 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
 - **Lập kế hoạch FY sau** (Biên tập). Hệ thống tự gợi ý các dòng:
   - *Gia hạn*: Opex có kỳ kế tiếp bắt đầu trong năm, tính theo số kỳ × (1 + % tăng giá mặc định, vd 5%);
   - *Đã ghi nhận*: Opex đã thuộc năm sau, gồm cả Opex sinh từ Capex;
-  - *Dự án Capex*: dự án của năm sau.
+  - *Dự án Capex*: dự án của năm sau;
+  - *Thay thế thiết bị* (Capex): thiết bị Data Center dùng từ 5 năm tính đến cuối năm kế hoạch, mỗi dòng một nhóm chức
+    năng (vd *Layer 2*, *ONE CLUSTER*), ghi model và danh sách thiết bị (tên, SN, tuổi). Chưa có giá: nhập *Giá dự
+    toán*. Ưu tiên *Bắt buộc* khi có thiết bị đã quá 5 năm mà không còn bảo hành phần cứng, còn lại *Nên có*.
 
   Thêm **đề xuất mới** cho dịch vụ / dự án chưa có.
 - **Mỗi dòng** sửa được: % tăng giá riêng, số tiền nhập tay, ưu tiên (Bắt buộc / Nên có / Tuỳ chọn), nhà cung cấp, ngày
@@ -818,7 +855,8 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   xem lại.
 - **Duyệt và áp dụng:**
   - Gửi duyệt → Duyệt (quyền Duyệt). Người duyệt thấy việc này trong hộp việc.
-  - Sau khi duyệt, có thể *Tạo Opex / Capex từ đề xuất mới*: tạo Opex *Dự kiến* / Capex *Nháp*.
+  - Sau khi duyệt, có thể *Tạo Opex / Capex từ đề xuất mới*: tạo Opex *Dự kiến* / Capex *Nháp* (dòng *Thay thế thiết
+    bị* thành dự án Capex nháp, mô tả gồm danh sách thiết bị).
   - Muốn đổi kế hoạch đã duyệt thì dùng *Sửa đổi* để tạo bản v2. Duyệt v2 thì v1 thành "Đã thay thế".
 - **Theo dõi thực hiện**: kế hoạch đã duyệt hiện số *Thực hiện / Chênh lệch* từng dòng, theo chuỗi gia hạn và mã đã
   tạo, cùng danh sách **phát sinh ngoài kế hoạch**. Xuất Excel gồm 4 sheet.

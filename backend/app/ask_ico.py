@@ -39,7 +39,7 @@ TOOLS = [
     {"name": "vm_chua_backup", "description": "VM trong phạm vi backup nhưng chưa được bảo vệ / đang lỗi, lọc theo cluster.",
      "input_schema": {"type": "object", "properties": {"cluster": {"type": "string"}}}},
     {"name": "viec_can_lam", "description": "Hộp việc của người hỏi: cảnh báo capacity / backup / license / hạn Opex / thanh toán… (đã lọc theo quyền).",
-     "input_schema": {"type": "object", "properties": {"source": {"type": "string", "enum": ["all", "capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "license", "spend", "system"]}}}},
+     "input_schema": {"type": "object", "properties": {"source": {"type": "string", "enum": ["all", "capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "asset", "license", "spend", "system"]}}}},
 ]
 TOOL_NAMES = {t["name"] for t in TOOLS}
 

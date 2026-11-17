@@ -25,7 +25,7 @@ LEVELS = ("crit", "bad", "warn", "task", "info")
 LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
 SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
-                 "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "license": "License", "spend": "Chi phí & hợp đồng",
+                 "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "asset": "Thiết bị Data Center", "license": "License", "spend": "Chi phí & hợp đồng",
                  "system": "Hệ thống"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
@@ -263,10 +263,37 @@ def storage_items(db: Session) -> List[Dict[str, Any]]:
     return out
 
 
+def asset_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
+    """Grouped by level (a Data Center holds hundreds of devices): ≥ 5 years without HW warranty, ≥ 5 years,
+    reaching 5 years within the warning window."""
+    from . import dc_assets
+    from .config import get_settings
+    s = get_settings()
+    data = dc_assets.listing(db, today, s.asset_age_limit_months, s.asset_age_warn_months, False)
+    by_level: Dict[str, List[Dict[str, Any]]] = {"crit": [], "bad": [], "warn": []}
+    for a in data["items"]:
+        if not a["removed"] and a["level"] in by_level:
+            by_level[a["level"]].append(a)
+    limit = dc_assets.age_text(s.asset_age_limit_months)
+    titles = {"crit": f"{{n}} thiết bị Data Center dùng từ {limit}, không còn bảo hành phần cứng",
+              "bad": f"{{n}} thiết bị Data Center dùng từ {limit}",
+              "warn": f"{{n}} thiết bị Data Center sắp đủ {limit} hoặc hết bảo hành / license"}
+    out = []
+    for level, rows in by_level.items():
+        if not rows:
+            continue
+        names = ", ".join(r["deviceId"] or r["assetTag"] or r["serial"] or "?" for r in rows[:6])
+        more = f" và {len(rows) - 6} thiết bị khác" if len(rows) > 6 else ""
+        out.append(item("asset", level, _key("as", level, len(rows)), titles[level].format(n=vn_g(len(rows))),
+                        f"{names}{more}. Đưa vào Kế hoạch năm sau → Thay thế thiết bị.", page="dc-assets",
+                        query=f"level={level}", alert_key=_key("as", level)))
+    return out
+
+
 PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("capacity", capacity_items, False), ("backup", backup_items, False),
     ("datastore", datastore_items, False), ("snapshot", snapshot_items, False),
-    ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False),
+    ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False), ("asset", asset_items, True),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
 ]
 

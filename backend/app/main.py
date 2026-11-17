@@ -17,6 +17,7 @@ from .database import SessionLocal, engine, ensure_schema
 from . import mcp_server, observability
 from .routers import infra as infra_router
 from .routers import admin, ai_admin, ai_data as ai_data_router, report_archive as report_archive_router, users_admin as users_admin_router, bom as bom_router, exports as exports_router, appconfig, entities, home, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, spend_capex, spend_contracts, spend_import, spend_plans, spend_payments, spend_proposals, spend_quotes, spend_renovations, spend_reports, vcenters
+from .routers import dc_assets as dc_assets_router
 from .spend import reminders as spend_reminders, service as spend_service
 from .security import ensure_bootstrap_admin
 from .shared.stored_text import InvalidStoredValue
@@ -152,6 +153,7 @@ app.include_router(ai_data_router.router)
 app.include_router(report_archive_router.router)
 app.include_router(users_admin_router.router)
 app.include_router(bom_router.router)
+app.include_router(dc_assets_router.router)
 app.include_router(exports_router.router)
 app.include_router(mcp_server.router)
 # Outermost: measures every /api and /mcp request (route template, latency, DB time).

@@ -37,6 +37,8 @@ const PAGES = [
       desc: 'Biến động CPU/RAM so với ngưỡng overcommit giữa các snapshot và danh sách VM thêm / bớt / đổi cấu hình.', scope: ['vcenter', 'cluster', 'host'] },
     { id: 'inventory', view: 'inventory', icon: 'server', label: 'Host & VM', title: 'Host & VM',
       desc: 'Danh sách ESXi host và VM đã đồng bộ hoặc import, kèm mức sử dụng; xuất Excel theo bộ lọc.', scope: ['vcenter', 'cluster', 'host', 'footprint'] },
+    { id: 'dc-assets', view: 'dcassets', icon: 'server-cog', label: 'Thiết bị Data Center', title: 'Thiết bị Data Center',
+      desc: 'Danh sách thiết bị nhập từ Excel: tuổi theo chính sách 5 năm, bảo hành phần cứng và license / firmware ghép theo số serial với Opex.', scope: [] },
     { id: 'lic-hardware', view: 'licensing', sub: 'hardware', icon: 'cpu', label: 'ESXi & phần cứng', title: 'ESXi & phần cứng',
       desc: 'Model, phiên bản ESXi, socket, physical core, logical thread, RAM và số VM của từng host.', scope: ['vcenter', 'cluster'] },
     { id: 'lic-os', view: 'licensing', sub: 'os', icon: 'app-window', label: 'Hệ điều hành', title: 'Hệ điều hành guest',
@@ -136,7 +138,7 @@ const MENU = [
   ] },
   { label: 'Quản lý thông tin', entries: [
     { key: 'assets', label: 'Tài sản', icon: 'server', tabs: [
-      ['inventory', '', 'Host & VM'], ['lic-hardware', 'hardware', 'ESXi & phần cứng'], ['lic-os', 'os', 'Hệ điều hành']] },
+      ['dc-assets', '', 'Thiết bị Data Center'], ['inventory', 'inventory', 'Host & VM'], ['lic-hardware', 'hardware', 'ESXi & phần cứng'], ['lic-os', 'os', 'Hệ điều hành']] },
     { key: 'license', label: 'License', icon: 'badge-check', tabs: [
       ['lic-assess', '', 'Đánh giá & quyền sử dụng'], ['lic-snapshots', 'snapshots', 'Snapshot']] },
     { key: 'budget', label: 'Ngân sách & chi phí', icon: 'wallet', tabs: [
@@ -200,6 +202,7 @@ const VIEWS = {
     if (typeof renderHistoryPanel === 'function' && typeof api !== 'undefined') renderHistoryPanel('techHistoryMount', { showVmChanges: true, followClusterFilter: true });
   } },
   inventory: { section: '#viewInventory', render: () => renderInventoryView() },
+  dcassets: { section: '#viewDcAssets', render: () => callIf('renderDcAssetsView') },
   whatif: { section: '#viewWhatif', render: () => renderWhatifView() },
   planning: { section: '#viewPlanning' },                       // static form bound once in app.js
   sizing: { section: '#viewSizing', render: () => callIf('renderSizingView') },

@@ -84,7 +84,7 @@ def _plan_out(p: BudgetPlan) -> Dict[str, Any]:
 def _line_out(l: BudgetPlanLine, lk: service.Lookups, plan: BudgetPlan) -> Dict[str, Any]:
     cat, ven, cc = lk.categories.get(l.category_id), lk.vendors.get(l.vendor_id), lk.cost_centers.get(l.cost_center_id)
     eff = l.uplift_pct if l.uplift_pct is not None else (plan.uplift_pct if l.source == "renewal" else 0)
-    return {"id": l.id, "source": l.source, "sourceLabel": bp.SOURCE_LABELS[l.source], "sourceCode": l.source_code,
+    return {"id": l.id, "source": l.source, "sourceLabel": bp.SOURCE_LABELS[l.source], "sourceCode": l.source_code, "sourceId": l.source_id,
             "kind": l.kind, "categoryId": l.category_id, "categoryName": cat.name if cat else None,
             "vendorId": l.vendor_id, "vendorName": ven.name if ven else None,
             "costCenterId": l.cost_center_id, "costCenterName": f"{cc.code} — {cc.name}" if cc else None,
@@ -93,7 +93,7 @@ def _line_out(l: BudgetPlanLine, lk: service.Lookups, plan: BudgetPlan) -> Dict[
             "effectiveUpliftPct": float(eff), "amountMode": l.amount_mode, "amountNet": l.amount_net,
             "vatPct": float(l.vat_pct), "amountGross": l.amount_gross, "priority": l.priority,
             "priorityLabel": bp.PRIORITY_LABELS[l.priority], "included": l.included, "note": l.note, "stale": l.stale,
-            "appliedCode": l.applied_code, "updatedAt": to_iso_utc(l.updated_at), "updatedBy": l.updated_by}
+            "appliedCode": l.applied_code, "detail": l.detail, "updatedAt": to_iso_utc(l.updated_at), "updatedBy": l.updated_by}
 
 
 def _detail(db: Session, p: BudgetPlan, user: User) -> Dict[str, Any]:

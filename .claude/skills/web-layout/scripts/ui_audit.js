@@ -9,7 +9,7 @@ const path = require('path');
 
 const ALL = ['home', 'home/leader', 'capacity', 'capacity/compliance', 'capacity/trends', 'backup', 'backup/clients', 'backup/jobs',
   'backup/schedule', 'backup/coverage', 'backup/size', 'backup/storage', 'agenda', 'simulate', 'simulate/planning', 'simulate/license',
-  'sizing', 'assets', 'assets/hardware', 'assets/os', 'license', 'license/snapshots', 'budget', 'budget/opex', 'budget/capex', 'budget/plan',
+  'sizing', 'assets', 'assets/inventory', 'assets/hardware', 'assets/os', 'license', 'license/snapshots', 'budget', 'budget/opex', 'budget/capex', 'budget/plan',
   'procure', 'procure/quotes', 'procure/bom', 'procure/renovations', 'contracts', 'contracts/payments', 'docs', 'docs/reports', 'docs/archive',
   'settings', 'settings/sources', 'settings/backup', 'settings/features', 'settings/spend', 'settings/ai', 'settings/users', 'settings/auth', 'settings/brand'];
 

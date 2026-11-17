@@ -170,6 +170,8 @@ class Settings(BaseSettings):
     storage_latency_warn_ms: float = Field(default=5)    # array read / write latency: CẢNH BÁO
     storage_latency_crit_ms: float = Field(default=20)   # VƯỢT NGƯỠNG
     storage_stale_minutes: int = Field(default=60)       # last good read older than this: CẢNH BÁO
+    asset_age_limit_months: int = Field(default=60)      # DC device in use this long (Green policy): CẢNH BÁO
+    asset_age_warn_months: int = Field(default=48)       # approaching the limit: THEO DÕI
 
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)

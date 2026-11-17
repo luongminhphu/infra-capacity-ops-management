@@ -775,7 +775,7 @@ class RenovationCost(Base):
 
 # ---------------------------------------------------------------- Kế hoạch ngân sách năm sau (docs/design/spend-budget-plan.md)
 PLAN_STATUSES = ("draft", "submitted", "approved", "superseded")
-PLAN_LINE_SOURCES = ("renewal", "committed", "capex", "new")
+PLAN_LINE_SOURCES = ("renewal", "committed", "capex", "replace", "extend", "new")
 PLAN_PRIORITIES = ("must", "should", "could")
 
 
@@ -813,7 +813,8 @@ class BudgetPlanLine(Base):
     amount_mode 'auto' follows base × (1 + uplift); 'manual' keeps the amount typed by the user."""
     __tablename__ = "budget_plan_lines"
     __table_args__ = (
-        CheckConstraint(_in("source", PLAN_LINE_SOURCES), name="ck_bpl_source"),
+        # v2: "replace" added; the old ck_bpl_source is dropped by database._drop_retired_checks().
+        CheckConstraint(_in("source", PLAN_LINE_SOURCES), name="ck_bpl_source_v2"),
         CheckConstraint(_in("kind", ("opex", "capex")), name="ck_bpl_kind"),
         CheckConstraint(_in("priority", PLAN_PRIORITIES), name="ck_bpl_priority"),
         CheckConstraint("amount_mode IN ('auto', 'manual')", name="ck_bpl_amount_mode"),
@@ -848,6 +849,7 @@ class BudgetPlanLine(Base):
     note = Column(String(1000), nullable=True)          # justification, or why the line is left out
     stale = Column(Boolean, nullable=False, default=False)     # its source no longer suggests it (after a refresh)
     applied_code = Column(String(20), nullable=True)    # OPX / CPX created from a `new` line once the plan is approved
+    detail = Column(String(1000), nullable=True)        # what the source says (devices to replace, renewal end …)
     sort_order = Column(Integer, nullable=False, default=0)
     updated_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(255), nullable=True)
