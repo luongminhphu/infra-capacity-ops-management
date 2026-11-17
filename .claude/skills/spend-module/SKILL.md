@@ -71,6 +71,11 @@ phải qua `uiRequire('spend').then(...)`.
 - Tiền hiển thị `spMoney` / `uiMoney`; ngày `spDate`; nhãn trạng thái từ `derived_status`
   (`displayLabel`, `tone`) qua `spPill` / `uiPill`. Không tự đặt nhãn, không hard-code màu.
 - Mọi chuỗi từ người dùng / NCC / file đưa vào HTML qua `esc()`; link do người dùng nhập chỉ khi `http(s)://`.
+- Form, bộ lọc, nhãn, nút theo skill `web-layout` (MASTER §6 “Form, nhãn và độ dài chữ”): ô cùng hàng thẳng hàng
+  (`.form-grid-aligned`), nhãn một dòng không “(tuỳ chọn)”, chữ tuỳ chọn select ngắn (VD bộ lọc Opex “Cần theo dõi”,
+  giải thích ở `title`), không cuộn ngang ở 390 px.
+- Chọn file (hợp đồng, bản ký, báo giá, đính kèm Opex, cải tạo): `uiDropzone(id, …)` hoặc nút `.btn` bọc
+  `<input type="file" hidden>` — không để lộ ô chọn file gốc (`test_frontend_markup.py` kiểm).
 
 ## Kiểm tra trước khi xong
 
@@ -81,4 +86,5 @@ phải qua `uiRequire('spend').then(...)`.
 - [ ] Upload mới đi qua `files.store`; file Excel qua `shared/xlsx_io.py`.
 - [ ] Web / PDF / Excel cùng số (cùng hàm trong `spend/`); PDF / Excel theo HSC (`report_pdf.COLORS`,
       `excel_style.py`).
+- [ ] Giao diện đổi: `ui_audit.js` (skill `web-layout`) ở 1440 + 390 px cho trang Chi phí / Hợp đồng / Mua sắm đã sửa.
 - [ ] `python -m pytest tests -q` (gồm `test_spend_*`) xanh.

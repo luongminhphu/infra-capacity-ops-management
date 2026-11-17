@@ -234,7 +234,8 @@ async function rnOpenForm(p) {
 async function rnOpenImport() {
   uiPanelDialog('Nhập lịch sử từ file so sánh (Summarize)', `
     <p class="panel-sub">Chọn file Excel theo bố cục đang dùng (khối I / II / III, bảng “SO SÁNH CHI PHÍ … FL6 - FL12 - FL3”). Hệ thống đọc các cột tầng, quy mô trong tiêu đề cột (“(62 nodes) - 24 NS”, “(10G &amp; Wifi7)”) và số theo nhóm chi phí; xem trước rồi mới lưu.</p>
-    <div class="sp-inline"><input type="file" id="rnFile" accept=".xlsx"><button class="btn btn-ghost btn-sm" type="button" id="rnPreview">Xem trước</button></div>
+    ${uiDropzone('rnFile', 'Chọn file Excel so sánh', '.xlsx', '.xlsx')}
+    <div class="sp-inline"><button class="btn btn-ghost btn-sm" type="button" id="rnPreview">Xem trước</button></div>
     <div id="rnPrev"></div>`, `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
     <button class="btn btn-primary btn-sm" type="button" id="rnApply" disabled>Lưu các dự án đã chọn</button>`);
   $('#spDialog').classList.add('qt-wide');

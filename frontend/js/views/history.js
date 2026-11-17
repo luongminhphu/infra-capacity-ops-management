@@ -384,9 +384,9 @@ function renderHistoryVmChanges(mountId, changes) {
       ${vmTable('VM đã loại bỏ', 'Định danh VM có ở snapshot đầu kỳ nhưng không còn ở bất kỳ cluster/host nào của vCenter hiện nay.', changes.removed, 'lastSeen', 'Thấy lần cuối', 'removed')}
     </div>
     <div class="history-vm-grid">
-      ${card('VM di chuyển — không tính thêm mới/loại bỏ', `vMotion giữa host hoặc migrate giữa cluster (${fmtInt(mv.vcpu)} vCPU · ${fmtInt(mv.ramGB)} GB RAM); di chuyển giữa host chỉ liệt kê khi lọc theo host.`, moved.length, 'moved',
+      ${card('VM di chuyển', `Không tính là thêm mới / loại bỏ. vMotion giữa host hoặc migrate giữa cluster (${fmtInt(mv.vcpu)} vCPU · ${fmtInt(mv.ramGB)} GB RAM); di chuyển giữa host chỉ liệt kê khi lọc theo host.`, moved.length, 'moved',
         ['VM', 'vCenter', 'Loại', 'Cluster (từ → đến)', 'Host (từ → đến)', 'Trạng thái', 'vCPU', 'RAM (GB)'], moved.length ? groupedRows(moved, movedRow, 8) : '')}
-      ${card('VM đổi tên — không tính thêm mới/loại bỏ', 'Cùng một VM nhưng tên khác giữa đầu kỳ và nay.', renamedVms.length, 'renamed',
+      ${card('VM đổi tên', 'Không tính là thêm mới / loại bỏ. Cùng một VM nhưng tên khác giữa đầu kỳ và nay.', renamedVms.length, 'renamed',
         ['Tên cũ', 'Tên mới', 'vCenter', 'Cluster', 'Host', 'vCPU', 'RAM (GB)', 'Căn cứ'], renamedVms.length ? groupedRows(renamedVms, renamedRow, 8) : '')}
     </div>
     ${card('VM đổi cấu hình vCPU/RAM', `Tách riêng vì có làm thay đổi tài nguyên đã cấp: ${fmtInt(rs.up)} tăng · ${fmtInt(rs.down)} giảm · tổng ${rs.deltaVcpu > 0 ? '+' : ''}${fmtInt(rs.deltaVcpu)} vCPU · ${rs.deltaRamGB > 0 ? '+' : ''}${fmtInt(rs.deltaRamGB)} GB RAM.`, resized.length, 'resized',

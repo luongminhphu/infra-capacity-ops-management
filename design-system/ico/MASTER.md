@@ -122,6 +122,28 @@ Nguồn: `--domain product` “Status Page” (status green + incident red + mai
   `text-wrap:balance`) + câu dẫn. Nguồn: quyết định 16/11/2026 (khối kết luận của hướng B).
 - Co giãn theo **container query** cho khối; breakpoint trang chỉ còn 640 và 1024. Nguồn: `modern-web-guidance` “size-aware-styling”.
 
+### Form, nhãn và độ dài chữ
+
+Duyệt 17/11/2026: chủ sản phẩm yêu cầu áp dụng thống nhất sau đợt rà toàn app (PR “căn hàng cột”). Cách làm và script
+kiểm: skill `web-layout`.
+
+- **Ô nhập cùng hàng thẳng hàng** dù nhãn dài ngắn khác nhau: lưới mới dùng `.form-grid-aligned` (subgrid nhãn · ô · trợ
+  giúp), lưới cũ `align-items:end`. Nguồn: `--domain ux` “Input Labels” (nhãn luôn ở trên / cạnh ô); quyết định 17/11/2026.
+- **Nhãn một dòng, ~≤ 24 ký tự, chỉ gồm tên trường + đơn vị.** “Tuỳ chọn”, ví dụ, đơn vị tiền đưa vào `placeholder`;
+  giải thích ngắn vào `title`; giải thích người dùng *cần* biết vào dòng trợ giúp `.field-help` (title không hiện trên điện
+  thoại). Placeholder không thay nhãn. Nguồn: `--domain ux` “Input Labels”, “Form Labels”; `search.py` **không có kết quả
+  phù hợp trong dữ liệu** cho “helper text” (hai truy vấn) — theo `design-skills:ux-writing` (nhãn ngắn, giải thích tách riêng).
+- **Chữ tuỳ chọn `<select>` vừa ô**: rút gọn chữ hiển thị, giữ nguyên `value` gửi backend, tên đầy đủ ở `title`.
+- **Tiêu đề panel / thẻ một dòng**; câu giải thích xuống `panel-sub`. Nút một dòng.
+- **Không cắt chữ thiết yếu** (tiêu đề, nút, tên đối tượng, lỗi) bằng “…” — cho xuống dòng. `.muted-sub` dạng đoạn văn
+  xuống dòng. Nguồn: `--domain ux` “Essential Text Truncation”, “Text Reflow and Spacing”.
+- **Không cuộn ngang trang ở 390 px**: track lưới `minmax(0,1fr)`, con của grid / flex `min-width:0`, bảng rộng trong vùng
+  cuộn riêng. Nguồn: `--domain ux` “Horizontal Scroll”.
+- **Ô chọn file**: không dùng ô gốc của trình duyệt (“Choose File” tiếng Anh); dùng `uiDropzone` — vừa kéo thả vừa bấm
+  chọn được (một con trỏ, dùng được bằng bàn phím). Nguồn: `--domain ux` “Dragging Movements” (WCAG 2.2 cần cách thay thế
+  không kéo thả); §10 (không trộn Anh – Việt).
+- Một trường / hành động giữ **một tên** ở mọi trang có nó (VD Quy hoạch và Tuỳ chọn báo cáo). Nguồn: §10.
+
 ## 7. Thành phần
 
 | Thành phần | Quy tắc | Nguồn |
@@ -182,6 +204,8 @@ Nguồn: skill `design-skills:ux-writing`; `--domain ux` “Form Labels”; quy�
 - [ ] `prefers-reduced-motion` tôn trọng; không chữ < 12 px.
 - [ ] Mọi ô nhập / chọn có nhãn (`<label>` hoặc `aria-label`; `uiAutoLabel` chỉ là lưới an toàn); vùng bấm ≥ 24 × 24 px.
 - [ ] Không cắt chữ bằng “…” ở dòng danh sách — cho xuống dòng; bảng rộng nằm trong vùng cuộn riêng; tiêu đề không nhảy bậc.
+- [ ] Form / nhãn / nút theo §6 “Form, nhãn và độ dài chữ”; `ui_audit.js` (skill `web-layout`) ở 1440 + 390 px không còn
+      cuộn ngang, lệch hàng hay chữ bị cắt chưa giải thích được.
 - [ ] Biểu đồ: ≤ 3 series màu, không màu trạng thái cho series, một trục Y, có “Xem bảng”.
 - [ ] Số liệu khớp giữa web / PDF / Excel ở chế độ DEMO.
 - [ ] `python -m pytest tests -q` (gồm `test_frontend_markup.py`).

@@ -129,16 +129,16 @@ function renderLicEntitlements() {
   const form = !admin ? `<p class="muted-sub">${ADMIN_ONLY_NOTE}</p>` : `<div class="planning-panel lic-editor">
     <div class="planning-panel-title">${e.id ? `Sửa entitlement #${e.id}` : 'Thêm entitlement / báo giá'}</div>
     <div class="sim-form-grid lic-form-6">
-      <div class="field"><label>Sản phẩm</label><select id="licEntProduct">${Object.entries(products).map(([k, l]) => `<option value="${k}"${(e.product || 'ws_dc') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+      <div class="field lic-span-2"><label>Sản phẩm</label><select id="licEntProduct">${Object.entries(products).map(([k, l]) => `<option value="${k}"${(e.product || 'ws_dc') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
       <div class="field"><label>Tình trạng</label><select id="licEntKind" data-lic-entkind="1">${Object.entries(kinds).map(([k, l]) => `<option value="${k}"${(isNone ? 'none' : 'owned') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
       <div class="field"><label>Đơn vị</label><select id="licEntMetric">${Object.entries(metrics).map(([k, l]) => `<option value="${k}"${(e.metric || 'pack16') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-      <div class="field"><label>Số lượng${isNone ? ' (chưa có = 0)' : ''}</label><input id="licEntQty" type="number" min="0" step="1" value="${isNone ? 0 : (e.quantity ?? '')}"${isNone ? ' disabled' : ''}></div>
-      <div class="field"><label>${isNone ? 'Báo giá / đơn vị (tuỳ chọn)' : 'Đơn giá / đơn vị (tuỳ chọn)'}</label><input id="licEntPrice" type="number" min="0" step="1" value="${e.unitPrice ?? ''}" placeholder="VD: 160000000"></div>
+      <div class="field"><label${isNone ? ' title="Chưa có quyền sử dụng: số lượng = 0"' : ''}>Số lượng</label><input id="licEntQty" type="number" min="0" step="1" value="${isNone ? 0 : (e.quantity ?? '')}"${isNone ? ' disabled' : ''}></div>
+      <div class="field"><label>${isNone ? 'Báo giá / đơn vị' : 'Đơn giá / đơn vị'}</label><input id="licEntPrice" type="number" min="0" step="1" value="${e.unitPrice ?? ''}" placeholder="Tuỳ chọn"></div>
       <div class="field"><label>Tiền tệ</label><input id="licEntCur" value="${esc(e.currency || 'VND')}"></div>
       <div class="field"><label>SA / Subscription</label><select id="licEntSa"><option value="0"${!e.hasSa ? ' selected' : ''}>Không</option><option value="1"${e.hasSa ? ' selected' : ''}>Có</option></select></div>
       <div class="field"><label>Phạm vi vCenter</label><select id="licEntVc"><option value="">Tất cả</option>${vcs.map(v => `<option value="${esc(v)}"${e.scopeVcenter === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
       <div class="field"><label>Phạm vi cluster</label><select id="licEntCl"><option value="">Tất cả</option>${clusters.map(c => `<option value="${esc(c)}"${e.scopeCluster === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
-      <div class="field"><label>Hết hạn (tuỳ chọn)</label><input id="licEntValid" type="date" value="${e.validTo ? String(e.validTo).slice(0, 10) : ''}"></div>
+      <div class="field"><label title="Tuỳ chọn">Hết hạn</label><input id="licEntValid" type="date" value="${e.validTo ? String(e.validTo).slice(0, 10) : ''}"></div>
       <div class="field"><label>Ghi chú (hợp đồng, PO…)</label><input id="licEntNote" value="${esc(e.note || '')}"></div>
     </div>
     <div class="sim-actions">

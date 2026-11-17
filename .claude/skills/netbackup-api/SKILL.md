@@ -54,3 +54,4 @@ description: Dùng khi sửa module Backup / Veritas NetBackup — backend/app/b
 - [ ] `python -m pytest tests/test_backup.py -q` pass; thêm test cho parser / analysis mới.
 - [ ] Web (`views/backup.js`), PDF (`report_backup.py`) và Excel (`excel_backup.py`) dùng cùng
       số liệu từ `analysis.py`, không tự tính lại ở mỗi nơi.
+- [ ] Giao diện Backup đổi: theo skill `web-layout` (nhãn ngắn, ô thẳng hàng, không cuộn ngang 390 px), chạy `ui_audit.js --pages backup,backup/clients,…`.

@@ -49,7 +49,7 @@ const spTime = (iso) => {
 const spPill = (tone, label) => uiPill(tone, label);
 const spOpt = (value, label, sel) => `<option value="${esc(value)}"${String(sel) === String(value) ? ' selected' : ''}>${esc(label)}</option>`;
 const SP_CYCLES = [['yearly', 'Hằng năm'], ['quarterly', 'Hằng quý'], ['monthly', 'Hằng tháng'], ['one_time', 'Một lần']];
-const SP_STATUS_FILTER = [['open', 'Cần theo dõi (dự kiến + hiệu lực)'], ['expiring', 'Sắp hết hạn'], ['overdue', 'Quá hạn'],
+const SP_STATUS_FILTER = [['open', 'Cần theo dõi'], ['expiring', 'Sắp hết hạn'], ['overdue', 'Quá hạn'],
   ['planned', 'Dự kiến'], ['active', 'Đang hiệu lực'], ['renewed', 'Đã gia hạn'], ['stopped', 'Ngừng'], ['all', 'Tất cả']];
 const SP_GROUPS = { hw_warranty: 'Bảo hành phần cứng', license: 'License', dc_maintenance: 'Bảo trì DC', outsourced: 'Thuê ngoài', other: 'Khác' };
 
@@ -164,7 +164,7 @@ function spRenderPage() {
           <details class="sp-more"${extraFilters ? ' open' : ''}><summary>Lọc${extraFilters ? ` <span class="n">${extraFilters}</span>` : ''}</summary>
             <div class="sp-filters sp-filters-pop">
               <label class="field"><span>Năm tài chính</span><select data-sp-filter="fy">${spOpt('', 'Tất cả', f.fy)}${m.fiscalYears.map(y => spOpt(y, `FY ${y}`, f.fy)).join('')}</select></label>
-              <label class="field"><span>Trạng thái</span><select data-sp-filter="status">${SP_STATUS_FILTER.map(([v, t]) => spOpt(v, t, f.status)).join('')}</select></label>
+              <label class="field"><span title="Cần theo dõi = dự kiến + đang hiệu lực">Trạng thái</span><select data-sp-filter="status">${SP_STATUS_FILTER.map(([v, t]) => spOpt(v, t, f.status)).join('')}</select></label>
               <label class="field"><span>Loại chi phí</span><select data-sp-filter="category">${spOpt('', 'Tất cả', f.category)}${m.categories.map(x => spOpt(x.id, x.name, f.category)).join('')}</select></label>
               <label class="field"><span>Nhà cung cấp</span><select data-sp-filter="vendor">${spOpt('', 'Tất cả', f.vendor)}${m.vendors.map(x => spOpt(x.id, x.name, f.vendor)).join('')}</select></label>
               <label class="field"><span>Cost center</span><select data-sp-filter="costCenter">${spOpt('', 'Tất cả', f.costCenter)}${m.costCenters.map(x => spOpt(x.id, `${x.code} — ${x.name}`, f.costCenter)).join('')}</select></label>
@@ -272,7 +272,7 @@ async function spOpenDetail(code) {
       <a href="/api/spend/files/${encodeURIComponent(f.id)}" download>${esc(f.name)}</a>
       <span class="muted-sub">${fmtInt(f.sizeBytes / 1024)} KB · ${esc(f.uploadedBy)} · ${esc(spTime(f.uploadedAt))}</span>
       ${spCan('editor') ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" data-sp-detach="${esc(f.id)}">Xoá</button>` : ''}</li>`).join('') || '<li class="muted-sub">Chưa có file.</li>'}</ul>
-    ${spCan('editor') ? '<label class="field"><span>Thêm file (PDF, .docx, .xlsx)</span><input type="file" id="spAttach" accept=".pdf,.docx,.xlsx"></label>' : ''}`;
+    ${spCan('editor') ? uiDropzone('spAttach', 'Thêm file đính kèm', 'PDF, .docx hoặc .xlsx', '.pdf,.docx,.xlsx') : ''}`;
   const body = `
     <div class="sp-detail-head">${spPill(it.tone, it.displayLabel)} ${it.status === 'active' ? spDaysCell(it) : ''}</div>
     <dl class="sp-dl">

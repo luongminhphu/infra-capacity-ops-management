@@ -103,3 +103,26 @@ def test_chart_colours_come_from_tokens():
         src = open(os.path.join(js, name), encoding="utf-8").read()
         assert not re.findall(r"'#[0-9a-fA-F]{6}'", src), name
 
+
+
+def test_form_labels_and_file_pickers_follow_master_layout_rules():
+    """MASTER §6 “Form, nhãn và độ dài chữ” (skill web-layout): a label holds the field name + unit only —
+    “(tuỳ chọn)” goes to the placeholder — and the browser's native file picker ("Choose File", English,
+    unstyled) is never shown: uiDropzone or a .btn wrapping a hidden input."""
+    import pathlib
+    import re
+    front = pathlib.Path(__file__).resolve().parents[2] / "frontend"
+    files = [front / "index.html", *sorted((front / "js").rglob("*.js"))]
+    bad = []
+    optional_in_label = re.compile(r"<(label|span)\b[^>]*>[^<]*\(tu[ỳỷ] chọn\)[^<]*</\1>")
+    file_input = re.compile(r"<input\b[^>]*type=\"file\"[^>]*>")
+    for f in files:
+        src = f.read_text(encoding="utf-8")
+        rel = f.relative_to(front)
+        for m in optional_in_label.finditer(src):
+            bad.append(f"{rel}:{src.count(chr(10), 0, m.start()) + 1} label with (tuỳ chọn): {m.group(0)[:60]}")
+        for m in file_input.finditer(src):
+            tag = m.group(0)
+            if not re.search(r"\bhidden\b|class=\"[^\"]*\b(sr-only|hidden)\b", tag):
+                bad.append(f"{rel}:{src.count(chr(10), 0, m.start()) + 1} visible native file input: {tag[:60]}")
+    assert bad == [], "\n".join(bad)
