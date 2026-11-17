@@ -183,6 +183,11 @@ function qtBind() {
   if (qtState.bound) return;
   qtState.bound = true;
   const mount = $('#spendMount');
+  mount.addEventListener('input', (e) => {
+    if (spState.sub !== 'quotes' || !e.target.matches('#qtCrit .qt-score, #qtCrit .qt-w, #qtEval [name="conclusion"]')) return;
+    e.target.classList.remove('qt-sugg'); e.target.removeAttribute('title');
+    qtEvalLive();
+  });
   mount.addEventListener('click', (e) => {
     if (spState.sub !== 'quotes') return;
     const row = e.target.closest('[data-qt-code]');
@@ -263,6 +268,7 @@ function qtRenderDetail() {
       <div id="qtTabBody">${body(d)}</div>
     </section>`;
   refreshIcons();
+  if (qtState.tab === 'eval' && $('#qtCrit')) qtEvalLive();     // totals include the pre-filled suggestions
 }
 
 function qtTabQuotes(d) {
@@ -331,10 +337,16 @@ function qtTabCompare(d) {
 function qtTabEval(d) {
   const ev = d.evaluation, cols = ev.columns, ro = !(spCan('editor') && !qtLocked()) ? ' disabled' : '';
   if (!cols.length) return '<p class="empty-note">Thêm báo giá trước khi đánh giá NCC.</p>';
+  const sgAll = ev.suggestion || {}, sg = sgAll.scores || {};
+  const anySug = !ro && ev.criteria.some(c => cols.some(x => (c.scores[String(x.quotationId)] ?? null) === null && sg[String(c.id)] && sg[String(c.id)][String(x.quotationId)] !== undefined));
+  const conclusion = ev.conclusion || (!ro && sgAll.conclusion) || '';
+  const pickLabel = (cols.find(x => x.quotationId === sgAll.pick) || {}).label;
   const crit = (sec) => ev.criteria.filter(c => c.section === sec).map(c => `<tr data-crit data-sec="${sec}">
       <td><input type="text" class="qt-crit-name" aria-label="Tiêu chí" value="${esc(c.name)}" maxlength="255"${ro}></td>
       <td class="num in"><input type="number" class="qt-w" aria-label="Tỷ trọng (%) — ${esc(c.name)}" min="1" max="70" step="0.5" value="${esc(Math.round(c.weight * 1000) / 10)}"${ro}></td>
-      ${cols.map(x => `<td class="num in"><input type="number" class="qt-score" aria-label="${esc(x.label)} — ${esc(c.name)}" min="1" max="10" step="0.05" data-q="${esc(x.quotationId)}" value="${esc(qtRaw(c.scores[String(x.quotationId)]))}"${ro}></td>`).join('')}
+      ${cols.map(x => { const q = String(x.quotationId), saved = c.scores[q], sug = sg[String(c.id)] && sg[String(c.id)][q];
+        const useSug = (saved === null || saved === undefined) && sug !== undefined && !ro;
+        return `<td class="num in"><input type="number" class="qt-score${useSug ? ' qt-sugg' : ''}" aria-label="${esc(x.label)} — ${esc(c.name)}" min="1" max="10" step="0.05" data-q="${esc(q)}" data-cid="${esc(c.id)}" value="${esc(qtRaw(useSug ? sug : saved))}"${useSug ? ' title="Điểm gợi ý — sửa được, lưu khi bấm Lưu đánh giá"' : ''}${ro}></td>`; }).join('')}
       ${ro ? '' : '<td class="act"><button class="btn btn-ghost btn-sm icon-btn" type="button" data-qt-act="crit-del" aria-label="Bỏ tiêu chí"><i data-lucide="x"></i></button></td>'}</tr>`).join('');
   const sec = (s, label) => `<tr class="qt-sec"><td colspan="${2 + cols.length + (ro ? 0 : 1)}"><b>${label}</b>${ro || s === 'A' ? '' : ' <button class="btn btn-ghost btn-sm" type="button" data-qt-act="crit-add">+ tiêu chí</button>'}</td></tr>`;
   const hint = Object.keys(ev.priceScoreHint).length ? `Gợi ý điểm Giá thành (rẻ nhất 10, mỗi 5% cao hơn trừ 1): ${cols.map(x => `${esc(x.label)} ${esc(qtNum(ev.priceScoreHint[String(x.quotationId)], 1))}`).join(' · ')}` : '';
@@ -342,7 +354,7 @@ function qtTabEval(d) {
       <label class="field"><span>Bộ phận đánh giá</span><input name="department" maxlength="64" value="${esc(ev.department || '')}"${ro}></label>
       <label class="field"><span>Ngày đánh giá</span><input name="date" type="date" value="${esc(ev.date || '')}"${ro}></label>
       <label class="field sp-span2"><span>Loại hình sản phẩm, dịch vụ</span><input name="service" maxlength="255" value="${esc(ev.service || '')}"${ro}></label>
-      <label class="field sp-span2"><span>Kết luận</span><input name="conclusion" maxlength="255" value="${esc(ev.conclusion || '')}" placeholder="Để trống: điền “Đề xuất chọn …” khi chọn NCC"${ro}></label>
+      <label class="field sp-span2"><span>Kết luận</span><input name="conclusion" maxlength="255" value="${esc(conclusion)}"${!ev.conclusion && conclusion ? ' class="qt-sugg" title="Đề xuất theo giá tốt nhất — sửa được"' : ''} placeholder="Đề xuất chọn …"${ro}></label>
       <label class="field"><span>Người thực hiện đánh giá</span><input name="evaluator" maxlength="128" value="${esc(ev.evaluator || '')}"${ro}></label>
       <label class="field"><span>Trưởng Bộ phận phê duyệt</span><input name="approver" maxlength="128" value="${esc(ev.approver || '')}"${ro}></label>
     </div></form>
@@ -350,14 +362,52 @@ function qtTabEval(d) {
       <colgroup><col><col class="c-num">${cols.map(() => '<col class="c-num">').join('')}${ro ? '' : '<col class="c-act">'}</colgroup>
       <thead><tr><th>Tiêu chí đánh giá</th><th class="num">Tỷ trọng (%)</th>${cols.map(x => `<th class="num" title="${esc(x.label)}">${esc(x.label)}</th>`).join('')}${ro ? '' : '<th></th>'}</tr></thead>
       <tbody id="qtCrit">${sec('A', 'A. Khung đánh giá tiêu chuẩn — 70%')}${crit('A')}${sec('B', 'B. Khung đánh giá mở rộng — 30% (2–4 tiêu chí)')}${crit('B')}</tbody>
-      <tfoot><tr class="qt-foot"><td><b>Tổng điểm</b></td><td></td>${cols.map(x => `<td class="num"><b>${esc(qtNum(ev.totals[String(x.quotationId)], 2))}</b></td>`).join('')}${ro ? '' : '<td></td>'}</tr>
-        <tr class="qt-foot"><td><b>Loại đánh giá</b></td><td></td>${cols.map(x => `<td class="num"><b>${esc(ev.classes[String(x.quotationId)] || '—')}</b></td>`).join('')}${ro ? '' : '<td></td>'}</tr></tfoot>
+      <tfoot><tr class="qt-foot"><td><b>Tổng điểm</b></td><td></td>${cols.map(x => `<td class="num"><b data-qt-total="${esc(x.quotationId)}">${esc(qtNum(ev.totals[String(x.quotationId)], 2))}</b></td>`).join('')}${ro ? '' : '<td></td>'}</tr>
+        <tr class="qt-foot"><td><b>Loại đánh giá</b></td><td></td>${cols.map(x => `<td class="num"><b data-qt-class="${esc(x.quotationId)}">${esc(ev.classes[String(x.quotationId)] || '—')}</b></td>`).join('')}${ro ? '' : '<td></td>'}</tr></tfoot>
     </table></div>
-    <p class="muted-sub">Thang điểm 1–10. Xếp loại: ≥ 8 A · ≥ 7 B · ≥ 6 C · dưới 6 Không đạt. ${hint}</p>
+    ${anySug ? `<p class="note-line qt-sugg-note">${uiTag('Gợi ý')}<span>Ô in nghiêng là điểm gợi ý: <b>Giá thành</b> theo giá (rẻ nhất 10, mỗi 5% cao hơn trừ 1), tiêu chí khác 10${pickLabel ? ` — <b>${esc(pickLabel)}</b> giá tốt nhất` : ''}. Sửa nếu cần rồi bấm <b>Lưu đánh giá</b>.</span></p>` : ''}
+    <p class="muted-sub">Thang điểm 1–10. Xếp loại: ≥ 8 A · ≥ 7 B · ≥ 6 C · dưới 6 Không đạt. ${anySug ? '' : hint}</p>
     <div class="sp-inline"><span class="src-spacer"></span>
+      ${ro || !sgAll.pick ? '' : '<button class="btn btn-ghost btn-sm" type="button" data-qt-act="eval-suggest" title="Điền lại điểm Giá thành theo giá và câu kết luận đề xuất NCC giá tốt nhất"><i data-lucide="sparkles"></i>Gợi ý lại theo giá</button>'}
       <button class="btn btn-ghost btn-sm" type="button" data-qt-act="xlsx-eval"><i data-lucide="file-spreadsheet"></i>Xuất phiếu đánh giá (Excel)</button>
       ${ro ? '' : '<button class="btn btn-primary btn-sm" type="button" data-qt-act="eval-save">Lưu đánh giá</button>'}</div>
     <p class="src-result" id="qtMsg" role="status"></p>`;
+}
+
+/* Live total / class of the evaluation table, same formula as quotes.weighted_total / classify on the server. */
+const qtClassOf = (t) => t === null ? '—' : t >= 8 ? 'A' : t >= 7 ? 'B' : t >= 6 ? 'C' : 'Không đạt';
+function qtEvalLive() {
+  const rows = $$('#qtCrit [data-crit]');
+  $$('[data-qt-total]').forEach(el => {
+    const q = el.dataset.qtTotal;
+    let sum = 0, ok = rows.length > 0;
+    rows.forEach(tr => {
+      const w = Number(tr.querySelector('.qt-w').value) / 100, inp = tr.querySelector(`.qt-score[data-q="${q}"]`);
+      if (!inp || inp.value === '') { ok = false; return; }
+      sum += w * Number(inp.value);
+    });
+    const t = ok ? Math.round(sum * 100) / 100 : null;
+    el.textContent = t === null ? '—' : qtNum(t, 2);
+    const c = $(`[data-qt-class="${q}"]`); if (c) c.textContent = qtClassOf(t);
+  });
+}
+
+/* "Gợi ý lại theo giá": price criterion from the current prices, conclusion = cheapest vendor. Other scores stay. */
+function qtEvalApplySuggestion(d) {
+  const sg = (d.evaluation.suggestion || {});
+  (sg.priceCriteria || []).forEach(cid => {
+    $$(`#qtCrit .qt-score[data-cid="${cid}"]`).forEach(inp => {
+      const v = sg.scores[String(cid)] && sg.scores[String(cid)][inp.dataset.q];
+      if (v !== undefined) { inp.value = v; inp.classList.add('qt-sugg'); }
+    });
+  });
+  $$('#qtCrit .qt-score').forEach(inp => {
+    if (inp.value === '') { const v = sg.scores[inp.dataset.cid] && sg.scores[inp.dataset.cid][inp.dataset.q]; if (v !== undefined) { inp.value = v; inp.classList.add('qt-sugg'); } }
+  });
+  const concl = $('#qtEval [name="conclusion"]');
+  if (concl && sg.conclusion) { concl.value = sg.conclusion; concl.classList.add('qt-sugg'); }
+  qtEvalLive();
+  qtMsg('Đã điền gợi ý theo giá — kiểm tra rồi bấm Lưu đánh giá.', true);
 }
 
 function qtTabDecide(d) {
@@ -444,11 +494,17 @@ async function qtAction(act, qid, btn) {
     const rows = $$('#qtCrit [data-crit][data-sec="B"]');
     if (rows.length >= 4) { qtMsg('Khung mở rộng tối đa 04 tiêu chí.'); return; }
     const tpl = rows[rows.length - 1].cloneNode(true);
-    tpl.querySelectorAll('input').forEach(i => { i.value = i.classList.contains('qt-w') ? '0' : ''; });
+    // new criterion: weight 0 for the person to set, every vendor 10 by default (editable, like the others)
+    tpl.querySelectorAll('input').forEach(i => {
+      i.value = i.classList.contains('qt-w') ? '0' : i.classList.contains('qt-score') ? '10' : '';
+      i.classList.toggle('qt-sugg', i.classList.contains('qt-score'));
+      delete i.dataset.cid;
+    });
     rows[rows.length - 1].after(tpl);
     return;
   }
   if (act === 'crit-del') { btn.closest('tr').remove(); return; }
+  if (act === 'eval-suggest') return qtEvalApplySuggestion(d);
   if (act === 'eval-save') return run(() => apiRequest(qtUrl(code, 'evaluation'), { method: 'PUT', body: JSON.stringify(qtReadEval()) }), 'Đã lưu đánh giá.');
   if (act === 'select') {
     const pick = $('input[name="qtPick"]:checked');

@@ -226,3 +226,39 @@ def test_out_of_range_numbers_from_the_ai_are_dropped_not_a_500(admin, editor, m
     line = {"lineType": "item", "description": "Videobar", "qty": "98.765.432.100.000", "unitPrice": "1", "amount": "1"}
     r = editor.put(f"/api/spend/quotes/{code}/quotations/{q['id']}", json={**base, "lines": [line]})
     assert r.status_code == 400 and "SL quá lớn" in r.json()["detail"]
+
+
+# ---------------------------------------------------------------- evaluation: suggested scores, price first
+def test_suggest_evaluation_price_first_others_ten():
+    crit = [(1, "Chất lượng sản phẩm/dịch vụ"), (2, "Giá thành"), (3, "Mức độ uy tín NCC"), (4, "Hỗ trợ cho mượn thiết bị")]
+    totals = {10: D(1_758_246_400), 11: D(1_787_362_400), 12: D(1_660_442_400)}       # CMC, HPT, SVT (Tổng NCC ghi)
+    sg = qm.suggest_evaluation(crit, totals, {10: "CMC", 11: "HPT", 12: "SVT"})
+    assert sg["priceCriteria"] == [2]
+    assert sg["scores"][2] == {10: D("8.8"), 11: D("8.5"), 12: D(10)}    # +5,9 % → 8,8; +7,6 % → 8,5
+    assert all(sg["scores"][c] == {10: 10, 11: 10, 12: 10} for c in (1, 3, 4))
+    assert sg["pick"] == 12
+    assert sg["conclusion"] == "Đề xuất chọn SVT — giá thấp nhất 1.660.442.400 đ (CMC +5,9%, HPT +7,6%)"
+    # with the suggested scores the cheapest vendor also has the best weighted total
+    weights = {1: D("0.15"), 2: D("0.15"), 3: D("0.10"), 4: D("0.60")}
+    tot = {q: qm.weighted_total((weights[c], sg["scores"][c][q]) for c in weights) for q in totals}
+    assert max(tot, key=tot.get) == 12 and tot[12] == D("10.00") and tot[11] == D("9.78")
+
+
+def test_suggest_evaluation_without_prices_or_price_criterion():
+    sg = qm.suggest_evaluation([(1, "Kinh nghiệm"), (2, "Tiến độ")], {5: None, 6: None}, {5: "A", 6: "B"})
+    assert sg["pick"] is None and sg["conclusion"] is None and sg["priceCriteria"] == []
+    assert sg["scores"][1] == {5: 10, 6: 10}
+    assert qm.is_price_criterion("Chi phí triển khai") and qm.is_price_criterion("Giá") and not qm.is_price_criterion("Giao hàng")
+
+
+def test_evaluation_api_returns_suggestion(editor):
+    from test_spend_quotes import _quote_file
+    code = _new_request(editor, title="Gợi ý NCC")["code"]
+    _upload(editor, code, "Rẻ", _quote_file(price_core=400_000_000))
+    d = _upload(editor, code, "Đắt", _quote_file(price_core=450_000_000)).json()
+    sg = d["evaluation"]["suggestion"]
+    cheap = next(q for q in d["quotations"] if q["vendorLabel"].startswith("R"))
+    assert sg["pick"] == cheap["id"] and sg["conclusion"].startswith(f"Đề xuất chọn {cheap['vendorLabel']} — giá thấp nhất")
+    price_cid = str(sg["priceCriteria"][0])
+    assert sg["scores"][price_cid][str(cheap["id"])] == 10.0
+    assert {v for c, per in sg["scores"].items() if c != price_cid for v in per.values()} == {10.0}
