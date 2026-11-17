@@ -218,3 +218,15 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 @container (width < 230px){ .kpi-v{white-space:normal;} .kpi-s{overflow-wrap:anywhere;} }
 /* Sizing host profiles on phones: name on its own row, numbers two per row (3 columns cut "2×24C / 768 GB"). */
 @media (max-width:640px){.sz-profile-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}.sz-profile-grid>.field:first-child{grid-column:1/-1;}}
+/* Phiếu đánh giá NCC: fixed column widths; score / weight inputs fill their column and share one right edge
+   with the header and the totals (inputs were 80 px boxes left in a wider right-aligned column). */
+.qt-eval{table-layout:fixed;width:100%;min-width:calc(280px + (var(--qt-n,3) + 1) * 112px + 48px);}
+.qt-eval .qt-c-num{width:112px;}
+.qt-eval .qt-c-act{width:48px;}
+.qt-eval th{white-space:normal;overflow-wrap:anywhere;}
+.qt-eval .qt-crit-name{min-width:0;width:100%;}
+.qt-eval .qt-w,.qt-eval .qt-score{width:100%;text-align:right;padding:0 var(--space-2);-moz-appearance:textfield;appearance:textfield;}
+.qt-eval .qt-w::-webkit-inner-spin-button,.qt-eval .qt-score::-webkit-inner-spin-button,
+.qt-eval .qt-w::-webkit-outer-spin-button,.qt-eval .qt-score::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+.qt-eval th.num,.qt-eval tfoot td.num{padding-right:calc(var(--space-2) * 2 + 1px);}
+.qt-eval td.qt-act{text-align:center;}
