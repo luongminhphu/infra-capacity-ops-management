@@ -471,6 +471,15 @@ def delete_request(code: str, request: Request, user: User = Depends(require_spe
 def _store_extracted(db: Session, q: Quotation, ex: qm.Extracted) -> None:
     db.query(QuotationLine).filter_by(quotation_id=q.id).delete(synchronize_session=False)
     lines = ex.lines[:MAX_LINES]
+    dropped = sum(qm.fit_line(l) for l in lines)              # out-of-range numbers → empty, never a DB error
+    vat_rate = qm.fit(ex.vat_pct, "vat_pct")
+    if ex.vat_pct is not None and (vat_rate is None or vat_rate > 20):
+        dropped, vat_rate = dropped + 1, None                 # a tax amount read as the rate: let the engine infer it
+    ex.vat_pct = vat_rate
+    for attr in ("subtotal", "discount", "vat", "total"):
+        if qm.fit(getattr(ex, attr), "amount") is None and getattr(ex, attr) is not None:
+            dropped += 1
+            setattr(ex, attr, None)
     bundles = qm.normalize_bundles(lines, ex.subtotal)        # "Phòng họp × 2" + per-room breakdown
     for i, l in enumerate(lines, 1):
         db.add(QuotationLine(quotation_id=q.id, seq=i, line_type=l.line_type, description=(l.description or "—")[:2000],
@@ -478,6 +487,9 @@ def _store_extracted(db: Session, q: Quotation, ex: qm.Extracted) -> None:
                              vat_pct=l.vat_pct, vat_amount=l.vat_amount, sets=l.sets))
     if bundles:
         ex.message = " ".join([ex.message or "", "Đã nhận dạng gói:", *bundles]).strip()
+    if dropped:
+        ex.message = " ".join([ex.message or "", f"{dropped} ô số đọc được không hợp lý (vd thuế suất là số tiền) nên để trống — "
+                               "nhập lại theo file gốc."]).strip()
     q.vat_pct = ex.vat_pct
     q.stated_subtotal, q.stated_discount = qm.to_int(ex.subtotal), qm.to_int(ex.discount)
     q.stated_vat, q.stated_total = qm.to_int(ex.vat), qm.to_int(ex.total)
@@ -647,6 +659,8 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
     if q.fx_rate is not None and not Decimal(0) < q.fx_rate < Decimal(10_000_000):
         _bad("Tỷ giá phải lớn hơn 0.")
     q.vat_pct = _d(data.get("vatPct"))
+    if q.vat_pct is not None and not Decimal(0) <= q.vat_pct <= Decimal(100):
+        _bad("VAT (%) là thuế suất, vd 8 hoặc 10 — không phải số tiền thuế.")
     for attr, key in (("stated_subtotal", "statedSubtotal"), ("stated_discount", "statedDiscount"), ("stated_vat", "statedVat"),
                       ("stated_total", "statedTotal")):
         setattr(q, attr, qm.to_int(_d(data.get(key))))
@@ -662,6 +676,11 @@ def update_quotation(code: str, qid: int, request: Request, data: Dict[str, Any]
             _bad(f"Tối đa {MAX_LINES} dòng.")
         db.query(QuotationLine).filter_by(quotation_id=q.id).delete(synchronize_session=False)
         for i, l in enumerate(rows, 1):
+            for key, label, lim in (("qty", "SL", "1e12"), ("unitPrice", "đơn giá", "1e15"), ("amount", "thành tiền", "1e15"),
+                                    ("vatAmount", "thuế GTGT", "1e15")):
+                v = _d(l.get(key))
+                if v is not None and abs(v) >= Decimal(lim):
+                    _bad(f"Dòng {i}: {label} quá lớn.")
             lt = l.get("lineType") or "item"
             if lt not in ("item", "discount", "subtotal", "vat", "total", "note"):
                 _bad(f"Dòng {i}: loại dòng không hợp lệ.")
