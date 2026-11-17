@@ -321,7 +321,8 @@ def public_error(exc: BaseException) -> str:
     """Message safe to show in the UI: our own connection errors are written for operators
     (no secrets); anything else (SQL, library internals) stays in the log only."""
     from ..backup.client import NetBackupError
-    if isinstance(exc, (vcenter_client.VCenterConnectionError, NetBackupError, SourceBusy)):
+    from ..storage import StorageError
+    if isinstance(exc, (vcenter_client.VCenterConnectionError, NetBackupError, StorageError, SourceBusy)):
         return str(exc)
     return "Đồng bộ thất bại. Xem log máy chủ để biết chi tiết."
 
@@ -338,13 +339,28 @@ def sync_backups(settings: Settings, configs=None) -> List[Dict[str, Any]]:
                      [{"key": c.key} for c in configs], settings.sync_concurrency, deadline_seconds(settings))
 
 
+def _sync_storage_task(cfg, peers: List[str]) -> Dict[str, Any]:
+    from ..storage.collector import sync_storage
+    with SessionLocal() as db:
+        return sync_storage(db, cfg, peers)
+
+
+def sync_storages(settings: Settings, configs=None) -> List[Dict[str, Any]]:
+    configs = settings.storages() if configs is None else configs
+    peers = {v: [c.key for c in configs if c.vendor == v and c.demo] for v in ("pure", "netapp")}
+    return run_syncs([lambda c=c: _sync_storage_task(c, peers[c.vendor]) for c in configs],
+                     [{"key": c.key} for c in configs], settings.sync_concurrency, deadline_seconds(settings))
+
+
 def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
-    """All vCenters and backup servers concurrently (vCenters first in the queue: backup
-    coverage reads the VM inventory)."""
-    vcs, nbus = settings.vcenters(), settings.netbackups()
+    """All vCenters, backup servers and storage arrays concurrently (vCenters first in the queue: backup
+    coverage reads the VM inventory, storage correlation reads the datastores)."""
+    vcs, nbus, arrays = settings.vcenters(), settings.netbackups(), settings.storages()
+    peers = {v: [c.key for c in arrays if c.vendor == v and c.demo] for v in ("pure", "netapp")}
     tasks = [lambda c=c: _sync_vcenter_task(c, settings) for c in vcs] + \
-            [lambda c=c: _sync_backup_task(c, settings) for c in nbus]
-    keys = [{"vcenterKey": c.key} for c in vcs] + [{"key": c.key} for c in nbus]
+            [lambda c=c: _sync_backup_task(c, settings) for c in nbus] + \
+            [lambda c=c: _sync_storage_task(c, peers[c.vendor]) for c in arrays]
+    keys = [{"vcenterKey": c.key} for c in vcs] + [{"key": c.key} for c in nbus] + [{"key": c.key} for c in arrays]
     return run_syncs(tasks, keys, settings.sync_concurrency, deadline_seconds(settings))
 
 

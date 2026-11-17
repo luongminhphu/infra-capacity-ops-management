@@ -29,6 +29,8 @@ const PAGES = [
       desc: 'VM đang có snapshot: tuổi, số lượng, dung lượng — snapshot tồn lâu làm đầy datastore và chậm I/O.', scope: ['vcenter'] },
     { id: 'infra-alarm', view: 'infra', sub: 'alarms', icon: 'siren', label: 'Alarm vCenter', title: 'Sức khoẻ hạ tầng — alarm vCenter',
       desc: 'Alarm đỏ / vàng đang kích hoạt trên vCenter.', scope: ['vcenter'] },
+    { id: 'infra-storage', view: 'infra', sub: 'storage', icon: 'database', label: 'Storage', title: 'Sức khoẻ hạ tầng — storage',
+      desc: 'Mảng Pure FlashArray / NetApp ONTAP: dung lượng, hiệu năng, linh kiện, alert; volume ↔ datastore ↔ VM.', scope: [] },
     { id: 'infra-health', view: 'infra', sub: 'hosts', icon: 'heart-pulse', label: 'Sức khoẻ host', title: 'Sức khoẻ hạ tầng — phần cứng host',
       desc: 'Cảm biến phần cứng host (nguồn, quạt, nhiệt độ, bộ nhớ) và trạng thái kết nối.', scope: ['vcenter'] },
     { id: 'history', view: 'history', icon: 'trending-up', label: 'Xu hướng & biến động', title: 'Xu hướng & biến động',
@@ -126,7 +128,7 @@ const MENU = [
       ['bk-overview', '', 'Tổng quan'], ['bk-clients', 'clients', 'Client & RPO'], ['bk-jobs', 'jobs', 'Job'],
       ['bk-schedule', 'schedule', 'Lịch & tuân thủ'], ['bk-coverage', 'coverage', 'Độ phủ VM'], ['bk-size', 'size', 'Dung lượng'], ['bk-storage', 'storage', 'Storage & policy']] },
     { key: 'health', label: 'Sức khoẻ hạ tầng', icon: 'activity', tabs: [
-      ['infra-ds', '', 'Datastore'], ['infra-snap', 'snapshots', 'Snapshot VM'], ['infra-alarm', 'alarms', 'Alarm vCenter'], ['infra-health', 'hosts', 'Sức khoẻ host']] },
+      ['infra-ds', '', 'Datastore'], ['infra-snap', 'snapshots', 'Snapshot VM'], ['infra-alarm', 'alarms', 'Alarm vCenter'], ['infra-health', 'hosts', 'Sức khoẻ host'], ['infra-storage', 'storage', 'Storage']] },
     { key: 'agenda', label: 'Lịch việc & nhắc hạn', icon: 'calendar-clock', tabs: [['agenda', '', 'Lịch việc']] },
     { key: 'simulate', label: 'Mô phỏng & quy hoạch', icon: 'git-branch', tabs: [
       ['whatif', '', 'What-if capacity'], ['planning', 'planning', 'Quy hoạch tài nguyên'], ['lic-whatif', 'license', 'What-if license']] },

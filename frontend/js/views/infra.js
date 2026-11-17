@@ -4,7 +4,7 @@
    Cài đặt → Cảnh báo: /api/settings/alerts (admin).
    ========================================================= */
 const infraState = { sub: 'datastores', q: '', onlyIssues: false, data: {}, summary: null, error: null, loading: false };
-const INFRA_TABS = { datastores: 'infra-ds', snapshots: 'infra-snap', alarms: 'infra-alarm', hosts: 'infra-health' };
+const INFRA_TABS = { datastores: 'infra-ds', snapshots: 'infra-snap', alarms: 'infra-alarm', hosts: 'infra-health', storage: 'infra-storage' };
 const INFRA_LEVEL = { crit: 'VƯỢT NGƯỠNG', bad: 'CẢNH BÁO', warn: 'THEO DÕI', ok: 'AN TOÀN' };
 const INFRA_ENTITY = { host: 'Host', vm: 'VM', datastore: 'Datastore', cluster: 'Cluster', other: 'Khác' };
 let infraChart = null;
@@ -21,7 +21,7 @@ async function infraLoad(force) {
   try {
     const [summary, rows] = await Promise.all([
       apiRequest(`/infra/summary${q}`),
-      apiRequest(`/infra/${{ datastores: 'datastores', snapshots: 'snapshots', alarms: 'alarms', hosts: 'health' }[sub]}${q}`)]);
+      apiRequest(sub === 'storage' ? '/infra/storage' : `/infra/${{ datastores: 'datastores', snapshots: 'snapshots', alarms: 'alarms', hosts: 'health' }[sub]}${q}`)]);
     infraState.summary = summary;
     infraState.data[sub] = rows;
     infraState.error = null;
@@ -52,6 +52,9 @@ function infraKpis() {
       status: al.red ? { cls: 'crit', text: 'Có alarm đỏ' } : al.total ? { cls: 'bad', text: 'Có alarm vàng' } : { cls: 'ok', text: 'AN TOÀN' } },
     { label: 'Sức khoẻ host', valueHtml: `${fmtInt(hh.hosts)}<small>host</small>`, subHtml: `${fmtInt(hh.issues)} host có vấn đề phần cứng / kết nối`,
       status: hh.issues ? { cls: 'bad', text: `${hh.issues} cần xử lý` } : { cls: 'ok', text: 'AN TOÀN' } },
+    ...(s.storage && s.storage.arrays ? [{ label: 'Storage', valueHtml: `${fmtInt(s.storage.arrays)}<small>mảng</small>`,
+      subHtml: `${fmtInt(s.storage.alerts)} alert đang mở`,
+      status: s.storage.crit ? { cls: 'crit', text: `${s.storage.crit} VƯỢT NGƯỠNG` } : s.storage.issues ? { cls: 'bad', text: `${s.storage.issues} cần xử lý` } : { cls: 'ok', text: 'AN TOÀN' } }] : []),
   ]);
 }
 
@@ -69,7 +72,7 @@ function infraDatastores(rows) {
   return `<div class="table-scroll" role="region" tabindex="0" aria-label="Datastore"><table class="data-table infra-table">
     <caption class="sr-only">Dung lượng datastore và dự báo ngày đầy</caption>
     <thead><tr><th>Datastore</th><th>Loại</th><th class="num">Dung lượng (GB)</th><th>Đã dùng</th><th class="num">Trống (GB)</th>
-      <th class="num">Cấp phát thin</th><th class="num">Tăng / ngày (GB)</th><th class="num">Đầy sau (ngày)</th><th>Trạng thái</th></tr></thead>
+      <th class="num">Cấp phát thin</th><th class="num">Tăng / ngày (GB)</th><th class="num">Đầy sau (ngày)</th><th>Storage</th><th>Trạng thái</th></tr></thead>
     <tbody>${list.map(d => `<tr class="infra-row" tabindex="0" data-infra-ds="${esc(d.vcenterKey)}|${esc(d.key)}" title="Xem xu hướng 30 ngày">
       <td><b>${esc(d.name)}</b><span class="muted-sub">${esc(d.clusters.join(', ') || '—')} · ${esc(d.vcenterKey)}</span></td>
       <td>${uiTag(d.type || '—')}</td>
@@ -79,8 +82,9 @@ function infraDatastores(rows) {
       <td class="num">${d.provisionedPct === null ? '—' : fmtNum(d.provisionedPct, 0) + '%'}</td>
       <td class="num">${d.growthGBPerDay === null ? '—' : fmtNum(d.growthGBPerDay, 1)}</td>
       <td class="num">${infraDays(d.daysToFull)}${d.fullDate ? `<span class="muted-sub">${esc(d.fullDate.split('-').reverse().join('/'))}</span>` : ''}</td>
+      <td>${d.storage ? `${esc(d.storage.array)}<span class="muted-sub">${esc(d.storage.kind === 'lun' ? 'LUN' : 'Volume')} ${esc(d.storage.volume)}</span>` : '<span class="muted-sub">—</span>'}</td>
       <td>${infraPill(d)}${d.reasons.length ? `<span class="muted-sub">${esc(d.reasons.join(' · '))}</span>` : ''}</td></tr>`).join('')
-      || uiEmptyRow(9, 'Không có datastore khớp bộ lọc.')}</tbody></table></div>
+      || uiEmptyRow(10, 'Không có datastore khớp bộ lọc.')}</tbody></table></div>
     <p class="muted-sub">Ngưỡng: ≥ 80% THEO DÕI · ≥ 90% CẢNH BÁO · ≥ 95% VƯỢT NGƯỠNG; dự báo đầy ≤ 30 ngày CẢNH BÁO, ≤ 7 ngày VƯỢT NGƯỠNG
       (xu hướng tuyến tính 30 ngày, cần ≥ 3 ngày lịch sử). Bấm một dòng để xem biểu đồ.</p>`;
 }
@@ -134,19 +138,56 @@ function infraHosts(rows) {
     <p class="muted-sub">Đọc từ cảm biến phần cứng qua vCenter (nguồn, quạt, nhiệt độ, bộ nhớ, bộ điều khiển đĩa). Host đang bảo trì không vào hộp việc.</p>`;
 }
 
+/* ---------- Storage arrays (Pure FlashArray / NetApp ONTAP) ---------- */
+const infraMs = (v) => (v === null || v === undefined) ? '—' : `${fmtNum(v, 2)} ms`;
+function infraStorage(data) {
+  const arrays = (data && data.arrays) || [], vols = (data && data.volumes) || [];
+  if (!arrays.length) return uiEmpty('Chưa có mảng lưu trữ — thêm Pure FlashArray / NetApp ONTAP ở Cài đặt → Nguồn dữ liệu.');
+  const cards = arrays.filter(a => !infraState.onlyIssues || a.level !== 'ok').map(a => `<article class="infra-array">
+      <header><div><b>${esc(a.name)}</b><span class="muted-sub">${esc(a.model || (a.vendor === 'pure' ? 'Pure FlashArray' : 'NetApp ONTAP'))} · ${esc(a.version || '—')}</span></div>${infraPill(a)}</header>
+      <div class="infra-use">${uiBullet(a.usedPct, a.name)}<b class="num">${a.usedPct === null ? '—' : fmtNum(a.usedPct, 1) + '%'}</b></div>
+      <dl class="sp-dl">
+        <div class="sp-dl-item"><dt>Vật lý đã dùng</dt><dd>${a.usedGB === null ? '—' : fmtNum(a.usedGB / 1024, 1)} / ${a.capacityGB === null ? '—' : fmtNum(a.capacityGB / 1024, 1)} TB</dd></div>
+        <div class="sp-dl-item"><dt>Giảm dữ liệu</dt><dd>${a.dataReduction === null ? '—' : fmtNum(a.dataReduction, 1) + ' : 1'}</dd></div>
+        <div class="sp-dl-item"><dt>Độ trễ đọc · ghi</dt><dd>${infraMs(a.latencyReadMs)} · ${infraMs(a.latencyWriteMs)}</dd></div>
+        <div class="sp-dl-item"><dt>IOPS · băng thông</dt><dd>${a.iops === null ? '—' : fmtInt(a.iops)} · ${a.throughputMBps === null ? '—' : fmtNum(a.throughputMBps, 0) + ' MB/s'}</dd></div>
+        <div class="sp-dl-item"><dt>Controller</dt><dd>${a.controllers.map(c => `${esc(c.name)} ${uiTag(c.status || '—')}`).join(' ') || '—'}</dd></div>
+        <div class="sp-dl-item"><dt>Đọc lần cuối</dt><dd>${uiDateTime(a.lastOkAt, 'short')}</dd></div>
+      </dl>
+      ${a.reasons.length ? `<ul class="infra-reasons">${a.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
+      ${a.alerts.length ? `<details class="infra-alerts"><summary>${fmtInt(a.alerts.length)} alert đang mở</summary><ul>${a.alerts.slice(0, 20).map(x =>
+        `<li>${uiPill(x.severity === 'critical' ? 'crit' : x.severity === 'warning' ? 'bad' : 'warn', x.severity === 'critical' ? 'Nghiêm trọng' : x.severity === 'warning' ? 'Cảnh báo' : 'Thông tin')} ${esc(x.summary)}<span class="muted-sub">${esc(x.component || '')} · ${uiDateTime(x.at, 'short')}</span></li>`).join('')}</ul></details>` : ''}
+    </article>`).join('');
+  const list = infraFilter(vols.map(v => ({ ...v, level: v.datastores.length ? 'warn' : 'ok' })), v => `${v.name} ${v.array} ${v.container || ''} ${v.datastores.map(d => d.datastore).join(' ')}`)
+    .filter(v => !infraState.onlyIssues || v.datastores.length);
+  const table = `<div class="table-scroll" role="region" tabindex="0" aria-label="Volume và LUN"><table class="data-table infra-table">
+    <caption class="sr-only">Volume / LUN của các mảng và datastore VMware tương ứng</caption>
+    <thead><tr><th>Volume / LUN</th><th>Mảng</th><th class="num">Dung lượng (GB)</th><th>Đã dùng</th><th>Datastore VMware</th><th class="num">VM</th></tr></thead>
+    <tbody>${list.slice(0, 500).map(v => `<tr>
+      <td><b>${esc(v.name)}</b><span class="muted-sub">${esc(v.kind === 'lun' ? 'LUN' : 'Volume')}${v.container ? ' · ' + esc(v.container) : ''}${v.nfsPath ? ' · NFS ' + esc(v.nfsPath) : ''}</span></td>
+      <td>${esc(v.array)}</td><td class="num">${v.sizeGB === null ? '—' : fmtNum(v.sizeGB, 0)}</td>
+      <td><span class="infra-use">${uiBullet(v.usedPct, v.name)}<b class="num">${v.usedPct === null ? '—' : fmtNum(v.usedPct, 1) + '%'}</b></span></td>
+      <td>${v.datastores.length ? v.datastores.map(d => `${esc(d.datastore)}<span class="muted-sub">${esc(d.vcenterKey)} · ${esc(d.clusters.join(', ') || '—')}</span>`).join('') : '<span class="muted-sub">Không gắn VMware</span>'}</td>
+      <td class="num">${v.datastores.length ? fmtInt(v.vmCount) : '—'}</td></tr>`).join('') || uiEmptyRow(6, 'Không có volume khớp bộ lọc.')}</tbody></table></div>
+    <p class="muted-sub">Ghép volume / LUN với datastore theo mã NAA của extent VMFS (Pure: naa.624a9370 + serial; ONTAP: naa.600a0980 + serial)
+      và theo IP LIF + đường dẫn export của datastore NFS. "Chỉ mục cần xử lý" ở bảng này = chỉ volume đang chứa datastore VMware.</p>`;
+  return `<div class="infra-arrays">${cards || uiNote('Không có mảng cần xử lý.')}</div><h3 class="sp-h">Volume / LUN ↔ datastore ↔ VM</h3>${table}`;
+}
+
 function infraRender() {
   const mount = $('#infraMount');
   if (!mount) return;
   const sub = infraState.sub, rows = infraState.data[sub] || [];
   const body = infraState.error ? uiError(infraState.error, 'data-infra-retry')
-    : { datastores: infraDatastores, snapshots: infraSnapshots, alarms: infraAlarms, hosts: infraHosts }[sub](rows);
+    : { datastores: infraDatastores, snapshots: infraSnapshots, alarms: infraAlarms, hosts: infraHosts, storage: infraStorage }[sub](rows);
   mount.innerHTML = `${infraKpis()}
     <section class="panel">
-      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">${esc({ datastores: 'Dung lượng datastore & dự báo đầy', snapshots: 'Snapshot VM tồn lâu', alarms: 'Alarm vCenter đang kích hoạt', hosts: 'Sức khoẻ phần cứng host' }[sub])}</div>
+      <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">${esc({ datastores: 'Dung lượng datastore & dự báo đầy', snapshots: 'Snapshot VM tồn lâu', alarms: 'Alarm vCenter đang kích hoạt', hosts: 'Sức khoẻ phần cứng host', storage: 'Mảng lưu trữ (Pure FlashArray · NetApp ONTAP)' }[sub])}</div>
         <p class="panel-sub">Cập nhật ở mỗi lần đồng bộ vCenter (chỉ đọc). Mục cần xử lý cũng vào hộp việc Trang chủ và cảnh báo Discord theo Cài đặt → Cảnh báo.</p></div>
         <div class="panel-toolbar infra-toolbar">
           <input type="search" data-infra-q placeholder="Tìm tên, cluster…" aria-label="Tìm" value="${esc(infraState.q)}">
           <label class="infra-check"><input type="checkbox" data-infra-issues${infraState.onlyIssues ? ' checked' : ''}> Chỉ mục cần xử lý</label>
+          ${sub === 'storage' && uiIsAdmin() ? '<button class="btn btn-secondary btn-sm" type="button" data-infra-storage-sync><i data-lucide="database"></i>Đồng bộ storage</button>' : ''}
           <button class="btn btn-ghost btn-sm" type="button" data-infra-reload><i data-lucide="refresh-cw"></i>Tải lại</button></div></div>
       <div id="infraBody">${body}</div>
     </section>`;
@@ -170,6 +211,17 @@ function infraBind() {
   const open = (row) => { const [vc, key] = row.dataset.infraDs.split('|'); infraOpenDatastore(vc, key); };
   mount.addEventListener('click', async (e) => {
     if (e.target.closest('[data-infra-reload], [data-infra-retry]')) { await infraLoad(true); infraRender(); return; }
+    const sync = e.target.closest('[data-infra-storage-sync]');
+    if (sync) {
+      sync.disabled = true;
+      try {
+        const r = await apiRequest('/infra/storage/sync', { method: 'POST' });
+        const bad = r.results.filter(x => !x.ok);
+        if (bad.length) uiAlert(bad.map(x => `${x.key}: ${x.error || 'đang đồng bộ'}`).join('\n'));
+        await infraLoad(true); infraRender();
+      } catch (err) { uiAlert(err.message); } finally { sync.disabled = false; }
+      return;
+    }
     const row = e.target.closest('[data-infra-ds]');
     if (row && !e.target.closest('a, button')) open(row);
   });

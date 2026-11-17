@@ -989,6 +989,8 @@
               <p class="panel-sub">Thêm vCenter và máy chủ backup NetBackup ngay trên giao diện: địa chỉ, tài khoản chỉ đọc, mật khẩu / API key (lưu mã hoá, không hiển thị lại). Thay đổi có hiệu lực ở lần đồng bộ kế tiếp, không cần khởi động lại.</p></div>
               <div class="panel-toolbar">
                 <button class="btn btn-secondary btn-sm hidden" type="button" id="btnSrcImportEnv" title="Chép các nguồn khai báo bằng biến môi trường vào giao diện để sửa tại đây">Chuyển từ biến môi trường</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-src-add="pure"><i data-lucide="plus"></i>Pure FlashArray</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-src-add="netapp"><i data-lucide="plus"></i>NetApp ONTAP</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="netbackup"><i data-lucide="plus"></i>Máy chủ backup</button>
                 <button class="btn btn-primary btn-sm" type="button" data-src-add="vcenter"><i data-lucide="plus"></i>vCenter</button>
               </div>
@@ -1012,9 +1014,9 @@
                 <div class="field"><label for="srcKey">Mã nguồn (không đổi được)</label><input id="srcKey" required maxlength="41" placeholder="vc-hcm-01" pattern="[a-z0-9][a-z0-9-]+"></div>
                 <div class="field"><label for="srcHost">Máy chủ (FQDN hoặc IP)</label><input id="srcHost" placeholder="vcenter01.corp.local" autocomplete="off"></div>
                 <div class="field"><label for="srcPort">Cổng</label><input id="srcPort" type="number" min="1" max="65535"></div>
-                <div class="field"><label for="srcUser">Tài khoản chỉ đọc</label><input id="srcUser" autocomplete="off" placeholder="infra.mon@vsphere.local"></div>
-                <div class="field"><label for="srcPassword">Mật khẩu</label><input id="srcPassword" type="password" autocomplete="new-password"></div>
-                <div class="field src-nbu"><label for="srcApiKey">API key (thay cho user / mật khẩu)</label><input id="srcApiKey" type="password" autocomplete="off"></div>
+                <div class="field src-up"><label for="srcUser">Tài khoản chỉ đọc</label><input id="srcUser" autocomplete="off" placeholder="infra.mon@vsphere.local"></div>
+                <div class="field src-up"><label for="srcPassword">Mật khẩu</label><input id="srcPassword" type="password" autocomplete="new-password"></div>
+                <div class="field src-key"><label for="srcApiKey" id="srcApiKeyLabel">API key (thay cho user / mật khẩu)</label><input id="srcApiKey" type="password" autocomplete="off"></div>
                 <div class="field src-nbu"><label for="srcApiVersion">API version</label><input id="srcApiVersion" placeholder="8.0 (NBU 10.0) · 12.0 (NBU 10.4)"></div>
                 <div class="field src-nbu"><label for="srcDomainType">Domain type</label><select id="srcDomainType"></select></div>
                 <div class="field src-nbu"><label for="srcDomainName">Domain name</label><input id="srcDomainName" placeholder="mặc định = tên máy chủ"></div>

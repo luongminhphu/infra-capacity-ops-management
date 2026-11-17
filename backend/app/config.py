@@ -167,6 +167,10 @@ class Settings(BaseSettings):
     snapshot_crit_gb: float = Field(default=200)    # snapshot data ≥ this: VƯỢT NGƯỠNG
     snapshot_chain_warn: int = Field(default=3)     # chain of ≥ N snapshots: CẢNH BÁO
 
+    storage_latency_warn_ms: float = Field(default=5)    # array read / write latency: CẢNH BÁO
+    storage_latency_crit_ms: float = Field(default=20)   # VƯỢT NGƯỠNG
+    storage_stale_minutes: int = Field(default=60)       # last good read older than this: CẢNH BÁO
+
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)
     metrics_hourly_days: int = Field(default=90)
@@ -286,6 +290,11 @@ class Settings(BaseSettings):
     def netbackups(self) -> List[NetBackupConfig]:
         from .sources import netbackup_configs
         return netbackup_configs(self)
+
+    def storages(self) -> list:
+        """Pure FlashArray / NetApp ONTAP sources (Cài đặt → Nguồn dữ liệu)."""
+        from .sources import storage_configs
+        return storage_configs(self)
 
     def env_vcenters(self) -> List[VCenterConfig]:
         result = []

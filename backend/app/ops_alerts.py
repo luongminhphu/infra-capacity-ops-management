@@ -52,7 +52,7 @@ from .alert_rules import SOURCES as _RULE_SOURCES
 
 PUSH_SOURCES = tuple(_RULE_SOURCES)     # sources that can push (Cài đặt → Cảnh báo decides which do)
 _KEY_PREFIX_SOURCE = {"cap": "capacity", "bk": "backup", "bkf": "backup", "ds": "datastore", "snap": "snapshot",
-                      "alarm": "alarm", "hh": "health"}
+                      "alarm": "alarm", "hh": "health", "st": "storage"}
 
 
 def _source_of(s: OpsAlertState) -> str:

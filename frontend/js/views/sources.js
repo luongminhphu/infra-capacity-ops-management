@@ -6,9 +6,13 @@
 
 const srcState = { items: [], domainTypes: [], editing: null, kind: 'vcenter' };
 const SRC_DEFAULTS = {
-  vcenter: { port: 443, user: 'infra.mon@vsphere.local', title: 'vCenter' },
-  netbackup: { port: 1556, user: '', title: 'máy chủ backup (NetBackup)' },
+  vcenter: { port: 443, user: 'infra.mon@vsphere.local', title: 'vCenter', label: 'vCenter' },
+  netbackup: { port: 1556, user: '', title: 'máy chủ backup (NetBackup)', label: 'Backup', keyLabel: 'API key (thay cho user / mật khẩu)' },
+  pure: { port: 443, user: '', title: 'mảng Pure FlashArray', label: 'Pure FlashArray', keyLabel: 'API token (user role readonly)' },
+  netapp: { port: 443, user: 'ico_ro', title: 'cụm NetApp ONTAP', label: 'NetApp ONTAP' },
 };
+/* Which credential fields each kind uses: user + password, API key / token, NetBackup-only fields. */
+const SRC_FIELDS = { vcenter: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'] };
 
 function srcSetStatus(msg, isErr) { uiSetStatus('#srcStatus', msg, isErr ? 'error' : ''); }
 
@@ -23,7 +27,7 @@ function srcAuthLabel(it) {
 }
 
 function srcRow(it) {
-  const kind = it.kind === 'vcenter' ? 'vCenter' : 'Backup';
+  const kind = (SRC_DEFAULTS[it.kind] || {}).label || it.kind;
   const test = it.lastTest
     ? `<span class="${it.lastTest.ok ? 'tone-ok' : 'tone-crit'}">${it.lastTest.ok ? 'OK' : 'Lỗi'}</span>
        <span class="muted-sub">${esc(fmtUtc(it.lastTest.at))}</span>`
@@ -52,7 +56,7 @@ async function loadSources() {
     $('#srcKeyWarning').classList.toggle('hidden', !!r.secretsKeyConfigured);
     $('#btnSrcImportEnv').classList.toggle('hidden', !r.items.some(i => i.origin === 'env' && !i.replacedByUi));
     $('#srcTable tbody').innerHTML = r.items.length ? r.items.map(srcRow).join('')
-      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter” hoặc “+ Máy chủ backup”.');
+      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Máy chủ backup”, “+ Pure FlashArray” hoặc “+ NetApp ONTAP”.');
   } catch (err) { srcSetStatus(err.message, true); }
 }
 
@@ -65,6 +69,7 @@ function srcFormPayload() {
     password: $('#srcPassword').value, verifySsl: $('#srcVerify').checked, caPem: $('#srcCaPem').value,
     demo: $('#srcDemo').checked,
   };
+  if (kind === 'pure') p.apiKey = $('#srcApiKey').value;
   if (kind === 'netbackup') {
     Object.assign(p, { apiKey: $('#srcApiKey').value, apiVersion: $('#srcApiVersion').value.trim() || '8.0',
       domainType: $('#srcDomainType').value, domainName: $('#srcDomainName').value.trim() });
@@ -84,7 +89,12 @@ function openSourceDialog(kind, item) {
   srcState.editing = item || null;
   const d = SRC_DEFAULTS[kind];
   $('#srcDialogTitle').textContent = (item ? 'Sửa ' : 'Thêm ') + d.title;
-  $$('#srcDialog .src-nbu').forEach(el => el.classList.toggle('hidden', kind !== 'netbackup'));
+  const fields = SRC_FIELDS[kind] || ['up'];
+  $$('#srcDialog .src-nbu').forEach(el => el.classList.toggle('hidden', !fields.includes('nbu')));
+  $$('#srcDialog .src-up').forEach(el => el.classList.toggle('hidden', !fields.includes('up')));
+  $$('#srcDialog .src-key').forEach(el => el.classList.toggle('hidden', !fields.includes('key')));
+  if (d.keyLabel) $('#srcApiKeyLabel').textContent = d.keyLabel;
+  $('#srcUser').placeholder = kind === 'netapp' ? 'ico_ro (role readonly, ứng dụng http)' : 'infra.mon@vsphere.local';
   $('#srcDomainType').innerHTML = srcState.domainTypes.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
   const v = item || {};
   $('#srcName').value = v.name || '';

@@ -25,7 +25,7 @@ LEVELS = ("crit", "bad", "warn", "task", "info")
 LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
 SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
-                 "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "license": "License", "spend": "Chi phí & hợp đồng",
+                 "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "license": "License", "spend": "Chi phí & hợp đồng",
                  "system": "Hệ thống"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
@@ -251,10 +251,22 @@ def health_items(db: Session) -> List[Dict[str, Any]]:
     return out
 
 
+def storage_items(db: Session) -> List[Dict[str, Any]]:
+    from . import infra
+    out = []
+    for a in infra.storage(db)["arrays"]:
+        if a["level"] == "ok":
+            continue
+        out.append(item("storage", a["level"], _key("st", a["sourceKey"], a["level"]),
+                        f"Storage {a['name']}{(' (' + a['model'] + ')') if a.get('model') else ''}: {infra.LEVEL_TEXT[a['level']].lower()}",
+                        "; ".join(a["reasons"][:4]) + ".", page="infra-storage", alert_key=_key("st", a["sourceKey"])))
+    return out
+
+
 PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("capacity", capacity_items, False), ("backup", backup_items, False),
     ("datastore", datastore_items, False), ("snapshot", snapshot_items, False),
-    ("alarm", alarm_items, False), ("health", health_items, False),
+    ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
 ]
 

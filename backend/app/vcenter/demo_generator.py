@@ -118,6 +118,20 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
 
 
 # ---------------------------------------------------------------- operational extras (vcenter/extras.py shape)
+DEMO_NFS_HOST = "10.20.0.11"            # data LIF of the demo NetApp SVM
+
+
+def demo_backing(vc_key: str, ds_name: str, ds_type: str) -> Dict[str, Any]:
+    """Storage correlation keys of a demo datastore, built the way the arrays expose them (storage/demo_generator
+    builds the matching volumes): VMFS on Pure → naa.624a9370 + serial, on NetApp → naa.600a0980 + hex(serial)."""
+    h = hashlib.sha1(f"{vc_key}/{ds_name}".encode()).hexdigest()
+    if ds_type == "NFS":
+        return {"naa": [], "nfsHost": DEMO_NFS_HOST, "nfsPath": "/" + ds_name.lower().replace("-", "_")}
+    if int(h[-1], 16) % 3:                       # ~2/3 on Pure, 1/3 on NetApp
+        return {"naa": ["naa.624a9370" + h[:24]], "nfsHost": None, "nfsPath": None}
+    return {"naa": ["naa.600a0980" + h[:12].upper().encode().hex()], "nfsHost": None, "nfsPath": None}
+
+
 def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     """Datastores sized from the demo VMs (one nearly full and growing, one at the watch level), VM snapshots
     of various ages (incl. short-lived backup snapshots), a few triggered alarms and two hosts with sensor issues."""
@@ -142,8 +156,9 @@ def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows:
         # target fill: the busiest datastore nearly full and growing with the drift cycle, the next at ~86 %
         fill = 0.905 + drift * 0.0015 if name == full_name else 0.86 if name == watch_name else rnd.uniform(0.45, 0.78)
         cap = round(d["used"] / fill, 1)
+        ds_type = "NFS" if i % 4 == 3 else "VMFS"
         datastores.append({
-            "key": f"datastore-{1000 + i}", "name": name, "type": "NFS" if i % 4 == 3 else "VMFS",
+            "key": f"datastore-{1000 + i}", "name": name, "type": ds_type, **demo_backing(cfg.key, name, ds_type),
             "capacityGB": cap, "freeGB": round(max(0.0, cap - d["used"]), 1), "uncommittedGB": round(max(0.0, d["prov"] - d["used"]), 1),
             "accessible": True, "maintenance": "normal", "clusters": [d["cluster"]],
             "hostCount": hosts_by_cluster.get(d["cluster"], 0), "vmCount": d["vms"],

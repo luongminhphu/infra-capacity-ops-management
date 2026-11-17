@@ -39,6 +39,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Thu thập NetBackup | `backend/app/backup/client.py`, `collector.py`, `status_codes.py`, `analysis.py`, `demo_generator.py` |
 | Lịch poll | `backend/app/collectors/scheduler.py` (thread pool, mỗi nguồn 1 DB session); job nền chỉ chạy ở pod leader (`leader.py`, advisory lock PostgreSQL; khoá theo nguồn giữa các pod) |
 | Sức khoẻ hạ tầng | `backend/app/vcenter/extras.py` (datastore, snapshot, alarm, sức khoẻ host — cùng phiên vCenter), `infra.py` (trạng thái + mức + dự báo đầy), `metrics.py` (chuỗi thời gian thô → giờ → ngày), `alert_rules.py` (Cài đặt → Cảnh báo) + `ops_alerts.py`, `routers/infra.py`, `frontend/js/views/infra.js` |
+| Storage Pure / NetApp | `backend/app/storage/` (`http.py` client JSON chỉ GET, `pure.py` Purity REST 2.x, `netapp.py` ONTAP REST, `collector.py`, `demo_generator.py`); ghép volume / LUN ↔ datastore (NAA, NFS) và mức mảng ở `infra.py` (`storage()`, `datastore_backing()`); nguồn khai báo trên giao diện (`sources.py` kind `pure` / `netapp`) |
 | Danh sách nguồn | `backend/app/sources.py` (biến môi trường + bảng `data_sources`, `Settings.vcenters()` / `netbackups()`), `secrets_box.py` (mã hoá), `routers/sources.py` |
 | Mô hình capacity + compliance | `backend/app/capacity.py` ⇄ `frontend/js/core.js` (**phải giữ khớp số liệu**) |
 | Quy hoạch / sizing / license | `planning.py`, `sizing.py`, `sizing_advisory.py`, `licensing/` |
@@ -58,8 +59,9 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 
 ## Quy tắc bắt buộc
 
-1. **vCenter và NetBackup chỉ được ĐỌC.** Không bao giờ gọi API làm thay đổi hạ tầng
-   (power, reconfigure, snapshot, xoá, POST/PUT/DELETE tới NetBackup ngoài `/login` `/logout`).
+1. **vCenter, NetBackup và storage (Pure / NetApp) chỉ được ĐỌC.** Không bao giờ gọi API làm thay đổi hạ tầng
+   (power, reconfigure, snapshot, xoá, POST/PUT/DELETE tới NetBackup / Pure ngoài `/login` `/logout`; ONTAP chỉ GET —
+   `storage/http.py::JsonClient` chặn sẵn).
    Tài khoản dịch vụ (`infra.mon@vsphere.local`, user NBU chỉ đọc) được cấp quyền tối thiểu.
    Xem skill `vmware-collector` và `netbackup-api`.
 2. **Mọi nguồn dữ liệu có chế độ DEMO.** Thêm trường mới vào client thật thì phải thêm vào

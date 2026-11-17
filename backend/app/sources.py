@@ -21,7 +21,8 @@ from . import secrets_box
 
 logger = logging.getLogger("vco.sources")
 
-KINDS = ("vcenter", "netbackup")
+KINDS = ("vcenter", "netbackup", "pure", "netapp")
+STORAGE_KINDS = ("pure", "netapp")
 NBU_DOMAIN_TYPES = ("unixpwd", "vx", "NT", "ldap", "msad")
 _KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
 _HOST_RE = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
@@ -60,6 +61,12 @@ def _secret(row: DataSource, field: str) -> str:
 
 
 def to_config(row: DataSource):
+    if row.kind in STORAGE_KINDS:
+        from .storage import StorageConfig
+        return StorageConfig(key=row.key, name=row.name, vendor=row.kind, host=row.host, port=row.port,
+                             username=row.username or "", password=_secret(row, "password_enc"),
+                             api_token=_secret(row, "api_key_enc"), verify_ssl=bool(row.verify_ssl), ca_pem=row.ca_pem or "",
+                             demo=bool(row.demo), timeout=int(_opts(row).get("timeout") or 30))
     if row.kind == "vcenter":
         return VCenterConfig(key=row.key, name=row.name, host=row.host, port=row.port, username=row.username or "",
                              password=_secret(row, "password_enc"), verify_ssl=bool(row.verify_ssl), demo=bool(row.demo),
@@ -91,7 +98,7 @@ def _merged(kind: str, settings: Settings) -> list:
         hit = _cache.get(kind)
         if hit and time.time() - hit[0] < CACHE_SECONDS:
             return hit[1]
-    env = settings.env_vcenters() if kind == "vcenter" else settings.env_netbackups()
+    env = settings.env_vcenters() if kind == "vcenter" else settings.env_netbackups() if kind == "netbackup" else []
     rows = _ui_rows(kind)
     ui_keys = {r.key for r in rows}
     merged = [c for c in env if c.key not in ui_keys] + [to_config(r) for r in rows if r.enabled]
@@ -106,6 +113,11 @@ def vcenter_configs(settings: Settings) -> List[VCenterConfig]:
 
 def netbackup_configs(settings: Settings) -> List[NetBackupConfig]:
     return _merged("netbackup", settings)
+
+
+def storage_configs(settings: Settings) -> list:
+    """Pure FlashArray + NetApp ONTAP sources (Settings only — no environment variables)."""
+    return _merged("pure", settings) + _merged("netapp", settings)
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +174,7 @@ def apply_input(row: DataSource, data: Dict[str, Any], creating: bool) -> None:
     row.demo = bool(data.get("demo"))
     row.host = validate_host(data.get("host") or (f"{row.key}.demo.local" if row.demo else ""))
     try:
-        port = int(data.get("port") or (443 if kind == "vcenter" else 1556))
+        port = int(data.get("port") or (1556 if kind == "netbackup" else 443))
     except (TypeError, ValueError):
         raise SourceError("Cổng không hợp lệ.") from None
     if not 1 <= port <= 65535:
@@ -196,10 +208,32 @@ def apply_input(row: DataSource, data: Dict[str, Any], creating: bool) -> None:
                                   "apiVersion": api_version, "timeout": timeout})
         if not row.demo and not (row.api_key_enc or (row.username and row.password_enc)):
             raise SourceError("Cần API key, hoặc user + mật khẩu của tài khoản NetBackup chỉ đọc.")
+    elif kind == "pure":
+        if data.get("apiKey"):
+            row.api_key_enc = secrets_box.encrypt(data["apiKey"])
+        if data.get("clearApiKey"):
+            row.api_key_enc = None
+        row.username = None
+        row.password_enc = None
+        row.options = json.dumps({"timeout": _storage_timeout(data, row)})
+        if not row.demo and not row.api_key_enc:
+            raise SourceError("Cần API token của user chỉ đọc (readonly) trên FlashArray.")
+    elif kind == "netapp":
+        row.api_key_enc = None
+        row.options = json.dumps({"timeout": _storage_timeout(data, row)})
+        if not row.demo and not (row.username and row.password_enc):
+            raise SourceError("Cần user + mật khẩu của tài khoản ONTAP role readonly (ứng dụng http).")
     elif not row.demo and not (row.username and row.password_enc):
         raise SourceError("Cần user + mật khẩu của tài khoản vCenter chỉ đọc.")
     if "enabled" in data:
         row.enabled = bool(data.get("enabled"))
+
+
+def _storage_timeout(data: Dict[str, Any], row: DataSource) -> int:
+    try:
+        return max(10, min(int(data.get("timeout") or _opts(row).get("timeout") or 30), 300))
+    except (TypeError, ValueError):
+        raise SourceError("Timeout không hợp lệ.") from None
 
 
 def public(row: DataSource) -> Dict[str, Any]:
@@ -260,6 +294,12 @@ def row_from_env(cfg, kind: str, user: str) -> DataSource:
 def test_connection(cfg, kind: str) -> str:
     if cfg.demo:
         return "Chế độ DEMO — không kết nối máy chủ thật."
+    if kind in STORAGE_KINDS:
+        from .storage import StorageError, netapp, pure
+        try:
+            return (pure if kind == "pure" else netapp).test(cfg)
+        except StorageError as exc:
+            raise SourceError(str(exc)) from exc
     if kind == "vcenter":
         from .vcenter import client as vc
         try:
