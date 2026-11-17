@@ -933,16 +933,26 @@
             </div>
             <div class="settings-form settings-form-2">
               <div class="field">
-                <label for="hostFile">Host file (CSV/JSON) — import thủ công</label>
-                <input type="file" id="hostFile" accept=".csv,.json,.txt">
+                <span class="field-label" id="hostFileL">Import host thủ công</span>
+                <label class="dropzone dropzone-sm" data-ui-drop="Chọn file host" aria-labelledby="hostFileL">
+                  <input type="file" id="hostFile" accept=".csv,.json,.txt" class="sr-only">
+                  <i data-lucide="upload" aria-hidden="true"></i>
+                  <span class="dz-main"><b>Chọn file host</b> hoặc kéo thả vào đây</span>
+                  <span class="dz-sub">CSV hoặc JSON</span>
+                </label>
               </div>
               <div class="field">
-                <label for="vmFile">VM file (CSV/JSON) — import thủ công</label>
-                <input type="file" id="vmFile" accept=".csv,.json,.txt">
+                <span class="field-label" id="vmFileL">Import VM thủ công</span>
+                <label class="dropzone dropzone-sm" data-ui-drop="Chọn file VM" aria-labelledby="vmFileL">
+                  <input type="file" id="vmFile" accept=".csv,.json,.txt" class="sr-only">
+                  <i data-lucide="upload" aria-hidden="true"></i>
+                  <span class="dz-main"><b>Chọn file VM</b> hoặc kéo thả vào đây</span>
+                  <span class="dz-sub">CSV hoặc JSON</span>
+                </label>
               </div>
             </div>
             <div class="sim-actions">
-              <button class="btn btn-secondary btn-sm" id="btnLoadSample" type="button">Nạp sample data</button>
+              <button class="btn btn-secondary btn-sm" id="btnLoadSample" type="button">Nạp dữ liệu mẫu</button>
               <button class="btn btn-secondary btn-sm btn-danger" id="btnResetAll" type="button">Đặt lại dữ liệu trên màn hình</button>
             </div>
           </section>
@@ -977,7 +987,7 @@
               <div><div class="panel-title" role="heading" aria-level="2">Kết nối nguồn dữ liệu <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Thêm vCenter và máy chủ backup NetBackup ngay trên giao diện: địa chỉ, tài khoản chỉ đọc, mật khẩu / API key (lưu mã hoá, không hiển thị lại). Thay đổi có hiệu lực ở lần đồng bộ kế tiếp, không cần khởi động lại.</p></div>
               <div class="panel-toolbar">
-                <button class="btn btn-secondary btn-sm hidden" type="button" id="btnSrcImportEnv">Chuyển cấu hình biến môi trường vào giao diện</button>
+                <button class="btn btn-secondary btn-sm hidden" type="button" id="btnSrcImportEnv" title="Chép các nguồn khai báo bằng biến môi trường vào giao diện để sửa tại đây">Chuyển từ biến môi trường</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="netbackup"><i data-lucide="plus"></i>Máy chủ backup</button>
                 <button class="btn btn-primary btn-sm" type="button" data-src-add="vcenter"><i data-lucide="plus"></i>vCenter</button>
               </div>
@@ -1064,7 +1074,7 @@
               <code id="mcpCommand"></code>
               <button type="button" class="btn btn-secondary btn-sm" id="btnCopyMcpCmd">Sao chép lệnh</button>
             </div>
-            <div class="table-wrap"><table class="data-table" id="mcpTokenTable">
+            <div class="table-scroll table-scroll-flat" role="region" tabindex="0" aria-label="Token MCP"><table class="data-table" id="mcpTokenTable">
               <thead><tr><th>Token</th><th>Chủ sở hữu</th><th>Hết hạn</th><th>Dùng gần nhất</th><th>Trạng thái</th><th></th></tr></thead>
               <tbody></tbody>
             </table></div>

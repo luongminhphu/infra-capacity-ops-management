@@ -395,11 +395,12 @@ function bkConfig() {
     const v = t.values[m.key], d = t.defaults[m.key];
     const isText = typeof d === 'string';
     const input = m.key === 'schedule_mode'
-      ? `<select id="bkTh_${m.key}" data-bk-th="${m.key}" ${lock}><option value="netbackup" ${v === 'netbackup' ? 'selected' : ''}>Đọc lịch từ policy NetBackup (khung cố định khi không có)</option><option value="fixed" ${v === 'fixed' ? 'selected' : ''}>Khung cố định cho mọi policy</option></select>`
-      : `<input id="bkTh_${m.key}" data-bk-th="${m.key}" ${lock} type="${isText ? 'text' : 'number'}" ${isText ? '' : 'min="0" step="any"'} value="${esc(String(v))}"/>`;
+      ? `<select id="bkTh_${m.key}" data-bk-th="${m.key}" ${lock}><option value="netbackup" ${v === 'netbackup' ? 'selected' : ''}>Lịch của policy NetBackup</option><option value="fixed" ${v === 'fixed' ? 'selected' : ''}>Khung cố định</option></select>`
+      : `<input id="bkTh_${m.key}" data-bk-th="${m.key}" ${lock} type="${isText ? 'text' : 'number'}" ${isText ? '' : 'min="0" step="any"'} value="${esc(String(v))}" aria-describedby="bkThH_${m.key}"/>`;
+    // short label · control · helper (hint + default) — one row of fields lines up (ui-ux-pro-max input-helper-text)
     return `<div class="field"><label for="bkTh_${m.key}">${esc(m.label)}${m.unit ? ` (${esc(m.unit)})` : ''}</label>
-      ${input}
-      <span class="muted-sub">Mặc định: ${esc(String(d))}</span></div>`;
+      ${input.replace('<select ', `<select aria-describedby="bkThH_${m.key}" `)}
+      <span class="muted-sub field-help" id="bkThH_${m.key}">${m.hint ? `${esc(m.hint)} ` : ''}Mặc định: ${esc(String(d))}</span></div>`;
   }).join('') : uiNote('Đang tải…');
   return `
     <section class="table-card">
@@ -411,7 +412,7 @@ function bkConfig() {
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Ngưỡng giám sát backup</div><p class="panel-sub">Áp dụng cho trang Backup, báo cáo PDF và Excel. Lưu trên server, dùng chung cho mọi người dùng.</p></div>
         ${admin ? `<div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-bk-action="th-reset">Về mặc định</button><button class="btn btn-primary btn-sm" type="button" data-bk-action="th-save">Lưu ngưỡng</button></div>` : `<span class="muted-sub">${ADMIN_ONLY_NOTE}</span>`}</div>
-      <div class="bk-th-grid">${form}</div>
+      <div class="bk-th-grid form-grid-aligned">${form}</div>
     </section>`;
 }
 

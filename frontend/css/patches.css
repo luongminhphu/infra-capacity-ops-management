@@ -150,3 +150,50 @@ summary{min-height:24px;}
 .bk-size-pair .sp-h{margin:0 0 var(--space-2);}
 .bk-size-mini td,.bk-size-mini th{padding-top:6px;padding-bottom:6px;}
 
+
+/* ── Settings forms (review 17/11, ui-ux-pro-max input-labels / input-helper-text / truncation-strategy) ─
+   Every field = 3 rows (label · control · helper) shared across the grid row via subgrid, so controls in one
+   row always line up even when one label or helper is longer; labels stay short, explanations go in the helper. */
+.form-grid-aligned{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));column-gap:var(--space-4);row-gap:var(--space-3);align-items:start;}
+.form-grid-aligned>.field{display:grid;grid-row:span 3;grid-template-rows:subgrid;row-gap:var(--space-1);align-content:start;}
+.form-grid-aligned>.field>label,.form-grid-aligned>.field>span:first-child{align-self:end;}
+.form-grid-aligned>.field>.sp-span2,.form-grid-aligned>.sp-span2{grid-column:span 2;}
+.field-help{display:block;white-space:normal;color:var(--text-secondary);font-size:var(--fs-caption);line-height:var(--lh-caption);}
+.finding-filter-item>span>b{display:block;font-weight:var(--fw-semibold);}
+.finding-filter-item>span>.muted-sub{display:block;}
+.dropzone.dropzone-sm{min-height:64px;padding:var(--space-3);}
+@media (max-width:639px){.form-grid-aligned>.sp-span2,.form-grid-aligned>.field>.sp-span2{grid-column:auto;}}
+.finding-filter-item:has(>span>b){align-items:flex-start;padding-top:var(--space-1);padding-bottom:var(--space-1);}
+.finding-filter-item:has(>span>b)>input{margin-top:3px;}
+.field-label{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);font-weight:var(--fw-medium);}
+/* Chi phí & nhắc hạn: two equal blocks per row; wide tables span the row; add-rows line up with the table above. */
+.sp-settings-grid>.sp-span-all{grid-column:1/-1;}
+.form-grid-aligned.sp-form-2{grid-template-columns:repeat(2,minmax(0,1fr));}
+.sp-add-row{display:grid;grid-template-columns:minmax(0,160px) minmax(0,1fr) auto;gap:var(--space-2);align-items:center;margin-top:var(--space-2);}
+.sp-add-row input{height:var(--control-h-sm);width:100%;}
+.sp-cat-table td:nth-child(2){min-width:240px;}
+.sp-cat-table td:nth-child(2) input{width:100%;}
+@media (max-width:639px){.form-grid-aligned.sp-form-2{grid-template-columns:1fr;}.sp-add-row{grid-template-columns:1fr;}}
+/* Người dùng & quyền: labelled create row, button on the input baseline; compact selects inside table rows. */
+.au-create{display:grid;grid-template-columns:minmax(0,240px) minmax(0,280px) max-content;justify-content:start;gap:var(--space-3);align-items:end;margin-bottom:var(--space-3);}
+.au-create .field>span{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);font-weight:var(--fw-medium);}
+.au-create .btn{height:var(--control-h-md);}
+.data-table select.select-sm{height:var(--control-h-sm);min-height:0;padding:0 28px 0 var(--space-2);font-size:var(--fs-caption);}
+@media (max-width:639px){.au-create{grid-template-columns:1fr;}}
+/* Narrow screens: a 1fr track grows to its widest table / dl and pushes the whole page sideways (pre-existing on
+   5 settings tabs at 390 px). minmax(0,1fr) + min-width:0 keeps panels at the viewport; tables scroll in place. */
+.settings-grid>*,.sp-settings-grid>*,.form-grid-aligned>*,#viewSettings .panel{min-width:0;}
+@media (max-width:1240px){.settings-grid{grid-template-columns:minmax(0,1fr);}}
+@media (max-width:1024px){.sp-settings-grid{grid-template-columns:minmax(0,1fr);}}
+@media (max-width:640px){#viewSettings .sp-dl{grid-template-columns:minmax(0,1fr);}}
+#viewSettings .sp-dl dd{overflow-wrap:anywhere;}
+/* Long technical values (URLs, env vars, code) wrap inside settings panels instead of widening the page. */
+#viewSettings .home-item-main,#viewSettings .panel-sub,#viewSettings code{overflow-wrap:anywhere;}
+#viewSettings .home-item{min-width:0;}
+#viewSettings .home-item-main .muted-sub,#viewSettings .finding-filter-item .muted-sub,#viewSettings .field-help{white-space:normal;}
+#viewSettings .finding-filter-item{min-width:0;}
+.ai-usage{flex-wrap:wrap;}
+.ai-usage>div:first-child{min-width:0;flex:1 1 240px;}
+#viewSettings .ai-usage-value .muted-sub{white-space:normal;}
+/* One label style in every aligned settings form (some used body-size spans). */
+.form-grid-aligned>.field>span:first-child,.form-grid-aligned>.field>label{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);font-weight:var(--fw-medium);}

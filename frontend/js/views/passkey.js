@@ -201,7 +201,7 @@ function usersRoleCell(u, roles) {
   if (u.isAdmin) return uiPill('ok', 'Quản trị — toàn quyền');
   const locked = u.spendRoleSource === 'entra';
   const opts = roles.map(r => `<option value="${esc(r.value)}" ${r.value === u.spendRole ? 'selected' : ''}>${esc(r.label)}</option>`).join('');
-  return `<select data-au-role="${esc(u.id)}" ${locked ? 'disabled' : ''} aria-label="Vai trò Chi phí của ${esc(u.username)}">${opts}</select>${locked ? '<span class="muted-sub">Từ app role Entra</span>' : ''}`;
+  return `<select class="select-sm" data-au-role="${esc(u.id)}" ${locked ? 'disabled' : ''} aria-label="Vai trò Chi phí của ${esc(u.username)}">${opts}</select>${locked ? '<span class="muted-sub">Từ app role Entra</span>' : ''}`;
 }
 
 /* Cài đặt → Người dùng & quyền (admin): every account, how it signs in, its passkeys and module roles. */
@@ -218,9 +218,10 @@ async function renderUsersSettings(force) {
   const src = { local: 'Cục bộ', entra: 'Microsoft Entra ID' };
   const spendCol = !!(users.spend && users.spend.on);
   mount.innerHTML = `
-    <div class="sim-actions"><input id="auNewUser" maxlength="64" placeholder="tên đăng nhập (vd phu.luong)" aria-label="Tên đăng nhập mới">
-      <input id="auNewName" maxlength="128" placeholder="Họ tên" aria-label="Họ tên">
-      <button class="btn btn-primary btn-sm" type="button" id="auCreate"><i data-lucide="user-plus"></i>Tạo tài khoản cục bộ (passkey)</button></div>
+    <div class="au-create">
+      <label class="field"><span>Tên đăng nhập</span><input id="auNewUser" maxlength="64" placeholder="vd nguyen.van.a"></label>
+      <label class="field"><span>Họ tên</span><input id="auNewName" maxlength="128" placeholder="Nguyễn Văn A"></label>
+      <button class="btn btn-primary btn-sm" type="button" id="auCreate" title="Tạo tài khoản cục bộ đăng nhập bằng passkey; gửi link mời cho người dùng"><i data-lucide="user-plus"></i>Tạo tài khoản (passkey)</button></div>
     <p class="criteria-status" id="auMsg" role="status"></p>
     <div id="auInvite"></div>
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Tài khoản</th><th>Nguồn</th><th>Mật khẩu</th><th class="num">Passkey</th>${spendCol ? '<th>Chi phí &amp; HĐ</th>' : ''}<th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>

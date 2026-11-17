@@ -60,25 +60,27 @@ class BackupThresholds:
     fixed_window_end: str = "04:00"
 
 
+# (key, label, unit, hint). Labels stay short so a row of fields lines up; the explanation goes in the hint
+# shown under the field (ui-ux-pro-max: input-labels + input-helper-text).
 THRESHOLD_META = [
-    ("success_target_pct", "Tỷ lệ backup thành công mục tiêu", "%"),
-    ("success_crit_pct", "Tỷ lệ thành công mức nghiêm trọng (dưới)", "%"),
-    ("rpo_hours", "RPO mục tiêu — tối đa giờ từ bản backup thành công gần nhất", "giờ"),
-    ("rpo_crit_hours", "Quá RPO mức nghiêm trọng", "giờ"),
-    ("consecutive_fail", "Số lần lỗi liên tiếp mức nghiêm trọng", "lần"),
-    ("long_running_hours", "Job chạy quá lâu", "giờ"),
-    ("queued_hours", "Job chờ (queued) quá lâu", "giờ"),
-    ("storage_warn_pct", "Disk pool — mức cảnh báo", "%"),
-    ("storage_crit_pct", "Disk pool — mức nghiêm trọng", "%"),
-    ("storage_days_warn", "Cảnh báo khi disk pool đầy trong vòng", "ngày"),
-    ("window_end_hour", "Giờ kết thúc cửa sổ backup đêm (giờ VN)", "giờ"),
-    ("coverage_days", "VM được coi là có backup nếu thành công trong vòng", "ngày"),
-    ("coverage_exclude", "Bỏ qua VM có tên chứa (phân cách bởi dấu phẩy)", ""),
-    ("schedule_grace_minutes", "Ân hạn sau giờ kết thúc cửa sổ trong lịch backup", "phút"),
-    ("backup_day_cutoff_hour", "Mốc tính ngày backup — job bắt đầu trước giờ này thuộc đêm hôm trước", "giờ"),
-    ("schedule_mode", "Cách lấy lịch kiểm tra: netbackup = đọc schedule của policy (không có thì dùng khung cố định) · fixed = khung cố định cho mọi policy", ""),
-    ("fixed_window_start", "Khung cố định — giờ bắt đầu (HH:MM)", ""),
-    ("fixed_window_end", "Khung cố định — giờ kết thúc, hôm sau nếu nhỏ hơn giờ bắt đầu (HH:MM)", ""),
+    ("success_target_pct", "Tỷ lệ thành công mục tiêu", "%", ""),
+    ("success_crit_pct", "Tỷ lệ thành công nghiêm trọng", "%", "Dưới mức này là nghiêm trọng."),
+    ("rpo_hours", "RPO mục tiêu", "giờ", "Tối đa từ bản backup thành công gần nhất."),
+    ("rpo_crit_hours", "RPO nghiêm trọng", "giờ", "Quá mức này là nghiêm trọng."),
+    ("consecutive_fail", "Lỗi liên tiếp nghiêm trọng", "lần", ""),
+    ("long_running_hours", "Job chạy quá lâu", "giờ", ""),
+    ("queued_hours", "Job chờ quá lâu", "giờ", "Job ở trạng thái queued."),
+    ("storage_warn_pct", "Disk pool cảnh báo", "%", ""),
+    ("storage_crit_pct", "Disk pool nghiêm trọng", "%", ""),
+    ("storage_days_warn", "Disk pool sắp đầy", "ngày", "Cảnh báo khi dự kiến đầy trong số ngày này."),
+    ("window_end_hour", "Kết thúc cửa sổ đêm", "giờ", "Giờ Việt Nam."),
+    ("coverage_days", "Hạn độ phủ VM", "ngày", "VM có backup nếu thành công trong số ngày này."),
+    ("coverage_exclude", "Bỏ qua VM có tên chứa", "", "Phân cách bằng dấu phẩy."),
+    ("schedule_grace_minutes", "Ân hạn lịch backup", "phút", "Sau giờ kết thúc cửa sổ trong lịch."),
+    ("backup_day_cutoff_hour", "Mốc tính ngày backup", "giờ", "Job bắt đầu trước giờ này thuộc đêm hôm trước."),
+    ("schedule_mode", "Nguồn lịch kiểm tra", "", "netbackup: đọc schedule của policy (không có thì dùng khung cố định); fixed: khung cố định cho mọi policy."),
+    ("fixed_window_start", "Khung cố định — bắt đầu", "", "Dạng HH:MM."),
+    ("fixed_window_end", "Khung cố định — kết thúc", "", "Dạng HH:MM; nhỏ hơn giờ bắt đầu là sáng hôm sau."),
 ]
 
 
