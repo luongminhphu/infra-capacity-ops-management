@@ -99,7 +99,8 @@ def _host_tag(m: "re.Match") -> str:
 
 def mask_infra(text: Optional[str]) -> str:
     """For output to the AI: hide internal host names / IPs but keep them distinguishable."""
-    if not text or not get_settings().mcp_mask_hosts:
+    from .mcp_config import current          # lazy: settings saved in the UI, environment otherwise
+    if not text or not current().mask_hosts:
         return text or ""
     text = _IP.sub(lambda m: "<ip:" + hashlib.sha1(m.group(0).encode()).hexdigest()[:6] + ">", text)
     return _HOST.sub(_host_tag, text)
