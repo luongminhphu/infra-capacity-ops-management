@@ -413,14 +413,14 @@ def mcp_no_stream():
 @router.post("/mcp", include_in_schema=False)
 @router.post("/mcp/", include_in_schema=False)
 async def mcp_endpoint(request: Request, db: Session = Depends(get_db)):
-    s = get_settings()
-    if not s.mcp_enabled:
-        return JSONResponse({"error": "MCP server is disabled (MCP_ENABLED=false)"}, status_code=404)
-    origin = request.headers.get("origin")
-    allowed = [o.strip() for o in s.mcp_allowed_origins.split(",") if o.strip()]
-    if origin and origin not in allowed:      # DNS-rebinding / browser cross-site protection
-        return JSONResponse({"error": "Origin not allowed"}, status_code=403)
     from starlette.concurrency import run_in_threadpool
+    from . import mcp_config
+    cfg = await run_in_threadpool(mcp_config.current, db)      # Settings → AI, environment as default
+    if not cfg.enabled:
+        return JSONResponse({"error": "MCP server is disabled (Settings → AI / MCP_ENABLED)"}, status_code=404)
+    origin = request.headers.get("origin")
+    if origin and origin.rstrip("/") not in cfg.allowed_origins:      # DNS-rebinding / browser cross-site protection
+        return JSONResponse({"error": "Origin not allowed"}, status_code=403)
     auth = await run_in_threadpool(_authenticate, request, db)
     if not auth:
         return JSONResponse({"error": "invalid_token", "error_description": "Missing, invalid, expired or revoked MCP token"},
@@ -430,7 +430,7 @@ async def mcp_endpoint(request: Request, db: Session = Depends(get_db)):
     now = time.time()
     while window and now - window[0] > 60:
         window.popleft()
-    if len(window) >= s.mcp_rate_per_minute:
+    if len(window) >= cfg.rate_per_minute:
         return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Retry-After": "30"})
     try:
         payload = await request.json()
@@ -440,10 +440,9 @@ async def mcp_endpoint(request: Request, db: Session = Depends(get_db)):
     if not messages or not all(isinstance(m, dict) for m in messages):
         return JSONResponse(_rpc_error(None, -32600, "Invalid Request"), status_code=400)
     # the limit counts JSON-RPC messages, not HTTP requests: a batch cannot multiply it (SEC2-09)
-    if len(messages) > MAX_BATCH or len(window) + len(messages) > s.mcp_rate_per_minute:
+    if len(messages) > MAX_BATCH or len(window) + len(messages) > cfg.rate_per_minute:
         return JSONResponse({"error": "rate_limited", "maxBatch": MAX_BATCH}, status_code=429, headers={"Retry-After": "30"})
     window.extend([now] * len(messages))
-    from starlette.concurrency import run_in_threadpool   # DB work off the event loop
     replies = await run_in_threadpool(
         lambda: [r for r in (_handle(m, db, user, tok, request) for m in messages) if r is not None])
     if not replies:

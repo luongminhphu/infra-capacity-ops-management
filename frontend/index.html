@@ -1061,6 +1061,27 @@
               <div><div class="panel-title" role="heading" aria-level="2">AI / MCP server <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Cho AI client (vd Claude Code) đọc <b>log và hiệu suất của ứng dụng</b> qua MCP — chỉ đọc, không có dữ liệu hạ tầng; host/IP trong log được che. Đề xuất sửa code đi qua pull request.</p></div>
             </div>
+            <form class="mcp-config" id="mcpConfigForm" novalidate>
+              <div class="feature-row">
+                <div><div class="feature-name" id="mcpCfgEnabledLbl">Bật MCP server</div><div class="feature-desc">AI client gọi <code id="mcpUrl"></code> bằng token cá nhân bên dưới.</div></div>
+                <label class="switch"><input type="checkbox" role="switch" id="mcpCfgEnabled" aria-labelledby="mcpCfgEnabledLbl"><span class="slider"></span></label>
+              </div>
+              <div class="feature-row">
+                <div><div class="feature-name" id="mcpCfgMaskLbl">Che host / IP trong log</div><div class="feature-desc">Tắt thì tên máy chủ và IP nội bộ trong log được gửi cho AI.</div></div>
+                <label class="switch"><input type="checkbox" role="switch" id="mcpCfgMask" aria-labelledby="mcpCfgMaskLbl"><span class="slider"></span></label>
+              </div>
+              <div class="form-grid-aligned mcp-config-grid">
+                <label class="field"><span>Hạn token tối đa (ngày)</span><input type="number" id="mcpCfgDays" min="1" max="365" inputmode="numeric"><span class="field-help" data-mcp-def="tokenMaxDays"></span></label>
+                <label class="field"><span>Giới hạn yêu cầu / phút</span><input type="number" id="mcpCfgRate" min="10" max="1000" inputmode="numeric"><span class="field-help" data-mcp-def="ratePerMinute"></span></label>
+                <label class="field"><span>Origin trình duyệt được phép</span><input type="text" id="mcpCfgOrigins" maxlength="255" placeholder="Trống = chỉ client ngoài trình duyệt"><span class="field-help" data-mcp-def="allowedOrigins"></span></label>
+              </div>
+              <div class="sp-inline mcp-config-actions">
+                <span class="mcp-state" id="mcpCfgSource"></span><span class="src-spacer"></span>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnMcpCfgReset">Về mặc định ConfigMap</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnMcpCfgSave">Lưu cấu hình</button>
+              </div>
+              <p class="src-result" id="mcpCfgMsg" role="status"></p>
+            </form>
             <p class="mcp-state" id="mcpState"></p>
             <div class="mcp-create" id="mcpCreate">
               <input type="text" id="mcpTokenName" placeholder="Tên token, vd claude-code-laptop" maxlength="100">

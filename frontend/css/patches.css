@@ -241,3 +241,8 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 .qt-lines .ql-unit{min-width:80px;}
 .qt-lines .ql-qty{min-width:64px;}
 .qt-lines .ql-desc{min-width:260px;}
+/* Cài đặt → AI / MCP server: parameters edited in the UI (stored in app_settings). */
+.mcp-config{border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 var(--space-4) var(--space-3);margin:var(--space-3) 0;}
+.mcp-config-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:var(--space-3);}
+.mcp-config-actions{margin-top:var(--space-3);flex-wrap:wrap;}
+@media (max-width:760px){.mcp-config-grid{grid-template-columns:minmax(0,1fr);}}

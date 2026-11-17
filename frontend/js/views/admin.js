@@ -112,12 +112,16 @@ async function loadLoginLogoSettings(isAdmin) {
 }
 
 /* ---------- AI / MCP server ---------- */
+const mcpDiff = (b = {}, a = {}) => Object.keys(a).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]))
+  .map(k => `${MCP_FIELD_LABEL[k] || k}: ${JSON.stringify(b[k])} → ${JSON.stringify(a[k])}`).join('; ') || 'không đổi';
+
 async function loadMcpPanel() {
   let info;
   try { info = await apiRequest('/admin/mcp'); } catch (err) { $('#mcpState').textContent = err.message; return; }
+  mcpFillConfig(info);
   $('#mcpState').innerHTML = info.enabled
-    ? `MCP đang <b>bật</b> tại <code>${esc(location.origin)}/mcp</code>. Token tối đa ${info.maxDays} ngày; ${info.maskHosts ? 'host/IP trong log được che.' : 'host/IP KHÔNG được che (MCP_MASK_HOSTS=false).'}`
-    : 'MCP đang <b>tắt</b>. Đặt <code>MCP_ENABLED: "true"</code> trong ConfigMap ico-config rồi redeploy để dùng.';
+    ? `MCP đang <b>bật</b>. Token tối đa ${esc(info.maxDays)} ngày; ${info.maskHosts ? 'host / IP trong log được che.' : '<b>host / IP KHÔNG được che</b>.'}`
+    : 'MCP đang <b>tắt</b> — bật bằng công tắc phía trên rồi bấm Lưu cấu hình (không cần redeploy).';
   $('#mcpCreate').classList.toggle('hidden', !info.enabled);
   const tbody = $('#mcpTokenTable tbody');
   tbody.innerHTML = info.tokens.length ? info.tokens.map(t => `
@@ -131,15 +135,67 @@ async function loadMcpPanel() {
     const audit = await apiRequest('/admin/mcp/audit?limit=50');
     $('#mcpAuditTable tbody').innerHTML = audit.length ? audit.map(a => `
       <tr><td>${fmtUtc(a.at)}</td><td>${esc(a.user || '')}</td><td>${esc(a.action)}</td>
-      <td><code>${esc(a.detail.tool || a.detail.name || a.detail.prefix || '')}</code></td></tr>`).join('')
+      <td><code>${esc(a.detail.tool || a.detail.name || a.detail.prefix || (a.detail.after ? mcpDiff(a.detail.before, a.detail.after) : ''))}</code></td></tr>`).join('')
       : '<tr><td colspan="4">Chưa có truy cập.</td></tr>';
   } catch (err) { /* ignore */ }
+}
+
+/* Settings → AI / MCP server: values saved here win over ConfigMap ico-config; every pod reads them within 15 s. */
+const MCP_FIELD_LABEL = { enabled: 'Bật MCP', maskHosts: 'Che host / IP', tokenMaxDays: 'Hạn token', ratePerMinute: 'Giới hạn / phút', allowedOrigins: 'Origin' };
+let mcpLoaded = null;
+function mcpFillConfig(info) {
+  mcpLoaded = info;
+  const c = info.config || {}, d = info.defaults || {}, saved = new Set(info.saved || []);
+  $('#mcpUrl').textContent = `${location.origin}/mcp`;
+  $('#mcpCfgEnabled').checked = !!c.enabled;
+  $('#mcpCfgMask').checked = !!c.maskHosts;
+  $('#mcpCfgDays').value = c.tokenMaxDays ?? '';
+  $('#mcpCfgRate').value = c.ratePerMinute ?? '';
+  $('#mcpCfgOrigins').value = (c.allowedOrigins || []).join(', ');
+  const show = (k, v) => Array.isArray(v) ? (v.join(', ') || 'trống') : typeof v === 'boolean' ? (v ? 'bật' : 'tắt') : String(v);
+  $$('[data-mcp-def]').forEach(el => {
+    const k = el.dataset.mcpDef;
+    el.textContent = `ConfigMap: ${show(k, d[k])}${saved.has(k) ? ' · đang dùng giá trị đã lưu' : ''}`;
+  });
+  $('#mcpCfgSource').textContent = saved.size
+    ? `Đã lưu trên giao diện: ${[...saved].map(k => MCP_FIELD_LABEL[k] || k).join(', ')}. Còn lại theo ConfigMap ico-config.`
+    : 'Đang theo ConfigMap ico-config (chưa lưu giá trị nào trên giao diện).';
+  $('#btnMcpCfgReset').disabled = !saved.size;
+}
+
+async function mcpSaveConfig() {
+  const form = { enabled: $('#mcpCfgEnabled').checked, maskHosts: $('#mcpCfgMask').checked,
+    tokenMaxDays: $('#mcpCfgDays').value.trim(), ratePerMinute: $('#mcpCfgRate').value.trim(), allowedOrigins: $('#mcpCfgOrigins').value };
+  // Only what the admin changed: an untouched field keeps following the ConfigMap.
+  const was = (mcpLoaded && mcpLoaded.config) || {};
+  const norm = (k, v) => k === 'allowedOrigins' ? String(Array.isArray(v) ? v.join(',') : v).split(/[\s,]+/).filter(Boolean).map(o => o.replace(/\/$/, '')).join(',') : String(v);
+  const body = Object.fromEntries(Object.entries(form).filter(([k, v]) => norm(k, v) !== norm(k, was[k] ?? '')));
+  const msg = $('#mcpCfgMsg');
+  if (!Object.keys(body).length) { uiSetStatus(msg, 'Không có thay đổi để lưu.', 'ok'); return; }
+  const send = () => apiRequest('/admin/mcp/config', { method: 'PUT', body: JSON.stringify(body) });
+  try {
+    try { await send(); }
+    catch (err) {
+      if (!/xác nhận/.test(err.message)) throw err;
+      if (!await uiConfirm('Tắt che host / IP: tên máy chủ và IP nội bộ trong log sẽ được gửi cho AI client. Tiếp tục?')) return;
+      body.confirmMaskOff = true;
+      await send();
+    }
+    uiSetStatus(msg, 'Đã lưu — các pod áp dụng trong khoảng 15 giây.', 'ok');
+    loadMcpPanel();
+  } catch (err) { uiSetStatus(msg, err.message, 'error'); }
 }
 
 function bindMcpPanel() {
   const panel = $('#mcpPanel');
   if (panel.dataset.bound) return;
   panel.dataset.bound = '1';
+  $('#btnMcpCfgSave').addEventListener('click', mcpSaveConfig);
+  $('#btnMcpCfgReset').addEventListener('click', async () => {
+    if (!await uiConfirm('Bỏ các giá trị đã lưu và dùng lại cấu hình trong ConfigMap ico-config?')) return;
+    try { await apiRequest('/admin/mcp/config', { method: 'DELETE' }); uiSetStatus($('#mcpCfgMsg'), 'Đã về mặc định ConfigMap.', 'ok'); loadMcpPanel(); }
+    catch (err) { uiSetStatus($('#mcpCfgMsg'), err.message, 'error'); }
+  });
   $('#btnCreateMcpToken').addEventListener('click', async () => {
     const name = $('#mcpTokenName').value.trim() || 'claude-code';
     try {
