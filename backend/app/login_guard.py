@@ -1,7 +1,7 @@
 """Throttle password guessing (audit SEC-04 / SEC2-01).
 
-In-process counters: the app runs one replica (k8s/04-app.yaml) so this is the real limit; with
-more replicas each pod limits on its own, which still bounds guessing to N x the rate.
+In-process counters: each pod limits on its own (k8s/04-app.yaml runs 2 replicas), which still bounds
+guessing to N x the rate.
 
 - per (client IP, username): after FREE_FAILURES wrong passwords within WINDOW, each new attempt
   waits an exponentially growing lockout (60 s, 120 s, ... up to MAX_LOCK);

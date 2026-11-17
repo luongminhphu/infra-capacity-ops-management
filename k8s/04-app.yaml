@@ -6,12 +6,15 @@ metadata:
   labels:
     app: ico-app
 spec:
-  replicas: 1  # giữ 1 — scheduler polling vCenter chạy trong tiến trình app, tăng replicas
-               # sẽ khiến nhiều pod cùng poll trùng lặp vào vCenter (không có phối hợp khoá).
-  # Recreate: tắt pod cũ rồi mới bật pod mới — không có lúc hai pod cùng poll vCenter / NetBackup
-  # hay cùng tạo bảng trên DB trống.
+  # 2 replica: web chạy trên cả hai; job nền (poll vCenter / NetBackup, cảnh báo, nhắc hạn, dọn dữ liệu)
+  # chỉ chạy ở pod giữ khoá leader trên PostgreSQL (app/leader.py) — pod kia chờ và nhận việc trong ~15 s
+  # khi leader tắt. Đồng bộ một nguồn giữ khoá theo nguồn trên DB, nên hai pod không bao giờ poll trùng.
+  replicas: 2
+  # RollingUpdate: bật pod mới, đợi readiness, rồi mới tắt pod cũ → deploy không gián đoạn.
+  # Migration chạy dưới advisory lock (database.ensure_schema) nên pod cũ / mới khởi động đan xen an toàn.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
   selector:
     matchLabels:
       app: ico-app
@@ -20,6 +23,17 @@ spec:
       labels:
         app: ico-app
     spec:
+      # PVC ico-files là ReadWriteOnce (Longhorn): chỉ gắn được vào MỘT node, nhiều pod trên cùng node dùng chung
+      # được. Vì vậy các pod ico-app được xếp cùng node — đủ cho deploy không gián đoạn, chưa chịu được hỏng node.
+      # Muốn chịu hỏng node: đổi ico-files sang ReadWriteMany (Longhorn RWX, cần nfs-common trên các node), xoá khối
+      # podAffinity dưới đây và thay bằng podAntiAffinity (preferred) theo kubernetes.io/hostname.
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector: { matchLabels: { app: ico-app } }
+              topologyKey: kubernetes.io/hostname
+      # Đủ thời gian để pod đang tắt nhường khoá leader (leader.release) và trả lời nốt request.
+      terminationGracePeriodSeconds: 30
       # Package GHCR private: kéo image bằng Secret ghcr-pull-secret (PAT classic, quyền read:packages),
       # tạo theo docs/huong-dan-chi-tiet.md. Package Public thì Secret không có cũng không sao — kubelet kéo ẩn danh.
       imagePullSecrets:
@@ -65,6 +79,18 @@ spec:
           configMap: { name: ico-nbu-ca, optional: true }
         - name: ico-files
           persistentVolumeClaim: { claimName: ico-files }
+---
+# Khi drain node / nâng cấp cụm: luôn còn ít nhất 1 pod phục vụ.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ico-app
+  namespace: cattle-monitoring-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ico-app
 ---
 apiVersion: v1
 kind: Service

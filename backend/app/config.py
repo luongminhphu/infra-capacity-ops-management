@@ -154,6 +154,11 @@ class Settings(BaseSettings):
     mcp_allowed_origins: str = Field(default="")    # browser Origins allowed to call /mcp (none by default)
     mcp_rate_per_minute: int = Field(default=120)
 
+    # ---- Time series (app/metrics.py): raw points → hourly → daily ----
+    metrics_raw_days: int = Field(default=7)
+    metrics_hourly_days: int = Field(default=90)
+    metrics_daily_days: int = Field(default=1095)
+
     # ---- Observability (app logs + request / SQL timing kept by the app itself) ----
     app_version: str = Field(default="dev")          # set at image build (GIT_SHA)
     obs_retention_days: int = Field(default=30)

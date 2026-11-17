@@ -166,7 +166,9 @@ def tick(now: Optional[dt.datetime] = None) -> Optional[Dict[str, object]]:
 
 
 async def reminder_loop() -> None:
+    from ..leader import wait_until_leader
     while True:
+        await wait_until_leader()          # several replicas: only the leader pod sends reminders
         try:
             await asyncio.to_thread(tick)
         except asyncio.CancelledError:

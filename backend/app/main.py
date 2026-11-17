@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -56,6 +57,8 @@ async def lifespan(app: FastAPI):
     try:
         ensure_bootstrap_admin(db)
         spend_service.ensure_defaults(db)
+    except IntegrityError:          # another pod created the same defaults a moment ago
+        db.rollback()
     finally:
         db.close()
 
@@ -70,9 +73,13 @@ async def lifespan(app: FastAPI):
         logger.info("Background scheduler disabled (ENABLE_SCHEDULER=false)")
 
     flush_task = asyncio.create_task(observability.flush_loop())
+    from . import leader
+    leader_task = asyncio.create_task(leader.leader_loop())   # one pod runs the background jobs
 
     yield
 
+    leader_task.cancel()
+    await asyncio.to_thread(leader.release)                    # hand over at once on a rolling update
     flush_task.cancel()
     if reminder_task:
         reminder_task.cancel()

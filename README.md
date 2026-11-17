@@ -127,7 +127,7 @@ Namespace hiện tại: `cattle-monitoring-system`.
 | `01-configmap.yaml` | `ico-config`: biến không nhạy cảm (polling, nguồn, Entra, `PUBLIC_URL`, `MCP_ENABLED`…) |
 | `02-secret.example.yaml` | Mẫu `ico-secrets` (Postgres, JWT, `SECRETS_KEY`, admin, mật khẩu nguồn, Entra secret). Bản thật `02-secret.yaml` không commit |
 | `03-postgres.yaml` | StatefulSet `ico-postgres`, PVC 20Gi, StorageClass `longhorn` |
-| `04-app.yaml` | Deployment `ico-app` (**giữ `replicas: 1`**: lịch đồng bộ chạy trong tiến trình), Service NodePort `30080`, mount CA NetBackup |
+| `04-app.yaml` | Deployment `ico-app` (2 replica, `RollingUpdate`, job nền chỉ chạy ở pod leader), PodDisruptionBudget, Service NodePort `30080`, mount CA NetBackup |
 | `05-files-pvc.yaml` | PVC `/data/files` cho file đính kèm (hợp đồng, báo giá, chứng từ) |
 
 **Lần đầu:**

@@ -1237,8 +1237,15 @@ kubectl diff -k k8s/
 
 ### Lưu ý
 
-- **Giữ `replicas: 1`** cho `ico-app` — polling vCenter / NetBackup chạy trong tiến trình app, không có
-  khoá phối hợp giữa nhiều pod.
+- **`ico-app` chạy 2 replica, `RollingUpdate`** (deploy không gián đoạn). Web chạy trên mọi pod; job nền (poll
+  vCenter / NetBackup, cảnh báo Discord, dọn dữ liệu, nhắc hạn Chi phí) chỉ chạy ở **pod leader** — pod giữ advisory
+  lock trên PostgreSQL (`app/leader.py`). Leader tắt (deploy, lỗi, mất node) thì pod kia nhận việc trong ~15 giây.
+  `/api/health/ready` trả `checks.scheduler.leader` cho biết pod nào đang là leader.
+  - PVC `ico-files` là `ReadWriteOnce` nên hai pod được xếp **cùng node** (`podAffinity`): đủ cho deploy không gián
+    đoạn, chưa chịu được hỏng node. Muốn chịu hỏng node: chuyển `ico-files` sang Longhorn **RWX** (cần `nfs-common`
+    trên các node), bỏ `podAffinity`, thêm `podAntiAffinity` (xem ghi chú trong `04-app.yaml`).
+  - Giới hạn đăng nhập sai và giới hạn yêu cầu MCP tính riêng theo pod (thực tế ≤ 2 × mức cấu hình).
+  - PostgreSQL vẫn 1 instance — là điểm đơn còn lại; backup DB theo mục *Backup database*.
 - Sửa ConfigMap / Secret xong phải `kubectl -n $NS rollout restart deploy/ico-app` (env không tự nạp lại).
 - `cattle-monitoring-system` là namespace của Rancher Monitoring: **không gỡ / cài lại Rancher Monitoring**
   khi chưa backup DB, vì thao tác đó có thể xoá cả namespace. Khi chuyển app sang namespace riêng, đổi
@@ -1275,7 +1282,8 @@ bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job
   quá hạn thì nguồn đó báo lỗi, các nguồn khác và cảnh báo Discord 90 % vẫn chạy.
 - Một nguồn chỉ được đồng bộ một luồng tại một thời điểm (dùng chung giữa lịch poll và nút "Đồng bộ
   ngay"). Bấm khi nguồn đang đồng bộ → HTTP 409 "Đang đồng bộ nguồn này, thử lại sau."; lịch poll bỏ
-  qua nguồn đó ở lượt này. Khoá nằm trong tiến trình — đúng khi chạy 1 replica, `strategy: Recreate`.
+  qua nguồn đó ở lượt này. Khoá có hai lớp: trong tiến trình và advisory lock trên PostgreSQL theo nguồn, nên
+  nút "Đồng bộ ngay" bấm trên pod B cũng thấy "đang đồng bộ" khi leader pod A đang poll nguồn đó.
 - Lần đồng bộ NetBackup chạm giới hạn 300 trang job (30 000 job) ghi cảnh báo vào lượt đồng bộ
   (hiện ở cột cảnh báo của máy chủ backup) và log WARNING.
 - Cảnh báo Discord: nếu module capacity / backup lỗi khi tính, cảnh báo của module đó giữ nguyên (không
@@ -1283,8 +1291,8 @@ bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job
 - Kiểm tra sức khoẻ: `/api/health` (liveness, không I/O) và `/api/health/ready` (readiness: DB trả lời
   `SELECT 1` và vòng poll còn nhịp — trễ quá 3 × chu kỳ + 2 × hạn tổng một nguồn + 2 phút thì 503). k8s dùng
   `/api/health/ready` cho readinessProbe.
-  Chạy > 1 replica: đặt `READINESS_REQUIRE_SCHEDULER=false` (mặc định `true`). Khi đó readiness chỉ kiểm DB;
-  trạng thái scheduler vẫn nằm trong `checks.scheduler` (kèm `required: false`) để theo dõi.
+  Nhiều replica: pod standby vẫn đánh nhịp khi chờ làm leader nên readiness của nó vẫn xanh — giữ
+  `READINESS_REQUIRE_SCHEDULER=true` (mặc định).
 - **Xoá cột tiền Float cũ (DAT-10, bước cuối).** Tiền license và chi phí AI chỉ còn lưu bằng số nguyên
   (`license_entitlements.unit_price_minor` theo đơn vị nhỏ nhất của tiền tệ, `ai_runs.cost_usd_micros` theo micro-USD).
   Bản này không đọc / ghi hai cột cũ `unit_price`, `cost_usd`; khi khởi động vẫn chép dữ liệu pod bản cũ vừa ghi sang cột

@@ -398,8 +398,9 @@ def heartbeat_status(settings: Optional[Settings] = None) -> Dict[str, Any]:
         return {"ok": False, "reason": "scheduler_not_started"}
     age = time.monotonic() - at
     max_age = 3 * interval + 2 * deadline_seconds(settings) + 120
+    from .. import leader
     out = {"ok": age <= max_age, "ageSeconds": round(age), "maxAgeSeconds": round(max_age),
-           "rounds": _heartbeat["rounds"]}
+           "rounds": _heartbeat["rounds"], "leader": leader.status()}
     if not out["ok"]:
         out["reason"] = "scheduler_stale"
     return out
@@ -407,8 +408,11 @@ def heartbeat_status(settings: Optional[Settings] = None) -> Dict[str, Any]:
 
 async def scheduler_loop(app_settings: Settings):
     """Poll every source each interval, off the API event loop."""
+    from .. import leader
     interval = max(5, app_settings.poll_interval_minutes) * 60
     while True:
+        # Several replicas: only the leader pod polls; standby pods wait here (and keep beating).
+        await leader.wait_until_leader(lambda: _beat(interval))
         started = time.monotonic()
         _beat(interval)
         job = observability.job_context("poll")
@@ -418,6 +422,10 @@ async def scheduler_loop(app_settings: Settings):
             _beat(interval)
             alerts = await asyncio.to_thread(_ops_alerts)
             purge = await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
+            from .. import metrics
+            rolled = await asyncio.to_thread(metrics.maybe_rollup)     # raw → hourly / daily, at most hourly
+            if rolled:
+                purge = {**(purge or {}), **{f"metrics_{k}": v for k, v in rolled.items()}}
             logger.info("%s", round_summary(results, time.monotonic() - started, alerts, purge))
         except asyncio.CancelledError:
             raise

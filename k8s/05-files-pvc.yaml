@@ -1,5 +1,7 @@
 # File của module Chi phí & Hợp đồng IT (file đính kèm Opex, hợp đồng, tờ trình) — gắn vào ico-app tại /data/files.
-# ReadWriteOnce là đủ: ico-app chạy 1 replica, strategy Recreate (pod cũ tắt trước khi pod mới gắn volume).
+# ReadWriteOnce: một node gắn volume, các pod ico-app được xếp cùng node (podAffinity trong 04-app.yaml) nên
+# 2 replica + RollingUpdate vẫn dùng chung được. Muốn các pod ở khác node (chịu hỏng node): ReadWriteMany
+# (Longhorn RWX) — xem ghi chú trong 04-app.yaml. Đổi accessModes của PVC đã có cần tạo PVC mới và chép dữ liệu.
 # Đưa PVC này vào kế hoạch backup (snapshot Longhorn) cùng với database.
 apiVersion: v1
 kind: PersistentVolumeClaim
