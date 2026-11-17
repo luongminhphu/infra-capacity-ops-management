@@ -59,6 +59,7 @@ def ensure_schema() -> None:
                            ("ai_summary", "TEXT"), ("ai_summary_at", "TIMESTAMP"), ("ai_summary_by", "VARCHAR(255)")],
         "proposals": [("quote_request_id", "INTEGER REFERENCES quote_requests(id)")],
         "spend_notify_channels": [("ops_alerts", "BOOLEAN DEFAULT FALSE")],
+        "budget_plan_lines": [("detail", "VARCHAR(1000)")],
         "ops_alert_state": [("source", "VARCHAR(16)"), ("sent_channels", "TEXT")],
         "spend_ai_config": [("tasks_json", "TEXT"), ("mask_names", "BOOLEAN DEFAULT TRUE"), ("budget_usd", "INTEGER DEFAULT 100"),
                             ("alert_usd", "INTEGER DEFAULT 50"), ("alert_month", "VARCHAR(7)"), ("rate_per_hour", "INTEGER DEFAULT 30")],
@@ -147,7 +148,27 @@ def ensure_schema() -> None:
             if col is not None and getattr(col["type"], "length", None) and col["type"].length < 255:
                 conn.execute(text("ALTER TABLE users ALTER COLUMN username TYPE VARCHAR(255)"))
     _ensure_indexes()
+    _drop_retired_checks()
     _ensure_checks()
+
+
+# CHECK constraints replaced by a wider one under a new name (the new one is added by _ensure_checks):
+# dropping the old one never breaks a pod of the previous release, whose values the new one still allows.
+RETIRED_CHECKS = (("budget_plan_lines", "ck_bpl_source"),)
+
+
+def _drop_retired_checks() -> None:
+    """PostgreSQL only (SQLite keeps the constraint of the table it created: dev / test databases are
+    recreated)."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect, text
+    tables = set(inspect(engine).get_table_names())
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        conn.execute(text("SET lock_timeout = '10s'"))
+        for table, name in RETIRED_CHECKS:
+            if table in tables:
+                conn.execute(text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {name}"))
 
 
 MIGRATION_LOCK_KEY = 7_410_316                 # arbitrary constant shared by every ICO pod

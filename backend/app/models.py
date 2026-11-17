@@ -809,6 +809,45 @@ class StorageAlertState(Base):
     captured_at = Column(DateTime, nullable=False, default=utcnow)
 
 
+class DcAsset(Base):
+    """A Data Center device imported from the asset list (Excel). asset_key is the import identity:
+    "tag:<ASSET TAG>" or, without a tag, "sn:<category>:<serial>:<device id>" (dc_assets.py)."""
+    __tablename__ = "dc_assets"
+    __table_args__ = (
+        CheckConstraint("category IN ('server', 'storage', 'network', 'other')", name="ck_dc_asset_category"),
+        CheckConstraint("qty >= 1", name="ck_dc_asset_qty"),
+        CheckConstraint("decision IS NULL OR decision IN ('replace', 'extend')", name="ck_dc_asset_decision"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    asset_key = Column(String(255), nullable=False, unique=True)
+    category = Column(String(16), nullable=False, index=True)
+    business_function = Column(String(128))
+    biz_type = Column(String(32))                  # TRADING / ENT ...
+    env = Column(String(16))                       # PROD / BETA / UAT / DEV
+    device_id = Column(String(255))                # host name / device name ("ID")
+    brand = Column(String(64))
+    model = Column(String(128))
+    serial = Column(String(128))                   # as typed, trimmed
+    serial_key = Column(String(128), index=True)   # upper-case, letters and digits only — matches opex_assets.serial
+    asset_tag = Column(String(64))
+    acquired_on = Column(Date)
+    location = Column(String(128))
+    qty = Column(Integer, nullable=False, default=1)
+    removed = Column(Boolean, nullable=False, default=False)
+    notes = Column(String(500))
+    sheet = Column(String(64))
+    imported_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_by = Column(String(255))
+    # Lifecycle decision for a device past the age limit: replace (Capex) or keep in use and renew (Opex).
+    decision = Column(String(8))                   # replace | extend | NULL (not decided)
+    decision_reason = Column(String(16))           # budget | good | support | project | other
+    decision_note = Column(String(500))
+    decision_until = Column(Date)                  # "extend": review date (NULL = until changed)
+    decision_by = Column(String(255))
+    decision_at = Column(DateTime)
+
+
 # SCH-10: JSON / CSV kept in Text columns are checked on every ORM write (type stays Text, rule 4).
 from .shared.stored_text import csv_column as _csv, json_column as _json  # noqa: E402
 

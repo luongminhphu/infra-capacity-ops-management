@@ -68,7 +68,8 @@ def build_plan_xlsx(d: Dict[str, Any]) -> bytes:
     rows = [[l["sourceLabel"], l["sourceCode"] or "", l["kind"].upper(), l["title"], l["categoryName"] or "", l["vendorName"] or "",
              dt.date.fromisoformat(l["startDate"]) if l["startDate"] else None, l["terms"], l["baseNet"], l["effectiveUpliftPct"],
              l["amountNet"], l["amountGross"], l["priorityLabel"], "Có" if l["included"] else "Không",
-             (l["note"] or "") + (" · Vượt trần" if l["id"] in cut else "") + (" · Nguồn đã thay đổi" if l["stale"] else ""),
+             " · ".join(x for x in (l["note"], l.get("detail") if l["source"] == "replace" else None) if x)
+             + (" · Vượt trần" if l["id"] in cut else "") + (" · Nguồn đã thay đổi" if l["stale"] else ""),
              l["appliedCode"] or ""] for l in d["lines"]]
     _rows_table(ws, 4, "KeHoach", ["Nguồn", "Mã gốc", "Loại", "Nội dung", "Loại chi phí", "Nhà cung cấp", "Bắt đầu", "Kỳ",
                                    "Hiện tại (trước VAT)", "% tăng", "Kế hoạch (trước VAT)", "Kế hoạch (sau VAT)",
