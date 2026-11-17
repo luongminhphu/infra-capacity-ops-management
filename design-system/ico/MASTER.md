@@ -142,6 +142,8 @@ kiểm: skill `web-layout`.
 - **Ô chọn file**: không dùng ô gốc của trình duyệt (“Choose File” tiếng Anh); dùng `uiDropzone` — vừa kéo thả vừa bấm
   chọn được (một con trỏ, dùng được bằng bàn phím). Nguồn: `--domain ux` “Dragging Movements” (WCAG 2.2 cần cách thay thế
   không kéo thả); §10 (không trộn Anh – Việt).
+- **Bảng có ô nhập**: cột số rộng cố định, ô nhập lấp cột, số căn phải cùng mép với tiêu đề và dòng tổng (phiếu đánh giá
+  NCC bị lệch cột, 17/11/2026). Nguồn: `--domain ux` “Table Handling”; quyết định 17/11/2026.
 - Một trường / hành động giữ **một tên** ở mọi trang có nó (VD Quy hoạch và Tuỳ chọn báo cáo). Nguồn: §10.
 
 ## 7. Thành phần

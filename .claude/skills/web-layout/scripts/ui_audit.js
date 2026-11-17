@@ -47,6 +47,17 @@ function measure() {
         rowsOff.push(`${name(g)} [${row.map(k => txt(k.querySelector('span,label') || k).slice(0, 30)).join(' | ')}] dTop=${Math.max(...tops) - Math.min(...tops)} h=${hs.join('/')}`);
     });
   });
+  // Editable tables: in a numeric column (th.num) the header, every input and the totals share one right edge.
+  const inner = (e) => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth); };
+  main.querySelectorAll('table').forEach(tb => {
+    if (!vis(tb) || !tb.querySelector('tbody input')) return;
+    [...tb.querySelectorAll('thead th')].forEach((th, i) => {
+      if (!th.matches('.num') || !th.textContent.trim()) return;
+      const cells = [...tb.querySelectorAll(`tbody tr > td:nth-child(${i + 1}) > input:not([type=checkbox]):not([type=radio]), tfoot tr > td.num:nth-child(${i + 1})`)].filter(vis);
+      const off = cells.map(c => Math.round(inner(c) - inner(th))).filter(d => Math.abs(d) > 3);
+      if (off.length) rowsOff.push(`${name(tb)} cột "${th.textContent.trim().slice(0, 24)}" lệch mép phải ${Math.min(...off)}…${Math.max(...off)} px so với tiêu đề`);
+    });
+  });
   const clipped = [];
   main.querySelectorAll('*').forEach(e => {
     if (!vis(e) || e.children.length > 3 || e.closest('.sr-only')) return;
