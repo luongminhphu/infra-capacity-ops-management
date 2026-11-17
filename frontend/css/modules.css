@@ -286,7 +286,7 @@
 .rn-block{margin-top:var(--space-4);}
 .rn-table td,.rn-table th{white-space:nowrap;}
 .rn-table td.wrap{white-space:normal;min-width:220px;}
-.rn-table .rn-amt{width:140px;height:var(--control-h-sm);text-align:right;}
+.rn-table .rn-amt{height:var(--control-h-sm);text-align:right;}
 @media (max-width:900px){.rn-scale{grid-template-columns:repeat(3,minmax(0,1fr));}}
 .qt-ai{border:1px solid var(--border);border-left:3px solid var(--brand);border-radius:var(--radius-sm);padding:var(--space-3);margin-bottom:var(--space-3);}
 .qt-ai .sp-h{margin-top:var(--space-2);}
