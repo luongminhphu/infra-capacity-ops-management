@@ -249,3 +249,17 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 .mcp-config-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:var(--space-3);}
 .mcp-config-actions{margin-top:var(--space-3);flex-wrap:wrap;}
 @media (max-width:760px){.mcp-config-grid{grid-template-columns:minmax(0,1fr);}}
+/* Sức khoẻ hạ tầng (views/infra.js) */
+.infra-table td .muted-sub{white-space:normal;}
+.infra-use{display:inline-flex;align-items:center;gap:var(--space-2);min-width:150px;}
+.infra-use .bullet{flex:1 1 90px;}
+.infra-row{cursor:pointer;}
+.infra-row:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px;}
+.infra-toolbar{flex-wrap:wrap;gap:var(--space-2);}
+.infra-toolbar input[type=search]{height:var(--control-h-sm);min-width:0;flex:1 1 180px;}
+.infra-check{display:inline-flex;align-items:center;gap:var(--space-1);font-size:var(--fs-caption);color:var(--text-secondary);}
+.infra-chart{position:relative;height:280px;margin-top:var(--space-3);}
+.alert-chans{display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-3);}
+.alert-rules td{vertical-align:middle;}
+.alert-rules select{height:var(--control-h-sm);}
+.alert-quiet{grid-template-columns:repeat(2,minmax(0,180px));margin:var(--space-2) 0;}

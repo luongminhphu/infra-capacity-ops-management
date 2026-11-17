@@ -123,10 +123,10 @@ def _connect(cfg: VCenterConfig, timeout: Optional[int] = None):
 # thousand VMs. The PropertyCollector returns the same properties for every object of a
 # type in a handful of paged calls; references between objects are resolved locally by
 # managed-object id.
-HOST_PROPS = ["name", "summary", "parent"]
+HOST_PROPS = ["name", "summary", "parent", "runtime.healthSystemRuntime"]   # + hardware sensors (extras)
 COMPUTE_PROPS = ["name", "configurationEx"]        # clusters and standalone compute resources
-VM_PROPS = ["name", "summary", "datastore", "guest.guestFamily"]
-DATASTORE_PROPS = ["name"]
+VM_PROPS = ["name", "summary", "datastore", "guest.guestFamily", "snapshot"]   # + snapshot tree (extras)
+DATASTORE_PROPS = ["name", "summary", "host"]      # capacity / free / mounts (extras)
 PAGE_SIZE = 1000
 
 Objs = Dict[str, Tuple[Any, Dict[str, Any]]]       # moId -> (managed object, {property path: value})
@@ -291,9 +291,25 @@ def build_rows(hosts: Objs, compute: Objs, vms: Objs, datastores: Objs) -> Tuple
     return host_rows, vm_rows
 
 
+def host_names(hosts: Objs, compute: Objs) -> Dict[str, Tuple[str, str]]:
+    """host moId -> (host name, cluster name), as build_rows names them."""
+    out = {}
+    for moid, (_, props) in hosts.items():
+        cluster, _, _ = _compute_info(compute, props.get("parent"))
+        out[moid] = (props.get("name") or _safe_attr(props.get("summary"), "config", "name") or moid, cluster)
+    return out
+
+
 def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Connect to one vCenter and return (host_rows, vm_rows) in the app's
     normalized row shape. Raises VCenterConnectionError on failure."""
+    hosts, vms, _ = collect_inventory_full(cfg)
+    return hosts, vms
+
+
+def collect_inventory_full(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+    """(host_rows, vm_rows, extras) in one session; extras = datastores / snapshots / alarms / health
+    (vcenter/extras.py). A failure reading the extras never loses the inventory: extras come back empty."""
     si = _connect(cfg)
     try:
         content = si.RetrieveContent()
@@ -305,7 +321,17 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
             logger.warning("Bulk property retrieval not supported on %s (%s) — falling back to per-object reads",
                            cfg.key, type(exc).__name__, exc_info=True)
             fetched = [_retrieve_lazy(content, t, p) for t, p in specs]
-        return build_rows(*fetched)
+        host_rows, vm_rows = build_rows(*fetched)
+        try:
+            from . import extras as _extras
+            hosts_o, compute_o, vms_o, ds_o = fetched
+            extra = _extras.build_extras(content, hosts_o, compute_o, vms_o, ds_o, host_names(hosts_o, compute_o))
+        except (socket.timeout, TimeoutError, ConnectionError, OSError):
+            raise
+        except Exception:  # noqa: BLE001 — operational extras are optional; the inventory is what matters
+            logger.warning("Could not build datastore / snapshot / alarm / health data for %s", cfg.key, exc_info=True)
+            extra = {"datastores": [], "snapshots": [], "alarms": [], "health": [], "error": True}
+        return host_rows, vm_rows, extra
     except (socket.timeout, TimeoutError) as exc:
         raise _timeout_error(cfg, timeout_for(cfg), exc) from exc
     except (ConnectionError, OSError) as exc:

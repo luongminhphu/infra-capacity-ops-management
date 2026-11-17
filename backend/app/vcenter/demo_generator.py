@@ -115,3 +115,80 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
             })
 
     return host_rows, vm_rows
+
+
+# ---------------------------------------------------------------- operational extras (vcenter/extras.py shape)
+def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Datastores sized from the demo VMs (one nearly full and growing, one at the watch level), VM snapshots
+    of various ages (incl. short-lived backup snapshots), a few triggered alarms and two hosts with sensor issues."""
+    import datetime as _dt
+    rnd = _seeded_random(cfg.key + "/extras")
+    drift = (time.time() / 86400.0) % 30
+    now = _dt.datetime.utcnow().replace(microsecond=0)
+    iso = lambda t: t.isoformat() + "Z"  # noqa: E731
+    by_ds: Dict[str, Dict[str, Any]] = {}
+    for v in vm_rows:
+        d = by_ds.setdefault(v["datastore"], {"used": 0.0, "prov": 0.0, "vms": 0, "cluster": v["cluster"]})
+        d["used"] += v["diskUsedGB"]
+        d["prov"] += v["diskProvGB"]
+        d["vms"] += 1
+    hosts_by_cluster: Dict[str, int] = {}
+    for h in host_rows:
+        hosts_by_cluster[h["cluster"]] = hosts_by_cluster.get(h["cluster"], 0) + 1
+    datastores = []
+    order = sorted(by_ds, key=lambda n: -by_ds[n]["used"])          # the busiest datastores carry the story
+    full_name, watch_name = (order + [None, None])[:2]
+    for i, (name, d) in enumerate(sorted(by_ds.items())):
+        # target fill: the busiest datastore nearly full and growing with the drift cycle, the next at ~86 %
+        fill = 0.905 + drift * 0.0015 if name == full_name else 0.86 if name == watch_name else rnd.uniform(0.45, 0.78)
+        cap = round(d["used"] / fill, 1)
+        datastores.append({
+            "key": f"datastore-{1000 + i}", "name": name, "type": "NFS" if i % 4 == 3 else "VMFS",
+            "capacityGB": cap, "freeGB": round(max(0.0, cap - d["used"]), 1), "uncommittedGB": round(max(0.0, d["prov"] - d["used"]), 1),
+            "accessible": True, "maintenance": "normal", "clusters": [d["cluster"]],
+            "hostCount": hosts_by_cluster.get(d["cluster"], 0), "vmCount": d["vms"],
+        })
+    snapshots = []
+    for v in vm_rows:
+        if rnd.random() > 0.09:
+            continue
+        kind = rnd.random()
+        if kind < 0.3:      # backup software snapshot, minutes old
+            items = [{"name": "NBU_SNAPSHOT " + v["vm"], "createdAt": iso(now - _dt.timedelta(minutes=rnd.randint(5, 90))),
+                      "description": "NetBackup snapshot", "quiesced": True, "depth": 0}]
+        else:
+            n = 1 if kind < 0.75 else rnd.randint(2, 4)
+            age0 = rnd.choice([0.6, 2.5, 5, 12, 26, 48])
+            items = [{"name": f"truoc-nang-cap-{k + 1}", "createdAt": iso(now - _dt.timedelta(days=age0 - k * 0.4)),
+                      "description": "Snapshot trước khi vá" if k == 0 else "", "quiesced": False, "depth": k} for k in range(n)]
+        times = sorted(i["createdAt"] for i in items)
+        snapshots.append({"vm": v["vm"], "instanceUuid": v.get("instanceUuid"), "cluster": v["cluster"], "host": v.get("host"),
+                          "count": len(items), "oldestAt": times[0], "newestAt": times[-1],
+                          "sizeGB": round(v["diskUsedGB"] * rnd.uniform(0.02, 0.6), 1), "items": items})
+    full = next((x for x in datastores if x["name"] == full_name), None)
+    alarms = []
+    if full:
+        alarms.append({"key": "alarm-ds-1", "entityType": "datastore", "entity": full["name"], "cluster": full["clusters"][0],
+                       "alarm": "Datastore usage on disk", "status": "red", "at": iso(now - _dt.timedelta(hours=5)), "acknowledged": False})
+    if host_rows:
+        h = host_rows[min(1, len(host_rows) - 1)]
+        alarms.append({"key": "alarm-host-1", "entityType": "host", "entity": h["host"], "cluster": h["cluster"],
+                       "alarm": "Host memory usage", "status": "yellow", "at": iso(now - _dt.timedelta(hours=30)), "acknowledged": False})
+        h2 = host_rows[-1]
+        alarms.append({"key": "alarm-host-2", "entityType": "host", "entity": h2["host"], "cluster": h2["cluster"],
+                       "alarm": "Host hardware power status", "status": "red", "at": iso(now - _dt.timedelta(hours=2)), "acknowledged": False})
+    if vm_rows:
+        v = vm_rows[3 % len(vm_rows)]
+        alarms.append({"key": "alarm-vm-1", "entityType": "vm", "entity": v["vm"], "cluster": v["cluster"],
+                       "alarm": "Virtual machine CPU usage", "status": "yellow", "at": iso(now - _dt.timedelta(minutes=40)), "acknowledged": True})
+    health = []
+    for idx, h in enumerate(host_rows):
+        issues = []
+        if idx == len(host_rows) - 1:
+            issues.append({"kind": "power", "name": "Power Supply 2 Status: Failure detected", "state": "red", "reading": None})
+        if idx == 2:
+            issues.append({"kind": "fan", "name": "Fan 4 RPM", "state": "yellow", "reading": 1680})
+        health.append({"host": h["host"], "cluster": h["cluster"],
+                       "overallStatus": "red" if any(i["state"] == "red" for i in issues) else "yellow" if issues else "green",
+                       "connection": "connected", "maintenance": False, "issues": issues})
+    return {"datastores": datastores, "snapshots": snapshots, "alarms": alarms, "health": health}

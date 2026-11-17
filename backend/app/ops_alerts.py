@@ -1,5 +1,6 @@
-"""Operations alerts pushed to Discord (decision 5 of docs/design/super-app.md): capacity and
-backup items at the 90 % level. Each alert is sent once per channel while it stays active and
+"""Operations alerts pushed to Discord (decision 5 of docs/design/super-app.md, extended by the rules of
+Cài đặt → Cảnh báo — app/alert_rules.py): capacity / backup at the 90 % level, datastore, snapshot, vCenter
+alarm and host health items at the level chosen per source. Each alert is sent once per channel while it stays active and
 re-armed when it clears, so a flapping metric does not spam the channel. Delivery state is kept
 per channel (`sent_channels`): a channel that failed is retried on the next run.
 
@@ -27,8 +28,10 @@ def _channels(db: Session):
 def messages(new: List[Dict[str, Any]], resolved: List[OpsAlertState], limit: int = 1900) -> List[str]:
     """Discord messages (≤ 2000 characters each); a long list is split, nothing is dropped."""
     from .spend.notify import discord_escape
-    head = "**ICO — cảnh báo vận hành (mức 90%)**"
-    lines = [f"• [{inbox.LEVEL_LABELS[it['level']]}] {discord_escape(it['title'])}" for it in new] + \
+    head = "**ICO — cảnh báo vận hành**"
+    src = lambda it: inbox.SOURCE_LABELS.get(it.get("source"), "")  # noqa: E731
+    lines = [f"• [{inbox.LEVEL_LABELS[it['level']]}] {src(it) + ': ' if src(it) else ''}{discord_escape(it['title'])}"
+             for it in new] + \
             [f"• Đã hết: {discord_escape(r.title)}" for r in resolved]
     out, cur = [], head
     for ln in lines:
@@ -45,8 +48,11 @@ def _today():
     return today_vn()
 
 
-PUSH_SOURCES = ("capacity", "backup")
-_KEY_PREFIX_SOURCE = {"cap": "capacity", "bk": "backup", "bkf": "backup"}
+from .alert_rules import SOURCES as _RULE_SOURCES
+
+PUSH_SOURCES = tuple(_RULE_SOURCES)     # sources that can push (Cài đặt → Cảnh báo decides which do)
+_KEY_PREFIX_SOURCE = {"cap": "capacity", "bk": "backup", "bkf": "backup", "ds": "datastore", "snap": "snapshot",
+                      "alarm": "alarm", "hh": "health"}
 
 
 def _source_of(s: OpsAlertState) -> str:
@@ -91,8 +97,11 @@ def _check_and_notify(db: Session, post=None) -> Dict[str, int]:
     unknown = {e for e in errors if e in PUSH_SOURCES}
     if unknown:
         logger.warning("Ops alerts: provider(s) %s failed; their alerts are kept unchanged this run", ", ".join(sorted(unknown)))
+    from . import alert_rules
     features = get_features(db)
-    current = {it.get("alertKey") or it["key"]: it for it in items if it.get("push") and it["source"] in PUSH_SOURCES
+    rules = alert_rules.rules(db)
+    quiet_now = alert_rules.quiet(db).active()
+    current = {it.get("alertKey") or it["key"]: it for it in items if it["source"] in rules and rules[it["source"]].wants(it)
                and not (it.get("feature") and features.get(it["feature"]) is False)}
     states = {s.key: s for s in db.query(OpsAlertState).all()}
     channels = _channels(db)
@@ -128,8 +137,11 @@ def _check_and_notify(db: Session, post=None) -> Dict[str, int]:
     sent = failed = 0
     for ch in channels:
         cid = str(ch.id)
-        to_new = [current[k] for k in current if cid not in _sent(states[k])]
+        to_new = [current[k] for k in current if cid not in _sent(states[k]) and rules[current[k]["source"]].to_channel(cid)]
         to_resolve = [s for s in states.values() if not s.active and cid in _sent(s)]
+        if quiet_now:                 # quiet hours: only VƯỢT NGƯỠNG now, the rest is owed until they end
+            to_new = [it for it in to_new if it["level"] == "crit"]
+            to_resolve = []
         pending.update(_akey(it) for it in to_new)
         if not to_new and not to_resolve:
             continue

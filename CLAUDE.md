@@ -37,7 +37,8 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 |---|---|
 | Thu thập vCenter | `backend/app/vcenter/client.py`, `vcenter/demo_generator.py` |
 | Thu thập NetBackup | `backend/app/backup/client.py`, `collector.py`, `status_codes.py`, `analysis.py`, `demo_generator.py` |
-| Lịch poll | `backend/app/collectors/scheduler.py` (thread pool, mỗi nguồn 1 DB session) |
+| Lịch poll | `backend/app/collectors/scheduler.py` (thread pool, mỗi nguồn 1 DB session); job nền chỉ chạy ở pod leader (`leader.py`, advisory lock PostgreSQL; khoá theo nguồn giữa các pod) |
+| Sức khoẻ hạ tầng | `backend/app/vcenter/extras.py` (datastore, snapshot, alarm, sức khoẻ host — cùng phiên vCenter), `infra.py` (trạng thái + mức + dự báo đầy), `metrics.py` (chuỗi thời gian thô → giờ → ngày), `alert_rules.py` (Cài đặt → Cảnh báo) + `ops_alerts.py`, `routers/infra.py`, `frontend/js/views/infra.js` |
 | Danh sách nguồn | `backend/app/sources.py` (biến môi trường + bảng `data_sources`, `Settings.vcenters()` / `netbackups()`), `secrets_box.py` (mã hoá), `routers/sources.py` |
 | Mô hình capacity + compliance | `backend/app/capacity.py` ⇄ `frontend/js/core.js` (**phải giữ khớp số liệu**) |
 | Quy hoạch / sizing / license | `planning.py`, `sizing.py`, `sizing_advisory.py`, `licensing/` |

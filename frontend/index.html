@@ -128,6 +128,7 @@
       <!-- ================= TRANG CHỦ · LỊCH VIỆC (super app SA2) ================= -->
       <section id="viewHome" class="view-section hidden"><div id="homeMount"></div></section>
       <section id="viewAgenda" class="view-section hidden"><div id="agendaMount"></div></section>
+      <section id="viewInfra" class="view-section hidden"><div id="infraMount"></div></section>
       <section id="viewArchive" class="view-section hidden"><div id="archiveMount"></div></section>
       <section id="viewBom" class="view-section hidden"><div id="bomMount"></div></section>
       <section id="viewEntity" class="view-section hidden"><div id="entityMount" class="entity-mount"></div></section>
@@ -1051,6 +1052,11 @@
             <div id="authSettingsMount"></div>
           </section>
 
+          <section class="panel" id="alertRulesPanel" data-set-tab="alerts">
+            <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Cảnh báo vận hành <span class="badge-admin">Admin</span></div>
+              <p class="panel-sub">Chọn nguồn nào gửi Discord, từ mức nào và tới kênh nào. Mục cần xử lý luôn hiện ở hộp việc Trang chủ, kể cả khi không gửi Discord.</p></div></div>
+            <div id="alertRulesMount"></div>
+          </section>
           <section class="panel hidden" id="aiPanel" data-set-tab="ai">
             <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">AI dùng chung <span class="badge-admin">Admin</span></div>
               <p class="panel-sub">Một cấu hình cho mọi tính năng AI: soạn tờ trình, đọc báo giá PDF, tóm tắt khác biệt báo giá, bản tin trang chủ, tổng kết báo cáo PDF. Số liệu luôn do hệ thống tính; AI chỉ viết / tóm tắt và mọi lượt gọi được ghi lại.</p></div></div>
@@ -1151,6 +1157,7 @@
 <script src="js/views/ai_data.js?v=__ASSET_V__"></script>
 <script src="js/views/ai_assist.js?v=__ASSET_V__"></script>
 <script src="js/views/archive.js?v=__ASSET_V__"></script>
+<script src="js/views/infra.js?v=__ASSET_V__"></script>
 <script src="js/views/passkey.js?v=__ASSET_V__"></script>
 <script src="js/scope_filter.js?v=__ASSET_V__"></script>
 <script src="js/settings_page.js?v=__ASSET_V__"></script>

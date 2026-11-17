@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 LEVELS = ("crit", "bad", "warn", "task", "info")
 LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
-SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "license": "License", "spend": "Chi phí & hợp đồng", "system": "Hệ thống"}
+SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
+                 "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "license": "License", "spend": "Chi phí & hợp đồng",
+                 "system": "Hệ thống"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
 PUSH_LEVEL_PCT = 90.0          # decision 5: Discord alert at the 90 % level
@@ -194,8 +196,65 @@ def system_items(db: Session) -> List[Dict[str, Any]]:
                  f"Hạn mức {budget} USD / tháng. Xem theo tác vụ ở Cài đặt → AI & MCP.", page="set-ai", role="admin")]
 
 
+# ---------------------------------------------------------------- infrastructure health (app/infra.py)
+def datastore_items(db: Session) -> List[Dict[str, Any]]:
+    from . import infra
+    out = []
+    for d in infra.datastores(db)[:MAX_PER_SOURCE]:
+        if d["level"] == "ok":
+            continue
+        out.append(item("datastore", d["level"], _key("ds", d["vcenterKey"], d["key"], d["level"]),
+                        f"Datastore {d['name']}: dùng {_pct(d['usedPct'])}"
+                        + (f" · đầy sau ~{d['daysToFull']:.0f} ngày" if d.get("daysToFull") is not None else ""),
+                        "; ".join(d["reasons"]) + f". Cluster: {', '.join(d['clusters']) or '—'}.",
+                        page="infra-ds", query=f"ds={quote(d['vcenterKey'] + ':' + d['key'])}",
+                        alert_key=_key("ds", d["vcenterKey"], d["key"])))
+    return out
+
+
+def snapshot_items(db: Session) -> List[Dict[str, Any]]:
+    from . import infra
+    out = []
+    for s in infra.snapshots(db):
+        if s["level"] in ("ok", "warn") or len(out) >= MAX_PER_SOURCE:      # watch-level snapshots: page only
+            continue
+        out.append(item("snapshot", s["level"], _key("snap", s["vcenterKey"], s["vm"], s["level"]),
+                        f"VM {s['vm']}: {s['count']} snapshot, cũ nhất {s['ageDays']:.0f} ngày".replace(".", ","),
+                        "; ".join(s["reasons"]) + ". Xoá / hợp nhất snapshot sau khi xác nhận với chủ VM.",
+                        page="infra-snap", query=f"vm={quote(s['vm'])}", alert_key=_key("snap", s["vcenterKey"], s["vm"])))
+    return out
+
+
+def alarm_items(db: Session) -> List[Dict[str, Any]]:
+    from . import infra
+    out = []
+    for a in infra.alarms(db)[:MAX_PER_SOURCE]:
+        if a["acknowledged"]:
+            continue
+        out.append(item("alarm", a["level"], _key("alarm", a["vcenterKey"], a["key"], a["status"]),
+                        f"Alarm {a['alarm']} — {a['entity']}",
+                        f"vCenter {a['vcenterKey']}, {a['entityType']}{(', cluster ' + a['cluster']) if a.get('cluster') else ''}.",
+                        page="infra-alarm", alert_key=_key("alarm", a["vcenterKey"], a["key"])))
+    return out
+
+
+def health_items(db: Session) -> List[Dict[str, Any]]:
+    from . import infra
+    out = []
+    for h in infra.host_health(db)[:MAX_PER_SOURCE]:
+        if h["level"] == "ok" or h["maintenance"]:
+            continue
+        out.append(item("health", h["level"], _key("hh", h["vcenterKey"], h["host"], h["level"]),
+                        f"Host {h['host']}: phần cứng {infra.LEVEL_TEXT[h['level']].lower()}",
+                        "; ".join(h["reasons"][:4]) or "Trạng thái tổng của host không xanh.",
+                        page="infra-health", alert_key=_key("hh", h["vcenterKey"], h["host"])))
+    return out
+
+
 PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("capacity", capacity_items, False), ("backup", backup_items, False),
+    ("datastore", datastore_items, False), ("snapshot", snapshot_items, False),
+    ("alarm", alarm_items, False), ("health", health_items, False),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
 ]
 

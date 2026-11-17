@@ -23,6 +23,14 @@ const PAGES = [
       desc: 'Tổng / đã dùng / còn dư CPU, RAM, Storage và tỷ lệ overcommit theo cluster, host, datastore.', scope: ['vcenter', 'cluster', 'host', 'footprint'] },
     { id: 'compliance', view: 'compliance', icon: 'shield-alert', label: 'Compliance', title: 'Compliance',
       desc: 'Phát hiện theo ngưỡng đã cấu hình: host CPU/RAM, overcommit cluster, VM idle, tắt lâu, over-provision.', scope: ['vcenter', 'cluster', 'host', 'footprint'] },
+    { id: 'infra-ds', view: 'infra', sub: 'datastores', icon: 'hard-drive', label: 'Datastore', title: 'Sức khoẻ hạ tầng — datastore',
+      desc: 'Dung lượng datastore, cấp phát thin và dự báo ngày đầy theo xu hướng 30 ngày.', scope: ['vcenter'] },
+    { id: 'infra-snap', view: 'infra', sub: 'snapshots', icon: 'camera', label: 'Snapshot VM', title: 'Sức khoẻ hạ tầng — snapshot VM',
+      desc: 'VM đang có snapshot: tuổi, số lượng, dung lượng — snapshot tồn lâu làm đầy datastore và chậm I/O.', scope: ['vcenter'] },
+    { id: 'infra-alarm', view: 'infra', sub: 'alarms', icon: 'siren', label: 'Alarm vCenter', title: 'Sức khoẻ hạ tầng — alarm vCenter',
+      desc: 'Alarm đỏ / vàng đang kích hoạt trên vCenter.', scope: ['vcenter'] },
+    { id: 'infra-health', view: 'infra', sub: 'hosts', icon: 'heart-pulse', label: 'Sức khoẻ host', title: 'Sức khoẻ hạ tầng — phần cứng host',
+      desc: 'Cảm biến phần cứng host (nguồn, quạt, nhiệt độ, bộ nhớ) và trạng thái kết nối.', scope: ['vcenter'] },
     { id: 'history', view: 'history', icon: 'trending-up', label: 'Xu hướng & biến động', title: 'Xu hướng & biến động',
       desc: 'Biến động CPU/RAM so với ngưỡng overcommit giữa các snapshot và danh sách VM thêm / bớt / đổi cấu hình.', scope: ['vcenter', 'cluster', 'host'] },
     { id: 'inventory', view: 'inventory', icon: 'server', label: 'Host & VM', title: 'Host & VM',
@@ -91,6 +99,8 @@ const PAGES = [
       desc: 'Bật / tắt module cho mọi người dùng.', scope: [] },
     { id: 'set-spend', view: 'settings', sub: 'spend', icon: 'bell-ring', label: 'Chi phí & nhắc hạn', title: 'Cài đặt — chi phí & nhắc hạn',
       desc: 'Năm tài chính, loại chi phí, mốc nhắc, kênh email / Discord, mẫu tờ trình và AI soạn tờ trình.', scope: [], spendRole: 'viewer', feature: 'spend' },
+    { id: 'set-alerts', view: 'settings', sub: 'alerts', icon: 'bell', label: 'Cảnh báo', title: 'Cài đặt — cảnh báo vận hành',
+      desc: 'Nguồn nào gửi Discord, từ mức nào, tới kênh nào; giờ im lặng (admin).', scope: [] },
     { id: 'set-ai', view: 'settings', sub: 'ai', icon: 'bot', label: 'AI & MCP', title: 'Cài đặt — AI & MCP',
       desc: 'MCP server chỉ đọc cho AI phân tích log / hiệu suất của app (admin).', scope: [] },
     { id: 'set-users', view: 'settings', sub: 'users', icon: 'users', label: 'Người dùng & quyền', title: 'Cài đặt — người dùng & quyền',
@@ -115,6 +125,8 @@ const MENU = [
     { key: 'backup', label: 'Backup', icon: 'database-backup', tabs: [
       ['bk-overview', '', 'Tổng quan'], ['bk-clients', 'clients', 'Client & RPO'], ['bk-jobs', 'jobs', 'Job'],
       ['bk-schedule', 'schedule', 'Lịch & tuân thủ'], ['bk-coverage', 'coverage', 'Độ phủ VM'], ['bk-size', 'size', 'Dung lượng'], ['bk-storage', 'storage', 'Storage & policy']] },
+    { key: 'health', label: 'Sức khoẻ hạ tầng', icon: 'activity', tabs: [
+      ['infra-ds', '', 'Datastore'], ['infra-snap', 'snapshots', 'Snapshot VM'], ['infra-alarm', 'alarms', 'Alarm vCenter'], ['infra-health', 'hosts', 'Sức khoẻ host']] },
     { key: 'agenda', label: 'Lịch việc & nhắc hạn', icon: 'calendar-clock', tabs: [['agenda', '', 'Lịch việc']] },
     { key: 'simulate', label: 'Mô phỏng & quy hoạch', icon: 'git-branch', tabs: [
       ['whatif', '', 'What-if capacity'], ['planning', 'planning', 'Quy hoạch tài nguyên'], ['lic-whatif', 'license', 'What-if license']] },
@@ -136,7 +148,7 @@ const MENU = [
   { label: 'Hệ thống', entries: [
     { key: 'settings', label: 'Cài đặt', icon: 'settings', tabs: [
       ['settings', '', 'Tiêu chí & ngưỡng'], ['set-sources', 'sources', 'Nguồn dữ liệu'], ['bk-config', 'backup', 'Backup'],
-      ['set-features', 'features', 'Tính năng'], ['set-spend', 'spend', 'Chi phí & nhắc hạn'], ['set-ai', 'ai', 'AI & MCP'],
+      ['set-features', 'features', 'Tính năng'], ['set-alerts', 'alerts', 'Cảnh báo'], ['set-spend', 'spend', 'Chi phí & nhắc hạn'], ['set-ai', 'ai', 'AI & MCP'],
       ['set-users', 'users', 'Người dùng & quyền'], ['set-auth', 'auth', 'Đăng nhập & bảo mật'], ['set-brand', 'brand', 'Thương hiệu']] },
   ] },
 ];
@@ -171,6 +183,9 @@ function uiRequire(name) {
 const VIEWS = {
   home: { section: '#viewHome', render: () => callIf('renderHomeView') },
   agenda: { section: '#viewAgenda', render: () => callIf('renderAgendaView') },
+  infra: { section: '#viewInfra', render: () => callIf('renderInfraView'),
+    sub: { get: () => (typeof infraState !== 'undefined' && infraState.sub) || 'datastores',
+           set: (s) => { if (typeof infraState !== 'undefined') infraState.sub = s || 'datastores'; }, fallback: 'infra-ds' } },
   entity: { section: '#viewEntity', render: () => callIf('renderEntityView') },
   executive: { section: '#viewExecutive', render: () => callIf('renderExecutiveView') },
   dashboard: { section: '#viewDashboard', render: () => {
@@ -204,7 +219,7 @@ const VIEWS = {
   settings: { section: '#viewSettings',
     sub: { get: () => appState.settingsSub || 'criteria', set: (s) => { appState.settingsSub = s || 'criteria'; }, fallback: 'settings' },
     // Settings tabs whose panel is built by a view module when shown.
-    tabRender: { ai: () => callIf('renderAiSettings'), auth: () => callIf('renderAuthSettings'), users: () => callIf('renderUsersSettings'),
+    tabRender: { alerts: () => callIf('renderAlertSettings'), ai: () => callIf('renderAiSettings'), auth: () => callIf('renderAuthSettings'), users: () => callIf('renderUsersSettings'),
       spend: () => { if (currentUser && currentUser.spendRole && currentUser.spendRole !== 'none') uiRequire('spend').then(() => callIf('initSpendSettings', currentUser), (e) => uiAlert(e.message)); } } },
 };
 

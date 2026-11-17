@@ -154,6 +154,19 @@ class Settings(BaseSettings):
     mcp_allowed_origins: str = Field(default="")    # browser Origins allowed to call /mcp (none by default)
     mcp_rate_per_minute: int = Field(default=120)
 
+    # ---- Infrastructure health thresholds (app/infra.py) ----
+    ds_watch_pct: float = Field(default=80)         # datastore used %: THEO DÕI
+    ds_warn_pct: float = Field(default=90)          # CẢNH BÁO
+    ds_crit_pct: float = Field(default=95)          # VƯỢT NGƯỠNG
+    ds_full_warn_days: int = Field(default=30)      # forecast: full within N days → CẢNH BÁO
+    ds_full_crit_days: int = Field(default=7)       # → VƯỢT NGƯỠNG
+    ds_overprov_pct: float = Field(default=150)     # (used + uncommitted) / capacity: THEO DÕI
+    snapshot_watch_hours: int = Field(default=24)   # older than this: THEO DÕI (backup snapshots live minutes)
+    snapshot_warn_days: int = Field(default=3)      # CẢNH BÁO
+    snapshot_crit_days: int = Field(default=7)      # VƯỢT NGƯỠNG
+    snapshot_crit_gb: float = Field(default=200)    # snapshot data ≥ this: VƯỢT NGƯỠNG
+    snapshot_chain_warn: int = Field(default=3)     # chain of ≥ N snapshots: CẢNH BÁO
+
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)
     metrics_hourly_days: int = Field(default=90)
