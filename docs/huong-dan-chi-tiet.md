@@ -848,6 +848,11 @@ hoạch backup) hoặc volume `ico_files` trong docker-compose. File lưu dướ
   - **Phiếu đánh giá NCC** theo mẫu EVALUATION FORM: khung tiêu chuẩn 70% (6 tiêu chí cố định tỷ trọng), khung mở rộng
     30% (2–4 tiêu chí, mặc định theo khối), điểm 1–10, Total và xếp loại ≥ 8 A / ≥ 7 B / ≥ 6 C / Không đạt; gợi ý điểm
     *Giá thành* từ báo giá. Xuất Excel cùng bố cục, Total và Loại đánh giá là công thức.
+  - **Gợi ý điểm, ưu tiên giá**: ô chưa chấm được điền sẵn (in nghiêng) — tiêu chí *Giá thành* theo giá (Tổng NCC ghi:
+    rẻ nhất 10, mỗi 5% cao hơn trừ 1), mọi tiêu chí khác **10**; tiêu chí mới thêm cũng mặc định 10. *Kết luận* trống thì
+    điền sẵn “Đề xuất chọn <NCC giá thấp nhất> — giá thấp nhất … đ (NCC khác +x%)”. Tổng điểm / Loại đánh giá tính lại
+    ngay khi sửa. Mọi ô sửa được; chỉ lưu khi bấm **Lưu đánh giá**. **Gợi ý lại theo giá** điền lại hàng Giá thành và câu
+    kết luận theo giá hiện tại (vd sau khi đọc lại báo giá), giữ nguyên điểm các tiêu chí khác.
   - **Chọn NCC** (quyền Duyệt): chỉ báo giá đã kiểm tra; ít hơn số báo giá tối thiểu thì phải ghi lý do; kết luận mặc
     định “Đề xuất chọn <tên viết tắt>”. Mở lại được để sửa. Mọi thao tác ghi nhật ký kiểm toán.
 

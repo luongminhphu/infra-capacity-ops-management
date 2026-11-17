@@ -241,3 +241,6 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 .qt-lines .ql-unit{min-width:80px;}
 .qt-lines .ql-qty{min-width:64px;}
 .qt-lines .ql-desc{min-width:260px;}
+/* Đánh giá NCC: suggested (unsaved) scores / conclusion are italic until the user edits or saves them. */
+.qt-sugg{font-style:italic;color:var(--text-secondary);}
+.qt-sugg-note{margin-top:var(--space-2);}

@@ -282,6 +282,11 @@ def _quotation_out(db: Session, q: Quotation, vendors: Dict[int, SpendVendor], w
     return out
 
 
+def _suggestion_out(sg: Dict[str, Any]) -> Dict[str, Any]:
+    return {"scores": {str(c): {str(q): float(v) for q, v in per.items()} for c, per in sg["scores"].items()},
+            "priceCriteria": sg["priceCriteria"], "pick": sg["pick"], "conclusion": sg["conclusion"]}
+
+
 def _evaluation_out(db: Session, r: QuoteRequest, quotations: List[Quotation], vendors: Dict[int, SpendVendor]) -> Dict[str, Any]:
     crit = db.query(EvaluationCriterion).filter_by(request_id=r.id).order_by(EvaluationCriterion.section, EvaluationCriterion.seq).all()
     scores = {(s.criterion_id, s.quotation_id): Decimal(s.score)
@@ -296,6 +301,9 @@ def _evaluation_out(db: Session, r: QuoteRequest, quotations: List[Quotation], v
         "totals": {str(qid): _num(t) for qid, t in totals.items()},
         "classes": {str(qid): qm.classify(t) for qid, t in totals.items()},
         "priceScoreHint": {str(k): float(v) for k, v in price_hint.items()},
+        "suggestion": _suggestion_out(qm.suggest_evaluation(
+            [(c.id, c.name) for c in crit], {q.id: _dec(_quote_total_vnd(q)) for q in quotations},
+            {q.id: service.vendor_label(vendors.get(q.vendor_id)) for q in quotations})),
         "columns": [{"quotationId": q.id, "label": service.vendor_label(vendors.get(q.vendor_id))} for q in quotations],
     }
 

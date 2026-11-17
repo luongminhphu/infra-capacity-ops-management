@@ -586,3 +586,37 @@ def suggest_price_score(totals: Dict[int, Optional[Decimal]]) -> Dict[int, Decim
         pct = (v - lo) * 100 / lo
         out[k] = max(Decimal(1), (Decimal(10) - pct / 5).quantize(Decimal("0.5"), ROUND_HALF_UP))
     return out
+
+
+PRICE_WORDS = ("gia thanh", "gia ca", "chi phi", "price", "cost")
+
+
+def is_price_criterion(name: str) -> bool:
+    t = norm_text(name)
+    return t == "gia" or any(w in t for w in PRICE_WORDS)
+
+
+def suggest_evaluation(criteria: Sequence[Tuple[int, str]], totals: Dict[int, Optional[Decimal]],
+                       labels: Dict[int, str]) -> Dict[str, Any]:
+    """Starting scores for the EVALUATION FORM, price first: the price criterion ("Giá thành") scores by price
+    (suggest_price_score: cheapest 10, −1 per 5 % above), every other criterion 10; the person edits them.
+    The conclusion proposes the cheapest vendor — with the others at 10 it also has the best weighted total."""
+    price = suggest_price_score(totals)
+    scores: Dict[int, Dict[int, Decimal]] = {}
+    price_ids = []
+    for cid, name in criteria:
+        if is_price_criterion(name):
+            price_ids.append(cid)
+            scores[cid] = {q: price[q] for q in totals if q in price}
+        else:
+            scores[cid] = {q: Decimal(10) for q in totals}
+    valid = {q: v for q, v in totals.items() if v}
+    if not valid:
+        return {"scores": scores, "priceCriteria": price_ids, "pick": None, "conclusion": None}
+    pick = min(valid, key=lambda q: (valid[q], q))
+    lo = valid[pick]
+    others = sorted((q for q in valid if q != pick), key=lambda q: valid[q])
+    pct = lambda q: f"{(valid[q] - lo) * 100 / lo:.1f}".replace(".", ",")      # vi-VN decimal comma
+    diff = ", ".join(f"{labels.get(q, q)} +{pct(q)}%" for q in others)
+    text = f"Đề xuất chọn {labels.get(pick, pick)} — giá thấp nhất {vnd(lo)} đ" + (f" ({diff})" if diff else "")
+    return {"scores": scores, "priceCriteria": price_ids, "pick": pick, "conclusion": text[:255]}
