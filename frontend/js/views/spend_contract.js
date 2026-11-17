@@ -183,14 +183,14 @@ async function ctOpenDetail(code, focus) {
       <h4 class="sp-h">Upload version mới (v${c.currentVersion + 1})</h4>
       <p class="panel-sub">Phải dựa trên bản mới nhất (v${c.currentVersion || 0}). Nếu ai đó đã upload bản mới hơn, hệ thống sẽ từ chối và yêu cầu tải bản mới về sửa tiếp.</p>
       <div class="src-grid">
-        <label class="field"><span>File .docx *</span><input type="file" id="ctFile" accept=".docx"></label>
+        <div class="sp-span2">${uiDropzone('ctFile', 'Chọn file .docx', 'Bắt buộc · bản Word của version mới', '.docx')}</div>
         <label class="field"><span>Bên chỉnh sửa *</span><select id="ctParty">${Object.entries(CT_PARTY).map(([k, t]) => spOpt(k, t, 'legal')).join('')}</select></label>
-        <label class="field sp-span2"><span>Ghi chú</span><input type="text" id="ctNote" maxlength="1000" placeholder="Vd: Đối tác đề nghị giảm giá còn 95 triệu"></label>
+        <label class="field"><span>Ghi chú</span><input type="text" id="ctNote" maxlength="1000" placeholder="Vd: Đối tác đề nghị giảm giá còn 95 triệu"></label>
       </div>
       <button class="btn btn-primary btn-sm" type="button" id="ctUpload" data-base="${esc(c.currentVersion)}">Upload v${c.currentVersion + 1}</button></div>` : '';
   const finalize = open && spCan('approver') && c.currentVersion ? `<div class="sp-inline"><label class="field"><span>Version chốt</span><select id="ctFinalV">${c.versions.map(v => spOpt(v.versionNo, `v${v.versionNo} · ${v.partyLabel}`, c.currentVersion)).join('')}</select></label>
       <button class="btn btn-primary btn-sm" type="button" id="ctFinalize">Chốt Final</button></div>` : '';
-  const signForm = c.status === 'final' && spCan('approver') ? `<label class="field"><span>Bản ký (scan PDF)</span><input type="file" id="ctSigned" accept=".pdf"></label>` : '';
+  const signForm = c.status === 'final' && spCan('approver') ? uiDropzone('ctSigned', 'Chọn bản ký (scan PDF)', 'Tải lên ngay khi chọn file', '.pdf') : '';
   const purge = c.purgeDueAt ? `<div class="insight-box">${esc(ctPurgeText(c))}. Chỉ giữ bản Final${c.signedFile ? ' và bản ký' : ''}; thông tin version và nhật ký vẫn giữ.
       ${spCan('admin') && !c.purgeDoneAt ? (c.purgeCancelledAt ? '<button class="btn btn-ghost btn-sm" type="button" id="ctPurgeResume">Bật lại lịch xoá</button>'
         : '<button class="btn btn-ghost btn-sm" type="button" id="ctPurgeCancel">Huỷ lịch xoá</button>') : ''}</div>` : '';

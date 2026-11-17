@@ -129,7 +129,7 @@ function renderLicEntitlements() {
   const form = !admin ? `<p class="muted-sub">${ADMIN_ONLY_NOTE}</p>` : `<div class="planning-panel lic-editor">
     <div class="planning-panel-title">${e.id ? `Sửa entitlement #${e.id}` : 'Thêm entitlement / báo giá'}</div>
     <div class="sim-form-grid lic-form-6">
-      <div class="field"><label>Sản phẩm</label><select id="licEntProduct">${Object.entries(products).map(([k, l]) => `<option value="${k}"${(e.product || 'ws_dc') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+      <div class="field lic-span-2"><label>Sản phẩm</label><select id="licEntProduct">${Object.entries(products).map(([k, l]) => `<option value="${k}"${(e.product || 'ws_dc') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
       <div class="field"><label>Tình trạng</label><select id="licEntKind" data-lic-entkind="1">${Object.entries(kinds).map(([k, l]) => `<option value="${k}"${(isNone ? 'none' : 'owned') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
       <div class="field"><label>Đơn vị</label><select id="licEntMetric">${Object.entries(metrics).map(([k, l]) => `<option value="${k}"${(e.metric || 'pack16') === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
       <div class="field"><label>Số lượng${isNone ? ' (chưa có = 0)' : ''}</label><input id="licEntQty" type="number" min="0" step="1" value="${isNone ? 0 : (e.quantity ?? '')}"${isNone ? ' disabled' : ''}></div>

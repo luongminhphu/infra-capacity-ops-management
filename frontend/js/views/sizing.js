@@ -62,11 +62,14 @@ const SIZING_PLATFORMS = {
     hint: 'Báo cáo dùng khái niệm chung (hypervisor, HA, lưu trữ HCI…), phụ lục có bảng tên gọi tương ứng các nền tảng.' },
 };
 
+/* Option text without the vendor prefix (the platform select already names it); the value stays the full name the backend expects. */
+const sizingEditionShort = (e) => e.replace(/^(VMware|Proxmox VE|Nutanix) /, '').replace(/^Cloud Infrastructure \(NCI\)/, 'NCI').replace(/^Subscription /, '');
+
 function sizingFillEditions(platform, keep) {
   const sel = $('#szLicEdition');
   if (!sel) return;
   const pf = SIZING_PLATFORMS[platform] || SIZING_PLATFORMS.vmware;
-  sel.innerHTML = pf.editions.map(e => `<option>${esc(e)}</option>`).join('');
+  sel.innerHTML = pf.editions.map(e => `<option value="${esc(e)}" title="${esc(e)}">${esc(sizingEditionShort(e))}</option>`).join('');
   if (keep && pf.editions.includes(keep)) sel.value = keep;
   const hint = $('#szPlatformHint');
   if (hint) hint.textContent = pf.hint;
@@ -164,8 +167,8 @@ function renderWarrantyYears(force = false) {
   box.dataset.sig = sig;
   if (n <= 0) { box.innerHTML = ''; return; }
   box.innerHTML = Array.from({ length: n }, (_, i) => `
-    <div class="field"><label for="szWy${i}">Gia hạn BH năm ${inc + i + 1} ${pct ? '(% giá host)' : '(/ host)'}</label>
-      <input id="szWy${i}" data-wy="${i}" value="${vals[i] == null ? '' : esc(vals[i])}" placeholder="${pct ? 'VD: 8' : 'VD: 30.000.000'}"></div>`).join('')
+    <div class="field"><label for="szWy${i}">Gia hạn năm ${inc + i + 1}</label>
+      <input id="szWy${i}" data-wy="${i}" value="${vals[i] == null ? '' : esc(vals[i])}" placeholder="${pct ? '% giá host' : 'VND / host'}" title="${pct ? 'Gia hạn bảo hành: % giá host mỗi năm, VD 8' : 'Gia hạn bảo hành: chi phí mỗi host mỗi năm, VD 30.000.000'}"></div>`).join('')
     + `<div class="sz-wy-note">Năm 1–${inc}: bảo hành đã gồm trong giá mua. Để trống = chưa có giá (TCO sẽ ghi chú thiếu).</div>`;
   box.querySelectorAll('input[data-wy]').forEach(inp => inp.addEventListener('change', () => {
     const arr = (Array.isArray(p.warranty_ext_values) ? p.warranty_ext_values.slice() : []);
@@ -324,7 +327,7 @@ function renderSizingProfiles() {
         <div class="field"><label>Cores / socket</label><input class="pCores" value="${esc(p.coresPerSocket)}"></div>
         <div class="field"><label>RAM GB / host</label><input class="pRam" value="${esc(p.ramGB)}"></div>
         <div class="field ${local ? '' : 'hidden'}"><label>Đĩa cục bộ GB / host</label><input class="pDisk" value="${esc(p.diskGB || 0)}"></div>
-        <div class="field"><label>Đơn giá / host (tuỳ chọn)</label><input class="pPrice" value="${p.unitPrice == null ? '' : esc(p.unitPrice)}" placeholder="VND"></div>
+        <div class="field"><label title="Tuỳ chọn — dùng để so sánh chi phí giữa các cấu hình">Đơn giá / host</label><input class="pPrice" value="${p.unitPrice == null ? '' : esc(p.unitPrice)}" placeholder="VND"></div>
       </div>
       <button class="btn btn-secondary btn-sm icon-btn sz-profile-remove" type="button" title="Xoá cấu hình" ${st.profiles.length <= 1 ? 'disabled' : ''}>✕</button>
     </div>`).join('');

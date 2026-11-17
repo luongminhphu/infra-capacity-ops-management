@@ -268,8 +268,8 @@ function qtTabQuotes(d) {
   }).join('');
   const vendors = (spState.meta && spState.meta.vendors || []).filter(v => v.active);
   const upload = canEdit ? `<div class="ct-upload"><div class="sp-h">Thêm báo giá</div>
+      ${uiDropzone('qtFile', 'Chọn file báo giá', 'Excel, Word hoặc PDF', '.xlsx,.docx,.pdf')}
       <div class="sp-inline"><input type="text" id="qtVendor" list="qtVendorList" maxlength="255" placeholder="Nhà cung cấp (tên, tên viết tắt hoặc tên khác)">
-        <input type="file" id="qtFile" accept=".xlsx,.docx,.pdf">
         <button class="btn btn-primary btn-sm" type="button" data-qt-act="upload"><i data-lucide="upload"></i>Upload</button></div>
       <p class="muted-sub">Excel / Word được đọc ngay. PDF scan: bấm “Đọc PDF bằng AI” (chỉ khi quản trị đã bật AI) hoặc nhập dòng bằng tay. Mọi số đọc được phải được người kiểm tra trước khi chọn NCC.</p>
       <datalist id="qtVendorList">${vendors.map(v => `<option value="${esc(v.shortName || v.name)}">${esc(v.name)}</option>`).join('')}</datalist></div>` : '';

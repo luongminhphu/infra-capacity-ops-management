@@ -197,3 +197,24 @@ summary{min-height:24px;}
 #viewSettings .ai-usage-value .muted-sub{white-space:normal;}
 /* One label style in every aligned settings form (some used body-size spans). */
 .form-grid-aligned>.field>span:first-child,.form-grid-aligned>.field>label{font-size:var(--fs-caption);line-height:var(--lh-caption);color:var(--text-secondary);font-weight:var(--fw-medium);}
+/* Whole-app alignment pass. .muted-sub is a one-line caption by default; as a paragraph / block it is prose and
+   must wrap (a nowrap hint pushed simulate/license to 770 px wide on phones). */
+p.muted-sub,div.muted-sub{white-space:normal;}
+/* Chi phí / Kế hoạch: the 1-column fallback must not grow to its widest child (670 px page at 390 px). */
+@media (max-width:1240px){.sr-two{grid-template-columns:minmax(0,1fr);}}
+.sr-two>*{min-width:0;}
+.sr-year-val .muted-sub{white-space:normal;}
+/* Checklist editor (Cài đặt → Chi phí): on phones the name takes the full row, actions wrap below. */
+@media (max-width:639px){.pay-def-row{grid-template-columns:minmax(0,1fr) auto auto;}.pay-def-row>:first-child{grid-column:1/-1;}}
+/* Planning form + report options: labels of unequal length no longer push one input below its neighbour. */
+.planning-row{align-items:flex-end;}
+.rpt-opt-grid{align-items:end;}
+/* Licence editor: product names ("Windows Server Datacenter") need two columns on wide screens. */
+@media (min-width:1025px){.lic-form-6>.lic-span-2{grid-column:span 2;}}
+.sz-profile-grid{align-items:end;}
+/* KPI strips on phones: a 176 px cell could not hold "11.472 – 12.080 core" + a status pill (License, 390 px).
+   Cells now need 200 px (one per row on a phone) and a value may wrap at its spaces in a very narrow cell. */
+.kpi-strip{grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));}
+@container (width < 230px){ .kpi-v{white-space:normal;} .kpi-s{overflow-wrap:anywhere;} }
+/* Sizing host profiles on phones: name on its own row, numbers two per row (3 columns cut "2×24C / 768 GB"). */
+@media (max-width:640px){.sz-profile-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}.sz-profile-grid>.field:first-child{grid-column:1/-1;}}
