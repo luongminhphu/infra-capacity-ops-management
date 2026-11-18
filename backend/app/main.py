@@ -55,6 +55,9 @@ async def lifespan(app: FastAPI):
     check_startup_secrets(settings)
     ensure_schema()
 
+    from . import secrets_box
+    secrets_box.rotate_at_startup()             # secrets saved with a previous key → SECRETS_KEY (no retyping)
+
     db = SessionLocal()
     try:
         ensure_bootstrap_admin(db)

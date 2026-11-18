@@ -816,7 +816,8 @@ class DcAsset(Base):
     __table_args__ = (
         CheckConstraint("category IN ('server', 'storage', 'network', 'other')", name="ck_dc_asset_category"),
         CheckConstraint("qty >= 1", name="ck_dc_asset_qty"),
-        CheckConstraint("decision IS NULL OR decision IN ('replace', 'extend')", name="ck_dc_asset_decision"),
+        # v2: "nocover" added; the first version is dropped by database._drop_retired_checks().
+        CheckConstraint("decision IS NULL OR decision IN ('replace', 'extend', 'nocover')", name="ck_dc_asset_decision_v2"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -840,7 +841,7 @@ class DcAsset(Base):
     imported_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(255))
     # Lifecycle decision for a device past the age limit: replace (Capex) or keep in use and renew (Opex).
-    decision = Column(String(8))                   # replace | extend | NULL (not decided)
+    decision = Column(String(8))                   # replace | extend | nocover (kept, no warranty bought) | NULL
     decision_reason = Column(String(16))           # budget | good | support | project | other
     decision_note = Column(String(500))
     decision_until = Column(Date)                  # "extend": review date (NULL = until changed)

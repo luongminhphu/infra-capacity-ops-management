@@ -290,3 +290,9 @@ p.muted-sub,div.muted-sub{white-space:normal;}
 .bp-head input{height:var(--control-h-sm);width:100%;}
 .dc-form input,.dc-form select{width:100%;}
 .dc-form-help{white-space:normal;margin:var(--space-2) 0 var(--space-3);}
+
+/* Cài đặt → Nguồn dữ liệu: dữ liệu mồ côi */
+.src-orphans{margin-top:var(--space-5);}
+.src-orphans-head{margin-bottom:var(--space-2);}
+#srcKeyWarning .btn{margin-left:var(--space-2);}
+.src-orphan-note{margin:0 0 var(--space-3);}

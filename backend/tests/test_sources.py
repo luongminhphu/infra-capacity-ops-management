@@ -32,6 +32,7 @@ def _vc(**kw):
 
 
 def test_secret_roundtrip_and_wrong_key(monkeypatch):
+    monkeypatch.setattr(get_settings(), "secrets_key", "key-a")
     token = secrets_box.encrypt(SECRET)
     assert token.startswith("f1:") and SECRET not in token
     assert secrets_box.decrypt(token) == SECRET
@@ -125,6 +126,7 @@ def test_ui_source_replaces_env_source_and_import(client):
 
 
 def test_unreadable_secret_is_flagged(client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "secrets_key", "key-a")
     created = client.post("/api/admin/sources", json=_vc()).json()
     monkeypatch.setattr(get_settings(), "secrets_key", "rotated")
     sources.invalidate_cache()

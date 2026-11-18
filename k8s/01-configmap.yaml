@@ -13,7 +13,7 @@ data:
   READINESS_REQUIRE_SCHEDULER: "true"   # "false" khi chạy > 1 replica: scheduler chỉ báo trong body, không chặn readiness
   DROP_LEGACY_MONEY_COLUMNS: "false"     # "true" ở lần deploy SAU bản này (hết pod cũ) để xoá 2 cột tiền Float cũ
   POLL_INTERVAL_MINUTES: "60"
-  SNAPSHOT_RETENTION_MONTHS: "36"   # giữ lịch sử snapshot vCenter 36 tháng (0 = giữ hết)
+  SNAPSHOT_RETENTION_MONTHS: "6"    # giữ lịch sử snapshot vCenter 6 tháng (0 = giữ hết)
   SYNC_CONCURRENCY: "4"             # số vCenter / máy chủ backup đồng bộ song song
   VCENTER_TIMEOUT_SECONDS: "120"    # chờ tối đa mỗi lời gọi vCenter (riêng nguồn: VCENTER_i_TIMEOUT)
   SYNC_SOURCE_DEADLINE_SECONDS: "1800"  # hạn tổng một nguồn trong một lượt poll

@@ -37,7 +37,7 @@ function dcKpis(s, d) {
       status: s.warn ? { cls: 'warn', text: `${fmtInt(s.warn)} THEO DÕI` } : null },
     { label: '≤ 3 năm', valueHtml: `${fmtInt(s.le3)}<small>thiết bị</small>`, subHtml: s.unknown ? `${fmtInt(s.unknown)} thiết bị chưa có ngày đưa vào dùng` : 'Trong vòng đời' },
     { label: 'Bảo hành phần cứng', valueHtml: `${fmtInt(s.hwActive)}<small>/ ${fmtInt(s.hwActive + s.hwExpired + s.hwNone)}</small>`,
-      subHtml: `${fmtInt(s.hwExpired)} hết hạn · ${fmtInt(s.hwNone)} chưa ghép Opex` },
+      subHtml: `${fmtInt(s.hwExpired)} hết hạn · ${fmtInt(s.hwNone)} chưa ghép Opex${s.noCover ? ` · ${fmtInt(s.noCover)} không mua bảo hành` : ''}` },
   ].filter(Boolean));
 }
 
@@ -171,9 +171,10 @@ function dcDecisionForm({ title, base, current, defaultUntil, onDone }) {
   uiPanelDialog(esc(title), `
     <p class="muted-sub dc-form-help">Thiết bị đủ 5 năm: <b>Thay thế</b> thì nằm trong dòng Capex “Thay thế thiết bị” của Kế hoạch năm sau;
       <b>Dùng tiếp</b> (vượt ngân sách, còn tốt…) thì rời dòng Capex, bảo hành được gia hạn ở Opex — dòng “Gia hạn” của Opex đang có,
-      hoặc dòng “Dùng tiếp thiết bị” khi chưa có Opex bảo hành.</p>
+      hoặc dòng “Dùng tiếp thiết bị” khi chưa có Opex bảo hành. <b>Không mua bảo hành</b>: dùng tiếp có chủ đích, không cảnh báo
+      tuổi / thiếu bảo hành và không vào kế hoạch cho tới ngày xem lại.</p>
     <div class="form-grid-aligned dc-form">
-      <label class="field"><span>Quyết định</span><select id="dcdDecision">${[['extend', 'Dùng tiếp, gia hạn Opex'], ['replace', 'Thay thế (Capex)'], ['none', 'Chưa quyết định']].map(([k, t]) => opt(k, t, cur.decision || 'extend')).join('')}</select></label>
+      <label class="field"><span>Quyết định</span><select id="dcdDecision">${[['extend', 'Dùng tiếp, gia hạn Opex'], ['nocover', 'Dùng tiếp, không mua bảo hành'], ['replace', 'Thay thế (Capex)'], ['none', 'Chưa quyết định']].map(([k, t]) => opt(k, t, cur.decision || 'extend')).join('')}</select></label>
       <label class="field"><span>Lý do</span><select id="dcdReason">${opt('', '— Chọn —', cur.reason)}${Object.entries(DC_REASONS).map(([k, t]) => opt(k, t, cur.reason)).join('')}</select></label>
       <label class="field"><span>Dùng tiếp đến</span><input id="dcdUntil" type="date" value="${esc(cur.until || defaultUntil || '')}"></label>
       <label class="field sp-span2"><span>Ghi chú</span><input id="dcdNote" maxlength="500" value="${esc(cur.note || '')}" placeholder="vd: dời sang FY sau, hãng còn hỗ trợ đến 2028"></label>
@@ -182,7 +183,7 @@ function dcDecisionForm({ title, base, current, defaultUntil, onDone }) {
       thiết bị quay lại dòng Thay thế từ ngày hôm sau.</p>`,
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
    <button class="btn btn-primary btn-sm" type="button" id="dcdSave">Lưu quyết định</button>`);
-  const sync = () => { const ext = $('#dcdDecision').value === 'extend'; $('#dcdReason').disabled = !ext; $('#dcdUntil').disabled = !ext; };
+  const sync = () => { const ext = ['extend', 'nocover'].includes($('#dcdDecision').value); $('#dcdReason').disabled = !ext; $('#dcdUntil').disabled = !ext; };
   $('#dcdDecision').onchange = sync; sync();
   $('#dcdSave').onclick = async () => {
     const pick = $('#dcdDecision').value;

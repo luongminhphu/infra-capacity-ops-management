@@ -343,3 +343,34 @@ def test_keep_in_use_moves_devices_from_capex_replacement_to_opex_renewal(app_, 
     assert any(c.startswith("OPX-") for c in out["created"])
     items = {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}
     assert items["SAN3-A300-01"]["hw"]["state"] == "planned" and items["SAN3-A300-02"]["opexCount"] == 1
+
+
+def test_no_warranty_decision_silences_the_device_and_stays_out_of_the_plan(app_, admin, editor, clean):
+    """Kept on purpose without buying a warranty: no alert, no Capex / Opex line, until the review date."""
+    _upload(admin, "/api/assets/dc/import/commit", _book())
+    items = {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}
+    a1, a2 = items["SAN3-A300-01"]["id"], items["SAN3-A300-02"]["id"]
+    assert items["SAN3-A300-01"]["level"] == "crit"
+    y = fiscal.fiscal_year(fiscal.today_vn(), 1) + 1
+    body = {"ids": [a1, a2], "decision": "nocover", "reason": "good", "note": "Chỉ chạy dữ liệu lưu trữ lạnh"}
+    assert editor.post("/api/assets/dc/decision", json={**body, "reason": None}).status_code == 400
+    assert editor.post("/api/assets/dc/decision", json=body).json() == {"updated": 2}
+    d = admin.get("/api/assets/dc").json()
+    it = {a["deviceId"]: a for a in d["items"]}["SAN3-A300-01"]
+    assert it["level"] == "ok" and it["reasons"] == ["Không mua bảo hành — thiết bị còn tốt"]
+    assert it["decision"]["label"] == "Dùng tiếp, không mua bảo hành" and d["summary"]["noCover"] == 2
+    from app import inbox
+    db = SessionLocal()
+    try:
+        assert not any("SAN3-A300" in i["detail"] for i in inbox.asset_items(db, fiscal.today_vn()))
+    finally:
+        db.close()
+    plan = editor.post("/api/spend/plans", json={"fiscalYear": y}).json()
+    assert not any("DC ENTERPRISE STORAGE CLUSTER" in l["title"] for l in plan["lines"])
+    # review date inside the plan year: back in the replacement plan after it, and alerts come back once it passes
+    editor.post("/api/assets/dc/decision", json={**body, "until": f"{y}-03-31"})
+    plan = editor.post(f"/api/spend/plans/{plan['id']}/refresh").json()
+    rep = next(l for l in plan["lines"] if l["title"] == "Thay thế 2 × NETAPP AFF A300 — DC ENTERPRISE STORAGE CLUSTER")
+    assert rep["startDate"] == f"{y}-04-01"
+    editor.post("/api/assets/dc/decision", json={**body, "until": (fiscal.today_vn() - dt.timedelta(days=1)).isoformat()})
+    assert {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}["SAN3-A300-01"]["level"] == "crit"
