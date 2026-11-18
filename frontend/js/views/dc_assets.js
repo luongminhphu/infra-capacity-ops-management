@@ -3,7 +3,7 @@
    bảo hành phần cứng / license – firmware ghép theo số serial với Opex.
    Data: /api/assets/dc (list), /api/assets/dc/import/preview|commit (admin).
    ========================================================= */
-const dcState = { data: null, error: null, q: '', cat: '', age: '', level: '', onlyIssues: false, showRemoved: false, file: null };
+const dcState = { data: null, error: null, q: '', cat: '', age: '', level: '', onlyIssues: false, showRemoved: false, file: null, sel: new Set() };
 const DC_AGE = { le3: '≤ 3 năm', '3to5': '3 – 5 năm', ge5: '≥ 5 năm', unknown: 'Chưa có ngày' };
 const DC_REASONS = { budget: 'Vượt ngân sách', good: 'Thiết bị còn tốt', support: 'Hãng còn hỗ trợ', project: 'Chờ dự án / chuyển đổi khác', other: 'Lý do khác' };
 const DC_SPEND_RANK = { none: 0, viewer: 1, editor: 2, approver: 3, admin: 4 };
@@ -84,16 +84,23 @@ function dcRender() {
     return;
   }
   const list = dcFiltered(d.items);
+  const pick = dcCanDecide();
+  const ids = new Set(d.items.map(a => a.id));
+  [...dcState.sel].forEach(id => { if (!ids.has(id)) dcState.sel.delete(id); });      // after a reload / delete
+  const shown = list.slice(0, 1000);
+  dcState.shown = shown.map(a => a.id);
   const opt = (v, t, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(t)}</option>`;
-  const rows = list.slice(0, 1000).map(a => `<tr class="infra-row" tabindex="0" data-dc-id="${esc(a.id)}">
-      <td>${a.host && typeof uiEntityLink === 'function' ? uiEntityLink('host', a.host) : `<b>${esc(a.deviceId || '—')}</b>`}
+  const rows = shown.map(a => `<tr class="infra-row" tabindex="0" data-dc-id="${esc(a.id)}">
+      ${pick ? `<td class="dc-pick"><input type="checkbox" data-dc-sel="${esc(a.id)}"${dcState.sel.has(a.id) ? ' checked' : ''} aria-label="Chọn ${esc(a.deviceId || a.serial || '')}"></td>` : ''}
+      <td class="dc-dev">${a.host && typeof uiEntityLink === 'function' ? uiEntityLink('host', a.host) : `<b>${esc(a.deviceId || '—')}</b>`}
         <span class="muted-sub">${esc([a.business || a.categoryLabel, a.env, a.location].filter(Boolean).join(' · '))}</span></td>
       <td>${esc(a.brand || '—')}<span class="muted-sub">${esc(a.model || '')}</span></td>
       <td class="mono">${esc(a.serial || '—')}<span class="muted-sub">${esc(a.assetTag || '')}</span></td>
       <td>${dcDate(a.acquiredOn)}<span class="muted-sub">${esc(a.ageText)}</span></td>
       <td>${dcCov(a.hw, d)}</td>
       <td>${dcCov(a.license, d)}</td>
-      <td class="dc-status">${a.removed ? uiTag('Đã thanh lý') : uiPill(a.level, a.levelText)}${dcShortReasons(a)}</td></tr>`).join('');
+      <td class="dc-status">${a.removed ? uiTag(a.disposedOn ? `Thanh lý ${dcDate(a.disposedOn)}` : 'Đã thanh lý') : uiPill(a.level, a.levelText)}${dcShortReasons(a)}</td></tr>`).join('');
+  const allOn = shown.length > 0 && shown.every(a => dcState.sel.has(a.id));
   mount.innerHTML = `${dcKpis(d.summary, d)}
     <section class="panel">${head}
       <div class="panel-toolbar infra-toolbar dc-filters">
@@ -104,16 +111,46 @@ function dcRender() {
         <label class="infra-check"><input type="checkbox" id="dcIssues"${dcState.onlyIssues ? ' checked' : ''}> Chỉ mục cần xử lý</label>
         <label class="infra-check"><input type="checkbox" id="dcRemoved"${dcState.showRemoved ? ' checked' : ''}> Hiện thiết bị đã thanh lý</label>
       </div>
+      ${pick ? '<div class="dc-bulk" id="dcBulk" role="status"></div>' : ''}
       <div class="table-scroll" role="region" tabindex="0" aria-label="Thiết bị Data Center"><table class="data-table infra-table dc-table">
         <caption class="sr-only">Thiết bị Data Center, tuổi và bảo hành</caption>
-        <thead><tr><th>Thiết bị</th><th>Hãng · model</th><th>SN · asset tag</th><th>Đưa vào dùng</th><th>Bảo hành HW</th><th>License / FW</th><th>Trạng thái</th></tr></thead>
-        <tbody>${rows || uiEmptyRow(7, 'Không có thiết bị khớp bộ lọc.')}</tbody></table></div>
+        <thead><tr>${pick ? `<th class="dc-pick"><input type="checkbox" id="dcSelAll"${allOn ? ' checked' : ''} aria-label="Chọn tất cả thiết bị đang hiện"></th>` : ''}<th>Thiết bị</th><th>Hãng · model</th><th>SN · asset tag</th><th>Đưa vào dùng</th><th>Bảo hành HW</th><th>License / FW</th><th>Trạng thái</th></tr></thead>
+        <tbody>${rows || uiEmptyRow(pick ? 8 : 7, 'Không có thiết bị khớp bộ lọc.')}</tbody></table></div>
       <p class="muted-sub">${fmtInt(list.length)} / ${fmtInt(d.items.length)} dòng${list.length > 1000 ? ' (hiện 1.000 dòng đầu)' : ''}.
         Ngưỡng: dùng từ ${esc(Math.round(d.limitMonths / 12))} năm CẢNH BÁO (không còn bảo hành phần cứng: VƯỢT NGƯỠNG), từ ${esc(Math.round(d.warnMonths / 12))} năm THEO DÕI.
         Thiết bị đủ ${esc(Math.round(d.limitMonths / 12))} năm trong năm kế hoạch được gợi ý ở Ngân sách → Kế hoạch năm sau → “Thay thế thiết bị” (Capex).
         Bảo hành / license: Opex có số serial trùng${d.opexDetail ? '' : ' (chi tiết hợp đồng cần quyền xem Chi phí)'}.</p>
     </section>`;
+  dcBulkBar();
   refreshIcons();
+}
+
+/* Selection bar: how many devices are ticked (across filters) and the bulk decision. */
+function dcBulkBar() {
+  const bar = $('#dcBulk');
+  if (!bar) return;
+  const n = dcState.sel.size;
+  bar.innerHTML = n ? `<span><b>${fmtInt(n)}</b> thiết bị đã chọn</span>
+      <button class="btn btn-primary btn-sm" type="button" data-dc-bulk>Cập nhật quyết định</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-dc-clear>Bỏ chọn</button>`
+    : '<span class="muted-sub">Đánh dấu ô đầu dòng để cập nhật quyết định cho nhiều thiết bị cùng lúc (thay thế, dùng tiếp, không mua bảo hành, thanh lý).</span>';
+  bar.classList.toggle('active', n > 0);
+  const all = $('#dcSelAll');
+  if (all) {
+    const shown = dcState.shown || [];
+    const on = shown.filter(id => dcState.sel.has(id)).length;
+    all.checked = shown.length > 0 && on === shown.length;
+    all.indeterminate = on > 0 && on < shown.length;
+  }
+}
+
+function dcBulkDecision() {
+  const ids = [...dcState.sel];
+  if (!ids.length) return;
+  const items = dcState.data.items.filter(a => dcState.sel.has(a.id));
+  const names = items.slice(0, 4).map(a => a.deviceId || a.serial).join(', ') + (items.length > 4 ? ` và ${items.length - 4} thiết bị khác` : '');
+  dcDecisionForm({ title: `Quyết định — ${fmtInt(ids.length)} thiết bị`, subtitle: names, base: { ids }, current: null,
+    onDone: async () => { dcState.sel.clear(); await dcLoad(); dcRender(); } });
 }
 
 function dcOpen(id) {
@@ -142,7 +179,7 @@ function dcOpen(id) {
     <h3 class="panel-subtitle">Opex ghép theo SN</h3>${opex}`,
   `${uiIsAdmin() ? '<button class="btn btn-ghost btn-sm btn-danger" type="button" id="dcDel">Xoá thiết bị</button>' : ''}
    <span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
-   ${dcCanDecide() && !a.removed ? '<button class="btn btn-secondary btn-sm" type="button" id="dcDecide">Thay thế / dùng tiếp</button>' : ''}
+   ${dcCanDecide() ? '<button class="btn btn-secondary btn-sm" type="button" id="dcDecide">Quyết định</button>' : ''}
    ${uiIsAdmin() ? '<button class="btn btn-primary btn-sm" type="button" id="dcEdit"><i data-lucide="pencil"></i>Sửa</button>' : ''}`);
   const dec = $('#dcDecide');
   if (dec) dec.onclick = () => dcDecisionForm({ title: `Quyết định — ${a.deviceId || a.serial}`, base: { ids: [a.id] }, current: a.decision,
@@ -159,35 +196,46 @@ function dcOpen(id) {
 
 function dcDecisionText(x) {
   if (!x) return '<span class="muted-sub">Chưa quyết định</span>';
+  if (x.decision === 'dispose') return `${uiTag('Thanh lý')} ${esc([`ngày ${dcDate(x.until)}`, x.note].filter(Boolean).join(' · '))}<span class="muted-sub">${esc(x.by || '')}</span>`;
   const bits = [x.reasonLabel, x.until ? `xem lại ${dcDate(x.until)}` : '', x.note].filter(Boolean);
   return `${uiTag(x.label)}${bits.length ? ` ${esc(bits.join(' · '))}` : ''}<span class="muted-sub">${esc(x.by || '')}</span>`;
 }
 
 /* Thay thế (Capex) or Dùng tiếp (renew in Opex) for one device or a whole plan line. Shared with Kế hoạch năm sau:
    base = { ids } or { groupOf, fiscalYear }; onDone runs after the decision is saved. */
-function dcDecisionForm({ title, base, current, defaultUntil, onDone }) {
+function dcDecisionForm({ title, subtitle, base, current, defaultUntil, onDone }) {
   const cur = current || {};
+  const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);       // Vietnam calendar day
   const opt = (v, t, c) => `<option value="${esc(v)}"${v === (c || '') ? ' selected' : ''}>${esc(t)}</option>`;
   uiPanelDialog(esc(title), `
+    ${subtitle ? `<p class="dc-form-help"><b>${esc(subtitle)}</b></p>` : ''}
     <p class="muted-sub dc-form-help">Thiết bị đủ 5 năm: <b>Thay thế</b> thì nằm trong dòng Capex “Thay thế thiết bị” của Kế hoạch năm sau;
       <b>Dùng tiếp</b> (vượt ngân sách, còn tốt…) thì rời dòng Capex, bảo hành được gia hạn ở Opex — dòng “Gia hạn” của Opex đang có,
       hoặc dòng “Dùng tiếp thiết bị” khi chưa có Opex bảo hành. <b>Không mua bảo hành</b>: dùng tiếp có chủ đích, không cảnh báo
-      tuổi / thiếu bảo hành và không vào kế hoạch cho tới ngày xem lại.</p>
+      tuổi / thiếu bảo hành và không vào kế hoạch cho tới ngày xem lại. <b>Thanh lý</b>: thiết bị chuyển sang “Đã thanh lý” từ ngày
+      thanh lý, rời cảnh báo và kế hoạch; chọn quyết định khác để đưa lại vào dùng.</p>
     <div class="form-grid-aligned dc-form">
-      <label class="field"><span>Quyết định</span><select id="dcdDecision">${[['extend', 'Dùng tiếp, gia hạn Opex'], ['nocover', 'Dùng tiếp, không mua bảo hành'], ['replace', 'Thay thế (Capex)'], ['none', 'Chưa quyết định']].map(([k, t]) => opt(k, t, cur.decision || 'extend')).join('')}</select></label>
+      <label class="field"><span>Quyết định</span><select id="dcdDecision">${[['extend', 'Dùng tiếp, gia hạn Opex'], ['nocover', 'Dùng tiếp, không mua bảo hành'], ['replace', 'Thay thế (Capex)'], ['dispose', 'Thanh lý'], ['none', 'Chưa quyết định']].map(([k, t]) => opt(k, t, cur.decision || 'extend')).join('')}</select></label>
       <label class="field"><span>Lý do</span><select id="dcdReason">${opt('', '— Chọn —', cur.reason)}${Object.entries(DC_REASONS).map(([k, t]) => opt(k, t, cur.reason)).join('')}</select></label>
-      <label class="field"><span>Dùng tiếp đến</span><input id="dcdUntil" type="date" value="${esc(cur.until || defaultUntil || '')}"></label>
+      <label class="field"><span id="dcdUntilLbl">Dùng tiếp đến</span><input id="dcdUntil" type="date" value="${esc(cur.until || defaultUntil || '')}"></label>
       <label class="field sp-span2"><span>Ghi chú</span><input id="dcdNote" maxlength="500" value="${esc(cur.note || '')}" placeholder="vd: dời sang FY sau, hãng còn hỗ trợ đến 2028"></label>
     </div>
-    <p class="muted-sub dc-form-help">Để trống “Dùng tiếp đến” = dùng tiếp cho tới khi đổi quyết định. Nếu ngày này nằm trong năm kế hoạch,
+    <p class="muted-sub dc-form-help" id="dcdUntilHelp">Để trống “Dùng tiếp đến” = dùng tiếp cho tới khi đổi quyết định. Nếu ngày này nằm trong năm kế hoạch,
       thiết bị quay lại dòng Thay thế từ ngày hôm sau.</p>`,
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
    <button class="btn btn-primary btn-sm" type="button" id="dcdSave">Lưu quyết định</button>`);
-  const sync = () => { const ext = ['extend', 'nocover'].includes($('#dcdDecision').value); $('#dcdReason').disabled = !ext; $('#dcdUntil').disabled = !ext; };
+  const sync = () => {
+    const v = $('#dcdDecision').value, ext = ['extend', 'nocover'].includes(v), disp = v === 'dispose';
+    $('#dcdReason').disabled = !ext; $('#dcdUntil').disabled = !(ext || disp);
+    $('#dcdUntilLbl').textContent = disp ? 'Ngày thanh lý' : 'Dùng tiếp đến';
+    $('#dcdUntilHelp').classList.toggle('hidden', !ext);
+    if (disp && !$('#dcdUntil').value) $('#dcdUntil').value = today;
+  };
   $('#dcdDecision').onchange = sync; sync();
   $('#dcdSave').onclick = async () => {
     const pick = $('#dcdDecision').value;
-    const body = { ...base, decision: pick === 'none' ? null : pick, reason: $('#dcdReason').value || null,
+    if (pick === 'dispose' && !(await uiConfirm(`Thanh lý ${base.ids ? `${fmtInt(base.ids.length)} thiết bị` : 'các thiết bị của dòng này'}? Thiết bị rời cảnh báo và kế hoạch.`))) return;
+    const body = { ...base, decision: pick === 'none' ? null : pick, reason: pick === 'dispose' ? null : ($('#dcdReason').value || null),
       until: $('#dcdUntil').value || null, note: $('#dcdNote').value.trim() };
     $('#dcdSave').disabled = true;
     try {
@@ -308,18 +356,28 @@ function dcBind() {
     else if (id === 'dcLevel') dcState.level = e.target.value;
     else if (id === 'dcIssues') dcState.onlyIssues = e.target.checked;
     else if (id === 'dcRemoved') dcState.showRemoved = e.target.checked;
-    else return;
+    else if (id === 'dcSelAll') {
+      (dcState.shown || []).forEach(x => (e.target.checked ? dcState.sel.add(x) : dcState.sel.delete(x)));
+      $$('[data-dc-sel]').forEach(c => { c.checked = e.target.checked; });
+      dcBulkBar(); return;
+    } else if (e.target.dataset.dcSel) {
+      const x = Number(e.target.dataset.dcSel);
+      if (e.target.checked) dcState.sel.add(x); else dcState.sel.delete(x);
+      dcBulkBar(); return;
+    } else return;
     dcRender();
   });
   mount.addEventListener('click', async (e) => {
     if (e.target.closest('[data-dc-reload]')) { mount.innerHTML = uiLoading(); await dcLoad(); dcRender(); return; }
     if (e.target.closest('[data-dc-import]')) { dcImportDialog(); return; }
     if (e.target.closest('[data-dc-add]')) { dcForm(null); return; }
+    if (e.target.closest('[data-dc-bulk]')) { dcBulkDecision(); return; }
+    if (e.target.closest('[data-dc-clear]')) { dcState.sel.clear(); $$('[data-dc-sel]').forEach(c => { c.checked = false; }); dcBulkBar(); return; }
     const row = e.target.closest('[data-dc-id]');
-    if (row && !e.target.closest('a, button')) dcOpen(Number(row.dataset.dcId));
+    if (row && !e.target.closest('a, button, input, .dc-pick')) dcOpen(Number(row.dataset.dcId));
   });
   mount.addEventListener('keydown', (e) => {
     const row = e.target.closest('[data-dc-id]');
-    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); dcOpen(Number(row.dataset.dcId)); }
+    if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); dcOpen(Number(row.dataset.dcId)); }
   });
 }

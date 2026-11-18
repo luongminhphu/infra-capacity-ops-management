@@ -374,3 +374,46 @@ def test_no_warranty_decision_silences_the_device_and_stays_out_of_the_plan(app_
     assert rep["startDate"] == f"{y}-04-01"
     editor.post("/api/assets/dc/decision", json={**body, "until": (fiscal.today_vn() - dt.timedelta(days=1)).isoformat()})
     assert {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}["SAN3-A300-01"]["level"] == "crit"
+
+
+def test_bulk_decision_and_disposal(app_, admin, editor, clean):
+    """Several devices at once; "Thanh lý" removes them from alerts and the plan, survives a re-import of an
+    older list, and another decision puts them back into use."""
+    _upload(admin, "/api/assets/dc/import/commit", _book())
+    items = {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}
+    ids = [items[n]["id"] for n in ("SAN3-A300-01", "SAN3-A300-02", "svr85")]
+    # bulk: keep in use, one call for three devices
+    assert editor.post("/api/assets/dc/decision", json={"ids": ids, "decision": "nocover", "reason": "budget"}).json() == {"updated": 3}
+    items = {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}
+    assert {items[n]["decision"]["decision"] for n in ("SAN3-A300-01", "SAN3-A300-02", "svr85")} == {"nocover"}
+    # bulk disposal on a given date (no reason needed)
+    r = editor.post("/api/assets/dc/decision", json={"ids": ids, "decision": "dispose", "until": "2026-10-31", "note": "Bán thanh lý đợt 10/2026"})
+    assert r.json() == {"updated": 3}
+    d = admin.get("/api/assets/dc").json()
+    items = {a["deviceId"]: a for a in d["items"]}
+    a300 = items["SAN3-A300-01"]
+    assert a300["removed"] and a300["disposedOn"] == "2026-10-31" and a300["levelText"] == "Đã thanh lý"
+    assert a300["decision"] == {"decision": "dispose", "label": "Thanh lý", "reason": None, "reasonLabel": "",
+                                "note": "Bán thanh lý đợt 10/2026", "until": "2026-10-31", "by": "editor1",
+                                "at": a300["decision"]["at"]}
+    assert d["summary"]["removed"] == 5                                         # 2 REMOVED in the file + 3 disposed
+    from app import inbox
+    db = SessionLocal()
+    try:
+        assert not any("SAN3-A300" in i["detail"] or "svr85" in i["detail"] for i in inbox.asset_items(db, fiscal.today_vn()))
+    finally:
+        db.close()
+    y = fiscal.fiscal_year(fiscal.today_vn(), 1) + 1
+    plan = editor.post("/api/spend/plans", json={"fiscalYear": y}).json()
+    assert not any("DC ENTERPRISE STORAGE CLUSTER" in l["title"] for l in plan["lines"])
+    # the old list (devices not marked REMOVED) is imported again: still disposed, counted as unchanged
+    r = _upload(admin, "/api/assets/dc/import/commit", _book()).json()
+    assert r["update"] == 0
+    assert {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}["svr85"]["removed"] is True
+    # undo: another decision puts the device back into use
+    editor.post("/api/assets/dc/decision", json={"ids": [ids[2]], "decision": None})
+    svr85 = {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}["svr85"]
+    assert svr85["removed"] is False and svr85["disposedOn"] is None and svr85["decision"] is None
+    assert editor.post("/api/assets/dc/decision", json={"ids": ids, "decision": "dispose", "until": "31/02/2026"}).status_code == 400
+    nobody = _login(app_, "nobody1")
+    assert nobody.post("/api/assets/dc/decision", json={"ids": ids, "decision": "dispose"}).status_code == 403
