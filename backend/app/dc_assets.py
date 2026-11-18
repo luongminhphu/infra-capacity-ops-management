@@ -241,6 +241,8 @@ def plan(db: Session, parsed: Dict[str, Any], mark_missing: bool) -> Dict[str, A
     new, upd, same = [], [], []
     for r in parsed["rows"]:
         a = existing.get(r["key"])
+        if a is not None and a.disposed_on and not r["removed"]:
+            r["removed"] = True                     # disposed in ICO: an older list still showing it does not revive it
         vals = _values(r)
         if a is None:
             new.append(r)
@@ -443,6 +445,7 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
             "assetTag": a.asset_tag, "acquiredOn": a.acquired_on.isoformat() if a.acquired_on else None, "location": a.location,
             "qty": a.qty, "removed": a.removed, "notes": a.notes, "sheet": a.sheet, "manual": not a.sheet,
             "updatedBy": a.updated_by, "decision": decision_public(a),
+            "disposedOn": a.disposed_on.isoformat() if a.disposed_on else None,
             "ageMonths": ev["months"], "ageText": age_text(ev["months"]), "ageBucket": bucket,
             "limitDate": _add_months(a.acquired_on, limit).isoformat() if a.acquired_on else None,
             "level": ev["level"], "levelText": "Đã thanh lý" if a.removed else LEVEL_TEXT[ev["level"]], "reasons": ev["reasons"],
@@ -475,6 +478,10 @@ def extended_until(a: DcAsset, on: dt.date) -> Optional[dt.date]:
 
 
 def decision_public(a: DcAsset) -> Optional[Dict[str, Any]]:
+    if a.disposed_on:
+        return {"decision": "dispose", "label": "Thanh lý", "reason": None, "reasonLabel": "", "note": a.decision_note,
+                "until": a.disposed_on.isoformat(), "by": a.decision_by,
+                "at": a.decision_at.isoformat() if a.decision_at else None}
     if not a.decision:
         return None
     return {"decision": a.decision, "label": DECISIONS[a.decision], "reason": a.decision_reason,
@@ -484,9 +491,11 @@ def decision_public(a: DcAsset) -> Optional[Dict[str, Any]]:
 
 
 def set_decision(db: Session, assets: List[DcAsset], d: Dict[str, Any], username: str) -> int:
-    """Record the decision for the devices (None / "" clears it). "extend" needs a reason."""
+    """Record the decision for the devices (None / "" clears it). Keeping a device needs a reason. "dispose"
+    (Thanh lý) marks the devices removed on `until` (default today); any other choice brings a device disposed
+    in ICO back into use."""
     decision = d.get("decision") or None
-    if decision not in (None, *DECISIONS):
+    if decision not in (None, "dispose", *DECISIONS):
         raise ImportError_("Quyết định không hợp lệ.")
     reason = d.get("reason") or None
     if decision in KEEP_DECISIONS and reason not in DECISION_REASONS:
@@ -496,7 +505,16 @@ def set_decision(db: Session, assets: List[DcAsset], d: Dict[str, Any], username
         raise ImportError_("Ngày xem lại không hợp lệ.")
     note = _text(d.get("note"))[:500] or None
     now = dt.datetime.utcnow()
+    if decision == "dispose":
+        from .spend.fiscal import today_vn
+        for a in assets:
+            a.removed, a.disposed_on = True, until or today_vn()
+            a.decision = a.decision_reason = a.decision_until = None
+            a.decision_note, a.decision_by, a.decision_at = note, username, now
+        return len(assets)
     for a in assets:
+        if a.disposed_on:                           # undo a disposal made in ICO
+            a.removed, a.disposed_on = False, None
         a.decision = decision
         a.decision_reason = reason if decision else None
         a.decision_note = note if decision else None
@@ -653,6 +671,8 @@ def save_manual(db: Session, a: Optional[DcAsset], d: Dict[str, Any], username: 
         for c, v in vals.items():
             setattr(a, c, v)
         a.asset_key, a.imported_at, a.updated_by = key, dt.datetime.utcnow(), username
+        if not a.removed:
+            a.disposed_on = None                    # put back into use from the edit form
     return a
 
 
