@@ -8,7 +8,7 @@ function renderLicHardware() {
   const inv = st.inv, t = inv.totals;
   const ratio = t.physicalCores > 0 ? (t.vcpuAllocated / t.physicalCores) : NaN;
   const kpis = [
-    ['ESXi host', licNum(t.hosts), `${Object.keys(inv.distribution.model).length} model · ${Object.keys(inv.distribution.esxiVersion).length} phiên bản ESXi`],
+    ['Host', licNum(t.hosts), `${Object.keys(inv.distribution.model).length} model · ${Object.keys(inv.distribution.esxiVersion).length} phiên bản hypervisor`],
     ['CPU socket', licNum(t.sockets), 'Số CPU vật lý — cơ sở mức sàn 16 core/CPU (VMware) và 8 core/CPU (Windows Server)'],
     ['Physical core', licNum(t.physicalCores), 'Core vật lý — đơn vị tính license, KHÔNG phải vCPU'],
     ['Logical thread', licNum(t.logicalThreads), 'Hyper-thread — không dùng để tính license'],
@@ -52,16 +52,16 @@ function renderLicHardware() {
     <div class="kpi-strip lic-kpi-6">${kpis.map(([l, v, s]) => `<div class="kpi-cell"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div><div class="kpi-s">${s}</div></div>`).join('')}</div>
     <section class="table-card">
       <div class="panel-head">
-        <div><div class="panel-title" role="heading" aria-level="2">ESXi theo vCenter / cluster / host</div><p class="panel-sub">Bấm vào dòng cluster để xem từng host. Physical core là số core vật lý của CPU; logical thread là số luồng khi bật Hyper-Threading; vCPU là tài nguyên ảo cấp cho VM — chỉ physical core được dùng để tính license.</p></div>
+        <div><div class="panel-title" role="heading" aria-level="2">Host theo nguồn / cluster</div><p class="panel-sub">Bấm vào dòng cluster để xem từng host. Physical core là số core vật lý của CPU; logical thread là số luồng khi bật Hyper-Threading; vCPU là tài nguyên ảo cấp cho VM — chỉ physical core được dùng để tính license.</p></div>
         <div class="panel-toolbar">
           <button class="btn btn-secondary btn-sm" data-lic-action="hw-expand" type="button">Mở tất cả</button>
           <button class="btn btn-secondary btn-sm" data-lic-action="hw-collapse" type="button">Thu gọn</button>
           <button class="btn btn-secondary btn-sm" data-lic-action="export-hw" type="button">Xuất Excel</button>
         </div>
       </div>
-      ${distChips(inv.distribution.model, 'Model')}${distChips(inv.distribution.esxiVersion, 'ESXi')}
+      ${distChips(inv.distribution.model, 'Model')}${distChips(inv.distribution.esxiVersion, 'Hypervisor')}
       <div class="table-scroll"><table class="data-table lic-table">
-        <thead><tr><th>Cluster / Host</th><th>Model</th><th>ESXi</th><th class="num">Host</th><th class="num">Socket</th><th class="num">Physical core</th><th class="num">Logical thread</th><th class="num">RAM GB</th><th class="num">VM</th><th>HA / DRS · license core</th></tr></thead>
+        <thead><tr><th>Cluster / Host</th><th>Model</th><th>Hypervisor</th><th class="num">Host</th><th class="num">Socket</th><th class="num">Physical core</th><th class="num">Logical thread</th><th class="num">RAM GB</th><th class="num">VM</th><th>HA / DRS · license core</th></tr></thead>
         <tbody>${rows || uiEmptyRow(10, 'Không có host trong phạm vi.')}</tbody>
       </table></div>
       <div class="row-count">${inv.hosts.length} host · ${Object.keys(groups).length} cluster</div>

@@ -40,7 +40,7 @@ const PAGES = [
     { id: 'dc-assets', view: 'dcassets', icon: 'server-cog', label: 'Thiết bị Data Center', title: 'Thiết bị Data Center',
       desc: 'Danh sách thiết bị nhập từ Excel: tuổi theo chính sách 5 năm, bảo hành phần cứng và license / firmware ghép theo số serial với Opex.', scope: [] },
     { id: 'lic-hardware', view: 'licensing', sub: 'hardware', icon: 'cpu', label: 'ESXi & phần cứng', title: 'ESXi & phần cứng',
-      desc: 'Model, phiên bản ESXi, socket, physical core, logical thread, RAM và số VM của từng host.', scope: ['vcenter', 'cluster'] },
+      desc: 'Model, phiên bản hypervisor (ESXi, Proxmox VE, AHV), socket, physical core, logical thread, RAM và số VM của từng host.', scope: ['vcenter', 'cluster'] },
     { id: 'lic-os', view: 'licensing', sub: 'os', icon: 'app-window', label: 'Hệ điều hành', title: 'Hệ điều hành guest',
       desc: 'Phân loại guest OS (Windows Server, Linux, khác) làm cơ sở tính license Windows Server.', scope: ['vcenter', 'cluster'] },
     { id: 'whatif', feature: 'whatif', view: 'whatif', icon: 'git-branch', label: 'What-if capacity', title: 'What-if capacity',

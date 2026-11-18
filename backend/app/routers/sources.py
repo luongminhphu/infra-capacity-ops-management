@@ -89,6 +89,11 @@ def create_source(request: Request, data: Dict[str, Any] = Body(...), user: User
         raise HTTPException(400, str(exc)) from exc
     if db.query(DataSource).filter_by(kind=row.kind, key=row.key).first():
         raise HTTPException(409, f"Mã {row.key} đã tồn tại.")
+    if row.kind in sources.HYPERVISOR_KINDS:     # vCenter / Proxmox / Nutanix share one history family
+        clash = db.query(DataSource).filter(DataSource.kind.in_(sources.HYPERVISOR_KINDS), DataSource.key == row.key).first()
+        env_clash = row.kind != "vcenter" and any(c.key == row.key for c in get_settings().env_vcenters())
+        if clash or env_clash:
+            raise HTTPException(409, f"Mã {row.key} đã dùng cho một nền tảng ảo hoá khác — chọn mã khác.")
     row.updated_by, row.updated_at = user.username, dt.datetime.utcnow()
     db.add(row)
     db.flush()

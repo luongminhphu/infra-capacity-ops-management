@@ -31,8 +31,10 @@ def _positive_int(v) -> Optional[int]:
 class VCenterConfig:
     def __init__(self, key: str, name: str, host: str, port: int, username: str,
                  password: str, verify_ssl: bool, demo: bool = False, ca_pem: str = "", origin: str = "env",
-                 timeout: Optional[int] = None):
+                 timeout: Optional[int] = None, platform: str = "vmware"):
         self.key = key
+        # vmware (vCenter, pyVmomi) | proxmox (Proxmox VE API token) | nutanix (Prism Element v2.0): app/hypervisors/
+        self.platform = platform
         self.name = name
         self.host = host
         self.port = port

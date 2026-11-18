@@ -20,8 +20,9 @@ from .models import (
     VmSnapshotState,
 )
 
-FAMILIES = {"vcenter": "vCenter", "netbackup": "Máy chủ backup", "storage": "Storage"}
-KIND_FAMILY = {"vcenter": "vcenter", "netbackup": "netbackup", "pure": "storage", "netapp": "storage"}
+FAMILIES = {"vcenter": "Nền tảng ảo hoá", "netbackup": "Máy chủ backup", "storage": "Storage"}
+KIND_FAMILY = {"vcenter": "vcenter", "proxmox": "vcenter", "nutanix": "vcenter", "netbackup": "netbackup",
+               "pure": "storage", "netapp": "storage"}
 NOT_A_SOURCE = {None, "", "import"}
 CHUNK = 5000
 

@@ -36,6 +36,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Khu vực | File chính |
 |---|---|
 | Thu thập vCenter | `backend/app/vcenter/client.py`, `vcenter/demo_generator.py` |
+| Proxmox VE / Nutanix AHV | `backend/app/hypervisors/` (`proxmox.py` API token, `nutanix.py` Prism Element v2.0, chỉ GET qua `storage/http.py::JsonClient`); cùng dạng dòng host / VM / extras với vCenter, lưu như vCenter (`VCenterConfig.platform`, kind `proxmox` / `nutanix` trong `sources.py`, rẽ nhánh ở `scheduler._sync_vcenter_locked`); `platform` trên dòng host (`data_access`), license VMware bỏ qua host không phải VMware (`licensing/assess.py`) |
 | Thu thập NetBackup | `backend/app/backup/client.py`, `collector.py`, `status_codes.py`, `analysis.py`, `demo_generator.py` |
 | Lịch poll | `backend/app/collectors/scheduler.py` (thread pool, mỗi nguồn 1 DB session); job nền chỉ chạy ở pod leader (`leader.py`, advisory lock PostgreSQL; khoá theo nguồn giữa các pod) |
 | Sức khoẻ hạ tầng | `backend/app/vcenter/extras.py` (datastore, snapshot, alarm, sức khoẻ host — cùng phiên vCenter), `infra.py` (trạng thái + mức + dự báo đầy), `metrics.py` (chuỗi thời gian thô → giờ → ngày), `alert_rules.py` (Cài đặt → Cảnh báo) + `ops_alerts.py`, `routers/infra.py`, `frontend/js/views/infra.js` |
@@ -60,7 +61,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 
 ## Quy tắc bắt buộc
 
-1. **vCenter, NetBackup và storage (Pure / NetApp) chỉ được ĐỌC.** Không bao giờ gọi API làm thay đổi hạ tầng
+1. **vCenter, Proxmox VE, Nutanix, NetBackup và storage (Pure / NetApp) chỉ được ĐỌC.** Không bao giờ gọi API làm thay đổi hạ tầng
    (power, reconfigure, snapshot, xoá, POST/PUT/DELETE tới NetBackup / Pure ngoài `/login` `/logout`; ONTAP chỉ GET —
    `storage/http.py::JsonClient` chặn sẵn).
    Tài khoản dịch vụ (`infra.mon@vsphere.local`, user NBU chỉ đọc) được cấp quyền tối thiểu.
