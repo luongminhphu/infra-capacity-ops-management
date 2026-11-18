@@ -27,11 +27,19 @@ def get_effective_policy(db: Session, settings: Settings) -> "capacity.Policy":
     )
 
 
+def _platform(key):
+    from .sources import platform_of
+    try:
+        return platform_of(key)
+    except Exception:  # noqa: BLE001 — sources unavailable: the legacy assumption
+        return "vmware" if key and key != "import" else None
+
+
 def _host_to_row(h: HostSnapshot) -> Dict[str, Any]:
     return {
         "cluster": h.cluster, "host": h.host, "cores": h.cores, "cpuMhz": h.cpu_mhz,
         "ramGB": h.ram_gb, "cpuUsagePctRaw": h.cpu_usage_pct_raw, "ramUsagePctRaw": h.ram_usage_pct_raw,
-        "status": h.status, "vcenterKey": h.vcenter_key,
+        "status": h.status, "vcenterKey": h.vcenter_key, "platform": _platform(h.vcenter_key),
         "vendor": h.vendor, "model": h.model, "esxiVersion": h.esxi_version, "esxiBuild": h.esxi_build,
         "cpuModel": h.cpu_model, "cpuSockets": h.cpu_sockets, "cpuThreads": h.cpu_threads,
         "clusterHa": h.cluster_ha, "clusterDrs": h.cluster_drs,

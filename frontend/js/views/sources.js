@@ -7,12 +7,16 @@
 const srcState = { items: [], domainTypes: [], editing: null, kind: 'vcenter' };
 const SRC_DEFAULTS = {
   vcenter: { port: 443, user: 'infra.mon@vsphere.local', title: 'vCenter', label: 'vCenter' },
+  proxmox: { port: 8006, user: '', title: 'cụm Proxmox VE', label: 'Proxmox VE', userLabel: 'Token ID (user@realm!token)',
+    passLabel: 'Secret của API token', userHint: 'ico@pve!monitor', hostHint: 'pve01.corp.local' },
+  nutanix: { port: 9440, user: '', title: 'cụm Nutanix (Prism Element)', label: 'Nutanix AHV', userLabel: 'Tài khoản Viewer (chỉ đọc)',
+    userHint: 'ico_ro', hostHint: 'IP ảo của cụm Prism Element' },
   netbackup: { port: 1556, user: '', title: 'máy chủ backup (NetBackup)', label: 'Backup', keyLabel: 'API key (thay cho user / mật khẩu)' },
   pure: { port: 443, user: '', title: 'mảng Pure FlashArray', label: 'Pure FlashArray', keyLabel: 'API token (user role readonly)' },
   netapp: { port: 443, user: 'ico_ro', title: 'cụm NetApp ONTAP', label: 'NetApp ONTAP' },
 };
 /* Which credential fields each kind uses: user + password, API key / token, NetBackup-only fields. */
-const SRC_FIELDS = { vcenter: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'] };
+const SRC_FIELDS = { vcenter: ['up'], proxmox: ['up'], nutanix: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'] };
 
 function srcSetStatus(msg, isErr) { uiSetStatus('#srcStatus', msg, isErr ? 'error' : ''); }
 
@@ -56,7 +60,7 @@ async function loadSources() {
     srcKeyBox(r);
     $('#btnSrcImportEnv').classList.toggle('hidden', !r.items.some(i => i.origin === 'env' && !i.replacedByUi));
     $('#srcTable tbody').innerHTML = r.items.length ? r.items.map(srcRow).join('')
-      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Máy chủ backup”, “+ Pure FlashArray” hoặc “+ NetApp ONTAP”.');
+      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Proxmox VE”, “+ Nutanix”, “+ Máy chủ backup”, “+ Pure FlashArray” hoặc “+ NetApp ONTAP”.');
   } catch (err) { srcSetStatus(err.message, true); }
   loadOrphans();
 }
@@ -163,7 +167,10 @@ function openSourceDialog(kind, item) {
   $$('#srcDialog .src-up').forEach(el => el.classList.toggle('hidden', !fields.includes('up')));
   $$('#srcDialog .src-key').forEach(el => el.classList.toggle('hidden', !fields.includes('key')));
   if (d.keyLabel) $('#srcApiKeyLabel').textContent = d.keyLabel;
-  $('#srcUser').placeholder = kind === 'netapp' ? 'ico_ro (role readonly, ứng dụng http)' : 'infra.mon@vsphere.local';
+  $('#srcUser').placeholder = d.userHint || (kind === 'netapp' ? 'ico_ro (role readonly, ứng dụng http)' : 'infra.mon@vsphere.local');
+  $('label[for="srcUser"]').textContent = d.userLabel || 'Tài khoản chỉ đọc';
+  $('label[for="srcPassword"]').textContent = d.passLabel || 'Mật khẩu';
+  $('#srcHost').placeholder = d.hostHint || 'vcenter01.corp.local';
   $('#srcDomainType').innerHTML = srcState.domainTypes.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
   const v = item || {};
   $('#srcName').value = v.name || '';

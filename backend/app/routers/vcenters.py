@@ -32,6 +32,7 @@ def _vcenter_public(cfg, db: Session, admin: bool = False):
         "name": cfg.name,
         "host": cfg.host,
         "demo": cfg.demo,
+        "platform": getattr(cfg, "platform", "vmware"),
         "lastSyncAt": to_iso_utc(last_run.finished_at) if last_run else None,
         "lastStatus": "ok" if last_run else None,
         # error text can name hosts / ports of the source: admins only (they are the ones who can act on it)

@@ -1079,6 +1079,41 @@ bảng với nhãn "Biến môi trường". Nút **Chuyển cấu hình biến m
 mật khẩu, API key, file CA) vào giao diện; nguồn trên giao diện cùng mã sẽ thay thế nguồn từ biến, sau đó có
 thể xoá các biến khỏi ConfigMap / Secret.
 
+## Kết nối Proxmox VE và Nutanix AHV (chỉ đọc)
+
+Thêm ở **Cài đặt → Kết nối nguồn dữ liệu → + Proxmox VE / + Nutanix**, hộp thoại giống vCenter (tên hiển thị, mã nguồn,
+máy chủ, cổng, tài khoản, kiểm tra TLS + CA, chế độ DEMO, **Kiểm tra kết nối**). Dữ liệu được chuẩn hoá thành host / VM /
+datastore / sức khoẻ host như vCenter và lưu theo mã nguồn, nên Capacity, Compliance, Xu hướng, Host & VM, What-if, Quy
+hoạch, Sức khoẻ hạ tầng (Datastore, Sức khoẻ host) và bộ lọc vCenter dùng chung cho mọi nền tảng. ICO chỉ gọi GET.
+
+- **Mã nguồn** dùng chung một không gian với vCenter (lịch sử lưu theo mã): không đặt trùng mã vCenter.
+- **License**: host Proxmox / Nutanix không tính vào license VMware (cột *VMware core* = 0, cờ `not_vmware`); license
+  Windows Server vẫn tính theo core vật lý như mọi host.
+
+**Proxmox VE** (6.2 trở lên, cổng 8006, một nguồn cho mỗi cụm — trỏ vào một node bất kỳ):
+
+1. Datacenter → Permissions → Users: tạo user, ví dụ `ico@pve` (realm Proxmox VE).
+2. Datacenter → Permissions → API Tokens → Add: user `ico@pve`, Token ID `monitor`; giữ *Privilege Separation*.
+3. Datacenter → Permissions → Add → API Token Permission: path `/`, token `ico@pve!monitor`, role **PVEAuditor**
+   (chỉ đọc), *Propagate* bật.
+   Dòng lệnh tương đương: `pveum user add ico@pve`, `pveum user token add ico@pve monitor --privsep 1`,
+   `pveum acl modify / --tokens 'ico@pve!monitor' --roles PVEAuditor`.
+4. Trên ICO: *Token ID* = `ico@pve!monitor`, *Secret* = chuỗi UUID hiện một lần khi tạo token.
+
+Đọc: `/cluster/status`, `/nodes`, `/nodes/{node}/status`, `/cluster/resources?type=vm` và `?type=storage` (một lần cho
+mọi VM, không gọi từng VM). Giới hạn: Proxmox không trả IP và hệ điều hành của VM khi không gọi riêng từng VM (cần
+guest agent), nên cột IP / HĐH để trống và phân loại license Windows của các VM này cần sửa tay ở *Hệ điều hành*;
+datastore của từng VM để `UNKNOWN`; dung lượng đã dùng của VM QEMU lấy bằng dung lượng cấp phát.
+
+**Nutanix AHV qua Prism Element** (API v2.0, AOS 5.x – 6.x, cổng 9440, một nguồn cho mỗi cụm — trỏ vào IP ảo của cụm):
+
+1. Prism Element → Settings → Local User Management (hoặc Role Mapping cho user AD): tạo user `ico_ro`, role **Viewer**.
+2. Trên ICO: tài khoản `ico_ro` + mật khẩu.
+
+Đọc: `/cluster/`, `/hosts/`, `/vms/` (phân trang 500 VM / lần, kèm disk và NIC), `/storage_containers/` → datastore là
+storage container. Prism Central (API v3 liệt kê VM bằng POST) không dùng. Giới hạn: v2.0 không trả % CPU / RAM của
+từng VM (để trống); dung lượng đã dùng của VM lấy bằng dung lượng cấp phát.
+
 ## Kết nối Pure FlashArray và NetApp ONTAP (chỉ đọc)
 
 Thêm ở **Cài đặt → Kết nối nguồn dữ liệu → + Pure FlashArray / + NetApp ONTAP**. Ứng dụng chỉ gọi GET;

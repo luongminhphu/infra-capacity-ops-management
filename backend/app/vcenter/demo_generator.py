@@ -52,9 +52,15 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
     vm_rows: List[Dict[str, Any]] = []
 
     os_weights = [g[0] for g in GUEST_OS_PLAN]
+    platform = getattr(cfg, "platform", "vmware")
+    tag = {"proxmox": "pve", "nutanix": "ahv"}.get(platform, "esx")
     for cluster, host_count, cores_per_host, ram_per_host_gb, sockets, (vendor, model), (esxi_ver, esxi_build), cpu_model in CLUSTER_PLAN:
+        if platform == "proxmox":
+            esxi_ver, esxi_build = "Proxmox VE 8.2.4", "faa83925c9641325"
+        elif platform == "nutanix":
+            (vendor, model), (esxi_ver, esxi_build) = ("Nutanix", "NX-3170-G8"), ("AHV 10.0 · AOS 6.10", "6.10")
         for hi in range(host_count):
-            host_name = f"{cfg.key}-{cluster}-esx{hi + 1:02d}"
+            host_name = f"{cfg.key}-{cluster}-{tag}{hi + 1:02d}"
             host_rows.append({
                 "cluster": cluster,
                 "host": host_name,
@@ -71,7 +77,7 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
 
         vm_count = int(host_count * rnd.uniform(6, 10))
         for vi in range(vm_count):
-            host_name = f"{cfg.key}-{cluster}-esx{rnd.randint(1, host_count):02d}"
+            host_name = f"{cfg.key}-{cluster}-{tag}{rnd.randint(1, host_count):02d}"
             is_on = rnd.random() > 0.08
             vcpu = rnd.choice([2, 2, 4, 4, 4, 8, 8, 16])
             ram_gb = rnd.choice([4, 8, 8, 16, 16, 32, 64])

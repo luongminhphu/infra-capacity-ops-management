@@ -147,9 +147,18 @@ def sync_vcenter(db: Session, cfg: VCenterConfig, settings: Optional[Settings] =
 def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) -> SnapshotRun:
     started_at = dt.datetime.utcnow()
     try:
+        platform = getattr(cfg, "platform", "vmware")
         if cfg.demo:
             host_rows, vm_rows = demo_generator.collect_inventory(cfg)
             extras = demo_generator.collect_extras(cfg, host_rows, vm_rows)
+        elif platform in ("proxmox", "nutanix"):
+            from ..hypervisors import PLATFORM_LABELS, nutanix, proxmox
+            from ..storage import StorageError
+            try:
+                host_rows, vm_rows, extras = (proxmox if platform == "proxmox" else nutanix).collect(cfg)
+            except StorageError as exc:     # same failure path as a vCenter: the run is recorded with the error
+                raise vcenter_client.VCenterConnectionError(
+                    f"Không đọc được {PLATFORM_LABELS[platform]} '{cfg.name}' ({cfg.host}): {exc}") from exc
         else:
             # same session: inventory + datastores / snapshots / alarms / host health (read-only)
             host_rows, vm_rows, extras = vcenter_client.collect_inventory_full(cfg)

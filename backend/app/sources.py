@@ -21,8 +21,10 @@ from . import secrets_box
 
 logger = logging.getLogger("vco.sources")
 
-KINDS = ("vcenter", "netbackup", "pure", "netapp")
+KINDS = ("vcenter", "proxmox", "nutanix", "netbackup", "pure", "netapp")
 STORAGE_KINDS = ("pure", "netapp")
+# Hypervisor managers: one history family (snapshot runs keyed by the source key), so keys are unique across them.
+HYPERVISOR_KINDS = ("vcenter", "proxmox", "nutanix")
 NBU_DOMAIN_TYPES = ("unixpwd", "vx", "NT", "ldap", "msad")
 _KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
 _HOST_RE = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
@@ -67,11 +69,12 @@ def to_config(row: DataSource):
                              username=row.username or "", password=_secret(row, "password_enc"),
                              api_token=_secret(row, "api_key_enc"), verify_ssl=bool(row.verify_ssl), ca_pem=row.ca_pem or "",
                              demo=bool(row.demo), timeout=int(_opts(row).get("timeout") or 30))
-    if row.kind == "vcenter":
+    if row.kind in HYPERVISOR_KINDS:
+        from .hypervisors import KIND_PLATFORM
         return VCenterConfig(key=row.key, name=row.name, host=row.host, port=row.port, username=row.username or "",
                              password=_secret(row, "password_enc"), verify_ssl=bool(row.verify_ssl), demo=bool(row.demo),
                              ca_pem=row.ca_pem or "", origin="ui",
-                             timeout=_positive_int(_opts(row).get("timeout")))
+                             timeout=_positive_int(_opts(row).get("timeout")), platform=KIND_PLATFORM[row.kind])
     o = _opts(row)
     return NetBackupConfig(key=row.key, name=row.name, host=row.host, port=row.port,
                            api_key=_secret(row, "api_key_enc"), username=row.username or "",
@@ -108,7 +111,20 @@ def _merged(kind: str, settings: Settings) -> list:
 
 
 def vcenter_configs(settings: Settings) -> List[VCenterConfig]:
-    return _merged("vcenter", settings)
+    """Every hypervisor manager: VMware vCenter (UI + environment), Proxmox VE and Nutanix (UI only)."""
+    return _merged("vcenter", settings) + _merged("proxmox", settings) + _merged("nutanix", settings)
+
+
+def platform_of(key: Optional[str]) -> Optional[str]:
+    """vmware | proxmox | nutanix for a history key; None for imported data. A key no longer configured keeps
+    vmware (the only platform before Proxmox / Nutanix were added)."""
+    if not key or key == "import":
+        return None
+    from .config import get_settings
+    for c in vcenter_configs(get_settings()):
+        if c.key == key:
+            return getattr(c, "platform", "vmware")
+    return "vmware"
 
 
 def netbackup_configs(settings: Settings) -> List[NetBackupConfig]:
@@ -174,7 +190,8 @@ def apply_input(row: DataSource, data: Dict[str, Any], creating: bool) -> None:
     row.demo = bool(data.get("demo"))
     row.host = validate_host(data.get("host") or (f"{row.key}.demo.local" if row.demo else ""))
     try:
-        port = int(data.get("port") or (1556 if kind == "netbackup" else 443))
+        from .hypervisors import DEFAULT_PORTS
+        port = int(data.get("port") or (1556 if kind == "netbackup" else DEFAULT_PORTS.get(kind, 443)))
     except (TypeError, ValueError):
         raise SourceError("Cổng không hợp lệ.") from None
     if not 1 <= port <= 65535:
@@ -223,6 +240,17 @@ def apply_input(row: DataSource, data: Dict[str, Any], creating: bool) -> None:
         row.options = json.dumps({"timeout": _storage_timeout(data, row)})
         if not row.demo and not (row.username and row.password_enc):
             raise SourceError("Cần user + mật khẩu của tài khoản ONTAP role readonly (ứng dụng http).")
+    elif kind == "proxmox":
+        from .hypervisors.proxmox import TOKEN_ID
+        row.api_key_enc = None
+        if row.username and not TOKEN_ID.match(row.username):
+            raise SourceError("Token ID dạng user@realm!tên-token, vd ico@pve!monitor.")
+        if not row.demo and not (row.username and row.password_enc):
+            raise SourceError("Cần Token ID và Secret của API token Proxmox (role PVEAuditor).")
+    elif kind == "nutanix":
+        row.api_key_enc = None
+        if not row.demo and not (row.username and row.password_enc):
+            raise SourceError("Cần user + mật khẩu Prism Element role Viewer (chỉ đọc).")
     elif not row.demo and not (row.username and row.password_enc):
         raise SourceError("Cần user + mật khẩu của tài khoản vCenter chỉ đọc.")
     if "enabled" in data:
@@ -298,6 +326,13 @@ def test_connection(cfg, kind: str) -> str:
         from .storage import StorageError, netapp, pure
         try:
             return (pure if kind == "pure" else netapp).test(cfg)
+        except StorageError as exc:
+            raise SourceError(str(exc)) from exc
+    if kind in ("proxmox", "nutanix"):
+        from .hypervisors import nutanix, proxmox
+        from .storage import StorageError
+        try:
+            return (proxmox if kind == "proxmox" else nutanix).test(cfg)
         except StorageError as exc:
             raise SourceError(str(exc)) from exc
     if kind == "vcenter":

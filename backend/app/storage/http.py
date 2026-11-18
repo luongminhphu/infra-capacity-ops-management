@@ -1,4 +1,5 @@
-"""Small JSON client for the storage REST APIs: TLS (verify off / system store / pasted CA), no redirects
+"""Small JSON client for the read-only REST APIs (storage arrays, Proxmox VE, Nutanix Prism): TLS (verify off /
+system store / pasted CA), no redirects
 (a redirect would carry the token / Basic credentials to another host), bounded response size, Vietnamese
 errors that never contain the secret."""
 import json
@@ -17,7 +18,7 @@ ALLOWED_POSTS = ("/login", "/logout")          # Pure session endpoints only (re
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise StorageError(f"Máy chủ chuyển hướng ({code}) sang {urllib.parse.urlsplit(newurl).netloc or newurl} — "
-                           "nhập đúng địa chỉ quản trị của mảng lưu trữ.")
+                           "nhập đúng địa chỉ và cổng quản trị.")
 
 
 def ssl_context(cfg: StorageConfig) -> ssl.SSLContext:
@@ -36,16 +37,19 @@ def ssl_context(cfg: StorageConfig) -> ssl.SSLContext:
 
 
 class JsonClient:
-    def __init__(self, cfg: StorageConfig, base: str):
+    """`product` / `api_hint` only word the error messages ("mảng lưu trữ" / "Purity / ONTAP" by default)."""
+
+    def __init__(self, cfg: StorageConfig, base: str, product: str = "mảng lưu trữ", api_hint: str = "Purity / ONTAP"):
         self.cfg = cfg
         self.base = base.rstrip("/")
+        self.product, self.api_hint = product, api_hint
         self.headers: Dict[str, str] = {"Accept": "application/json"}
         self.opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context(cfg)), _NoRedirect())
 
     def request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
                 headers: Optional[Dict[str, str]] = None) -> Tuple[Any, Dict[str, str]]:
         if method != "GET" and not any(path.endswith(p) for p in ALLOWED_POSTS):
-            raise StorageError(f"Chặn lời gọi {method} {path}: ICO chỉ đọc dữ liệu mảng lưu trữ.")
+            raise StorageError(f"Chặn lời gọi {method} {path}: ICO chỉ đọc dữ liệu {self.product}.")
         url = path if path.startswith("https://") else self.base + path
         if params:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params, safe="=',|:<>*", quote_via=urllib.parse.quote)
@@ -67,7 +71,7 @@ class JsonClient:
             if exc.code == 403:
                 raise StorageError(f"Tài khoản không có quyền đọc {path.split('?')[0]} (403) — gán role chỉ đọc đủ quyền xem.") from exc
             if exc.code == 404:
-                raise StorageError(f"Không có API {path.split('?')[0]} (404) — kiểm tra phiên bản Purity / ONTAP hỗ trợ REST.") from exc
+                raise StorageError(f"Không có API {path.split('?')[0]} (404) — kiểm tra phiên bản {self.api_hint} hỗ trợ REST.") from exc
             raise StorageError(f"Lỗi API {exc.code} tại {path.split('?')[0]}.") from exc
         except urllib.error.URLError as exc:
             if isinstance(exc.reason, ssl.SSLCertVerificationError):

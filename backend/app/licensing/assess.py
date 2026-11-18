@@ -82,17 +82,21 @@ def host_license_row(h: Dict[str, Any], ws: Dict[str, Any], vm_core: Dict[str, A
     ws_floor_applied = ws_lic_cores > cores
 
     vmw_min = _i(vm_core.get("min_cores_per_cpu"), 16)
-    vmw_cores = max(cores, sockets * vmw_min) if cores > 0 else 0
+    # A Proxmox / Nutanix host needs no VMware license (Windows Server licensing still applies: physical cores).
+    not_vmware = h.get("platform") not in (None, "vmware")
+    vmw_cores = max(cores, sockets * vmw_min) if cores > 0 and not not_vmware else 0
     vmw_floor_applied = vmw_cores > cores
+    if not_vmware:
+        flags.append("not_vmware")
 
     legacy_cpu = None
-    if vm_legacy:
+    if vm_legacy and not not_vmware:
         per = _i(vm_legacy.get("cores_per_cpu_license"), 32)
         cores_per_socket = cores / sockets if sockets > 0 else cores
         legacy_cpu = sockets * _ceil_div(cores_per_socket, per) if cores > 0 else 0
 
     return {
-        "vcenterKey": h.get("vcenterKey"), "cluster": h.get("cluster"), "host": h.get("host"),
+        "vcenterKey": h.get("vcenterKey"), "platform": h.get("platform"), "cluster": h.get("cluster"), "host": h.get("host"),
         "vendor": h.get("vendor"), "model": h.get("model"), "esxiVersion": h.get("esxiVersion"), "esxiBuild": h.get("esxiBuild"),
         "cpuModel": h.get("cpuModel"), "sockets": sockets, "cores": cores, "threads": threads, "ramGB": h.get("ramGB"),
         "clusterHa": h.get("clusterHa"), "clusterDrs": h.get("clusterDrs"),
