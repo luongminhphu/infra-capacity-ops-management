@@ -35,9 +35,48 @@ def list_sources(user: User = Depends(require_admin), db: Session = Depends(get_
     ui_keys = {(r.kind, r.key) for r in rows}
     env = [sources.public_env(c, "vcenter", ("vcenter", c.key) in ui_keys) for c in s.env_vcenters()] + \
           [sources.public_env(c, "netbackup", ("netbackup", c.key) in ui_keys) for c in s.env_netbackups()]
-    return {"secretsKeyConfigured": secrets_box.dedicated_key(),
+    return {"secretsKeyConfigured": secrets_box.dedicated_key(), "secrets": secrets_box.status(db),
             "domainTypes": list(sources.NBU_DOMAIN_TYPES),
             "items": [sources.public(r) for r in rows] + env}
+
+
+@router.post("/rotate-secrets")
+def rotate_secrets(request: Request, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Re-encrypt now every secret still on a previous key (also done at each pod start)."""
+    if not secrets_box.dedicated_key():
+        raise HTTPException(409, "Chưa đặt SECRETS_KEY — thêm vào Secret rồi khởi động lại app.")
+    res = secrets_box.rotate(db)
+    db.add(AuditLog(username=user.username, action="secrets.rotate", client_ip=request.client.host if request.client else None,
+                    detail=json.dumps(res)))
+    db.commit()
+    sources.invalidate_cache()
+    return res
+
+
+@router.get("/orphans")
+def list_orphans(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from .. import orphans
+    return {"items": orphans.scan(db)}
+
+
+@router.post("/orphans/purge")
+async def purge_orphan(request: Request, data: Dict[str, Any] = Body(...), user: User = Depends(require_admin),
+                       db: Session = Depends(get_db)):
+    """Delete the history of a key no source uses any more. `confirm` must repeat the key."""
+    from fastapi.concurrency import run_in_threadpool
+    from .. import inbox, orphans
+    family, key = str(data.get("family") or ""), str(data.get("key") or "")
+    if not key or data.get("confirm") != key:
+        raise HTTPException(400, "Gõ lại đúng mã nguồn để xác nhận xoá.")
+    try:
+        res = await run_in_threadpool(orphans.purge, db, family, key)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    db.add(AuditLog(username=user.username, action="sources.orphan_purge", client_ip=request.client.host if request.client else None,
+                    detail=json.dumps({"family": family, "key": key, "deleted": res})))
+    db.commit()
+    inbox.invalidate()
+    return {"deleted": res, "rows": sum(res.values())}
 
 
 @router.post("")

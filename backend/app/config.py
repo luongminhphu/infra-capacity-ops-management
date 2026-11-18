@@ -249,7 +249,7 @@ class Settings(BaseSettings):
     sync_source_deadline_seconds: int = Field(default=1800)
     # vCenter snapshot history (runs, hosts, VMs, cluster aggregates, findings) older than this
     # many months is purged once a day; the latest successful run per vCenter is always kept. 0 = keep all.
-    snapshot_retention_months: int = Field(default=36)
+    snapshot_retention_months: int = Field(default=6)
 
     # Compliance / overcommit default thresholds (mirrors the original client-side policy)
     cpu_overcommit_max: float = 6.0
@@ -284,6 +284,9 @@ class Settings(BaseSettings):
     # (table data_sources, secrets encrypted with SECRETS_KEY). A UI source with the same key
     # replaces the variable-based one. vcenters() / netbackups() return the merged, enabled list.
     secrets_key: str = Field(default="")
+    # Former SECRETS_KEY value(s), comma separated, still accepted for reading while the stored secrets are
+    # re-encrypted with the new key at start-up (secrets_box.rotate). Remove once the pods have restarted.
+    secrets_key_previous: str = Field(default="")
 
     def vcenters(self) -> List[VCenterConfig]:
         from .sources import vcenter_configs

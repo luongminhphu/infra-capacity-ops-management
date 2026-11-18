@@ -364,10 +364,15 @@ def evaluate(a: DcAsset, links: List[Dict[str, Any]], today: dt.date, limit: int
 
     if a.removed:
         return {"months": months, "level": "ok", "reasons": [], "hw": hw, "lic": lic}
+    kept = extended_until(a, today)
+    if a.decision == "nocover" and kept is not None:
+        # Kept on purpose without a warranty / license contract: no age or coverage signal until the review date.
+        reasons.append("Không mua bảo hành" + (f" đến {kept.strftime('%m/%Y')}" if kept != dt.date.max else "")
+                       + (f" — {DECISION_REASONS[a.decision_reason].lower()}" if a.decision_reason in DECISION_REASONS else ""))
+        return {"months": months, "level": "ok", "reasons": reasons, "hw": hw, "lic": lic}
     if months is None:
         reasons.append("Thiếu ngày đưa vào sử dụng")
     elif months >= limit:
-        kept = extended_until(a, today)
         # Kept in use on purpose (over budget, still good …) and still under HW warranty: THEO DÕI until review.
         worse("warn" if kept is not None and hw["state"] == "active" else "bad")
         reasons.append(f"Đã dùng {age_text(months)} (≥ {age_text(limit)})")
@@ -415,7 +420,7 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
     links = opex_links(db, (a.serial_key for a in assets))
     hosts = _host_names(db)
     items = []
-    summary = {"total": 0, "removed": 0, "ge5": 0, "3to5": 0, "le3": 0, "unknown": 0, "crit": 0, "bad": 0, "warn": 0,
+    summary = {"total": 0, "removed": 0, "noCover": 0, "ge5": 0, "3to5": 0, "le3": 0, "unknown": 0, "crit": 0, "bad": 0, "warn": 0,
                "hwActive": 0, "hwNone": 0, "hwExpired": 0, "licActive": 0, "linked": 0}
     for a in assets:
         lk = links.get(a.serial_key or "", [])
@@ -431,6 +436,7 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
             summary["hwActive" if ev["hw"]["state"] == "active" else "hwExpired" if ev["hw"]["state"] == "expired" else "hwNone"] += 1
             summary["licActive"] += ev["lic"]["state"] == "active"
             summary["linked"] += bool(lk)
+            summary["noCover"] += a.decision == "nocover" and extended_until(a, today) is not None
         items.append({
             "id": a.id, "category": a.category, "categoryLabel": CATEGORY_LABELS[a.category], "business": a.business_function,
             "bizType": a.biz_type, "env": a.env, "deviceId": a.device_id, "brand": a.brand, "model": a.model, "serial": a.serial,
@@ -453,15 +459,16 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
 
 
 # ---------------------------------------------------------------- lifecycle decision (thay thế / dùng tiếp)
-DECISIONS = {"replace": "Thay thế", "extend": "Dùng tiếp, gia hạn Opex"}
+DECISIONS = {"replace": "Thay thế", "extend": "Dùng tiếp, gia hạn Opex", "nocover": "Dùng tiếp, không mua bảo hành"}
+KEEP_DECISIONS = ("extend", "nocover")          # kept in use instead of replaced
 DECISION_REASONS = {"budget": "Vượt ngân sách", "good": "Thiết bị còn tốt", "support": "Hãng còn hỗ trợ",
                     "project": "Chờ dự án / chuyển đổi khác", "other": "Lý do khác"}
 
 
 def extended_until(a: DcAsset, on: dt.date) -> Optional[dt.date]:
-    """The review date when the device is kept in use (decision "extend") on day `on`, else None.
+    """The review date when the device is kept in use ("extend" / "nocover") on day `on`, else None.
     No review date = kept until changed: date.max."""
-    if a.decision != "extend":
+    if a.decision not in KEEP_DECISIONS:
         return None
     until = a.decision_until or dt.date.max
     return until if until >= on else None
@@ -482,7 +489,7 @@ def set_decision(db: Session, assets: List[DcAsset], d: Dict[str, Any], username
     if decision not in (None, *DECISIONS):
         raise ImportError_("Quyết định không hợp lệ.")
     reason = d.get("reason") or None
-    if decision == "extend" and reason not in DECISION_REASONS:
+    if decision in KEEP_DECISIONS and reason not in DECISION_REASONS:
         raise ImportError_("Chọn lý do dùng tiếp (vượt ngân sách, còn tốt …).")
     until, ok = _date(d.get("until"))
     if not ok:
@@ -493,7 +500,7 @@ def set_decision(db: Session, assets: List[DcAsset], d: Dict[str, Any], username
         a.decision = decision
         a.decision_reason = reason if decision else None
         a.decision_note = note if decision else None
-        a.decision_until = until if decision == "extend" else None
+        a.decision_until = until if decision in KEEP_DECISIONS else None
         a.decision_by, a.decision_at = (username, now) if decision else (None, None)
     return len(assets)
 
@@ -562,7 +569,7 @@ def plan_suggestions(db: Session, year_start: dt.date, year_end: dt.date,
         due = _add_months(a.acquired_on, limit)
         kept = extended_until(a, year_start)
         if kept is not None and kept >= year_end:
-            if not any(o["status"] != "stopped" for o in hw_items(a)):
+            if a.decision == "extend" and not any(o["status"] != "stopped" for o in hw_items(a)):
                 extend[key].append(a)                # kept all year, nothing to renew: plan a new warranty Opex
             continue
         if kept is not None:                         # kept until a date inside the year: replace after it
@@ -607,7 +614,7 @@ def plan_suggestions(db: Session, year_start: dt.date, year_end: dt.date,
 def extend_serials(db: Session, asset_id: int, year_start: dt.date, year_end: dt.date) -> List[str]:
     """Serials of an "extend" plan line (for the Opex created when the plan is applied)."""
     return [a.serial for a in group_of(db, asset_id, year_end)
-            if a.serial and (extended_until(a, year_start) or dt.date.min) >= year_end][:50]
+            if a.serial and a.decision == "extend" and (extended_until(a, year_start) or dt.date.min) >= year_end][:50]
 
 
 # ---------------------------------------------------------------- manual entry (one device at a time)

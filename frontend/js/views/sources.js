@@ -53,11 +53,80 @@ async function loadSources() {
     const r = await apiRequest('/admin/sources');
     srcState.items = r.items;
     srcState.domainTypes = r.domainTypes;
-    $('#srcKeyWarning').classList.toggle('hidden', !!r.secretsKeyConfigured);
+    srcKeyBox(r);
     $('#btnSrcImportEnv').classList.toggle('hidden', !r.items.some(i => i.origin === 'env' && !i.replacedByUi));
     $('#srcTable tbody').innerHTML = r.items.length ? r.items.map(srcRow).join('')
       : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Máy chủ backup”, “+ Pure FlashArray” hoặc “+ NetApp ONTAP”.');
   } catch (err) { srcSetStatus(err.message, true); }
+  loadOrphans();
+}
+
+/* Encryption key of the stored secrets: missing SECRETS_KEY, secrets still on a previous key, unreadable ones. */
+function srcKeyBox(r) {
+  const box = $('#srcKeyWarning'), s = r.secrets || { current: 0, previous: 0, unreadable: 0 };
+  let html = '';
+  if (!r.secretsKeyConfigured) {
+    html = `<strong>Chưa đặt SECRETS_KEY.</strong> Mật khẩu / API key đang mã hoá bằng khoá suy ra từ JWT_SECRET.
+      Thêm <code>SECRETS_KEY</code> (vd <code>openssl rand -hex 32</code>) vào Secret <code>ico-secrets</code> rồi khởi động lại app:
+      mật khẩu đã lưu tự được mã hoá lại bằng khoá mới, không cần nhập lại.`;
+  } else if (s.previous) {
+    html = `<strong>${fmtInt(s.previous)} mật khẩu / API key còn mã hoá bằng khoá cũ.</strong> App tự mã hoá lại khi khởi động;
+      bấm để làm ngay. <button class="btn btn-secondary btn-sm" type="button" id="btnSrcRotate">Mã hoá lại ngay</button>`;
+  }
+  if (s.unreadable) {
+    html += `${html ? '<br>' : ''}<strong>${fmtInt(s.unreadable)} mật khẩu / API key không giải mã được</strong> (lưu bằng khoá không còn trong cấu hình) —
+      nhập lại ở nút Sửa của nguồn, kênh thông báo hoặc cấu hình AI tương ứng.`;
+  }
+  box.innerHTML = html;
+  box.classList.toggle('hidden', !html);
+  const b = $('#btnSrcRotate');
+  if (b) b.onclick = async () => {
+    b.disabled = true;
+    try { const x = await apiRequest('/admin/sources/rotate-secrets', { method: 'POST' }); srcSetStatus(`Đã mã hoá lại ${fmtInt(x.rotated)} mật khẩu / API key.`); await loadSources(); }
+    catch (err) { srcSetStatus(err.message, true); b.disabled = false; }
+  };
+}
+
+/* ---------- Data of sources no longer configured ---------- */
+async function loadOrphans() {
+  const mount = $('#srcOrphans');
+  if (!mount) return;
+  let r;
+  try { r = await apiRequest('/admin/sources/orphans'); } catch (err) { mount.innerHTML = uiError(err.message); return; }
+  const rows = r.items.map(o => `<tr>
+      <td><b>${esc(o.key)}</b><span class="muted-sub">${esc(o.familyLabel)}</span></td>
+      <td>${o.lastSeen ? uiDateTime(o.lastSeen, 'short') : '—'}</td>
+      <td class="num">${fmtInt(o.rows)}</td>
+      <td class="wrap">${esc(o.tables.map(t => `${t.label} ${fmtInt(t.rows)}`).join(' · '))}</td>
+      <td><button class="btn btn-ghost btn-sm btn-danger" type="button" data-orphan="${esc(o.family)}|${esc(o.key)}">Xoá dữ liệu</button></td></tr>`).join('');
+  mount.innerHTML = `<div class="panel-head src-orphans-head"><div><div class="panel-title" role="heading" aria-level="3">Dữ liệu mồ côi</div>
+      <p class="panel-sub">Lịch sử của mã nguồn không còn được cấu hình (đã xoá, đổi mã, dữ liệu DEMO cũ). Xoá nguồn chỉ ngắt kết nối,
+        dữ liệu vẫn giữ để nguồn thêm lại cùng mã dùng tiếp. Dữ liệu nhập tay (import) không nằm ở đây.</p></div></div>
+    ${r.items.length ? `<div class="table-scroll table-scroll-flat"><table class="data-table">
+      <caption class="sr-only">Dữ liệu của nguồn không còn cấu hình</caption>
+      <thead><tr><th>Mã nguồn</th><th>Đồng bộ cuối</th><th class="num">Số dòng</th><th>Gồm</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` : uiNote('Không có dữ liệu mồ côi — mọi lịch sử đều thuộc một nguồn đang cấu hình.')}`;
+}
+
+function purgeOrphanDialog(family, key) {
+  uiPanelDialog(`Xoá dữ liệu của “${esc(key)}”`, `
+    <p class="src-orphan-note">Xoá toàn bộ lịch sử của mã nguồn <b>${esc(key)}</b> (đồng bộ, VM / host, job backup, chuỗi số liệu…). Không hoàn tác được.
+      Báo cáo, xu hướng và snapshot license cũ dùng dữ liệu này sẽ không còn số liệu của nguồn đó.</p>
+    <label class="field"><span>Gõ lại mã nguồn để xác nhận</span><input id="orphanConfirm" autocomplete="off" placeholder="${esc(key)}"></label>`,
+  `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+   <button class="btn btn-secondary btn-sm btn-danger" type="button" id="orphanGo">Xoá dữ liệu</button>`);
+  $('#orphanGo').onclick = async () => {
+    const btn = $('#orphanGo');
+    btn.disabled = true;
+    uiSetStatus($('#spDialogMsg'), 'Đang xoá theo từng lô…');
+    try {
+      const x = await apiRequest('/admin/sources/orphans/purge', { method: 'POST', body: JSON.stringify({ family, key, confirm: $('#orphanConfirm').value.trim() }) });
+      $('#spDialog').close();
+      srcSetStatus(`Đã xoá ${fmtInt(x.rows)} dòng dữ liệu của ${key}.`);
+      loadOrphans();
+      if (typeof refreshVcenterList === 'function') refreshVcenterList();
+    } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); btn.disabled = false; }
+  };
 }
 
 /* ---------- Dialog ---------- */
@@ -137,6 +206,8 @@ function bindSourcesPanel() {
   if (!panel || panel.dataset.bound) return;
   panel.dataset.bound = '1';
   panel.addEventListener('click', async e => {
+    const orphan = e.target.closest('[data-orphan]');
+    if (orphan) { const [family, ...k] = orphan.dataset.orphan.split('|'); purgeOrphanDialog(family, k.join('|')); return; }
     const add = e.target.closest('[data-src-add]');
     if (add) { openSourceDialog(add.dataset.srcAdd); return; }
     const edit = e.target.closest('[data-src-edit]');

@@ -996,7 +996,7 @@
                 <button class="btn btn-primary btn-sm" type="button" data-src-add="vcenter"><i data-lucide="plus"></i>vCenter</button>
               </div>
             </div>
-            <div class="insight-box src-warning hidden" id="srcKeyWarning"><strong>Chưa đặt SECRETS_KEY.</strong> Mật khẩu / API key đang được mã hoá bằng khoá suy ra từ JWT_SECRET. Thêm <code>SECRETS_KEY</code> (vd <code>openssl rand -hex 32</code>) vào Secret <code>ico-secrets</code> rồi nhập lại mật khẩu; nếu đổi JWT_SECRET khi chưa có SECRETS_KEY, các mật khẩu đã lưu phải nhập lại.</div>
+            <div class="insight-box src-warning hidden" id="srcKeyWarning"></div>
             <div class="table-scroll table-scroll-flat">
               <table class="data-table" id="srcTable">
                 <thead><tr><th>Nguồn</th><th>Địa chỉ</th><th>Xác thực</th><th>Cấu hình từ</th><th>Kiểm tra gần nhất</th><th>Bật</th><th></th></tr></thead>
@@ -1004,6 +1004,7 @@
               </table>
             </div>
             <p class="criteria-status" id="srcStatus"></p>
+            <div id="srcOrphans" class="src-orphans"></div>
           </section>
 
           <dialog class="src-dialog" id="srcDialog" aria-labelledby="srcDialogTitle">

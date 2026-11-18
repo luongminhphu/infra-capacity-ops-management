@@ -493,6 +493,9 @@ tắt rule và thêm / sửa / xoá entitlement chỉ dành cho **quản trị v
     dòng này tạo Opex *Dự kiến* kèm danh sách SN, nên thiết bị tự ghép bảo hành;
   - *Dùng tiếp đến* rơi vào giữa năm kế hoạch → thiết bị quay lại dòng *Thay thế* từ ngày hôm sau;
   - thiết bị dùng tiếp còn bảo hành phần cứng hạ xuống THEO DÕI; không có bảo hành vẫn VƯỢT NGƯỠNG. Mọi quyết định ghi nhật ký.
+  - **Dùng tiếp, không mua bảo hành**: thiết bị dùng tiếp có chủ đích, không gia hạn bảo hành / license (vd chỉ chạy dữ
+    liệu lạnh, chờ thanh lý). Tới *Dùng tiếp đến*: mức AN TOÀN, không vào hộp việc / Discord, không có dòng Capex hay Opex
+    trong kế hoạch. Qua ngày đó thiết bị được đánh giá lại như thường (quay lại cảnh báo và dòng *Thay thế*).
 
 ### Inventory — lọc VM theo cluster & xuất Excel
 
@@ -1042,9 +1045,23 @@ sửa ConfigMap / Secret hay redeploy:
 - Thay đổi có hiệu lực ở lần đồng bộ kế tiếp (lịch đồng bộ đọc lại danh sách nguồn mỗi chu kỳ). Tắt hoặc
   xoá một nguồn chỉ dừng đồng bộ; dữ liệu lịch sử vẫn giữ.
 
-**`SECRETS_KEY`**: thêm vào Secret `ico-secrets` (`openssl rand -hex 32`) trước khi nhập mật khẩu. Khi chưa
-đặt, app dùng khoá suy ra từ `JWT_SECRET` và hiện cảnh báo; đổi khoá nào thì các mật khẩu đã lưu phải nhập
-lại (trang Cài đặt báo "không giải mã được").
+**`SECRETS_KEY`**: thêm vào Secret `ico-secrets` (`openssl rand -hex 32`). Khi chưa đặt, app dùng khoá suy ra từ
+`JWT_SECRET` và hiện cảnh báo.
+- **Đặt `SECRETS_KEY` lần đầu không cần nhập lại mật khẩu**: app vẫn đọc được mật khẩu lưu bằng khoá cũ và, mỗi lần
+  khởi động, mã hoá lại mọi bí mật đã lưu (mật khẩu / API key nguồn, mật khẩu SMTP, webhook Discord, API key AI) bằng
+  `SECRETS_KEY`. Trang Nguồn dữ liệu hiện số bí mật còn ở khoá cũ và nút **Mã hoá lại ngay**. Sau đó đổi `JWT_SECRET`
+  không còn ảnh hưởng.
+- **Đổi `SECRETS_KEY`**: đặt giá trị mới, đưa giá trị cũ vào `SECRETS_KEY_PREVIOUS` (nhiều giá trị cách bằng dấu phẩy),
+  khởi động lại; khi trang Nguồn dữ liệu không còn báo "khoá cũ", xoá `SECRETS_KEY_PREVIOUS`.
+- Trong lúc rollout, pod bản cũ chưa có khoá mới có thể không đọc được bí mật vừa mã hoá lại cho tới khi được thay.
+- Bí mật lưu bằng khoá không còn trong cấu hình được báo "không giải mã được" và phải nhập lại.
+
+**Dữ liệu mồ côi** (cuối trang Nguồn dữ liệu, admin): mã nguồn còn lịch sử nhưng không còn được cấu hình (đã xoá, đổi
+mã, dữ liệu DEMO cũ), kèm số dòng từng loại và lần đồng bộ cuối. **Xoá dữ liệu** (gõ lại mã nguồn để xác nhận) xoá theo
+lô: lịch sử vCenter (VM / host / cluster / phát hiện / lần đồng bộ, datastore, snapshot, alarm, sức khoẻ host, phân loại
+HĐH sửa tay, phạm vi backup), job / policy / disk pool NetBackup, mảng / volume / alert storage và chuỗi số liệu. Không
+xoá được mã của nguồn đang cấu hình (kể cả nguồn đang tắt); dữ liệu import không thuộc nguồn nào nên không nằm ở đây.
+Mọi lần xoá ghi nhật ký.
 
 **`JWT_SECRET`** bắt buộc là chuỗi ngẫu nhiên dài (`openssl rand -hex 32`): app từ chối khởi động khi giá
 trị trống, ngắn hơn 16 ký tự hoặc trùng giá trị mẫu trong `.env.example` / `02-secret.example.yaml`.
@@ -1425,11 +1442,15 @@ bằng bulk insert. NetBackup: chi tiết policy đọc song song 8 luồng, job
 - Biểu đồ xu hướng và dự báo "còn bao lâu thì hết công suất" (`/api/dashboard/trend`) lấy **một snapshot mỗi
   ngày cho mỗi cluster** (lần poll thành công cuối ngày), giống trang Xu hướng & biến động. Bản trước 16/11/2026
   cộng mọi lần poll trong ngày (cả đồng bộ tay, import, run lỗi), nên tổng bị phóng to theo số lần poll và dự báo lệch.
-- **Giữ lịch sử 36 tháng** (`SNAPSHOT_RETENTION_MONTHS`, mặc định 36; `0` = giữ hết): mỗi ngày một lần,
-  sau lượt poll, app xoá các `SnapshotRun` (kèm host, VM, tổng hợp cluster, finding) bắt đầu trước mốc
-  36 tháng. Lượt thành công mới nhất của mỗi vCenter (và của import) luôn được giữ, kể cả khi đã cũ.
-  Xoá theo lô 20 run, mỗi lô một transaction, nên lần dọn đầu trên DB lớn không khoá bảng lâu. Số dòng
-  đã xoá ghi trong log `vco.retention`. Báo cáo xu hướng dài hơn 36 tháng sẽ không còn dữ liệu cũ.
+- **Giữ lịch sử 6 tháng** (`SNAPSHOT_RETENTION_MONTHS`, mặc định 6 từ 18/11/2026, trước đó 36; `0` = giữ hết):
+  mỗi ngày một lần, sau lượt poll, app xoá các `SnapshotRun` (kèm host, VM, tổng hợp cluster, finding) bắt đầu
+  trước mốc 6 tháng. Lượt thành công mới nhất của mỗi vCenter (và của import) luôn được giữ, kể cả khi đã cũ.
+  Xoá theo lô 20 run, mỗi lô một transaction, tối đa 60 giây mỗi lượt; phần còn lại xoá ở chu kỳ poll sau cho tới khi
+  xong, nên lần dọn đầu sau khi giảm từ 36 xuống 6 tháng không khoá bảng lâu. Số dòng đã xoá ghi trong log
+  `vco.retention`. Xu hướng, dự phóng quy hoạch và biến động VM chỉ còn tối đa 6 tháng dữ liệu snapshot; chuỗi số
+  liệu datastore / storage theo ngày vẫn giữ 3 năm (`METRICS_DAILY_DAYS`). PostgreSQL dùng lại chỗ trống sau khi
+  xoá (autovacuum); muốn trả dung lượng đĩa thì chạy `VACUUM (FULL)` các bảng `vm_snapshots`, `host_snapshots`
+  trong giờ bảo trì (khoá bảng trong lúc chạy).
 - `lastActivityDays`/`powerOffDays` của VM được tính dựa trên **lịch sử polling của chính ứng
   dụng** (vCenter API không trả trực tiếp "đã tắt bao lâu") — nghĩa là ngay sau khi triển khai lần
   đầu, các chỉ số này sẽ cần vài chu kỳ polling để chính xác dần theo thời gian thực tế.

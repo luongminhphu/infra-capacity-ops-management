@@ -154,7 +154,7 @@ def ensure_schema() -> None:
 
 # CHECK constraints replaced by a wider one under a new name (the new one is added by _ensure_checks):
 # dropping the old one never breaks a pod of the previous release, whose values the new one still allows.
-RETIRED_CHECKS = (("budget_plan_lines", "ck_bpl_source"),)
+RETIRED_CHECKS = (("budget_plan_lines", "ck_bpl_source"), ("dc_assets", "ck_dc_asset_decision"))
 
 
 def _drop_retired_checks() -> None:
