@@ -108,6 +108,13 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
    `backup/analysis`, `spend/budget_plan`) thì phải có test trong `backend/tests/` với số liệu cụ thể. Chạy
    `python -m pytest tests -q` trước khi kết thúc.
 
+## Lộ trình ICO v2
+
+Thiết kế đã chốt: `docs/design/ico-v2-plan.md` (sổ CI + khoá chuẩn, hệ thống & owner, rà soát 6 tháng, Dell OME, kho sự kiện,
+ServiceDesk Plus, kế hoạch năm sau). Mỗi giai đoạn là **một PR**, làm tuần tự theo `docs/design/ico-v2-prompts.md`
+(dán *Phần chung* ở đầu mỗi prompt). Ngoại lệ chỉ đọc mới (OME session, vSphere Automation session) chỉ hợp lệ khi đúng mục 5
+của kế hoạch và được thêm vào quy tắc 1 trong cùng PR. Đánh dấu tiến độ bằng cách ghi số PR vào bảng lộ trình (mục 6).
+
 ## Skill của dự án (`.claude/skills/`)
 
 - `vmware-collector` — đọc vCenter bằng pyVmomi, demo generator, scheduler.
