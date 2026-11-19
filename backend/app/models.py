@@ -35,6 +35,8 @@ class User(Base):
     spend_role_source = Column(String(8), nullable=True)
     # Bumped to sign the account out everywhere (passkey revoked / deleted): sessions carry it as "sv".
     session_version = Column(Integer, nullable=False, default=0)
+    # Hệ thống & Owner: may create / edit systems and assign VMs (set by an admin; admins always may).
+    owner_admin = Column(Boolean, nullable=False, default=False)
 
 
 class ApiToken(Base):
@@ -884,8 +886,7 @@ _json(HostHealthState.issues, list, "Cảm biến bất thường", nullable=Fal
 
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
 from .spend import models as _spend_models  # noqa: E402,F401
-# CI registry (ICO v2 G1).
+# CI registry (ICO v2 G1) and Hệ thống & Owner (G2).
 from .cmdb import models as _cmdb_models  # noqa: E402,F401
+from .owners import models as _owners_models  # noqa: E402,F401
 
-_json(_cmdb_models.Ci.attrs, dict, "Thuộc tính CI", nullable=False)
-_json(_cmdb_models.CiLink.attrs, dict, "Thuộc tính liên kết CI", nullable=False)

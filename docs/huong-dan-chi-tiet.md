@@ -586,6 +586,29 @@ Thẻ đối tượng (Ctrl + K → chọn một kết quả) đọc từ sổ C
 - **Hỏi ICO** có hai công cụ chỉ đọc: `ci_lookup` (tìm trong sổ CI theo tên / khoá) và `ci_impact` (tác động down / up).
 - API: `GET /api/ci/{id}/impact?direction=down|up&depth=1..4` (tối đa 5.000 đối tượng; mục `truncated` báo đã rút gọn).
 
+### Hệ thống & Owner (ICO v2 G2a)
+
+**Quản lý thông tin → Hệ thống & Owner**: mỗi VM thuộc tối đa một **hệ thống** nghiệp vụ; mỗi hệ thống có **owner** là Team Lead
+đại diện nhóm dự án / phòng ban (email đăng nhập Microsoft Entra, UPN).
+
+- **Hệ thống**: mã `SYS-0001` (tự cấp, không dùng lại), tên (không trùng, không phân biệt hoa thường / dấu cách), dự án, phòng ban,
+  owner (email + tên), người thay thế, quản lý trực tiếp (để leo thang ở đợt rà soát G3), trung tâm chi phí, **mức độ quan trọng**
+  1–4 (1 = quan trọng nhất), **môi trường** prod / uat / dev / dr / other. Email lưu chữ thường và kiểm định dạng. Lọc theo owner,
+  phòng ban, mức quan trọng, môi trường; bấm một dòng để xem VM của hệ thống, sửa, bỏ gán VM.
+- **Gán VM**: trên thẻ VM (*Gán hệ thống* / *Đổi hệ thống*) hoặc tab **VM chưa có owner** (chọn nhiều VM → *Gán vào hệ thống*).
+  VM đã được gán tay vào hệ thống khác thì bị chặn, trừ khi chọn *Chuyển sang hệ thống này*. Gán tay luôn thắng gán tự động
+  (thuộc tính vCenter, quy tắc — từ G2b); gán tay đè lên gán tự động không cần xác nhận.
+- **Tab VM chưa có owner**: tỷ lệ VM có owner (VM đang hoạt động trong sổ CI thuộc hệ thống có email owner), số VM chưa thuộc hệ
+  thống, số VM thuộc hệ thống chưa có owner, danh sách VM chưa thuộc hệ thống.
+- **Nhập / xuất Excel** (cùng một mẫu — bấm *Xuất Excel* để lấy mẫu):
+  - sheet **Hệ thống**: Mã · Tên hệ thống · Dự án · Phòng ban · Owner (email) · Tên owner · Người thay thế (email) · Quản lý trực tiếp
+    (email) · Mức độ quan trọng · Môi trường · Ghi chú. Để trống mã → tạo mới (hoặc cập nhật hệ thống cùng tên); có mã → cập nhật.
+  - sheet **VM**: VM · vCenter · Hệ thống (mã hoặc tên). Dòng VM là gán tay (chuyển VM nếu đang ở hệ thống khác).
+  - *Kiểm tra* trước (không ghi) → *Nhập*: dòng lỗi (email sai, mã không tồn tại, VM không có trong dữ liệu mới nhất, VM có ở nhiều
+    vCenter mà không ghi vCenter, hệ thống của dòng VM bị lỗi) được liệt kê và bỏ qua; các dòng còn lại ghi trong một giao dịch.
+- **Quyền**: mọi người dùng xem được; tạo / sửa / xoá hệ thống, gán VM, nhập Excel cần quyền **Quản trị Hệ thống & Owner**
+  (Cài đặt → Người dùng & quyền, mặc định chỉ admin). Mọi thay đổi ghi nhật ký (`owners.*`; đổi owner: `owners.system.owner_change`).
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh

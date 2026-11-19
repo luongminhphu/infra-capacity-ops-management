@@ -37,6 +37,10 @@ const PAGES = [
       desc: 'Biến động CPU/RAM so với ngưỡng overcommit giữa các snapshot và danh sách VM thêm / bớt / đổi cấu hình.', scope: ['vcenter', 'cluster', 'host'] },
     { id: 'inventory', view: 'inventory', icon: 'server', label: 'Host & VM', title: 'Host & VM',
       desc: 'Danh sách ESXi host và VM đã đồng bộ hoặc import, kèm mức sử dụng; xuất Excel theo bộ lọc.', scope: ['vcenter', 'cluster', 'host', 'footprint'] },
+    { id: 'systems', view: 'owners', sub: 'systems', icon: 'users', label: 'Hệ thống & Owner', title: 'Hệ thống & Owner',
+      desc: 'Hệ thống nghiệp vụ, owner (Team Lead) và VM thuộc từng hệ thống; nhập / xuất Excel.', scope: [] },
+    { id: 'systems-unowned', view: 'owners', sub: 'unowned', icon: 'user-x', label: 'VM chưa có owner', title: 'VM chưa có owner',
+      desc: 'VM trong sổ CI chưa thuộc hệ thống nào và tỷ lệ phủ owner.', scope: [] },
     { id: 'dc-assets', view: 'dcassets', icon: 'server-cog', label: 'Thiết bị Data Center', title: 'Thiết bị Data Center',
       desc: 'Danh sách thiết bị nhập từ Excel: tuổi theo chính sách 5 năm, bảo hành phần cứng và license / firmware ghép theo số serial với Opex.', scope: [] },
     { id: 'lic-hardware', view: 'licensing', sub: 'hardware', icon: 'cpu', label: 'ESXi & phần cứng', title: 'ESXi & phần cứng',
@@ -139,6 +143,7 @@ const MENU = [
   { label: 'Quản lý thông tin', entries: [
     { key: 'assets', label: 'Tài sản', icon: 'server', tabs: [
       ['dc-assets', '', 'Thiết bị Data Center'], ['inventory', 'inventory', 'Host & VM'], ['lic-hardware', 'hardware', 'ESXi & phần cứng'], ['lic-os', 'os', 'Hệ điều hành']] },
+    { key: 'owners', label: 'Hệ thống & Owner', icon: 'users', tabs: [['systems', '', 'Hệ thống'], ['systems-unowned', 'unowned', 'VM chưa có owner']] },
     { key: 'license', label: 'License', icon: 'badge-check', tabs: [
       ['lic-assess', '', 'Đánh giá & quyền sử dụng'], ['lic-snapshots', 'snapshots', 'Snapshot']] },
     { key: 'budget', label: 'Ngân sách & chi phí', icon: 'wallet', tabs: [
@@ -203,6 +208,9 @@ const VIEWS = {
   } },
   inventory: { section: '#viewInventory', render: () => renderInventoryView() },
   dcassets: { section: '#viewDcAssets', render: () => callIf('renderDcAssetsView') },
+  owners: { section: '#viewOwners', render: () => callIf('renderOwnersView'),
+    sub: { get: () => (typeof osState !== 'undefined' && osState.sub) || 'systems',
+           set: (s) => { if (typeof osState !== 'undefined') osState.sub = s || 'systems'; }, fallback: 'systems' } },
   whatif: { section: '#viewWhatif', render: () => renderWhatifView() },
   planning: { section: '#viewPlanning' },                       // static form bound once in app.js
   sizing: { section: '#viewSizing', render: () => callIf('renderSizingView') },

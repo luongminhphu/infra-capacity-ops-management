@@ -217,6 +217,8 @@ async function renderUsersSettings(force) {
   catch (err) { mount.innerHTML = `${uiError(err.message)}`; return; }
   const src = { local: 'Cục bộ', entra: 'Microsoft Entra ID' };
   const spendCol = !!(users.spend && users.spend.on);
+  const ownerCell = (u) => u.isAdmin ? '<span class="muted-sub">Có (admin)</span>'
+    : `<label class="infra-check"><input type="checkbox" data-au-owner="${esc(u.id)}"${u.ownerAdmin ? ' checked' : ''} aria-label="Quản trị Hệ thống &amp; Owner cho ${esc(u.username)}"> Quản trị</label>`;
   mount.innerHTML = `
     <div class="au-create">
       <label class="field"><span>Tên đăng nhập</span><input id="auNewUser" maxlength="64" placeholder="vd nguyen.van.a"></label>
@@ -224,16 +226,16 @@ async function renderUsersSettings(force) {
       <button class="btn btn-primary btn-sm" type="button" id="auCreate" title="Tạo tài khoản cục bộ đăng nhập bằng passkey; gửi link mời cho người dùng"><i data-lucide="user-plus"></i>Tạo tài khoản (passkey)</button></div>
     <p class="criteria-status" id="auMsg" role="status"></p>
     <div id="auInvite"></div>
-    <div class="table-scroll"><table class="data-table"><thead><tr><th>Tài khoản</th><th>Nguồn</th><th>Mật khẩu</th><th class="num">Passkey</th>${spendCol ? '<th>Chi phí &amp; HĐ</th>' : ''}<th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>Tài khoản</th><th>Nguồn</th><th>Mật khẩu</th><th class="num">Passkey</th>${spendCol ? '<th>Chi phí &amp; HĐ</th>' : ''}<th>Hệ thống &amp; Owner</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
       ${users.items.map(u => `<tr><td><b>${esc(u.username)}</b>${u.displayName ? `<span class="muted-sub">${esc(u.displayName)}</span>` : ''}${u.isAdmin ? ' <span class="badge-admin">Admin</span>' : ''}</td>
         <td>${esc(src[u.source] || u.source)}</td><td>${u.source === 'local' ? (u.hasPassword ? 'Có' : 'Không') : '—'}</td>
         <td class="num">${u.source === 'local' ? esc(u.passkeys) : '—'}${u.inviteExpiresAt ? `<span class="muted-sub">link mời hạn ${esc(spTimeSafe(u.inviteExpiresAt))}</span>` : ''}</td>
-        ${spendCol ? `<td>${usersRoleCell(u, users.spend.roles)}</td>` : ''}
+        ${spendCol ? `<td>${usersRoleCell(u, users.spend.roles)}</td>` : ''}<td>${ownerCell(u)}</td>
         <td>${esc(u.lastLoginAt ? spTimeSafe(u.lastLoginAt) : '—')}</td>
         <td>${u.source === 'local' ? `<button class="btn btn-ghost btn-sm" type="button" data-au-invite="${esc(u.id)}">Link mời passkey</button>
           ${u.passkeys ? `<button class="btn btn-ghost btn-sm" type="button" data-au-keys="${esc(u.id)}" data-au-name="${esc(u.username)}">Passkey…</button>` : ''}` : ''}</td></tr>`).join('')}
     </tbody></table></div>
-    <p class="panel-sub">${spendCol ? 'Vai trò Chi phí: Xem — đọc dữ liệu; Biên tập — tạo / sửa / gia hạn; Duyệt — xác nhận khoản dự kiến. Tài khoản Entra lấy vai trò từ app role ICO.Spend.*. ' : ''}Đổi vai trò có hiệu lực ở lần tải trang kế tiếp của người dùng đó; mọi thay đổi được ghi nhật ký.</p>`;
+    <p class="panel-sub">${spendCol ? 'Vai trò Chi phí: Xem — đọc dữ liệu; Biên tập — tạo / sửa / gia hạn; Duyệt — xác nhận khoản dự kiến. Tài khoản Entra lấy vai trò từ app role ICO.Spend.*. ' : ''}Quản trị Hệ thống &amp; Owner: tạo / sửa hệ thống, gán VM, nhập Excel. Đổi vai trò có hiệu lực ở lần tải trang kế tiếp của người dùng đó; mọi thay đổi được ghi nhật ký.</p>`;
   refreshIcons();
   const msg = (t, tone) => uiSetStatus('#auMsg', t, tone || 'ok');
   const showInvite = (r, who) => {
@@ -267,6 +269,14 @@ async function renderUsersSettings(force) {
     } catch (err) { msg(err.message, 'error'); }
   }; });
   mount.onchange = async (e) => {
+    const own = e.target.closest('[data-au-owner]');
+    if (own) {
+      try {
+        await apiRequest(`/admin/users/${encodeURIComponent(own.dataset.auOwner)}/owner-admin`, { method: 'PUT', body: JSON.stringify({ ownerAdmin: own.checked }) });
+        msg(own.checked ? 'Đã cấp quyền quản trị Hệ thống & Owner.' : 'Đã bỏ quyền quản trị Hệ thống & Owner.');
+      } catch (err) { msg(err.message, 'error'); renderUsersSettings(true); }
+      return;
+    }
     const sel = e.target.closest('[data-au-role]');
     if (!sel) return;
     try {

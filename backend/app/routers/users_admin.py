@@ -2,6 +2,7 @@
 local accounts without a password (passkey invite link); Cài đặt → Đăng nhập & bảo mật: the sign-in /
 App Proxy configuration as the server sees it."""
 import datetime as dt
+import json
 import os
 import re
 from typing import Any, Dict
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from .. import passkeys
 from ..config import get_settings
 from ..database import get_db
-from ..models import PasskeyInvite, User, UserPasskey
+from ..models import AuditLog, PasskeyInvite, User, UserPasskey
 from ..security import is_admin, require_admin
 from ..features import get_features, is_on
 from ..spend import service
@@ -37,7 +38,8 @@ def _user_out(u: User, n_keys: int, invite) -> Dict[str, Any]:
             "lastLoginAt": to_iso_utc(u.last_login_at) if u.last_login_at else None,
             "inviteExpiresAt": to_iso_utc(invite.expires_at) if invite else None,
             # Module roles on the same page (changed through /api/spend/admin/users/{id}/role, audited there).
-            "spendRole": u.spend_role or "none", "spendRoleSource": u.spend_role_source}
+            "spendRole": u.spend_role or "none", "spendRoleSource": u.spend_role_source,
+            "ownerAdmin": bool(u.owner_admin)}
 
 
 @router.get("/users")
@@ -136,3 +138,20 @@ def auth_status(request: Request, admin: User = Depends(require_admin)):
     return {"authMode": s.auth_mode, "localMethod": s.auth_local_method, "entraEnabled": s.entra_enabled(), "entraAutoRedirect": s.entra_auto_redirect,
             "publicUrl": s.public_base(), "redirectUri": s.oidc_redirect_uri(), "rpId": rp_id, "origin": origin,
             "secureCookies": s.secure_cookies(), "breakglass": s.breakglass(), "request": seen, "checks": checks}
+
+
+@router.put("/users/{user_id}/owner-admin")
+def set_owner_admin(user_id: int, request: Request, data: Dict[str, Any] = Body(...), admin: User = Depends(require_admin),
+                    db: Session = Depends(get_db)):
+    """Quyền quản trị Hệ thống & Owner (tạo / sửa hệ thống, gán VM, nhập Excel). Admins always have it."""
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(404, "Không tìm thấy người dùng.")
+    on = data.get("ownerAdmin")
+    if not isinstance(on, bool):
+        raise HTTPException(422, "ownerAdmin phải là true / false.")
+    before, target.owner_admin = bool(target.owner_admin), on
+    db.add(AuditLog(username=admin.username, action="owners.user.admin", client_ip=request.client.host if request.client else None,
+                    detail=json.dumps({"target": target.username, "ownerAdmin": [before, on]})))
+    db.commit()
+    return {"ok": True, "ownerAdmin": on}

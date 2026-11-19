@@ -18,6 +18,7 @@ class UserOut(BaseModel):
     display_name: Optional[str] = None
     is_admin: bool = False
     spend_role: str = "none"     # effective role in Chi phí & Hợp đồng: none|viewer|editor|approver|admin
+    owner_admin: bool = False    # may manage Hệ thống & Owner (admins always may)
 
 
 class ImportPayload(BaseModel):

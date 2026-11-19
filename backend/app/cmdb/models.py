@@ -85,3 +85,10 @@ class CiLink(Base):
     first_seen = Column(DateTime, nullable=False, default=utcnow)
     last_seen = Column(DateTime, nullable=False, default=utcnow)
     attrs = Column(Text, nullable=False, default="{}")          # JSON object, e.g. {"matchedBy": "ip"}
+
+
+# JSON kept in Text columns is checked on every ORM write (shared/stored_text.py), like spend/models.py.
+from ..shared.stored_text import json_column as _json  # noqa: E402
+
+_json(Ci.attrs, dict, "Thuộc tính CI", nullable=False)
+_json(CiLink.attrs, dict, "Thuộc tính liên kết CI", nullable=False)

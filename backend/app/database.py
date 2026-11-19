@@ -73,6 +73,7 @@ def ensure_schema() -> None:
             ("email", "VARCHAR(255)"), ("last_login_at", "TIMESTAMP"),
             ("is_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ("spend_role", "VARCHAR(16) NOT NULL DEFAULT 'none'"), ("spend_role_source", "VARCHAR(8)"),
+            ("owner_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ("session_version", "INTEGER NOT NULL DEFAULT 0"),
         ],
     }
