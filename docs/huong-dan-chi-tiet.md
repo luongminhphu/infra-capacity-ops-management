@@ -609,6 +609,27 @@ Thẻ đối tượng (Ctrl + K → chọn một kết quả) đọc từ sổ C
 - **Quyền**: mọi người dùng xem được; tạo / sửa / xoá hệ thống, gán VM, nhập Excel cần quyền **Quản trị Hệ thống & Owner**
   (Cài đặt → Người dùng & quyền, mặc định chỉ admin). Mọi thay đổi ghi nhật ký (`owners.*`; đổi owner: `owners.system.owner_change`).
 
+### Gán owner tự động — thuộc tính vCenter và quy tắc (ICO v2 G2b)
+
+Sau mỗi vòng đồng bộ (pod leader, ngay sau bộ dựng sổ CI) ICO gán VM vào hệ thống theo thứ tự ưu tiên
+**gán tay → thuộc tính vCenter → (vSphere tag, G2d) → quy tắc → ServiceDesk (G7)**. Gán tay không bao giờ bị đổi; ICO chỉ thêm /
+đổi / bỏ các gán do chính nó tạo (nguồn *Thuộc tính vCenter*, *Quy tắc*).
+
+- **Dữ liệu vCenter mới** (cùng phiên đọc, PropertyCollector theo lô — không có lệnh ghi nào): thư mục của VM (`folder_path`, vd
+  `/Projects/CoreBanking/App`, bỏ thư mục ẩn `vm` của datacenter), resource pool (`Resources` gốc của cluster → trống), custom attribute
+  (`custom_attrs`, tên lấy từ CustomFieldsManager). Proxmox / Nutanix: trống. Lưu ở `vm_snapshots`, đưa vào thuộc tính CI của VM.
+- **Cài đặt → Owner** (admin hoặc Quản trị Hệ thống & Owner):
+  - *Thuộc tính vCenter dùng làm nguồn*: tên custom attribute chứa hệ thống (mặc định `System` — mã SYS-… hoặc tên) và chứa email
+    owner (mặc định `Owner` — khớp khi đúng một hệ thống có owner đó). Để trống để không dùng.
+  - *Quy tắc* áp dụng từ trên xuống, quy tắc đầu tiên khớp thắng: **Thư mục vCenter** (khớp cả thư mục con, không phân biệt hoa thường),
+    **Resource pool**, **Cluster** (đúng tên), **Thuộc tính vCenter** (`Tên=giá trị`), **Tên VM (regex)** — tối đa 200 ký tự, không nhận
+    lượng từ lồng nhau (`(a+)+`) hay tham chiếu ngược để tránh treo.
+  - **Chạy thử**: tính với quy tắc đang sửa (chưa lưu) — số VM được gán mới, đổi hệ thống, bỏ gán, giữ gán tay, còn chưa có hệ thống, kèm
+    danh sách. **Lưu & áp dụng** ghi đúng kết quả đó ngay.
+  - **Đề xuất cần duyệt**: thuộc tính trỏ tới hệ thống / email owner chưa có trong ICO. ICO không tự tạo hệ thống; bấm *Tạo hệ thống*
+    (sửa tên / owner / phòng ban) thì VM được gán ngay, hoặc *Bỏ qua*.
+- Log vòng poll có `owners_add`, `owners_change`, `owners_remove`; mỗi lần đổi ghi nhật ký `owners.rules.apply`.
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh

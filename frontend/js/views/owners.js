@@ -308,3 +308,152 @@ function osBind() {
     if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); osOpen(Number(row.dataset.osId)); }
   });
 }
+
+/* ---------------------------------------------------------------- Cài đặt → Owner (G2b): attributes, rules, proposals */
+const orState = { data: null, rules: [], systems: [], attrs: { system: '', owner: '' }, preview: null, proposals: [] };
+
+async function renderOwnerSettings() {
+  const mount = $('#ownerSettingsMount');
+  if (!mount) return;
+  if (!osCan()) { mount.innerHTML = uiNote('Cần quyền quản trị Hệ thống & Owner (Cài đặt → Người dùng & quyền).'); return; }
+  mount.innerHTML = uiLoading();
+  try {
+    const [d, sys, props] = await Promise.all([apiRequest('/systems/rules'), apiRequest('/systems?limit=500'), apiRequest('/systems/proposals')]);
+    orState.data = d; orState.rules = d.rules.map(r => ({ ...r })); orState.attrs = { ...d.attributes };
+    orState.systems = sys.items; orState.proposals = props.items; orState.preview = null;
+  } catch (err) { mount.innerHTML = uiError(err.message); return; }
+  orRender();
+}
+
+function orRuleRow(r, i) {
+  const opt = (v, t, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`;
+  const hint = { folder: '/Projects/CoreBanking', resource_pool: 'RP-Web', cluster: 'PROD-CLUSTER-A', attribute: 'Phòng ban=Tài chính', name_regex: '^web-\\d+$' }[r.matchKind] || '';
+  return `<tr data-or-row="${i}"><td class="num">${i + 1}</td>
+    <td><select data-or-f="matchKind" aria-label="Loại quy tắc ${i + 1}">${orState.data.kinds.map(k => opt(k.value, k.label, r.matchKind)).join('')}</select></td>
+    <td><input data-or-f="pattern" maxlength="200" value="${esc(r.pattern || '')}" placeholder="${esc(hint)}" aria-label="Giá trị so khớp ${i + 1}"></td>
+    <td><select data-or-f="systemId" aria-label="Hệ thống ${i + 1}">${orState.systems.map(s => opt(s.id, `${s.code} — ${s.name}`, r.systemId)).join('')}</select></td>
+    <td><label class="infra-check"><input type="checkbox" data-or-f="enabled"${r.enabled !== false ? ' checked' : ''}> Bật</label></td>
+    <td class="or-actions"><button class="btn btn-ghost btn-sm" type="button" data-or-up="${i}" aria-label="Lên"${i ? '' : ' disabled'}><i data-lucide="arrow-up"></i></button>
+      <button class="btn btn-ghost btn-sm" type="button" data-or-down="${i}" aria-label="Xuống"${i < orState.rules.length - 1 ? '' : ' disabled'}><i data-lucide="arrow-down"></i></button>
+      <button class="btn btn-ghost btn-sm" type="button" data-or-del="${i}" aria-label="Xoá quy tắc ${i + 1}"><i data-lucide="trash-2"></i></button></td></tr>`;
+}
+
+function orPreviewHtml(p) {
+  if (!p) return '';
+  const c = p.counts, li = (x, to) => `<li>${esc(x.vm)} → ${esc(to ? x.system || '—' : x.fromSystem || '—')}${x.reason ? ` <span class="muted-sub">${esc(x.reason)}</span>` : ''}</li>`;
+  const list = (title, arr, to) => arr.length ? `<details class="dc-issues"><summary>${esc(title)} (${fmtInt(arr.length)}${arr.length >= 200 ? '+' : ''})</summary><ul>${arr.map(x => li(x, to)).join('')}</ul></details>` : '';
+  return `<div class="insight-box" role="status"><div><b>Chạy thử:</b> ${fmtInt(c.add)} VM được gán mới · ${fmtInt(c.change)} VM đổi hệ thống ·
+      ${fmtInt(c.remove)} VM bỏ gán · ${fmtInt(c.keptManual)} VM gán tay giữ nguyên · ${fmtInt(c.unassigned)} VM vẫn chưa có hệ thống ·
+      ${fmtInt(c.proposals)} đề xuất. Chưa lưu gì.</div></div>
+    ${list('Gán mới', p.adds, true)}${list('Đổi hệ thống', p.changes, true)}${list('Bỏ gán', p.removes, false)}`;
+}
+
+function orRender() {
+  const mount = $('#ownerSettingsMount');
+  if (!mount) return;
+  const d = orState.data, pend = d.pending;
+  const props = orState.proposals.map(p => `<tr><td>${p.kind === 'system' ? `Hệ thống <b>${esc(p.systemName)}</b>` : 'Owner chưa có hệ thống'}
+      ${p.ownerEmail ? `<span class="muted-sub mono">${esc(p.ownerEmail)}</span>` : ''}</td>
+      <td class="num">${fmtInt(p.vmCount)}</td><td class="wrap"><span class="muted-sub">${esc(p.sample.join(', '))}</span></td>
+      <td class="or-actions"><button class="btn btn-secondary btn-sm" type="button" data-or-accept="${esc(p.id)}">Tạo hệ thống</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-or-dismiss="${esc(p.id)}">Bỏ qua</button></td></tr>`).join('');
+  mount.innerHTML = `
+    <div class="sp-h">Thuộc tính vCenter dùng làm nguồn</div>
+    <div class="form-grid-aligned dc-form">
+      <label class="field"><span>Thuộc tính hệ thống</span><input id="orAttrSys" maxlength="64" value="${esc(orState.attrs.system || '')}" placeholder="System"></label>
+      <label class="field"><span>Thuộc tính owner (email)</span><input id="orAttrOwner" maxlength="64" value="${esc(orState.attrs.owner || '')}" placeholder="Owner"></label>
+    </div>
+    <p class="muted-sub">Custom attribute của VM: giá trị là mã (SYS-…) hoặc tên hệ thống; hoặc email owner của đúng một hệ thống. Giá trị chưa có trong ICO thành đề xuất bên dưới. Để trống để không dùng.</p>
+    <div class="sp-h">Quy tắc (áp dụng từ trên xuống, quy tắc đầu tiên khớp thắng)</div>
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Quy tắc gán owner"><table class="data-table or-table">
+      <thead><tr><th class="num">#</th><th>Loại</th><th>Giá trị so khớp</th><th>Hệ thống</th><th>Trạng thái</th><th></th></tr></thead>
+      <tbody>${orState.rules.map(orRuleRow).join('') || uiEmptyRow(6, orState.systems.length ? 'Chưa có quy tắc.' : 'Tạo hệ thống trước rồi thêm quy tắc.')}</tbody></table></div>
+    <p class="muted-sub">Thư mục: khớp cả thư mục con (/Projects/Bank khớp /Projects/Bank/Core). Resource pool / cluster: đúng tên. Thuộc tính: Tên=giá trị.
+      Tên VM: regex tối đa 200 ký tự, không có lượng từ lồng nhau.</p>
+    <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-or-add${orState.systems.length ? '' : ' disabled'}><i data-lucide="plus"></i>Thêm quy tắc</button>
+      <span class="src-spacer"></span>
+      <button class="btn btn-secondary btn-sm" type="button" data-or-preview><i data-lucide="flask-conical"></i>Chạy thử</button>
+      <button class="btn btn-primary btn-sm" type="button" data-or-save>Lưu &amp; áp dụng</button></div>
+    <p class="criteria-status" id="orMsg" role="status">${pend.add || pend.change || pend.remove ? esc(`Quy tắc đã lưu còn ${fmtInt(pend.add + pend.change + pend.remove)} thay đổi chưa áp dụng — sẽ chạy ở vòng đồng bộ kế tiếp.`) : ''}</p>
+    <div id="orPreview">${orPreviewHtml(orState.preview)}</div>
+    <div class="sp-h">Đề xuất cần duyệt (${fmtInt(orState.proposals.length)})</div>
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Đề xuất"><table class="data-table">
+      <thead><tr><th>Đề xuất</th><th class="num">VM</th><th>Ví dụ VM</th><th></th></tr></thead>
+      <tbody>${props || uiEmptyRow(4, 'Không có đề xuất — mọi giá trị thuộc tính đều khớp một hệ thống.')}</tbody></table></div>`;
+  refreshIcons();
+  orBind();
+}
+
+function orBody() {
+  return { rules: orState.rules.map((r, i) => ({ matchKind: r.matchKind, pattern: r.pattern, systemId: Number(r.systemId), priority: (i + 1) * 10, enabled: r.enabled !== false })),
+    attributes: { system: $('#orAttrSys').value.trim(), owner: $('#orAttrOwner').value.trim() } };
+}
+
+function orBind() {
+  const mount = $('#ownerSettingsMount');
+  const msg = (t, tone) => uiSetStatus('#orMsg', t, tone || 'ok');
+  mount.oninput = (e) => {
+    const row = e.target.closest('[data-or-row]');
+    if (row && e.target.dataset.orF) orState.rules[Number(row.dataset.orRow)][e.target.dataset.orF] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    else if (e.target.id === 'orAttrSys') orState.attrs.system = e.target.value;
+    else if (e.target.id === 'orAttrOwner') orState.attrs.owner = e.target.value;
+  };
+  mount.onchange = mount.oninput;
+  mount.onclick = async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const d = b.dataset;
+    if ('orAdd' in d) { orState.rules.push({ matchKind: 'folder', pattern: '', systemId: orState.systems[0].id, enabled: true }); orRender(); return; }
+    if (d.orUp || d.orDown || d.orDel) {
+      const i = Number(d.orUp || d.orDown || d.orDel), r = orState.rules;
+      if (d.orDel) r.splice(i, 1);
+      else { const j = d.orUp ? i - 1 : i + 1; [r[i], r[j]] = [r[j], r[i]]; }
+      orState.preview = null; orRender(); return;
+    }
+    if ('orPreview' in d || 'orSave' in d) {
+      b.disabled = true;
+      try {
+        if ('orPreview' in d) {
+          orState.preview = await apiRequest('/systems/rules/preview', { method: 'POST', body: JSON.stringify(orBody()) });
+          $('#orPreview').innerHTML = orPreviewHtml(orState.preview); msg('Đã chạy thử — chưa lưu.');
+        } else {
+          const r = (await apiRequest('/systems/rules', { method: 'PUT', body: JSON.stringify(orBody()) })).applied;
+          await renderOwnerSettings(); osState.list = null;
+          msg(`Đã lưu và áp dụng: ${fmtInt(r.add)} gán mới, ${fmtInt(r.change)} đổi hệ thống, ${fmtInt(r.remove)} bỏ gán, ${fmtInt(r.proposals)} đề xuất.`);
+        }
+      } catch (err) { msg(err.message, 'error'); }
+      b.disabled = false;
+      return;
+    }
+    if (d.orDismiss) {
+      try { await apiRequest(`/systems/proposals/${d.orDismiss}/dismiss`, { method: 'POST' }); await renderOwnerSettings(); } catch (err) { msg(err.message, 'error'); }
+      return;
+    }
+    if (d.orAccept) orAcceptDialog(orState.proposals.find(p => String(p.id) === d.orAccept));
+  };
+}
+
+function orAcceptDialog(p) {
+  if (!p) return;
+  uiPanelDialog('Tạo hệ thống từ đề xuất', `
+    <div class="form-grid-aligned dc-form">
+      <label class="field"><span>Tên hệ thống</span><input id="oraName" maxlength="255" value="${esc(p.systemName || '')}" required></label>
+      <label class="field"><span>Owner (email)</span><input id="oraOwner" type="email" maxlength="255" value="${esc(p.ownerEmail || '')}"></label>
+      <label class="field"><span>Phòng ban</span><input id="oraDept" maxlength="128"></label>
+      <label class="field"><span>Dự án</span><input id="oraProject" maxlength="128"></label>
+    </div>
+    <p class="muted-sub">${fmtInt(p.vmCount)} VM có thuộc tính trỏ tới đề xuất này; chúng được gán ngay sau khi tạo.</p>`,
+  `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+   <button class="btn btn-primary btn-sm" type="button" id="oraSave">Tạo hệ thống</button>`);
+  $('#oraSave').onclick = async () => {
+    $('#oraSave').disabled = true;
+    try {
+      const body = { name: $('#oraName').value.trim(), ownerEmail: $('#oraOwner').value.trim(), department: $('#oraDept').value.trim(), project: $('#oraProject').value.trim() };
+      const r = await apiRequest(`/systems/proposals/${p.id}/accept`, { method: 'POST', body: JSON.stringify(body) });
+      $('#spDialog').close();
+      osState.list = null; osState.facets = null;
+      await renderOwnerSettings();
+      uiAlert(`Đã tạo ${r.system.code} — ${r.system.name}; gán ${fmtInt(r.applied.add + r.applied.change)} VM.`);
+    } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); $('#oraSave').disabled = false; }
+  };
+}

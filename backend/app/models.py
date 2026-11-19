@@ -184,6 +184,10 @@ class VmSnapshot(Base):
     tools_guest_family = Column(String(64), nullable=True)  # guest.guestFamily (windowsGuest / linuxGuest / otherGuestFamily)
     tools_status = Column(String(32), nullable=True)        # guest.toolsRunningStatus
     guest_hostname = Column(String(255), nullable=True)
+    # Owner sources (ICO v2 G2b): vCenter folder path, resource pool, custom attributes (JSON {name: value}).
+    folder_path = Column(String(512), nullable=True)
+    resource_pool = Column(String(255), nullable=True)
+    custom_attrs = Column(Text, nullable=True)
     captured_at = Column(DateTime, default=utcnow, index=True)
 
     run = relationship("SnapshotRun", back_populates="vms")
@@ -881,6 +885,7 @@ _json(StorageArrayState.controllers, list, "Bộ điều khiển mảng lưu tr�
 _json(StorageArrayState.hardware_issues, list, "Linh kiện lỗi của mảng lưu trữ", nullable=False)
 _json(StorageArrayState.nfs_endpoints, list, "Địa chỉ NFS của mảng lưu trữ", nullable=False)
 _json(VmSnapshotState.items, list, "Danh sách snapshot", nullable=False)
+_json(VmSnapshot.custom_attrs, dict, "Thuộc tính tuỳ chỉnh của VM")
 _json(HostHealthState.issues, list, "Cảm biến bất thường", nullable=False)
 
 

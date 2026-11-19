@@ -24,8 +24,8 @@ def sent(monkeypatch):
     return calls
 
 
-def _expiring(editor, days, **kw):
-    end = TODAY + dt.timedelta(days=days)
+def _expiring(editor, days, today=TODAY, **kw):
+    end = today + dt.timedelta(days=days)
     return editor.post("/api/spend/opex", json=_opex(startDate=(end - dt.timedelta(days=364)).isoformat(),
                                                       endDate=end.isoformat(), **kw)).json()
 
@@ -138,8 +138,9 @@ def test_stale_pending_is_not_resent(admin, editor, sent):
 
 
 def test_manual_run_and_log_api(admin, editor, sent):
+    from app.spend.fiscal import today_vn
     admin.post("/api/spend/admin/channels", json={"kind": "discord", "name": "Discord", "webhookUrl": WEBHOOK})
-    _expiring(editor, 5)
+    _expiring(editor, 5, today=today_vn())          # the API runs on the real clock, not on the fixed TODAY
     r = admin.post("/api/spend/admin/reminders/run")
     assert r.status_code == 200 and r.json()["sent"] == 1
     log = admin.get("/api/spend/admin/reminders").json()

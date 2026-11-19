@@ -39,6 +39,7 @@ def ensure_schema() -> None:
             ("guest_id", "VARCHAR(64)"), ("guest_full_name", "VARCHAR(255)"),
             ("tools_guest_full_name", "VARCHAR(255)"), ("tools_guest_family", "VARCHAR(64)"),
             ("tools_status", "VARCHAR(32)"), ("guest_hostname", "VARCHAR(255)"),
+            ("folder_path", "VARCHAR(512)"), ("resource_pool", "VARCHAR(255)"), ("custom_attrs", "TEXT"),
         ],
         "host_snapshots": [
             ("vendor", "VARCHAR(128)"), ("model", "VARCHAR(128)"), ("esxi_version", "VARCHAR(64)"),

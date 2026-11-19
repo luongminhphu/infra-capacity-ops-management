@@ -4,7 +4,7 @@ Table names are plural like the rest of the app ("system" is an SQL keyword). In
 code / normalised name UNIQUE, criticality 1–4, env and status in fixed sets, e-mails stored lower case,
 a VM (CI) in at most one system (UNIQUE ci_id), assignment source in a fixed set.
 """
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from ..database import Base
 from ..models import utcnow
@@ -94,3 +94,36 @@ class OwnerRule(Base):
     pattern = Column(String(255), nullable=False)
     system_id = Column(Integer, ForeignKey("systems.id", ondelete="CASCADE"), nullable=False, index=True)
     enabled = Column(Boolean, nullable=False, default=True)
+
+
+PROPOSAL_STATUSES = ("open", "accepted", "dismissed")
+
+
+class OwnerProposal(Base):
+    """A vCenter attribute names a system / owner e-mail that ICO does not know: never auto-created, an owner
+    admin accepts (creates the system) or dismisses it. key = "system:<normalised name>" | "owner:<email>"."""
+    __tablename__ = "owner_proposals"
+    __table_args__ = (
+        UniqueConstraint("key", name="uq_owner_proposal_key"),
+        CheckConstraint(_in("status", PROPOSAL_STATUSES), name="ck_owner_proposal_status"),
+        CheckConstraint(_lower("owner_email"), name="ck_owner_proposal_owner_lower"),
+        CheckConstraint("vm_count >= 0", name="ck_owner_proposal_vms"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(300), nullable=False)
+    system_name = Column(String(255))
+    owner_email = Column(String(255))
+    vm_count = Column(Integer, nullable=False, default=0)
+    sample = Column(Text, nullable=False, default="[]")             # JSON list of up to 10 VM names
+    status = Column(String(10), nullable=False, default="open")
+    first_seen = Column(DateTime, nullable=False, default=utcnow)
+    last_seen = Column(DateTime, nullable=False, default=utcnow)
+    decided_by = Column(String(255))
+    decided_at = Column(DateTime)
+    system_id = Column(Integer, ForeignKey("systems.id", ondelete="SET NULL"), index=True)
+
+
+from ..shared.stored_text import json_column as _json  # noqa: E402
+
+_json(OwnerProposal.sample, list, "VM của đề xuất", nullable=False)

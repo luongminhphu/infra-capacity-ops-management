@@ -16,6 +16,7 @@ Reliability
 """
 import asyncio
 import contextvars
+import json
 import datetime as dt
 import logging
 import math
@@ -133,6 +134,11 @@ def _vm_inventory_cols(v: Dict[str, Any]) -> Dict[str, Any]:
         "guest_id": v.get("guestId"), "guest_full_name": v.get("guestFullName"),
         "tools_guest_full_name": v.get("toolsGuestFullName"), "tools_guest_family": v.get("toolsGuestFamily"),
         "tools_status": v.get("toolsStatus"), "guest_hostname": v.get("guestHostname"),
+        "folder_path": (str(v["folderPath"])[:512] if v.get("folderPath") else None),
+        "resource_pool": (str(v["resourcePool"])[:255] if v.get("resourcePool") else None),
+        # Bulk INSERT bypasses the stored_text listener: built with json.dumps on a dict of strings.
+        "custom_attrs": json.dumps({str(k)[:64]: str(x)[:255] for k, x in list(v["customAttrs"].items())[:30]}, ensure_ascii=False)
+        if isinstance(v.get("customAttrs"), dict) and v["customAttrs"] else None,
     }
 
 
@@ -402,6 +408,17 @@ def _build_cmdb() -> Optional[Dict[str, Any]]:
         return None
 
 
+def _assign_owners() -> Optional[Dict[str, Any]]:
+    """Automatic system assignment from vCenter attributes / owner rules (owners/rules.py), after the CI build."""
+    from ..owners import rules
+    try:
+        with SessionLocal() as db:
+            return rules.run(db)
+    except Exception:  # noqa: BLE001 — derived data: never stops the polling loop
+        logger.exception("Owner rules run failed")
+        return None
+
+
 def round_summary(results: List[Dict[str, Any]], seconds: float, alerts: Optional[Dict[str, int]],
                   purge: Optional[Dict[str, int]]) -> str:
     """One key=value line per scheduler round (audit BEQ-11), easy to grep / parse:
@@ -469,6 +486,8 @@ async def scheduler_loop(app_settings: Settings):
             _beat(interval)
             cmdb = await asyncio.to_thread(_build_cmdb)                # after every source of the round
             _beat(interval)
+            owners = await asyncio.to_thread(_assign_owners) if cmdb else None
+            _beat(interval)
             alerts = await asyncio.to_thread(_ops_alerts)
             purge = await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
             from .. import metrics
@@ -478,6 +497,8 @@ async def scheduler_loop(app_settings: Settings):
                 line += " " + " ".join(f"metrics_{k}={v}" for k, v in sorted(rolled.items()))
             line += (f" cmdb_ms={int(cmdb['seconds'] * 1000)} cmdb_cis={cmdb['cis']} cmdb_links={cmdb['links']}"
                      f" cmdb_retired={cmdb['retired']}") if cmdb else " cmdb=error"
+            if owners:
+                line += f" owners_add={owners['add']} owners_change={owners['change']} owners_remove={owners['remove']}"
             logger.info("%s", line)
         except asyncio.CancelledError:
             raise
