@@ -472,7 +472,9 @@ async function renderReviewSettings() {
     rvState.list = await apiRequest('/reviews');
     const first = rvState.list.items[0];
     rvState.sel = rvState.sel && rvState.list.items.some(c => c.id === rvState.sel) ? rvState.sel : (first ? first.id : null);
-    rvState.detail = rvState.sel ? await apiRequest(`/reviews/${rvState.sel}`) : null;
+    [rvState.detail, rvState.summary, rvState.queue] = rvState.sel
+      ? await Promise.all([apiRequest(`/reviews/${rvState.sel}`), apiRequest(`/reviews/${rvState.sel}/summary`), apiRequest('/reviews/queue/reassign')])
+      : [null, null, await apiRequest('/reviews/queue/reassign')];
   } catch (err) { mount.innerHTML = uiError(err.message); return; }
   rvRender();
 }
@@ -491,7 +493,8 @@ function rvRender() {
     <div class="table-scroll" role="region" tabindex="0" aria-label="Kỳ rà soát"><table class="data-table">
       <thead><tr><th>Kỳ</th><th>Mở lúc</th><th>Hạn xác nhận</th><th>Trạng thái</th><th class="num">VM</th></tr></thead>
       <tbody>${rows || uiEmptyRow(5, 'Chưa có kỳ rà soát nào.')}</tbody></table></div>
-    <div id="rvDetail">${d ? rvDetailHtml(d) : ''}</div>`;
+    <div id="rvDetail">${d ? rvDetailHtml(d) + rvResultsHtml(rvState.summary) : ''}</div>
+    ${rvQueueHtml(rvState.queue)}`;
   refreshIcons();
   rvBind();
 }
@@ -535,6 +538,25 @@ function rvBind() {
     if (!b) return;
     if ('rvOpen' in b.dataset) { rvOpenDialog(); return; }
     if (b.dataset.rvPreview) { rvPreview(Number(b.dataset.rvPreview)); return; }
+    if (b.dataset.rvDl) {
+      const c = rvState.detail;
+      uiDownload(`${API_BASE}/reviews/${c.id}/report.${b.dataset.rvDl}`, { method: 'GET' }, `ICO_Ra_soat_owner_${c.periodLabel}.${b.dataset.rvDl}`).catch(err => uiAlert(err.message));
+      return;
+    }
+    if (b.dataset.rvResolve) {
+      try { await apiRequest(`/reviews/items/${b.dataset.rvResolve}/resolve`, { method: 'POST' }); await renderReviewSettings(); } catch (err) { uiAlert(err.message); }
+      return;
+    }
+    if ('rvInfra' in b.dataset) {
+      const ids = $$('[data-rv-infra-sel]').filter(x => x.checked).map(x => Number(x.dataset.rvInfraSel));
+      const dec = $('#rvInfraDec').value;
+      if (!ids.length || !dec) { uiAlert('Chọn VM và quyết định trước.'); return; }
+      try {
+        await apiRequest(`/reviews/${rvState.sel}/items`, { method: 'PUT', body: JSON.stringify({ itemIds: ids, decision: dec, note: $('#rvInfraNote').value.trim() }) });
+        await renderReviewSettings();
+      } catch (err) { uiAlert(err.message); }
+      return;
+    }
     if ('rvSend' in b.dataset) {
       if (!await uiConfirm(`Gửi ${fmtInt(rvState.detail.notices.length)} email rà soát kỳ ${rvState.detail.periodLabel} cho owner? Không thu hồi được sau khi gửi.`)) return;
       b.disabled = true;
@@ -544,6 +566,9 @@ function rvBind() {
         uiSetStatus('#rvMsg', r.error ? r.error : `Đã gửi ${fmtInt(r.sent)} email${r.failed ? `, ${fmtInt(r.failed)} lỗi — gửi lại ở vòng đồng bộ kế tiếp` : ''}.`, r.error || r.failed ? 'error' : 'ok');
       } catch (err) { uiSetStatus('#rvMsg', err.message, 'error'); b.disabled = false; }
     }
+  };
+  mount.onchange = (e) => {
+    if (e.target.id === 'rvInfraAll') $$('[data-rv-infra-sel]').forEach(x => { x.checked = e.target.checked; });
   };
   mount.onkeydown = (e) => {
     const row = e.target.closest('[data-rv-id]');
@@ -584,4 +609,47 @@ async function rvPreview(nid) {
   '<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>');
   const f = $('.rv-mail');
   f.srcdoc = n.bodyHtml;
+}
+
+/* Results of a period (G3b): response, decisions, reclaimed resources, team decisions, re-assign queue, PDF / Excel. */
+function rvResultsHtml(s) {
+  if (!s) return '';
+  const t = s.totals, r = s.reclaim, closed = s.campaign.status === 'closed';
+  const undecided = s.items.filter(i => i.ownerEmail && !i.decision);
+  const opt = (v, txt) => `<option value="${esc(v)}">${esc(txt)}</option>`;
+  const money = r.vndMonthly === null ? 'chưa khai đơn giá (REVIEW_UNIT_COST_*)' : `${uiNumber(r.vndMonthly)} đ/tháng · ${uiNumber(r.vndYearly)} đ/năm`;
+  return `<div class="sp-h">Kết quả kỳ ${esc(s.campaign.periodLabel)}</div>
+    ${uiKpiStrip([
+      { label: 'Tỷ lệ phản hồi', valueHtml: t.responsePct === null ? '—' : `${esc(uiNumber(t.responsePct, 1))}<small>%</small>`, subHtml: `${fmtInt(t.decided)} / ${fmtInt(t.owned)} VM có quyết định` },
+      { label: 'Tài nguyên thu hồi', valueHtml: `${esc(uiNumber(r.vcpu))}<small>vCPU</small>`, subHtml: `${esc(uiNumber(r.ramGB))} GB RAM · ${esc(uiNumber(r.diskGB))} GB disk` },
+      { label: 'Giá trị thu hồi', valueHtml: r.vndMonthly === null ? '—' : `${esc(uiNumber(r.vndMonthly))}<small>đ/tháng</small>`, subHtml: esc(money) },
+    ])}
+    <dl class="sp-dl">${s.byDecision.map(x => `<div class="sp-dl-item"><dt>${esc(x.label)}</dt><dd>${fmtInt(x.count)} VM</dd></div>`).join('')}
+      <div class="sp-dl-item"><dt>${closed ? 'Chờ team hạ tầng xác nhận' : 'Chưa quyết định'}</dt><dd>${fmtInt(t.undecided)} VM</dd></div>
+      <div class="sp-dl-item"><dt>Đã leo thang</dt><dd>${fmtInt(t.escalated)} VM</dd></div>
+      <div class="sp-dl-item"><dt>Thu hồi đã xác minh</dt><dd>${fmtInt(t.verified)} VM</dd></div></dl>
+    <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-rv-dl="pdf"><i data-lucide="file-text"></i>Báo cáo PDF</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-rv-dl="xlsx"><i data-lucide="sheet"></i>Excel</button></div>
+    ${undecided.length ? `<div class="sp-h">${closed ? 'Chờ team hạ tầng xác nhận' : 'VM chưa có quyết định'} (${fmtInt(undecided.length)})</div>
+      <div class="form-grid-aligned dc-form">
+        <label class="field"><span>Quyết định thay owner</span><select id="rvInfraDec">${opt('', '— Chọn —')}${opt('keep', 'Còn dùng')}${opt('not_mine', 'Không xác định được owner')}</select></label>
+        <label class="field"><span>Ghi chú</span><input id="rvInfraNote" maxlength="500"></label></div>
+      <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-rv-infra>Áp dụng cho các VM đã chọn</button></div>
+      <div class="table-scroll" role="region" tabindex="0" aria-label="VM chưa có quyết định"><table class="data-table">
+        <thead><tr><th class="dc-pick"><input type="checkbox" id="rvInfraAll" aria-label="Chọn tất cả"></th><th>VM</th><th>Owner</th><th>Tín hiệu</th></tr></thead>
+        <tbody>${undecided.slice(0, 500).map(i => `<tr><td class="dc-pick"><input type="checkbox" data-rv-infra-sel="${esc(i.id)}" aria-label="Chọn ${esc(i.vm)}"></td>
+          <td>${esc(i.vm)}<span class="muted-sub">${esc(i.systemCode || '—')}</span></td><td class="mono">${esc(i.ownerEmail)}</td>
+          <td>${i.flagged ? esc(i.reasons.join('; ')) : '—'}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
+
+function rvQueueHtml(q) {
+  if (!q || !q.items.length) return '';
+  return `<div class="sp-h">Cần gán lại owner (${fmtInt(q.items.length)})</div>
+    <p class="muted-sub">Owner báo chuyển owner / không phải của mình. Gán lại ở Quản lý thông tin → Hệ thống &amp; Owner, rồi bấm Đã gán lại.</p>
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Cần gán lại owner"><table class="data-table">
+      <thead><tr><th>VM</th><th>Kỳ</th><th>Owner hiện tại</th><th>Đề xuất</th><th></th></tr></thead>
+      <tbody>${q.items.map(i => `<tr><td>${uiEntityLink('vm', i.vm, i.vcenterKey, false)}<span class="muted-sub">${esc(i.systemCode || '—')}</span></td>
+        <td>${esc(i.periodLabel)}</td><td class="mono">${esc(i.ownerEmail || '—')}</td>
+        <td>${i.decision === 'transfer' ? `Chuyển cho <span class="mono">${esc(i.transferTo)}</span>` : 'Không phải của tôi'}${i.note ? `<span class="muted-sub">${esc(i.note)}</span>` : ''}</td>
+        <td><button class="btn btn-ghost btn-sm" type="button" data-rv-resolve="${esc(i.id)}">Đã gán lại</button></td></tr>`).join('')}</tbody></table></div>`;
 }

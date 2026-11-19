@@ -13,6 +13,7 @@ import datetime as dt
 import html
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import update
@@ -310,4 +311,286 @@ def tick(db: Session, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
                 opened = open_campaign(db, label, now=now).period_label
             except Exists:
                 db.rollback()
-    return {"opened": opened, **deliver(db, now)}
+    staged = advance(db, now)
+    verified = verify(db, now)
+    return {"opened": opened, **staged, "verified": verified, **deliver(db, now)}
+
+
+# ================================================================ G3b — decisions
+DECISION_LABELS = {"keep": "Còn dùng", "decommission": "Thu hồi", "resize": "Giảm cấu hình", "transfer": "Chuyển owner",
+                   "not_mine": "Không phải của tôi"}
+MAX_NOTE = 500
+_EMAIL = re.compile(r"^[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}$")
+
+
+class Invalid(ValueError):
+    """A decision that cannot be saved; the message is Vietnamese and safe to show."""
+
+
+def clean_decision(data: Dict[str, Any], item: ReviewItem, today: dt.date) -> Dict[str, Any]:
+    """Validated column values of one decision (fields of other decisions are cleared)."""
+    d = data.get("decision")
+    if d not in DECISION_LABELS:
+        raise Invalid("Quyết định không hợp lệ.")
+    out: Dict[str, Any] = {"decision": d, "action_date": None, "new_vcpu": None, "new_ram_gb": None, "transfer_to": None}
+    note = " ".join(str(data.get("note") or "").split())
+    if len(note) > MAX_NOTE:
+        raise Invalid(f"Ghi chú dài quá {MAX_NOTE} ký tự.")
+    out["note"] = note or None
+    if d == "decommission":
+        try:
+            day = dt.date.fromisoformat(str(data.get("actionDate") or ""))
+        except ValueError:
+            raise Invalid("Thu hồi cần ngày dự kiến (yyyy-mm-dd).") from None
+        if not today <= day <= today + dt.timedelta(days=365):
+            raise Invalid("Ngày thu hồi dự kiến phải từ hôm nay đến 12 tháng tới.")
+        out["action_date"] = day
+    elif d == "resize":
+        sig = json.loads(item.signals or "{}")
+        for key, col, cur, label in (("newVcpu", "new_vcpu", sig.get("vcpu"), "vCPU"), ("newRamGB", "new_ram_gb", sig.get("ramGB"), "RAM")):
+            v = data.get(key)
+            if v in (None, ""):
+                continue
+            if not isinstance(v, int) or isinstance(v, bool) or v <= 0:
+                raise Invalid(f"{label} đề xuất phải là số nguyên dương.")
+            if isinstance(cur, (int, float)) and v >= cur:
+                raise Invalid(f"{label} đề xuất ({v}) phải nhỏ hơn hiện tại ({_vn(cur)}).")
+            out[col] = v
+        if out["new_vcpu"] is None and out["new_ram_gb"] is None:
+            raise Invalid("Giảm cấu hình cần vCPU hoặc RAM đề xuất.")
+    elif d == "transfer":
+        to = str(data.get("transferTo") or "").strip().lower()
+        if not _EMAIL.match(to) or len(to) > 255:
+            raise Invalid("Chuyển owner cần email người nhận hợp lệ.")
+        if to == (item.owner_email or ""):
+            raise Invalid("Email người nhận trùng owner hiện tại.")
+        out["transfer_to"] = to
+    return out
+
+
+def visible_items(db: Session, principal, campaign_id: int):
+    """Items of a campaign the caller may see / decide: owner scope = systems they own or deputise (current) or items
+    addressed to their e-mail; full users = every item."""
+    from sqlalchemy import or_
+    from .access import identities
+    q = db.query(ReviewItem).filter(ReviewItem.campaign_id == campaign_id)
+    if principal.system_ids is None:
+        return q
+    ids, mails = sorted(principal.system_ids), sorted(identities(principal.user))
+    conds = []
+    if ids:
+        conds.append(ReviewItem.system_id.in_(ids))
+    if mails:
+        conds.append(ReviewItem.owner_email.in_(mails))
+    return q.filter(or_(*conds)) if conds else q.filter(ReviewItem.id == -1)
+
+
+def decide(db: Session, c: ReviewCampaign, items: List[ReviewItem], data: Dict[str, Any], by: str, infra: bool = False,
+           now: Optional[dt.datetime] = None) -> int:
+    """Save one decision on several items (caller has checked they are visible). Owners: only while the campaign is
+    open. infra=True: the infrastructure team settles items after closing too. Commits; one audit row."""
+    now = now or dt.datetime.utcnow()
+    if c.status != "open" and not infra:
+        raise Invalid("Kỳ rà soát đã đóng — liên hệ team hạ tầng.")
+    if not items:
+        raise Invalid("Chưa chọn VM nào.")
+    today = today_vn(now)
+    for it in items:
+        for col, v in clean_decision(data, it, today).items():
+            setattr(it, col, v)
+        it.decided_by, it.decided_at = by, now
+        it.resolved_at = it.resolved_by = None
+    db.add(AuditLog(username=by, action="owners.review.decide",
+                    detail=json.dumps({"period": c.period_label, "decision": data.get("decision"), "infra": infra,
+                                       "items": [i.id for i in items][:200]}, ensure_ascii=False)))
+    db.commit()
+    return len(items)
+
+
+def resolve(db: Session, item: ReviewItem, by: str) -> None:
+    """Admin queue: a "transfer" / "not mine" item has been re-assigned in Hệ thống & Owner (G2a)."""
+    if item.decision not in ("transfer", "not_mine"):
+        raise Invalid("Chỉ xử lý được VM chuyển owner / không phải của tôi.")
+    item.resolved_at, item.resolved_by = dt.datetime.utcnow(), by
+    db.add(AuditLog(username=by, action="owners.review.resolve", detail=json.dumps({"item": item.id, "vm": item.vm_name})))
+    db.commit()
+
+
+# ================================================================ G3b — reminders, escalation, closing
+STAGES = (("closing", 7), ("escalation", 0), ("reminder2", -2), ("reminder1", -7))   # days relative to the due date
+
+
+def stage_for(c: ReviewCampaign, today: dt.date) -> Optional[str]:
+    """The latest stage reached (earlier stages that were missed while ICO was down are not sent late)."""
+    for kind, offset in STAGES:
+        if today >= c.due_at + dt.timedelta(days=offset):
+            return kind
+    return None
+
+
+def _add_notice(db: Session, c: ReviewCampaign, recipient: str, kind: str, mail: Tuple[str, str, str], n: int, now: dt.datetime) -> bool:
+    if db.query(ReviewNotice.id).filter_by(campaign_id=c.id, recipient=recipient, kind=kind).first():
+        return False
+    subject, text, body = mail
+    db.add(ReviewNotice(campaign_id=c.id, recipient=recipient, kind=kind, status="preview" if c.dry_run else "pending",
+                        subject=subject[:255], body_text=text, body_html=body, vm_count=n, created_at=now))
+    return True
+
+
+def _mail(title: str, intro: str, items: List[ReviewItem], c: ReviewCampaign, extra: str = "") -> Tuple[str, str, str]:
+    e = html.escape
+    link = portal_link(c.id)
+    lines = [intro, ""] + [f"- {i.vm_name} ({i.system_code or '—'}){' — owner ' + i.owner_email if i.owner_email else ''}"
+                           for i in items[:MAX_ROWS_IN_MAIL]]
+    if len(items) > MAX_ROWS_IN_MAIL:
+        lines.append(f"… và {len(items) - MAX_ROWS_IN_MAIL} VM khác.")
+    if extra:
+        lines += ["", extra]
+    lines += ["", f"Xác nhận trên ICO: {link}" if link else "Xác nhận trên ICO: đăng nhập ICO → Cổng Owner."]
+    td = "padding:6px 8px;border-bottom:1px solid #CED5DE;vertical-align:top"
+    rows = "".join(f"<tr><td style='{td}'><b>{e(i.vm_name)}</b></td><td style='{td}'>{e(i.system_code or '—')} {e(i.system_name or '')}</td>"
+                   f"<td style='{td}'>{e(i.owner_email or '—')}</td></tr>" for i in items[:MAX_ROWS_IN_MAIL])
+    button = (f"<p><a href=\"{e(link)}\" style='display:inline-block;background:#165AB8;color:#FFFFFF;padding:10px 18px;"
+              f"border-radius:6px;text-decoration:none;font-weight:bold'>Xác nhận trên ICO</a></p>") if link else ""
+    body = (f"<div style='font-family:Arial,sans-serif;font-size:14px;color:#0B2D5C'><p>{e(intro)}</p>"
+            f"{f'<p><b>{e(extra)}</b></p>' if extra else ''}"
+            f"<table style='border-collapse:collapse;font-size:13px' cellspacing='0'><tr><th style='{td};text-align:left'>VM</th>"
+            f"<th style='{td};text-align:left'>Hệ thống</th><th style='{td};text-align:left'>Owner</th></tr>{rows}</table>{button}"
+            f"<p style='color:#465F83;font-size:12px'>Email này không chứa liên kết đăng nhập.</p></div>")
+    return title, "\n".join(lines), body
+
+
+def advance(db: Session, now: Optional[dt.datetime] = None) -> Dict[str, int]:
+    """Reminders, escalation and closing of open campaigns from the clock (idempotent: one notice per recipient
+    and kind; closing happens once)."""
+    now = now or dt.datetime.utcnow()
+    today = today_vn(now)
+    s = get_settings()
+    infra = (s.review_infra_email or "").strip().lower()
+    out = {"reminders": 0, "escalations": 0, "closed": 0, "missingManager": 0}
+    for c in db.query(ReviewCampaign).filter(ReviewCampaign.status == "open").all():
+        stage = stage_for(c, today)
+        if stage is None:
+            continue
+        due = c.due_at.strftime("%d/%m/%Y")
+        open_items = db.query(ReviewItem).filter(ReviewItem.campaign_id == c.id, ReviewItem.owner_email.isnot(None),
+                                                 ReviewItem.decision.is_(None)).order_by(ReviewItem.vm_name).all()
+        if stage in ("reminder1", "reminder2"):
+            by_owner: Dict[str, List[ReviewItem]] = {}
+            for it in open_items:
+                by_owner.setdefault(it.owner_email, []).append(it)
+            for email, its in sorted(by_owner.items()):
+                lead = "Nhắc lần cuối" if stage == "reminder2" else "Nhắc rà soát"
+                title = f"[ICO] {lead} {c.period_label} — còn {len(its)} VM chưa xác nhận, hạn {due}"
+                intro = f"Kỳ rà soát {c.period_label} còn {len(its)} VM của bạn chưa được xác nhận. Hạn: {due}."
+                out["reminders"] += _add_notice(db, c, email, stage, _mail(title, intro, its, c), len(its), now)
+        elif stage == "escalation":
+            sys_ids = {i.system_id for i in open_items if i.system_id}
+            managers = dict(db.query(System.id, System.manager_email).filter(System.id.in_(sys_ids))) if sys_ids else {}
+            by_mgr: Dict[str, List[ReviewItem]] = {}
+            missing: List[ReviewItem] = []
+            for it in open_items:
+                m = managers.get(it.system_id)
+                (by_mgr.setdefault(m, []) if m else missing).append(it)
+                if it.escalated_at is None:
+                    it.escalated_at = now
+            for email, its in sorted(by_mgr.items()):
+                owners = ", ".join(sorted({i.owner_email for i in its}))
+                title = f"[ICO] Rà soát {c.period_label} quá hạn — {len(its)} VM chưa được owner xác nhận"
+                intro = (f"Kỳ rà soát {c.period_label} đã đến hạn {due}. {len(its)} VM của nhóm bạn quản lý (owner: {owners}) "
+                         f"chưa được xác nhận. Đề nghị nhắc owner hoặc xác nhận thay trước khi kỳ đóng.")
+                out["escalations"] += _add_notice(db, c, email, "escalation", _mail(title, intro, its, c), len(its), now)
+            if missing:
+                out["missingManager"] += len(missing)
+                if infra:
+                    title = f"[ICO] Rà soát {c.period_label} quá hạn — {len(missing)} VM, hệ thống thiếu quản lý"
+                    intro = (f"Kỳ rà soát {c.period_label} đã đến hạn {due}. {len(missing)} VM chưa được xác nhận và hệ thống của chúng "
+                             f"chưa khai quản lý trực tiếp, nên email leo thang gửi về team hạ tầng.")
+                    out["escalations"] += _add_notice(db, c, infra, "escalation",
+                                                      _mail(title, intro, missing, c, "Cảnh báo: thiếu quản lý trực tiếp — bổ sung ở Hệ thống & Owner."),
+                                                      len(missing), now)
+                else:
+                    logger.warning("Review %s: %d VM escalated without manager and REVIEW_INFRA_EMAIL is empty", c.period_label, len(missing))
+        elif stage == "closing":
+            c.status, c.closed_at = "closed", now
+            out["closed"] += 1
+            if infra:
+                title = f"[ICO] Đóng kỳ rà soát {c.period_label} — {len(open_items)} VM chờ team hạ tầng xác nhận"
+                intro = (f"Kỳ rà soát {c.period_label} đã đóng. {len(open_items)} VM chưa có quyết định của owner, "
+                         f"chờ team hạ tầng xác nhận (Trang chủ → hộp việc, nguồn Rà soát owner).")
+                _add_notice(db, c, infra, "closing", _mail(title, intro, open_items, c), len(open_items), now)
+            db.add(AuditLog(username="system", action="owners.review.close",
+                            detail=json.dumps({"period": c.period_label, "undecided": len(open_items)})))
+        db.commit()
+    return out
+
+
+def verify(db: Session, now: Optional[dt.datetime] = None) -> int:
+    """Next-period check of "Thu hồi": the VM's CI is retired → verified_at. Returns the number newly verified."""
+    now = now or dt.datetime.utcnow()
+    rows = (db.query(ReviewItem).join(Ci, Ci.id == ReviewItem.ci_id)
+            .filter(ReviewItem.decision == "decommission", ReviewItem.verified_at.is_(None), Ci.status == "retired").all())
+    for it in rows:
+        it.verified_at = now
+    if rows:
+        db.commit()
+    return len(rows)
+
+
+def not_cleaned(db: Session, today: dt.date) -> List[ReviewItem]:
+    """"Thu hồi" past its planned date whose VM is still active in the CI registry."""
+    return (db.query(ReviewItem).join(Ci, Ci.id == ReviewItem.ci_id)
+            .filter(ReviewItem.decision == "decommission", ReviewItem.verified_at.is_(None), ReviewItem.action_date < today,
+                    Ci.status == "active").order_by(ReviewItem.action_date, ReviewItem.vm_name).all())
+
+
+# ================================================================ G3b — results
+def summary(db: Session, c: ReviewCampaign) -> Dict[str, Any]:
+    """Results of a campaign (page, PDF, Excel): response rate, VMs per decision, reclaimed resources (+ VND)."""
+    s = get_settings()
+    items = db.query(ReviewItem).filter(ReviewItem.campaign_id == c.id).order_by(ReviewItem.owner_email, ReviewItem.vm_name).all()
+    owned = [i for i in items if i.owner_email]
+    decided = [i for i in owned if i.decision]
+    counts = {k: sum(1 for i in items if i.decision == k) for k in DECISION_LABELS}
+    rec = {"vcpu": 0.0, "ramGB": 0.0, "diskGB": 0.0}
+    rows = []
+    for i in items:
+        sig = json.loads(i.signals or "{}")
+        vcpu, ram, disk = float(sig.get("vcpu") or 0), float(sig.get("ramGB") or 0), float(sig.get("diskProvGB") or 0)
+        r = {"vcpu": 0.0, "ramGB": 0.0, "diskGB": 0.0}
+        if i.decision == "decommission":
+            r = {"vcpu": vcpu, "ramGB": ram, "diskGB": disk}
+        elif i.decision == "resize":
+            r = {"vcpu": max(0.0, vcpu - i.new_vcpu) if i.new_vcpu else 0.0, "ramGB": max(0.0, ram - i.new_ram_gb) if i.new_ram_gb else 0.0,
+                 "diskGB": 0.0}
+        for k in rec:
+            rec[k] += r[k]
+        rows.append({"id": i.id, "vm": i.vm_name, "vcenterKey": i.vcenter_key, "systemCode": i.system_code, "systemName": i.system_name,
+                     "ownerEmail": i.owner_email, "flagged": bool(i.flagged), "reasons": json.loads(i.reasons or "[]"),
+                     "decision": i.decision, "decisionLabel": DECISION_LABELS.get(i.decision, "Chờ team hạ tầng xác nhận"
+                                                                                    if c.status == "closed" else "Chưa quyết định"),
+                     "actionDate": i.action_date.isoformat() if i.action_date else None, "newVcpu": i.new_vcpu, "newRamGB": i.new_ram_gb,
+                     "transferTo": i.transfer_to, "note": i.note, "decidedBy": i.decided_by,
+                     "decidedAt": i.decided_at.isoformat() + "Z" if i.decided_at else None,
+                     "escalated": i.escalated_at is not None, "verified": i.verified_at is not None,
+                     "resolved": i.resolved_at is not None, "vcpu": vcpu, "ramGB": ram, "diskGB": disk, "reclaim": r})
+    costs = (s.review_unit_cost_vcpu, s.review_unit_cost_ram_gb, s.review_unit_cost_disk_gb)
+    monthly = round(rec["vcpu"] * costs[0] + rec["ramGB"] * costs[1] + rec["diskGB"] * costs[2]) if any(costs) else None
+    per_owner: Dict[str, Dict[str, int]] = {}
+    for i in owned:
+        o = per_owner.setdefault(i.owner_email, {"items": 0, "decided": 0})
+        o["items"] += 1
+        o["decided"] += bool(i.decision)
+    return {"campaign": {"id": c.id, "periodLabel": c.period_label, "status": c.status, "dryRun": bool(c.dry_run),
+                         "openedAt": c.opened_at.isoformat() + "Z", "dueAt": c.due_at.isoformat(),
+                         "closedAt": c.closed_at.isoformat() + "Z" if c.closed_at else None},
+            "totals": {"items": len(items), "owned": len(owned), "unowned": len(items) - len(owned), "decided": len(decided),
+                       "undecided": len(owned) - len(decided), "flagged": sum(1 for i in items if i.flagged),
+                       "responsePct": round(len(decided) * 100.0 / len(owned), 1) if owned else None,
+                       "escalated": sum(1 for i in items if i.escalated_at), "verified": sum(1 for i in items if i.verified_at),
+                       "queue": sum(1 for i in items if i.decision in ("transfer", "not_mine") and not i.resolved_at)},
+            "byDecision": [{"decision": k, "label": v, "count": counts[k]} for k, v in DECISION_LABELS.items()],
+            "reclaim": {**{k: round(v, 1) for k, v in rec.items()}, "vndMonthly": monthly,
+                        "vndYearly": monthly * 12 if monthly is not None else None},
+            "owners": [{"ownerEmail": k, **v, "pct": round(v["decided"] * 100.0 / v["items"], 1)} for k, v in sorted(per_owner.items())],
+            "items": rows}

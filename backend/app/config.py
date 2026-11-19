@@ -183,6 +183,11 @@ class Settings(BaseSettings):
     review_due_days: int = Field(default=21)
     review_snapshot_days: int = Field(default=14)        # snapshot older than this → "nên rà" (idle / power-off use idle_days)
     review_dry_run: bool = Field(default=False)          # campaigns after the first; the first one is always a dry run
+    review_infra_email: str = Field(default="")         # team hạ tầng: escalations without a manager, the closing summary
+    # Unit costs (VND per month) to value the reclaimed resources; 0 = not valued.
+    review_unit_cost_vcpu: int = Field(default=0)
+    review_unit_cost_ram_gb: int = Field(default=0)
+    review_unit_cost_disk_gb: int = Field(default=0)
 
     # ---- CI registry (app/cmdb/): a CI not seen for this many days becomes "retired" (never deleted) ----
     cmdb_retire_days: int = Field(default=7)

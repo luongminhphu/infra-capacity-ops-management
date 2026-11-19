@@ -677,6 +677,35 @@ Mỗi kỳ (mặc định 6 tháng) ICO lập danh sách **mọi VM có owner** 
   thì email chờ, không mất lượt. Dùng máy chủ SMTP ở Cài đặt → Chi phí & nhắc hạn.
 - Log vòng poll có `review_opened`, `review_sent`, `review_failed`, `review_waiting`.
 
+### Rà soát owner — xác nhận, nhắc, leo thang, kết quả (ICO v2 G3b)
+
+- **Owner xác nhận** trên Cổng Owner (`#/owner/review/<kỳ>` — liên kết trong email) hoặc ở app đầy đủ (`#/owner-review?c=<kỳ>`).
+  Mỗi VM một thẻ, chọn một quyết định:
+  - **Còn dùng**.
+  - **Thu hồi** + ngày thu hồi dự kiến (từ hôm nay đến tối đa 1 năm).
+  - **Giảm cấu hình** + vCPU / RAM mới (số nguyên dương, nhỏ hơn hiện tại).
+  - **Chuyển owner** + email owner mới (khác owner hiện tại).
+  - **Không phải của tôi**.
+  Ghi chú tối đa 500 ký tự. Chọn nhiều VM để áp dụng một quyết định cho cả nhóm. Chỉ sửa được khi kỳ đang mở; owner chỉ thấy và
+  sửa VM của mình (VM ngoài phạm vi → 404 cho cả yêu cầu). Mỗi lần lưu ghi một dòng `audit_log` (`owners.review.decide`).
+- **Nhắc và leo thang** (pod leader, mỗi vòng poll; mỗi người nhận một email cho mỗi mốc, không gửi trùng):
+  - hạn − 7 ngày: **nhắc lần 1** cho owner còn VM chưa xác nhận;
+  - hạn − 2 ngày: **nhắc lần cuối**;
+  - đến hạn: **leo thang** tới `manager_email` của hệ thống (gộp theo quản lý); hệ thống chưa có quản lý → gửi team hạ tầng
+    (`REVIEW_INFRA_EMAIL`) kèm cảnh báo *thiếu quản lý trực tiếp*;
+  - hạn + 7 ngày: **đóng kỳ** — VM chưa quyết định thành *Chờ team hạ tầng xác nhận*, gửi email tổng kết cho team hạ tầng.
+  Kỳ chạy thử chỉ lập email để xem trước, như G3a.
+- **Sau khi đóng kỳ**, team hạ tầng (admin hoặc owner admin) quyết định thay owner ở Cài đặt → Rà soát owner (*Còn dùng* /
+  *Không xác định được owner*). VM **Chuyển owner** / **Không phải của tôi** vào hàng **Cần gán lại owner**: gán lại ở
+  Quản lý thông tin → Hệ thống & Owner rồi bấm *Đã gán lại*.
+- **Kết quả kỳ**: tỷ lệ phản hồi (VM có quyết định / VM có owner), số VM theo quyết định, tài nguyên thu hồi
+  (Thu hồi = toàn bộ vCPU / RAM / disk của VM; Giảm cấu hình = phần giảm), quy ra tiền bằng đơn giá `REVIEW_UNIT_COST_VCPU`,
+  `REVIEW_UNIT_COST_RAM_GB`, `REVIEW_UNIT_COST_DISK_GB` (VND / đơn vị / tháng; × 12 cho năm — để 0 thì không quy tiền).
+  Xuất **PDF** (HSC, lưu vào Kho báo cáo) và **Excel** (Tổng kết, Theo owner, Chi tiết VM).
+- **Đối chiếu kỳ sau**: VM *Thu hồi* mà CI đã chuyển `retired` (không còn thấy trong vCenter) được đánh dấu **đã xác minh**;
+  quá ngày thu hồi mà VM vẫn còn → hộp việc Trang chủ nguồn **Rà soát owner** (mức xấu). Hộp việc cũng nhắc VM chờ team hạ tầng
+  xác nhận và hàng cần gán lại owner.
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh

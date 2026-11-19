@@ -69,6 +69,8 @@ def ensure_schema() -> None:
         "quotation_lines": [("cost_group_id", "INTEGER REFERENCES renovation_cost_groups(id) ON DELETE SET NULL"),
                             ("vat_pct", "NUMERIC(5, 2)"), ("vat_amount", "NUMERIC(18, 2)"), ("sets", "NUMERIC(10, 3)")],
         "datastore_states": [("backing", "TEXT")],
+        "review_items": [("action_date", "DATE"), ("new_vcpu", "INTEGER"), ("new_ram_gb", "INTEGER"),
+                         ("transfer_to", "VARCHAR(255)"), ("resolved_at", "TIMESTAMP"), ("resolved_by", "VARCHAR(255)")],
         "users": [
             ("auth_source", "VARCHAR(16) NOT NULL DEFAULT 'local'"), ("external_id", "VARCHAR(64)"),
             ("email", "VARCHAR(255)"), ("last_login_at", "TIMESTAMP"),

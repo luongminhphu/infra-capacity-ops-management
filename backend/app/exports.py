@@ -43,6 +43,10 @@ EXPORTS: List[Dict[str, Any]] = [
      "feature": "spend", "role": "spend:viewer", "archive": False},
     {"id": "systems-xlsx", "group": "owners", "label": "Hệ thống & Owner (Excel, nhập lại được)", "format": "xlsx",
      "method": "GET", "path": "/api/systems/export.xlsx", "rx": r"^/api/systems/export\.xlsx$", "feature": None, "role": None, "archive": False},
+    {"id": "review-pdf", "group": "owners", "label": "Kết quả rà soát owner (PDF)", "format": "pdf",
+     "method": "GET", "path": "/api/reviews/{id}/report.pdf", "rx": r"^/api/reviews/\d+/report\.pdf$", "feature": None, "role": None, "archive": True},
+    {"id": "review-xlsx", "group": "owners", "label": "Kết quả rà soát owner (Excel)", "format": "xlsx",
+     "method": "GET", "path": "/api/reviews/{id}/report.xlsx", "rx": r"^/api/reviews/\d+/report\.xlsx$", "feature": None, "role": None, "archive": False},
     {"id": "bom-xlsx", "group": "bom", "label": "BOM chuẩn hoá (Excel)", "format": "xlsx",
      "method": "POST", "path": "/api/bom/export", "rx": r"^/api/bom/export$", "feature": "bom", "role": None, "archive": False},
 ]

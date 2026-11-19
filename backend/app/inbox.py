@@ -26,7 +26,7 @@ LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
 SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
                  "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "asset": "Thiết bị Data Center", "license": "License", "spend": "Chi phí & hợp đồng",
-                 "system": "Hệ thống"}
+                 "system": "Hệ thống", "review": "Rà soát owner"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
 PUSH_LEVEL_PCT = 90.0          # decision 5: Discord alert at the 90 % level
@@ -290,11 +290,38 @@ def asset_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
     return out
 
 
+def review_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
+    """Owner reviews (G3b): undecided VMs of closed periods (team hạ tầng decides), VMs to re-assign
+    (chuyển owner / không phải của tôi), "Thu hồi" past its date while the VM is still active (chưa dọn)."""
+    from .owners import review
+    from .owners.models import ReviewCampaign, ReviewItem
+    out = []
+    for c, n in (db.query(ReviewCampaign, func.count(ReviewItem.id)).join(ReviewItem, ReviewItem.campaign_id == ReviewCampaign.id)
+                 .filter(ReviewCampaign.status == "closed", ReviewItem.owner_email.isnot(None), ReviewItem.decision.is_(None))
+                 .group_by(ReviewCampaign.id).all()):
+        out.append(item("review", "task", _key("rv-undecided", c.id, n), f"Kỳ rà soát {c.period_label}: {vn_g(n)} VM chờ team hạ tầng xác nhận",
+                        "Owner chưa quyết định trước khi kỳ đóng. Mở Cài đặt → Rà soát owner → Kết quả để quyết định thay.",
+                        page="set-reviews", role="admin", alert_key=_key("rv-undecided", c.id)))
+    q = db.query(func.count(ReviewItem.id)).filter(ReviewItem.decision.in_(("transfer", "not_mine")), ReviewItem.resolved_at.is_(None)).scalar() or 0
+    if q:
+        out.append(item("review", "task", _key("rv-queue", q), f"{vn_g(q)} VM cần gán lại owner sau rà soát",
+                        "Owner báo chuyển owner / không phải của mình. Gán lại ở Hệ thống & Owner rồi đánh dấu đã xử lý.",
+                        page="set-reviews", role="admin", alert_key="rv-queue"))
+    left = review.not_cleaned(db, today)
+    if left:
+        names = ", ".join(i.vm_name for i in left[:6]) + (f" và {len(left) - 6} VM khác" if len(left) > 6 else "")
+        out.append(item("review", "bad", _key("rv-left", len(left)), f"{vn_g(len(left))} VM đã quyết định thu hồi nhưng chưa dọn",
+                        f"Quá ngày thu hồi dự kiến mà VM vẫn còn trong vCenter: {names}.", page="set-reviews", role="admin",
+                        alert_key="rv-left"))
+    return out
+
+
 PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("capacity", capacity_items, False), ("backup", backup_items, False),
     ("datastore", datastore_items, False), ("snapshot", snapshot_items, False),
     ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False), ("asset", asset_items, True),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
+    ("review", review_items, True),
 ]
 
 _cache: Dict[str, Any] = {"at": 0.0, "items": None, "errors": []}

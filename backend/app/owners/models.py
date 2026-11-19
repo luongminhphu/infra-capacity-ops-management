@@ -164,6 +164,9 @@ class ReviewItem(Base):
         UniqueConstraint("campaign_id", "ci_id", name="uq_review_item_vm"),
         CheckConstraint("decision IS NULL OR " + _in("decision", DECISIONS), name="ck_review_item_decision"),
         CheckConstraint(_lower("owner_email"), name="ck_review_item_owner_lower"),
+        CheckConstraint(_lower("transfer_to"), name="ck_review_item_transfer_lower"),
+        CheckConstraint("new_vcpu IS NULL OR new_vcpu > 0", name="ck_review_item_new_vcpu"),
+        CheckConstraint("new_ram_gb IS NULL OR new_ram_gb > 0", name="ck_review_item_new_ram"),
         Index("ix_review_items_owner", "campaign_id", "owner_email"),
     )
 
@@ -186,6 +189,13 @@ class ReviewItem(Base):
     note = Column(String(500))
     escalated_at = Column(DateTime)
     verified_at = Column(DateTime)
+    # G3b: details of the decision
+    action_date = Column(Date)                                 # decommission: planned date
+    new_vcpu = Column(Integer)                                 # resize: proposed vCPU / RAM
+    new_ram_gb = Column(Integer)
+    transfer_to = Column(String(255))                          # transfer: proposed owner e-mail
+    resolved_at = Column(DateTime)                             # transfer / not_mine: re-assigned by an admin (G2a)
+    resolved_by = Column(String(255))
 
 
 class ReviewNotice(Base):

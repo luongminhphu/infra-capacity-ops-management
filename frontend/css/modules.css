@@ -405,3 +405,19 @@
 .owner-topbar{padding:var(--space-3) var(--space-4);}
 .rv-mail{width:100%;min-height:420px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--white);}  /* e-mails are written for a white page */
 .data-table tr.is-selected td{background:var(--brand-tint);}
+/* Owner review (G3b): one card per VM, phone first */
+.orv-list{display:flex;flex-direction:column;gap:var(--space-3);}
+.owner-main-inner{display:flex;flex-direction:column;gap:var(--space-4);}
+.orv-card{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-surface);padding:var(--space-3) var(--space-4);
+  display:flex;flex-direction:column;gap:var(--space-2);min-width:0;}
+.orv-card.is-flagged{border-left:3px solid var(--status-warn-glyph);}
+.orv-head{display:flex;align-items:flex-start;gap:var(--space-2);flex-wrap:wrap;}
+.orv-title{display:flex;flex-direction:column;flex:1 1 12rem;min-width:0;overflow-wrap:anywhere;}
+.orv-meta,.orv-reason,.orv-progress{margin:0;}
+.orv-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--space-2) var(--space-3);align-items:end;}
+.orv-form .field{min-width:0;}
+.orv-extra{display:contents;}
+.orv-extra[hidden]{display:none;}
+.orv-two{display:contents;}
+.orv-bulk{display:flex;flex-direction:column;gap:var(--space-2);margin-top:var(--space-2);}
+.orv-pick{margin-top:3px;}

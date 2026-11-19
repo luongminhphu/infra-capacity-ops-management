@@ -72,6 +72,16 @@ def open_now(data: Dict[str, Any] = Body(default={}), user: User = Depends(requi
     return _out(c)
 
 
+@router.get("/queue/reassign")
+def reassign_queue(user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    """"Chuyển owner" / "Không phải của tôi" waiting for an admin to re-assign the VM (never changed automatically)."""
+    rows = (db.query(ReviewItem, ReviewCampaign.period_label).join(ReviewCampaign, ReviewCampaign.id == ReviewItem.campaign_id)
+            .filter(ReviewItem.decision.in_(("transfer", "not_mine")), ReviewItem.resolved_at.is_(None))
+            .order_by(ReviewCampaign.opened_at.desc(), ReviewItem.vm_name).limit(2000).all())
+    return {"items": [{**_item(i), "periodLabel": p, "transferTo": i.transfer_to, "decidedBy": i.decided_by, "note": i.note}
+                      for i, p in rows]}
+
+
 @router.get("/{cid}")
 def campaign(cid: int, user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
     c = _c(db, cid)
@@ -114,3 +124,57 @@ def send(cid: int, user: User = Depends(require_admin), db: Session = Depends(ge
         return review.send_campaign(db, c, user.username)
     except ValueError as exc:
         raise HTTPException(409, str(exc))
+
+
+# ---------------------------------------------------------------- G3b: results, infra decisions, re-assign queue, reports
+@router.get("/{cid}/summary")
+def campaign_summary(cid: int, user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    return review.summary(db, _c(db, cid))
+
+
+@router.put("/{cid}/items")
+def infra_decide(cid: int, data: Dict[str, Any] = Body(...), user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    """Team hạ tầng settles items (also after closing: "chờ team hạ tầng xác nhận")."""
+    c = _c(db, cid)
+    ids = data.get("itemIds")
+    if not isinstance(ids, list) or not ids or len(ids) > 2000 or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
+        raise HTTPException(422, "itemIds phải là danh sách số nguyên (1–2000).")
+    items = db.query(ReviewItem).filter(ReviewItem.campaign_id == c.id, ReviewItem.id.in_(set(ids))).all()
+    if len(items) != len(set(ids)):
+        raise HTTPException(404, "Không có VM này trong kỳ.")
+    try:
+        return {"saved": review.decide(db, c, items, data, user.username, infra=True)}
+    except review.Invalid as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.post("/items/{iid}/resolve")
+def resolve_item(iid: int, user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    it = db.get(ReviewItem, iid)
+    if it is None:
+        raise HTTPException(404, "Không có VM này.")
+    try:
+        review.resolve(db, it, user.username)
+    except review.Invalid as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True}
+
+
+@router.get("/{cid}/report.pdf")
+def report_pdf(cid: int, user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    from fastapi.responses import Response as Resp
+    from .. import report_review
+    c = _c(db, cid)
+    data = report_review.build_pdf(review.summary(db, c), user.display_name or user.username)
+    return Resp(data, media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="ICO_Ra_soat_owner_{c.period_label}.pdf"'})
+
+
+@router.get("/{cid}/report.xlsx")
+def report_xlsx(cid: int, user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    from fastapi.responses import Response as Resp
+    from .. import excel_review
+    c = _c(db, cid)
+    return Resp(excel_review.build_xlsx(review.summary(db, c)),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f'attachment; filename="ICO_Ra_soat_owner_{c.period_label}.xlsx"'})

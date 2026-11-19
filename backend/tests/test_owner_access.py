@@ -280,6 +280,7 @@ NOT_FULL_ONLY = {
     "/api/auth/passkey/invite", "/api/auth/passkey/register/options", "/api/auth/passkey/register/verify",  # invite link / own passkey
     "/api/auth/me",                                                                   # any scope: picks the shell
     "/api/owner/systems", "/api/owner/vms",                                           # owner portal (get_owner_user)
+    "/api/owner/reviews", "/api/owner/reviews/{cid}", "/api/owner/reviews/{cid}/items",  # owner's review decisions (G3b)
 }
 
 
