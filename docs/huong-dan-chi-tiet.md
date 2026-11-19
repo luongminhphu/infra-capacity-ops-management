@@ -499,6 +499,8 @@ tắt rule và thêm / sửa / xoá entitlement chỉ dành cho **quản trị v
   - **Thanh lý**: thiết bị chuyển sang *Đã thanh lý* từ *Ngày thanh lý* (mặc định hôm nay), rời cảnh báo, hộp việc và
     kế hoạch. Lần nhập Excel sau (file cũ vẫn còn thiết bị đó) không đưa nó trở lại; chọn quyết định khác (hoặc *Chưa
     quyết định*) để đưa lại vào dùng.
+  - **Luân chuyển cho HN**: như Thanh lý (rời DC từ *Ngày luân chuyển*, rời cảnh báo và kế hoạch, giữ qua lần nhập Excel)
+    nhưng ghi là *Đã luân chuyển HN*; thẻ số liệu tách riêng số thiết bị đã thanh lý và đã luân chuyển.
 - **Chọn nhiều thiết bị**: đánh dấu ô đầu dòng (hoặc ô tiêu đề = mọi thiết bị đang hiện theo bộ lọc), rồi **Cập nhật
   quyết định** để áp một quyết định (thay thế, dùng tiếp, không mua bảo hành, thanh lý) cho tất cả trong một lần,
   ghi một dòng nhật ký.

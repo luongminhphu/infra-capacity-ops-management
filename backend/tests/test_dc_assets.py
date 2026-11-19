@@ -417,3 +417,29 @@ def test_bulk_decision_and_disposal(app_, admin, editor, clean):
     assert editor.post("/api/assets/dc/decision", json={"ids": ids, "decision": "dispose", "until": "31/02/2026"}).status_code == 400
     nobody = _login(app_, "nobody1")
     assert nobody.post("/api/assets/dc/decision", json={"ids": ids, "decision": "dispose"}).status_code == 403
+
+
+def test_transfer_to_hn_is_an_exit_kept_apart_from_disposal(app_, admin, editor, clean):
+    _upload(admin, "/api/assets/dc/import/commit", _book())
+    items = {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}
+    a1, a2, s85 = items["SAN3-A300-01"]["id"], items["SAN3-A300-02"]["id"], items["svr85"]["id"]
+    assert editor.post("/api/assets/dc/decision", json={"ids": [a1, a2], "decision": "transfer", "until": "2026-11-15",
+                                                        "note": "Chuyển DR Hà Nội"}).json() == {"updated": 2}
+    editor.post("/api/assets/dc/decision", json={"ids": [s85], "decision": "dispose", "until": "2026-11-10"})
+    d = admin.get("/api/assets/dc").json()
+    items = {a["deviceId"]: a for a in d["items"]}
+    a300 = items["SAN3-A300-01"]
+    assert (a300["removed"], a300["exitKind"], a300["disposedOn"], a300["levelText"]) == (True, "transfer", "2026-11-15", "Đã luân chuyển HN")
+    assert (a300["decision"]["decision"], a300["decision"]["label"], a300["decision"]["note"]) == ("transfer", "Luân chuyển cho HN", "Chuyển DR Hà Nội")
+    assert (items["svr85"]["exitKind"], items["svr85"]["levelText"]) == ("dispose", "Đã thanh lý")
+    # 2 REMOVED rows of the file + 1 disposed + 2 transferred
+    assert (d["summary"]["removed"], d["summary"]["transferred"]) == (5, 2)
+    y = fiscal.fiscal_year(fiscal.today_vn(), 1) + 1
+    plan = editor.post("/api/spend/plans", json={"fiscalYear": y}).json()
+    assert not any("DC ENTERPRISE STORAGE CLUSTER" in l["title"] for l in plan["lines"])
+    # an older list does not bring them back; another decision does
+    _upload(admin, "/api/assets/dc/import/commit", _book())
+    assert {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}["SAN3-A300-02"]["exitKind"] == "transfer"
+    editor.post("/api/assets/dc/decision", json={"ids": [a2], "decision": "replace"})
+    back = {a["deviceId"]: a for a in admin.get("/api/assets/dc").json()["items"]}["SAN3-A300-02"]
+    assert (back["removed"], back["exitKind"], back["disposedOn"], back["decision"]["decision"]) == (False, None, None, "replace")

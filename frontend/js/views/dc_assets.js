@@ -30,7 +30,7 @@ function dcKpis(s, d) {
   const limit = Math.round(d.limitMonths / 12);
   const active = s.total || 0;
   return uiKpiStrip([
-    { label: 'Thiết bị đang dùng', valueHtml: `${fmtInt(active)}<small>thiết bị</small>`, subHtml: `${fmtInt(s.removed)} đã thanh lý · ${fmtInt(s.linked)} có hợp đồng ghép SN` },
+    { label: 'Thiết bị đang dùng', valueHtml: `${fmtInt(active)}<small>thiết bị</small>`, subHtml: `${fmtInt(s.removed - (s.transferred || 0))} đã thanh lý${s.transferred ? ` · ${fmtInt(s.transferred)} luân chuyển HN` : ''} · ${fmtInt(s.linked)} có hợp đồng ghép SN` },
     { label: `Dùng từ ${limit} năm`, valueHtml: `${fmtInt(s.ge5)}<small>thiết bị</small>`, subHtml: `${fmtInt(s.crit)} không còn bảo hành phần cứng`,
       status: s.crit ? { cls: 'crit', text: `${fmtInt(s.crit)} VƯỢT NGƯỠNG` } : s.ge5 ? { cls: 'bad', text: 'Lập kế hoạch thay thế' } : { cls: 'ok', text: 'AN TOÀN' } },
     { label: '3 – 5 năm', valueHtml: `${fmtInt(s['3to5'])}<small>thiết bị</small>`, subHtml: `${fmtInt(s.warn)} sắp đủ ${limit} năm hoặc hết bảo hành / license`,
@@ -99,7 +99,7 @@ function dcRender() {
       <td>${dcDate(a.acquiredOn)}<span class="muted-sub">${esc(a.ageText)}</span></td>
       <td>${dcCov(a.hw, d)}</td>
       <td>${dcCov(a.license, d)}</td>
-      <td class="dc-status">${a.removed ? uiTag(a.disposedOn ? `Thanh lý ${dcDate(a.disposedOn)}` : 'Đã thanh lý') : uiPill(a.level, a.levelText)}${dcShortReasons(a)}</td></tr>`).join('');
+      <td class="dc-status">${a.removed ? uiTag(a.disposedOn ? `${a.exitKind === 'transfer' ? 'Luân chuyển HN' : 'Thanh lý'} ${dcDate(a.disposedOn)}` : 'Đã thanh lý') : uiPill(a.level, a.levelText)}${dcShortReasons(a)}</td></tr>`).join('');
   const allOn = shown.length > 0 && shown.every(a => dcState.sel.has(a.id));
   mount.innerHTML = `${dcKpis(d.summary, d)}
     <section class="panel">${head}
@@ -109,7 +109,7 @@ function dcRender() {
         <select id="dcAge" aria-label="Tuổi thiết bị">${opt('', 'Mọi độ tuổi', dcState.age)}${Object.entries(DC_AGE).map(([k, t]) => opt(k, t, dcState.age)).join('')}</select>
         <select id="dcLevel" aria-label="Trạng thái">${opt('', 'Mọi trạng thái', dcState.level)}${opt('crit', 'VƯỢT NGƯỠNG', dcState.level)}${opt('bad', 'CẢNH BÁO', dcState.level)}${opt('warn', 'THEO DÕI', dcState.level)}${opt('ok', 'AN TOÀN', dcState.level)}</select>
         <label class="infra-check"><input type="checkbox" id="dcIssues"${dcState.onlyIssues ? ' checked' : ''}> Chỉ mục cần xử lý</label>
-        <label class="infra-check"><input type="checkbox" id="dcRemoved"${dcState.showRemoved ? ' checked' : ''}> Hiện thiết bị đã thanh lý</label>
+        <label class="infra-check"><input type="checkbox" id="dcRemoved"${dcState.showRemoved ? ' checked' : ''}> Hiện thiết bị đã thanh lý / luân chuyển</label>
       </div>
       ${pick ? '<div class="dc-bulk" id="dcBulk" role="status"></div>' : ''}
       <div class="table-scroll" role="region" tabindex="0" aria-label="Thiết bị Data Center"><table class="data-table infra-table dc-table">
@@ -133,7 +133,7 @@ function dcBulkBar() {
   bar.innerHTML = n ? `<span><b>${fmtInt(n)}</b> thiết bị đã chọn</span>
       <button class="btn btn-primary btn-sm" type="button" data-dc-bulk>Cập nhật quyết định</button>
       <button class="btn btn-ghost btn-sm" type="button" data-dc-clear>Bỏ chọn</button>`
-    : '<span class="muted-sub">Đánh dấu ô đầu dòng để cập nhật quyết định cho nhiều thiết bị cùng lúc (thay thế, dùng tiếp, không mua bảo hành, thanh lý).</span>';
+    : '<span class="muted-sub">Đánh dấu ô đầu dòng để cập nhật quyết định cho nhiều thiết bị cùng lúc (thay thế, dùng tiếp, không mua bảo hành, thanh lý, luân chuyển cho HN).</span>';
   bar.classList.toggle('active', n > 0);
   const all = $('#dcSelAll');
   if (all) {
@@ -169,7 +169,7 @@ function dcOpen(id) {
       <div class="sp-dl-item"><dt>SN · asset tag</dt><dd>${esc(a.serial || '—')} · ${esc(a.assetTag || '—')}</dd></div>
       <div class="sp-dl-item"><dt>Vị trí</dt><dd>${esc(a.location || '—')}</dd></div>
       <div class="sp-dl-item"><dt>Đưa vào dùng</dt><dd>${dcDate(a.acquiredOn)} · ${esc(a.ageText)}${a.limitDate ? ` · đủ ${esc(Math.round(d.limitMonths / 12))} năm ${dcDate(a.limitDate)}` : ''}</dd></div>
-      <div class="sp-dl-item"><dt>Trạng thái</dt><dd>${a.removed ? uiTag('Đã thanh lý') : uiPill(a.level, a.levelText)} ${esc(a.reasons.join(' · '))}</dd></div>
+      <div class="sp-dl-item"><dt>Trạng thái</dt><dd>${a.removed ? uiTag(a.levelText) : uiPill(a.level, a.levelText)} ${esc(a.reasons.join(' · '))}</dd></div>
       <div class="sp-dl-item"><dt>Quyết định vòng đời</dt><dd>${dcDecisionText(a.decision)}</dd></div>
       <div class="sp-dl-item"><dt>Bảo hành phần cứng</dt><dd>${dcCov(a.hw, d)}</dd></div>
       <div class="sp-dl-item"><dt>License / firmware</dt><dd>${dcCov(a.license, d)}</dd></div>
@@ -196,7 +196,7 @@ function dcOpen(id) {
 
 function dcDecisionText(x) {
   if (!x) return '<span class="muted-sub">Chưa quyết định</span>';
-  if (x.decision === 'dispose') return `${uiTag('Thanh lý')} ${esc([`ngày ${dcDate(x.until)}`, x.note].filter(Boolean).join(' · '))}<span class="muted-sub">${esc(x.by || '')}</span>`;
+  if (x.decision === 'dispose' || x.decision === 'transfer') return `${uiTag(x.label)} ${esc([`ngày ${dcDate(x.until)}`, x.note].filter(Boolean).join(' · '))}<span class="muted-sub">${esc(x.by || '')}</span>`;
   const bits = [x.reasonLabel, x.until ? `xem lại ${dcDate(x.until)}` : '', x.note].filter(Boolean);
   return `${uiTag(x.label)}${bits.length ? ` ${esc(bits.join(' · '))}` : ''}<span class="muted-sub">${esc(x.by || '')}</span>`;
 }
@@ -213,9 +213,10 @@ function dcDecisionForm({ title, subtitle, base, current, defaultUntil, onDone }
       <b>Dùng tiếp</b> (vượt ngân sách, còn tốt…) thì rời dòng Capex, bảo hành được gia hạn ở Opex — dòng “Gia hạn” của Opex đang có,
       hoặc dòng “Dùng tiếp thiết bị” khi chưa có Opex bảo hành. <b>Không mua bảo hành</b>: dùng tiếp có chủ đích, không cảnh báo
       tuổi / thiếu bảo hành và không vào kế hoạch cho tới ngày xem lại. <b>Thanh lý</b>: thiết bị chuyển sang “Đã thanh lý” từ ngày
-      thanh lý, rời cảnh báo và kế hoạch; chọn quyết định khác để đưa lại vào dùng.</p>
+      thanh lý, rời cảnh báo và kế hoạch; <b>Luân chuyển cho HN</b> tương tự nhưng ghi là đã chuyển cho Hà Nội. Chọn quyết định khác để đưa
+      lại vào dùng.</p>
     <div class="form-grid-aligned dc-form">
-      <label class="field"><span>Quyết định</span><select id="dcdDecision">${[['extend', 'Dùng tiếp, gia hạn Opex'], ['nocover', 'Dùng tiếp, không mua bảo hành'], ['replace', 'Thay thế (Capex)'], ['dispose', 'Thanh lý'], ['none', 'Chưa quyết định']].map(([k, t]) => opt(k, t, cur.decision || 'extend')).join('')}</select></label>
+      <label class="field"><span>Quyết định</span><select id="dcdDecision">${[['extend', 'Dùng tiếp, gia hạn Opex'], ['nocover', 'Dùng tiếp, không mua bảo hành'], ['replace', 'Thay thế (Capex)'], ['dispose', 'Thanh lý'], ['transfer', 'Luân chuyển cho HN'], ['none', 'Chưa quyết định']].map(([k, t]) => opt(k, t, cur.decision || 'extend')).join('')}</select></label>
       <label class="field"><span>Lý do</span><select id="dcdReason">${opt('', '— Chọn —', cur.reason)}${Object.entries(DC_REASONS).map(([k, t]) => opt(k, t, cur.reason)).join('')}</select></label>
       <label class="field"><span id="dcdUntilLbl">Dùng tiếp đến</span><input id="dcdUntil" type="date" value="${esc(cur.until || defaultUntil || '')}"></label>
       <label class="field sp-span2"><span>Ghi chú</span><input id="dcdNote" maxlength="500" value="${esc(cur.note || '')}" placeholder="vd: dời sang FY sau, hãng còn hỗ trợ đến 2028"></label>
@@ -225,17 +226,18 @@ function dcDecisionForm({ title, subtitle, base, current, defaultUntil, onDone }
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
    <button class="btn btn-primary btn-sm" type="button" id="dcdSave">Lưu quyết định</button>`);
   const sync = () => {
-    const v = $('#dcdDecision').value, ext = ['extend', 'nocover'].includes(v), disp = v === 'dispose';
+    const v = $('#dcdDecision').value, ext = ['extend', 'nocover'].includes(v), disp = v === 'dispose' || v === 'transfer';
     $('#dcdReason').disabled = !ext; $('#dcdUntil').disabled = !(ext || disp);
-    $('#dcdUntilLbl').textContent = disp ? 'Ngày thanh lý' : 'Dùng tiếp đến';
+    $('#dcdUntilLbl').textContent = v === 'transfer' ? 'Ngày luân chuyển' : disp ? 'Ngày thanh lý' : 'Dùng tiếp đến';
     $('#dcdUntilHelp').classList.toggle('hidden', !ext);
     if (disp && !$('#dcdUntil').value) $('#dcdUntil').value = today;
   };
   $('#dcdDecision').onchange = sync; sync();
   $('#dcdSave').onclick = async () => {
     const pick = $('#dcdDecision').value;
-    if (pick === 'dispose' && !(await uiConfirm(`Thanh lý ${base.ids ? `${fmtInt(base.ids.length)} thiết bị` : 'các thiết bị của dòng này'}? Thiết bị rời cảnh báo và kế hoạch.`))) return;
-    const body = { ...base, decision: pick === 'none' ? null : pick, reason: pick === 'dispose' ? null : ($('#dcdReason').value || null),
+    const exit = pick === 'dispose' || pick === 'transfer';
+    if (exit && !(await uiConfirm(`${pick === 'transfer' ? 'Luân chuyển cho HN' : 'Thanh lý'} ${base.ids ? `${fmtInt(base.ids.length)} thiết bị` : 'các thiết bị của dòng này'}? Thiết bị rời cảnh báo và kế hoạch.`))) return;
+    const body = { ...base, decision: pick === 'none' ? null : pick, reason: exit ? null : ($('#dcdReason').value || null),
       until: $('#dcdUntil').value || null, note: $('#dcdNote').value.trim() };
     $('#dcdSave').disabled = true;
     try {
