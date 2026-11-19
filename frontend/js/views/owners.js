@@ -457,3 +457,131 @@ function orAcceptDialog(p) {
     } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); $('#oraSave').disabled = false; }
   };
 }
+
+/* ---------------------------------------------------------------- Cài đặt → Rà soát owner (G3a) */
+const rvState = { list: null, sel: null, detail: null };
+const RV_NOTICE = { preview: ['na', 'Chạy thử — chưa gửi'], pending: ['warn', 'Chờ gửi'], sending: ['warn', 'Đang gửi'],
+  sent: ['ok', 'Đã gửi'], failed: ['crit', 'Gửi lỗi'] };
+
+async function renderReviewSettings() {
+  const mount = $('#reviewSettingsMount');
+  if (!mount) return;
+  if (!osCan()) { mount.innerHTML = uiNote('Cần quyền quản trị Hệ thống & Owner (Cài đặt → Người dùng & quyền).'); return; }
+  mount.innerHTML = uiLoading();
+  try {
+    rvState.list = await apiRequest('/reviews');
+    const first = rvState.list.items[0];
+    rvState.sel = rvState.sel && rvState.list.items.some(c => c.id === rvState.sel) ? rvState.sel : (first ? first.id : null);
+    rvState.detail = rvState.sel ? await apiRequest(`/reviews/${rvState.sel}`) : null;
+  } catch (err) { mount.innerHTML = uiError(err.message); return; }
+  rvRender();
+}
+
+function rvRender() {
+  const mount = $('#reviewSettingsMount');
+  const L = rvState.list, d = rvState.detail, admin = uiIsAdmin();
+  const months = L.startMonths.map(m => `tháng ${m}`).join(' và ');
+  const rows = L.items.map(c => `<tr class="infra-row${c.id === rvState.sel ? ' is-selected' : ''}" tabindex="0" data-rv-id="${esc(c.id)}">
+      <td><b>${esc(c.periodLabel)}</b></td><td>${esc(spTimeSafe(c.openedAt))}<span class="muted-sub">${esc(c.openedBy)}</span></td>
+      <td>${esc(spDateSafe(c.dueAt))}</td><td>${c.dryRun ? uiTag('Chạy thử') : uiTag(c.status === 'open' ? 'Đang mở' : 'Đã đóng')}</td>
+      <td class="num">${fmtInt(c.itemCount)}</td></tr>`).join('');
+  mount.innerHTML = `
+    <p class="muted-sub">Kỳ tự mở vào ${esc(months)} (kỳ hiện tại: <b>${esc(L.nextLabel)}</b>), mỗi kỳ đúng một lần.</p>
+    ${admin ? '<div class="panel-toolbar"><button class="btn btn-primary btn-sm" type="button" data-rv-open><i data-lucide="plus"></i>Mở kỳ ngay</button></div>' : ''}
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Kỳ rà soát"><table class="data-table">
+      <thead><tr><th>Kỳ</th><th>Mở lúc</th><th>Hạn xác nhận</th><th>Trạng thái</th><th class="num">VM</th></tr></thead>
+      <tbody>${rows || uiEmptyRow(5, 'Chưa có kỳ rà soát nào.')}</tbody></table></div>
+    <div id="rvDetail">${d ? rvDetailHtml(d) : ''}</div>`;
+  refreshIcons();
+  rvBind();
+}
+
+function rvDetailHtml(d) {
+  const c = d.counts, admin = uiIsAdmin();
+  const notices = d.notices.map(n => {
+    const [tone, label] = RV_NOTICE[n.status] || ['na', n.status];
+    return `<tr><td class="mono">${esc(n.recipient)}</td><td class="num">${fmtInt(n.vmCount)}</td><td>${uiPill(tone, label)}${n.error ? `<span class="muted-sub">${esc(n.error)}</span>` : ''}</td>
+      <td class="num">${fmtInt(n.attempts)}</td><td>${n.sentAt ? esc(spTimeSafe(n.sentAt)) : '—'}</td>
+      <td><button class="btn btn-ghost btn-sm" type="button" data-rv-preview="${esc(n.id)}">Xem trước</button></td></tr>`;
+  }).join('');
+  const unowned = d.unowned.map(i => `<tr><td>${uiEntityLink('vm', i.vm, i.vcenterKey, false)}<span class="muted-sub">${esc(i.vcenterKey)}</span></td>
+      <td>${esc(i.systemCode ? `${i.systemCode} — ${i.systemName} (chưa có owner)` : 'Chưa thuộc hệ thống')}</td>
+      <td>${i.flagged ? `${uiPill('warn', 'Nên rà')} <span class="muted-sub">${esc(i.reasons.join('; '))}</span>` : '—'}</td></tr>`).join('');
+  return `<div class="sp-h">Kỳ ${esc(d.periodLabel)} — hạn ${esc(spDateSafe(d.dueAt))}</div>
+    ${uiKpiStrip([
+      { label: 'VM trong kỳ', valueHtml: `${fmtInt(c.items)}<small>VM</small>`, subHtml: `${fmtInt(c.flagged)} VM nên rà` },
+      { label: 'Có owner', valueHtml: `${fmtInt(c.owned)}<small>VM</small>`, subHtml: `${fmtInt(c.owners)} owner nhận email` },
+      { label: 'Chưa có owner', valueHtml: `${fmtInt(c.unowned)}<small>VM</small>`, subHtml: 'Team hạ tầng tự rà — không gửi ai' },
+    ])}
+    ${d.dryRun ? `<div class="insight-box" role="status"><div><b>Chạy thử:</b> email đã được lập nhưng chưa gửi ai. Xem trước từng email, rồi
+      ${admin ? 'bấm <b>Gửi email</b> để gửi thật.' : 'đề nghị quản trị viên gửi.'}</div>
+      ${admin ? '<button class="btn btn-primary btn-sm" type="button" data-rv-send><i data-lucide="send"></i>Gửi email</button>' : ''}</div>` : ''}
+    <p class="criteria-status" id="rvMsg" role="status"></p>
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Email của kỳ"><table class="data-table">
+      <thead><tr><th>Người nhận</th><th class="num">VM</th><th>Trạng thái</th><th class="num">Lần thử</th><th>Gửi lúc</th><th></th></tr></thead>
+      <tbody>${notices || uiEmptyRow(6, 'Không có owner nào để gửi.')}</tbody></table></div>
+    <div class="sp-h">VM chưa có owner (${fmtInt(d.unowned.length)})</div>
+    <div class="table-scroll" role="region" tabindex="0" aria-label="VM chưa có owner"><table class="data-table">
+      <thead><tr><th>VM</th><th>Hệ thống</th><th>Tín hiệu</th></tr></thead>
+      <tbody>${unowned || uiEmptyRow(3, 'Mọi VM đều có owner.')}</tbody></table></div>`;
+}
+
+function rvBind() {
+  const mount = $('#reviewSettingsMount');
+  mount.onclick = async (e) => {
+    const row = e.target.closest('[data-rv-id]');
+    if (row && !e.target.closest('button, a')) { rvState.sel = Number(row.dataset.rvId); renderReviewSettings(); return; }
+    const b = e.target.closest('button');
+    if (!b) return;
+    if ('rvOpen' in b.dataset) { rvOpenDialog(); return; }
+    if (b.dataset.rvPreview) { rvPreview(Number(b.dataset.rvPreview)); return; }
+    if ('rvSend' in b.dataset) {
+      if (!await uiConfirm(`Gửi ${fmtInt(rvState.detail.notices.length)} email rà soát kỳ ${rvState.detail.periodLabel} cho owner? Không thu hồi được sau khi gửi.`)) return;
+      b.disabled = true;
+      try {
+        const r = await apiRequest(`/reviews/${rvState.sel}/send`, { method: 'POST' });
+        await renderReviewSettings();
+        uiSetStatus('#rvMsg', r.error ? r.error : `Đã gửi ${fmtInt(r.sent)} email${r.failed ? `, ${fmtInt(r.failed)} lỗi — gửi lại ở vòng đồng bộ kế tiếp` : ''}.`, r.error || r.failed ? 'error' : 'ok');
+      } catch (err) { uiSetStatus('#rvMsg', err.message, 'error'); b.disabled = false; }
+    }
+  };
+  mount.onkeydown = (e) => {
+    const row = e.target.closest('[data-rv-id]');
+    if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); rvState.sel = Number(row.dataset.rvId); renderReviewSettings(); }
+  };
+}
+
+function rvOpenDialog() {
+  uiPanelDialog('Mở kỳ rà soát', `
+    <div class="form-grid-aligned dc-form">
+      <label class="field"><span>Tên kỳ</span><input id="rvoLabel" maxlength="16" value="${esc(rvState.list.nextLabel)}"></label>
+      <label class="field"><span>Hạn xác nhận (ngày)</span><input id="rvoDue" type="number" min="1" max="120" value="21"></label>
+    </div>
+    <label class="infra-check"><input type="checkbox" id="rvoDry" checked> Chạy thử: lập email để xem trước, chưa gửi</label>
+    <p class="muted-sub dc-form-help">Mỗi kỳ chỉ mở được một lần. Danh sách VM, owner và tín hiệu (tắt / không hoạt động lâu, chưa backup, snapshot cũ) chốt tại lúc mở.</p>`,
+  `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
+   <button class="btn btn-primary btn-sm" type="button" id="rvoSave">Mở kỳ</button>`);
+  $('#rvoSave').onclick = async () => {
+    $('#rvoSave').disabled = true;
+    try {
+      const c = await apiRequest('/reviews', { method: 'POST', body: JSON.stringify({ periodLabel: $('#rvoLabel').value.trim(),
+        dueDays: Number($('#rvoDue').value || 21), dryRun: $('#rvoDry').checked }) });
+      $('#spDialog').close();
+      rvState.sel = c.id;
+      await renderReviewSettings();
+    } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); $('#rvoSave').disabled = false; }
+  };
+}
+
+async function rvPreview(nid) {
+  let n;
+  try { n = await apiRequest(`/reviews/${rvState.sel}/notices/${nid}`); } catch (err) { uiAlert(err.message); return; }
+  // The e-mail is ICO-generated HTML with every value escaped; it is still shown in a sandboxed frame (no script, no same-origin).
+  uiPanelDialog('Xem trước email', `
+    <dl class="sp-dl"><div class="sp-dl-item"><dt>Người nhận</dt><dd class="mono">${esc(n.recipient)}</dd></div>
+      <div class="sp-dl-item"><dt>Tiêu đề</dt><dd>${esc(n.subject)}</dd></div></dl>
+    <iframe class="rv-mail" sandbox="" title="Nội dung email" referrerpolicy="no-referrer"></iframe>`,
+  '<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>');
+  const f = $('.rv-mail');
+  f.srcdoc = n.bodyHtml;
+}

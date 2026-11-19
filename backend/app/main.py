@@ -21,6 +21,7 @@ from .routers import dc_assets as dc_assets_router
 from .routers import cmdb as cmdb_router
 from .routers import owner_rules as owner_rules_router
 from .routers import owner_portal as owner_portal_router
+from .routers import reviews as reviews_router
 from .routers import owners as owners_router
 from .spend import reminders as spend_reminders, service as spend_service
 from .security import ensure_bootstrap_admin
@@ -165,6 +166,7 @@ app.include_router(cmdb_router.router)
 app.include_router(owner_rules_router.router)      # before owners: /api/systems/rules is not /{id}
 app.include_router(owners_router.router)
 app.include_router(owner_portal_router.router)
+app.include_router(reviews_router.router)
 app.include_router(exports_router.router)
 app.include_router(mcp_server.router)
 # Outermost: measures every /api and /mcp request (route template, latency, DB time).

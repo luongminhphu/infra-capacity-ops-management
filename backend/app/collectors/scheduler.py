@@ -419,6 +419,17 @@ def _assign_owners() -> Optional[Dict[str, Any]]:
         return None
 
 
+def _owner_reviews() -> Optional[Dict[str, Any]]:
+    """Open the review campaign of the period (once) and send its pending e-mails (owners/review.py)."""
+    from ..owners import review
+    try:
+        with SessionLocal() as db:
+            return review.tick(db)
+    except Exception:  # noqa: BLE001 — e-mails are retried next round; never stops the polling loop
+        logger.exception("Owner review round failed")
+        return None
+
+
 def round_summary(results: List[Dict[str, Any]], seconds: float, alerts: Optional[Dict[str, int]],
                   purge: Optional[Dict[str, int]]) -> str:
     """One key=value line per scheduler round (audit BEQ-11), easy to grep / parse:
@@ -488,6 +499,8 @@ async def scheduler_loop(app_settings: Settings):
             _beat(interval)
             owners = await asyncio.to_thread(_assign_owners) if cmdb else None
             _beat(interval)
+            reviews = await asyncio.to_thread(_owner_reviews)
+            _beat(interval)
             alerts = await asyncio.to_thread(_ops_alerts)
             purge = await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
             from .. import metrics
@@ -499,6 +512,9 @@ async def scheduler_loop(app_settings: Settings):
                      f" cmdb_retired={cmdb['retired']}") if cmdb else " cmdb=error"
             if owners:
                 line += f" owners_add={owners['add']} owners_change={owners['change']} owners_remove={owners['remove']}"
+            if reviews:
+                line += (f" review_opened={reviews['opened'] or '-'} review_sent={reviews['sent']} review_failed={reviews['failed']}"
+                         f" review_waiting={reviews['waiting']}")
             logger.info("%s", line)
         except asyncio.CancelledError:
             raise

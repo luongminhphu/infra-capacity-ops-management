@@ -7,15 +7,12 @@
 """
 import html
 import re
-import smtplib
-import ssl
 import urllib.error
 from dataclasses import dataclass
-from email.message import EmailMessage
-from email.utils import formataddr
 from typing import Iterable, List, Optional, Sequence
 
 from .. import secrets_box
+from ..shared import mailer
 from .models import SpendNotifyChannel, SpendSmtpConfig
 from .service import EMAIL_RE
 
@@ -84,7 +81,7 @@ def discord_messages(lines: Sequence[ReminderLine], test: bool = False) -> List[
 
 
 def _header(text: str) -> str:
-    return re.sub(r"[\r\n]+", " ", text)[:200]
+    return mailer.header(text)
 
 
 def email_content(lines: Sequence[ReminderLine], test: bool = False):
@@ -123,38 +120,30 @@ def send_discord(url: str, lines: Sequence[ReminderLine], test: bool = False) ->
         _post_json(url, {"content": content, "allowed_mentions": {"parse": []}, "username": "ICO nhắc hạn"})
 
 
-def smtp_send(cfg: SpendSmtpConfig, to: Iterable[str], subject: str, text: str, body_html: str) -> None:
-    to = list(to)
-    if not to:
-        return
-    msg = EmailMessage()
-    msg["Subject"] = _header(subject)
-    msg["From"] = formataddr(("ICO – Chi phí IT", cfg.from_addr))
-    msg["To"] = ", ".join(to)
-    msg.set_content(text)
-    msg.add_alternative(body_html, subtype="html")
+def smtp_settings_from(cfg: SpendSmtpConfig, from_name: str = "ICO – Chi phí IT") -> mailer.SmtpSettings:
     try:
         password = secrets_box.decrypt(cfg.password_enc) if cfg.password_enc else ""
     except secrets_box.SecretUnreadable:
         raise NotifyError("Mật khẩu SMTP đã lưu không giải mã được (SECRETS_KEY đổi) — nhập lại.") from None
-    ctx = ssl.create_default_context()
+    return mailer.SmtpSettings(host=cfg.host, port=cfg.port, security=cfg.security, username=cfg.username or "",
+                               password=password, from_addr=cfg.from_addr, from_name=from_name)
+
+
+def smtp_settings(db, from_name: str = "ICO") -> Optional[mailer.SmtpSettings]:
+    """The app's SMTP configuration (Cài đặt → Chi phí & nhắc hạn), for other modules (owner reviews…).
+    None when not configured. Raises NotifyError when the stored password cannot be decrypted."""
+    cfg = db.get(SpendSmtpConfig, 1)
+    return smtp_settings_from(cfg, from_name) if cfg is not None and cfg.host else None
+
+
+def smtp_send(cfg: SpendSmtpConfig, to: Iterable[str], subject: str, text: str, body_html: str) -> None:
+    to = list(to)
+    if not to:
+        return
     try:
-        if cfg.security == "ssl":
-            server = smtplib.SMTP_SSL(cfg.host, cfg.port, timeout=TIMEOUT, context=ctx)
-        else:
-            server = smtplib.SMTP(cfg.host, cfg.port, timeout=TIMEOUT)
-        with server:
-            if cfg.security == "starttls":
-                server.starttls(context=ctx)
-            if cfg.username:
-                server.login(cfg.username, password)
-            server.send_message(msg)
-    except smtplib.SMTPAuthenticationError:
-        raise NotifyError("Máy chủ SMTP từ chối đăng nhập (sai tài khoản / mật khẩu).") from None
-    except smtplib.SMTPRecipientsRefused:
-        raise NotifyError("Máy chủ SMTP từ chối địa chỉ người nhận.") from None
-    except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
-        raise NotifyError(f"Gửi email thất bại: {type(exc).__name__}.") from None
+        mailer.send(smtp_settings_from(cfg), to, subject, text, body_html)
+    except mailer.MailError as exc:
+        raise NotifyError(str(exc)) from None
 
 
 def send_email(cfg: Optional[SpendSmtpConfig], channel: SpendNotifyChannel, lines: Sequence[ReminderLine],
