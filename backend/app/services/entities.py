@@ -315,6 +315,9 @@ def vm_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str, 
     if is_on(features, "backup"):
         out["backup"] = _backup_for_vm(db, v, ci)
     out["ci"] = cq.card_extras(db, user, ci)
+    from ..owners import service as owners
+    out["system"] = owners.system_of_vm(db, ci.id) if ci is not None else None
+    out["canAssignSystem"] = ci is not None and owners.can_manage(user)
     return out
 
 

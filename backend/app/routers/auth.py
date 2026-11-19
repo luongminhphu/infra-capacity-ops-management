@@ -36,6 +36,11 @@ def _set_session(response: Response, user: User, auth_at: Optional[int] = None) 
     )
 
 
+
+def _owner_admin(user: User) -> bool:
+    from ..owners.service import can_manage
+    return can_manage(user)
+
 @router.get("/config")
 def auth_config():
     """What the login screen should offer (no secrets)."""
@@ -70,7 +75,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
     db.commit()
     _set_session(response, user)
     return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user),
-                   spend_role=effective_role(user))
+                   spend_role=effective_role(user), owner_admin=_owner_admin(user))
 
 
 # ---- Microsoft Entra ID (OIDC) ----
@@ -176,7 +181,8 @@ def passkey_login_verify(request: Request, response: Response, data: dict = Body
     db.commit()
     passkeys.clear_state(response)
     _set_session(response, user)
-    return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user), spend_role=effective_role(user))
+    return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user), spend_role=effective_role(user),
+                   owner_admin=_owner_admin(user))
 
 
 @router.post("/passkey/invite")
@@ -339,4 +345,4 @@ def logout(response: Response, vco_session: Optional[str] = Cookie(default=None)
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user),
-                   spend_role=effective_role(user))
+                   spend_role=effective_role(user), owner_admin=_owner_admin(user))

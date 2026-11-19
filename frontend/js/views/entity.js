@@ -104,8 +104,29 @@ function entityVmHtml(d) {
               ...(os ? [['Hệ điều hành', `${enVal(os.label)} ${os.version ? esc(os.version) : ''} ${os.edition ? esc(os.edition) : ''}${os.overridden ? ' ' + uiTag('ghi đè') : ''}`]] : [])])}
     </section>
     ${backup}
+    ${enSystemHtml(d)}
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
 }
+
+/* Hệ thống & Owner of a VM (G2a) + assign button for owner admins. */
+function enSystemHtml(d) {
+  if (!d.ci) return '';
+  const s = d.system;
+  const btn = d.canAssignSystem ? `<button class="btn btn-secondary btn-sm" type="button" data-en-assign="${esc(d.ci.id)}" data-en-vm="${esc(d.name)}">${s ? 'Đổi hệ thống' : 'Gán hệ thống'}</button>` : '';
+  const body = s ? enDl([['Hệ thống', `${esc(s.name)} <span class="muted-sub mono">${esc(s.code)}</span>`],
+      ['Owner', s.ownerEmail ? `${esc(s.ownerName || '')} <span class="mono">${esc(s.ownerEmail)}</span>` : uiPill('warn', 'Chưa có owner')],
+      ['Dự án · phòng ban', esc([s.project, s.department].filter(Boolean).join(' · ') || '—')],
+      ['Mức quan trọng', uiTag(s.criticalityLabel)], ['Gán bởi', esc(`${s.source === 'manual' ? 'Gán tay' : s.source}${s.assignedBy ? ' · ' + s.assignedBy : ''}`)]])
+    : '<p class="muted-sub">VM chưa thuộc hệ thống nào — chưa có owner.</p>';
+  return `<section class="panel"><div class="panel-head"><div class="panel-title" role="heading" aria-level="2">Hệ thống & Owner</div>
+      <div class="panel-toolbar">${btn}<button class="btn btn-ghost btn-sm" type="button" data-nav-link="systems">Hệ thống & Owner</button></div></div>${body}</section>`;
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-en-assign]');
+  if (!b || typeof osAssignDialog !== 'function') return;
+  osAssignDialog([Number(b.dataset.enAssign)], b.dataset.enVm, () => renderEntityView());
+});
 
 /* ---------------------------------------------------------------- CI registry: links, impact, server, datastore (ICO v2 G1c) */
 const EN_REL = {       // relation → [label seen from the source (out), label seen from the target (in)]

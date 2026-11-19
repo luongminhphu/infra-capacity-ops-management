@@ -7,7 +7,8 @@ import re
 from typing import Any, Dict, List, Optional
 
 GROUP_LABELS = {"capacity": "Capacity", "backup": "Backup", "license": "License", "sizing": "Sizing máy chủ",
-                "spend": "Ngân sách & chi phí", "renovation": "Cải tạo văn phòng", "bom": "Chuẩn hoá BOM", "inventory": "Tài sản"}
+                "spend": "Ngân sách & chi phí", "renovation": "Cải tạo văn phòng", "bom": "Chuẩn hoá BOM", "inventory": "Tài sản",
+                "owners": "Hệ thống & Owner"}
 
 # role: None = any signed-in user · "spend:viewer" = spend role at least viewer
 EXPORTS: List[Dict[str, Any]] = [
@@ -40,6 +41,8 @@ EXPORTS: List[Dict[str, Any]] = [
     {"id": "renovation-xlsx", "group": "renovation", "label": "Cải tạo văn phòng (Excel)", "format": "xlsx",
      "method": "GET", "path": "/api/spend/renovations/{code}/export.xlsx", "rx": r"^/api/spend/renovations/[^/]+/export\.xlsx$",
      "feature": "spend", "role": "spend:viewer", "archive": False},
+    {"id": "systems-xlsx", "group": "owners", "label": "Hệ thống & Owner (Excel, nhập lại được)", "format": "xlsx",
+     "method": "GET", "path": "/api/systems/export.xlsx", "rx": r"^/api/systems/export\.xlsx$", "feature": None, "role": None, "archive": False},
     {"id": "bom-xlsx", "group": "bom", "label": "BOM chuẩn hoá (Excel)", "format": "xlsx",
      "method": "POST", "path": "/api/bom/export", "rx": r"^/api/bom/export$", "feature": "bom", "role": None, "archive": False},
 ]
