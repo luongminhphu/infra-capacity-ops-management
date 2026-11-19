@@ -69,6 +69,42 @@ def demo_host_identity(vcenter_key: str, platform: str, vendor: str, host_name: 
     return {"serial": serial, "hwUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{vcenter_key}/host/{host_name}"))}
 
 
+# Owner sources of the demo (G2b): folder per project (weight, folder, System attribute, Owner attribute).
+# About 1 VM in 4 also carries the "System" / "Owner" custom attributes; ~8 % stay in "Discovered virtual machine".
+DEMO_PROJECTS = [
+    (24, "/Projects/CoreBanking/App", "Core Banking", "lead.corebanking@hsc.example"),
+    (10, "/Projects/CoreBanking/DB", "Core Banking", "lead.corebanking@hsc.example"),
+    (14, "/Projects/Payments/Gateway", "Thanh toán", "lead.payments@hsc.example"),
+    (8, "/Projects/Payments/Batch", "Thanh toán", "lead.payments@hsc.example"),
+    (14, "/Projects/Web", "Website", "lead.web@hsc.example"),
+    (12, "/Projects/DataWarehouse", "Kho dữ liệu", "lead.dwh@hsc.example"),
+    (10, "/Shared/Internal", "Ứng dụng nội bộ", "lead.internal@hsc.example"),
+    (8, "/Discovered virtual machine", None, None),
+]
+DEMO_POOLS = {"/Projects/DataWarehouse": "RP-Analytics", "/Projects/Web": "RP-Web"}
+
+
+def demo_owner_sources(vcenter_key: str, vm_name: str, platform: str, infra_vm: bool) -> Dict[str, Any]:
+    """folderPath / resourcePool / customAttrs of a demo VM, stable per name (own hash: the seeded inventory
+    stream is not touched). Proxmox / Nutanix have no vCenter folders or custom attributes."""
+    if platform != "vmware":
+        return {"folderPath": None, "resourcePool": None, "customAttrs": {}}
+    if infra_vm:
+        return {"folderPath": "/Infrastructure/VMware", "resourcePool": None, "customAttrs": {}}
+    h = int(hashlib.sha256(f"owner/{vcenter_key}/{vm_name}".encode()).hexdigest(), 16)
+    pick, total = h % 100, 0
+    for weight, folder, system, owner in DEMO_PROJECTS:
+        total += weight
+        if pick < total:
+            break
+    attrs: Dict[str, str] = {}
+    if system and (h >> 8) % 4 == 0:
+        attrs["System"] = system
+    if owner and (h >> 12) % 5 == 0:
+        attrs["Owner"] = owner
+    return {"folderPath": folder, "resourcePool": DEMO_POOLS.get(folder), "customAttrs": attrs}
+
+
 def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     rnd = _seeded_random(cfg.key)
     # Slow time-based drift so repeated polls show gentle organic growth in the
@@ -146,6 +182,7 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
                 "toolsGuestFamily": tools_family if tools_running else None,
                 "toolsStatus": "guestToolsRunning" if tools_running else ("guestToolsNotRunning" if is_on else "guestToolsNotRunning"),
                 "guestHostname": (vm_name.upper() if tools_running else None),
+                **demo_owner_sources(cfg.key, vm_name, platform, guest_id == "vmwarePhoton64Guest"),
             })
 
     return host_rows, vm_rows

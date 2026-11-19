@@ -4,6 +4,7 @@ row dicts the frontend/capacity engine expects, and figure out "latest data
 per source" (each live vCenter's most recent successful run, plus the most
 recent manual import, combined).
 """
+import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -46,6 +47,14 @@ def _host_to_row(h: HostSnapshot) -> Dict[str, Any]:
     }
 
 
+def _attrs(raw: Optional[str]) -> Dict[str, str]:
+    try:
+        d = json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
 def _vm_to_row(v: VmSnapshot) -> Dict[str, Any]:
     return {
         "cluster": v.cluster, "host": v.host, "vm": v.vm, "instanceUuid": v.instance_uuid, "powerState": v.power_state,
@@ -56,6 +65,7 @@ def _vm_to_row(v: VmSnapshot) -> Dict[str, Any]:
         "vcenterKey": v.vcenter_key,
         "guestId": v.guest_id, "guestFullName": v.guest_full_name, "toolsGuestFullName": v.tools_guest_full_name,
         "toolsGuestFamily": v.tools_guest_family, "toolsStatus": v.tools_status, "guestHostname": v.guest_hostname,
+        "folderPath": v.folder_path, "resourcePool": v.resource_pool, "customAttrs": _attrs(v.custom_attrs),
     }
 
 

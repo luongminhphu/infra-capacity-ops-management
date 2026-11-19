@@ -125,7 +125,12 @@ def _connect(cfg: VCenterConfig, timeout: Optional[int] = None):
 # managed-object id.
 HOST_PROPS = ["name", "summary", "parent", "runtime.healthSystemRuntime"]   # + hardware sensors (extras)
 COMPUTE_PROPS = ["name", "configurationEx"]        # clusters and standalone compute resources
-VM_PROPS = ["name", "summary", "datastore", "guest.guestFamily", "snapshot"]   # + snapshot tree (extras)
+VM_PROPS = ["name", "summary", "datastore", "guest.guestFamily", "snapshot",   # + snapshot tree (extras)
+            "parent", "resourcePool", "customValue"]                          # owner sources (ICO v2 G2b)
+FOLDER_PROPS = ["name", "parent"]                  # VM folder path, resolved locally by moId
+POOL_PROPS = ["name"]
+MAX_FOLDER_DEPTH = 32
+MAX_CUSTOM_ATTRS = 30
 DATASTORE_PROPS = ["name", "summary", "host", "info"]   # capacity / mounts / VMFS extents (NAA) or NFS export (extras)
 PAGE_SIZE = 1000
 
@@ -216,8 +221,50 @@ def host_serial(hw: Any) -> Optional[str]:
     return next((found[k] for k in SERIAL_ID_KEYS if k in found), None)
 
 
-def build_rows(hosts: Objs, compute: Objs, vms: Objs, datastores: Objs) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def folder_path(folders: Objs, ref: Any) -> Optional[str]:
+    """"/Projects/Bank/Core" for a VM whose parent is that folder: names up to the datacenter's hidden
+    "vm" folder (dropped). None when the VM has no folder parent (vApp member) or folders were not read."""
+    names, cur, seen = [], _moid(ref), set()
+    while cur in folders and cur not in seen and len(names) < MAX_FOLDER_DEPTH:
+        seen.add(cur)
+        _, props = folders[cur]
+        parent = _moid(props.get("parent"))
+        if parent not in folders:          # the top folder of the datacenter ("vm"): not part of the path
+            break
+        names.append(str(props.get("name") or cur))
+        cur = parent
+    if not seen:
+        return None
+    return ("/" + "/".join(reversed(names)))[:512]
+
+
+def custom_attrs(values: Any, field_names: Dict[int, str]) -> Dict[str, str]:
+    """{attribute name: value} from vm.customValue (keys resolved by CustomFieldsManager.field)."""
+    out: Dict[str, str] = {}
+    for v in values or []:
+        name = field_names.get(getattr(v, "key", None))
+        val = str(getattr(v, "value", "") or "").strip()
+        if name and val and len(out) < MAX_CUSTOM_ATTRS:
+            out[str(name)[:64]] = val[:255]
+    return out
+
+
+def vm_field_names(content) -> Dict[int, str]:
+    """Custom attribute definitions for VMs (global or VirtualMachine): one property read per session."""
+    try:
+        fields = content.customFieldsManager.field if content.customFieldsManager is not None else []
+    except Exception:  # noqa: BLE001 — no custom attributes is not an inventory error
+        logger.warning("Could not read custom attribute definitions", exc_info=True)
+        return {}
+    return {f.key: f.name for f in fields or []
+            if getattr(f, "managedObjectType", None) in (None, vim.VirtualMachine)}
+
+
+def build_rows(hosts: Objs, compute: Objs, vms: Objs, datastores: Objs, folders: Optional[Objs] = None,
+               pools: Optional[Objs] = None, field_names: Optional[Dict[int, str]] = None
+               ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Turn retrieved properties into the app's normalized (host_rows, vm_rows)."""
+    folders, pools, field_names = folders or {}, pools or {}, field_names or {}
     host_rows: List[Dict[str, Any]] = []
     host_info: Dict[str, Tuple[str, str]] = {}          # host moId -> (host name, cluster name)
     for moid, (_, props) in hosts.items():
@@ -306,8 +353,18 @@ def build_rows(hosts: Objs, compute: Objs, vms: Objs, datastores: Objs) -> Tuple
             "toolsGuestFamily": props.get("guest.guestFamily"),
             "toolsStatus": _safe_attr(guest, "toolsRunningStatus"),
             "guestHostname": _safe_attr(guest, "hostName"),
+            # Owner sources (G2b): folder path, resource pool ("Resources" = the cluster root pool → None), custom attributes.
+            "folderPath": folder_path(folders, props.get("parent")),
+            "resourcePool": _pool_name(pools, props.get("resourcePool")),
+            "customAttrs": custom_attrs(props.get("customValue"), field_names),
         })
     return host_rows, vm_rows
+
+
+def _pool_name(pools: Objs, ref: Any) -> Optional[str]:
+    hit = pools.get(_moid(ref))
+    name = str(hit[1].get("name") or "") if hit else ""
+    return name[:255] if name and name != "Resources" else None
 
 
 def host_names(hosts: Objs, compute: Objs) -> Dict[str, Tuple[str, str]]:
@@ -340,7 +397,18 @@ def collect_inventory_full(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], Li
             logger.warning("Bulk property retrieval not supported on %s (%s) — falling back to per-object reads",
                            cfg.key, type(exc).__name__, exc_info=True)
             fetched = [_retrieve_lazy(content, t, p) for t, p in specs]
-        host_rows, vm_rows = build_rows(*fetched)
+        try:      # folders / pools / attribute names only feed owner assignment: never lose the inventory over them
+            try:
+                owner_src = [_retrieve(content, vim.Folder, FOLDER_PROPS), _retrieve(content, vim.ResourcePool, POOL_PROPS)]
+            except FALLBACK_FAULTS:
+                owner_src = [_retrieve_lazy(content, vim.Folder, FOLDER_PROPS), _retrieve_lazy(content, vim.ResourcePool, POOL_PROPS)]
+            field_names = vm_field_names(content)
+        except (socket.timeout, TimeoutError, ConnectionError, OSError):
+            raise
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not read folders / resource pools for %s", cfg.key, exc_info=True)
+            owner_src, field_names = [{}, {}], {}
+        host_rows, vm_rows = build_rows(*fetched, *owner_src, field_names)
         try:
             from . import extras as _extras
             hosts_o, compute_o, vms_o, ds_o = fetched

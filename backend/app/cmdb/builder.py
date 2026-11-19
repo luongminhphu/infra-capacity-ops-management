@@ -169,7 +169,10 @@ def _inventory(db: Session, g: Graph, vcs: Dict[str, str], ds_by_name: Dict[Tupl
         used_uuid.add(uuid)
         ident = g.ci("vm", "vcenter", key, v["vm"],
                      {"vcenterKey": vc, "cluster": v.get("cluster"), "host": v.get("host"), "platform": vcs.get(vc, "vmware"),
-                      "powerOn": bool(v.get("isPoweredOn")), "vcpu": v.get("vcpu"), "ramGB": v.get("ramGB")})
+                      "powerOn": bool(v.get("isPoweredOn")), "vcpu": v.get("vcpu"), "ramGB": v.get("ramGB"),
+                      # owner sources (G2b), read by owners/rules.py
+                      "folderPath": v.get("folderPath"), "resourcePool": v.get("resourcePool"),
+                      "customAttrs": v.get("customAttrs") or None})
         g.key(ident, "instance_uuid", uuid)
         g.key(ident, "short_name", short_name(v["vm"]) if not norm_ip(v["vm"]) else None)
         _name_keys(g, ident, v.get("guestHostname"))

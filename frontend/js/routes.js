@@ -113,6 +113,8 @@ const PAGES = [
       desc: 'MCP server chỉ đọc cho AI phân tích log / hiệu suất của app (admin).', scope: [] },
     { id: 'set-users', view: 'settings', sub: 'users', icon: 'users', label: 'Người dùng & quyền', title: 'Cài đặt — người dùng & quyền',
       desc: 'Tài khoản, cách đăng nhập, passkey và vai trò từng module (admin).', scope: [] },
+    { id: 'set-owners', view: 'settings', sub: 'owners', icon: 'user-cog', label: 'Owner', title: 'Cài đặt — gán owner tự động',
+      desc: 'Thuộc tính vCenter và quy tắc (thư mục, resource pool, cluster, tên VM) gán VM vào hệ thống; đề xuất cần duyệt.', scope: [] },
     { id: 'set-auth', view: 'settings', sub: 'auth', icon: 'shield-check', label: 'Đăng nhập & bảo mật', title: 'Cài đặt — đăng nhập & bảo mật',
       desc: 'SSO Entra ID, passkey cho tài khoản cục bộ, App Proxy (admin).', scope: [] },
     { id: 'set-brand', view: 'settings', sub: 'brand', icon: 'image', label: 'Thương hiệu', title: 'Cài đặt — thương hiệu',
@@ -158,7 +160,7 @@ const MENU = [
     { key: 'settings', label: 'Cài đặt', icon: 'settings', tabs: [
       ['settings', '', 'Tiêu chí & ngưỡng'], ['set-sources', 'sources', 'Nguồn dữ liệu'], ['bk-config', 'backup', 'Backup'],
       ['set-features', 'features', 'Tính năng'], ['set-alerts', 'alerts', 'Cảnh báo'], ['set-spend', 'spend', 'Chi phí & nhắc hạn'], ['set-ai', 'ai', 'AI & MCP'],
-      ['set-users', 'users', 'Người dùng & quyền'], ['set-auth', 'auth', 'Đăng nhập & bảo mật'], ['set-brand', 'brand', 'Thương hiệu']] },
+      ['set-users', 'users', 'Người dùng & quyền'], ['set-owners', 'owners', 'Owner'], ['set-auth', 'auth', 'Đăng nhập & bảo mật'], ['set-brand', 'brand', 'Thương hiệu']] },
   ] },
 ];
 
@@ -232,7 +234,7 @@ const VIEWS = {
   settings: { section: '#viewSettings',
     sub: { get: () => appState.settingsSub || 'criteria', set: (s) => { appState.settingsSub = s || 'criteria'; }, fallback: 'settings' },
     // Settings tabs whose panel is built by a view module when shown.
-    tabRender: { alerts: () => callIf('renderAlertSettings'), ai: () => callIf('renderAiSettings'), auth: () => callIf('renderAuthSettings'), users: () => callIf('renderUsersSettings'),
+    tabRender: { alerts: () => callIf('renderAlertSettings'), ai: () => callIf('renderAiSettings'), auth: () => callIf('renderAuthSettings'), users: () => callIf('renderUsersSettings'), owners: () => callIf('renderOwnerSettings'),
       spend: () => { if (currentUser && currentUser.spendRole && currentUser.spendRole !== 'none') uiRequire('spend').then(() => callIf('initSpendSettings', currentUser), (e) => uiAlert(e.message)); } } },
 };
 
