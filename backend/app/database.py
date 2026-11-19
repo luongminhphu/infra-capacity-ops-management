@@ -75,6 +75,7 @@ def ensure_schema() -> None:
             ("is_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ("spend_role", "VARCHAR(16) NOT NULL DEFAULT 'none'"), ("spend_role_source", "VARCHAR(8)"),
             ("owner_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("access_scope", "VARCHAR(8) NOT NULL DEFAULT 'full'"),
             ("session_version", "INTEGER NOT NULL DEFAULT 0"),
         ],
     }

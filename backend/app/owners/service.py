@@ -33,6 +33,8 @@ class Invalid(ValueError):
 # ---------------------------------------------------------------- permissions / audit
 def can_manage(user: User) -> bool:
     from ..security import is_admin
+    if (getattr(user, "access_scope", None) or "full") != "full":      # an owner-portal user never manages systems
+        return False
     return is_admin(user) or bool(getattr(user, "owner_admin", False))
 
 
@@ -148,6 +150,7 @@ def create(db: Session, user: User, data: Dict[str, Any], ip: Optional[str] = No
     db.add(s)
     db.flush()
     audit(db, user, "owners.system.create", ip, id=s.id, code=s.code, name=s.name, owner=s.owner_email)
+    invalidate_scope_cache()
     return s
 
 
@@ -164,6 +167,7 @@ def update_system(db: Session, user: User, s: System, data: Dict[str, Any], ip: 
     # Owner change (chuyển owner) gets its own audit action: G3 reviews follow the owner.
     action = "owners.system.owner_change" if "owner_email" in changed else "owners.system.update"
     audit(db, user, action, ip, id=s.id, code=s.code, changes=changed)
+    invalidate_scope_cache()
     return s
 
 
@@ -171,6 +175,7 @@ def delete(db: Session, user: User, s: System, ip: Optional[str] = None) -> int:
     n = db.query(SystemMember).filter(SystemMember.system_id == s.id).delete(synchronize_session=False)
     audit(db, user, "owners.system.delete", ip, id=s.id, code=s.code, name=s.name, members=n)
     db.delete(s)
+    invalidate_scope_cache()
     return n
 
 
@@ -266,6 +271,7 @@ def assign(db: Session, user: User, s: System, ci_ids: List[int], move: bool = F
             same += m.system_id == s.id
             m.system_id, m.source, m.confidence, m.assigned_by, m.assigned_at = s.id, "manual", "strong", user.username, now
     audit(db, user, audit_action, ip, system=s.code, added=added, moved=moved, vms=[vms[c].name for c in list(vms)[:50]])
+    invalidate_scope_cache()
     return {"added": added, "moved": moved, "unchanged": same}
 
 
@@ -274,6 +280,7 @@ def unassign(db: Session, user: User, s: System, ci_ids: List[int], ip: Optional
     n = (db.query(SystemMember).filter(SystemMember.system_id == s.id, SystemMember.ci_id.in_(ids))
          .delete(synchronize_session=False)) if ids else 0
     audit(db, user, "owners.member.unassign", ip, system=s.code, removed=n, ciIds=ids[:50])
+    invalidate_scope_cache()
     return n
 
 
@@ -282,6 +289,7 @@ def assign_auto(db: Session, ci_id: int, system_id: int, source: str, confidence
     Returns "added" | "updated" | "kept_manual" | "unchanged"."""
     if source not in SOURCES or source == "manual":
         raise ValueError("automatic source expected")
+    invalidate_scope_cache()
     m = db.query(SystemMember).filter(SystemMember.ci_id == ci_id).first()
     if m is None:
         db.add(SystemMember(ci_id=ci_id, system_id=system_id, source=source, confidence=confidence, assigned_by=f"auto:{source}"))
@@ -339,3 +347,64 @@ def find_vms(db: Session, pairs: Iterable[Tuple[str, str]]) -> Dict[Tuple[str, s
             cands = [c for c in cands if (json.loads(c.attrs or "{}").get("vcenterKey") or "").lower() == vc.lower()]
         out_[(n, vc)] = cands
     return out_
+
+
+# ---------------------------------------------------------------- owner scope → VMs (G2c), cached per round
+import threading as _threading  # noqa: E402
+import time as _time  # noqa: E402
+
+SCOPE_TTL = 60.0
+_scope_cache: Dict[Any, Tuple[float, Dict[str, Any]]] = {}
+_scope_lock = _threading.Lock()
+
+
+def invalidate_scope_cache() -> None:
+    """Called after any change to systems / assignments (here, rules.apply, the CI build)."""
+    with _scope_lock:
+        _scope_cache.clear()
+
+
+def resolve_vm_scope(db: Session, sc) -> Dict[str, Any]:
+    """Systems matching the owner filter → their VMs as {(vcenterKey, vm name lower)} / {(vcenterKey, instanceUuid)}."""
+    from ..cmdb.models import CiKey
+    key = (tuple(sc.systems or ()) if sc.systems is not None else None, tuple(sc.owners or ()) if sc.owners is not None else None,
+           tuple(sc.departments or ()) if sc.departments is not None else None,
+           tuple(sc.projects or ()) if sc.projects is not None else None,
+           tuple(sc.criticality or ()) if sc.criticality is not None else None)
+    now = _time.monotonic()
+    with _scope_lock:
+        hit = _scope_cache.get(key)
+        if hit and now - hit[0] < SCOPE_TTL:
+            return hit[1]
+    q = db.query(System.id).filter(System.status == "active")
+    if sc.systems is not None:
+        ids = [int(x) for x in sc.systems if x.isdigit()]
+        codes = [x.upper() for x in sc.systems if not x.isdigit()]
+        q = q.filter(or_(System.id.in_(ids or [-1]), System.code.in_(codes or [""])))
+    if sc.owners is not None:
+        q = q.filter(or_(func.lower(System.owner_email).in_(sc.owners or [""]), func.lower(System.deputy_email).in_(sc.owners or [""])))
+    if sc.departments is not None:
+        q = q.filter(func.lower(System.department).in_([d.lower() for d in sc.departments] or [""]))
+    if sc.projects is not None:
+        q = q.filter(func.lower(System.project).in_([p.lower() for p in sc.projects] or [""]))
+    if sc.criticality is not None:
+        q = q.filter(System.criticality.in_(sc.criticality or [-1]))
+    sids = [i for (i,) in q]
+    names, uuids, n = set(), set(), 0
+    if sids:
+        rows = (db.query(Ci.id, Ci.name, Ci.attrs).join(SystemMember, SystemMember.ci_id == Ci.id)
+                .filter(SystemMember.system_id.in_(sids), Ci.type == "vm").all())
+        vc_of = {}
+        for cid, name, attrs in rows:
+            vc = json.loads(attrs or "{}").get("vcenterKey") or ""
+            vc_of[cid] = vc
+            names.add((vc, (name or "").lower()))
+        n = len(rows)
+        ids = list(vc_of)
+        for i in range(0, len(ids), 500):
+            for cid, val in db.query(CiKey.ci_id, CiKey.value_norm).filter(CiKey.ci_id.in_(ids[i:i + 500]), CiKey.kind == "instance_uuid"):
+                uuids.add((vc_of[cid], val.lower()))
+    out = {"names": names, "uuids": uuids, "vms": n, "systems": len(sids)}
+    with _scope_lock:
+        _scope_cache[key] = (_time.monotonic(), out)
+    return out

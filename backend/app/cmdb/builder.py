@@ -307,6 +307,8 @@ def build_all(db: Session, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
         db.commit()
         retired = registry.retire_unseen(db, now, days)
         db.commit()
+        from ..owners.service import invalidate_scope_cache
+        invalidate_scope_cache()                        # VM names / uuids of the owner filter may have changed
         seconds = time.monotonic() - started
         out = {"cis": len(ids), "links": len(links), "ciInserted": ci_n["inserted"], "ciUpdated": ci_n["updated"],
                "keysInserted": key_n["inserted"], "keysDeleted": key_n["deleted"], "linksInserted": link_n["inserted"],

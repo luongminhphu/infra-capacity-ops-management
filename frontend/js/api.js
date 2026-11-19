@@ -14,6 +14,7 @@ class ApiError extends Error {
 }
 
 async function apiRequest(path, options = {}) {
+  if (typeof ownerScopeApply === 'function') path = ownerScopeApply(path);     // owner filter on scoped pages (G2c)
   const res = await fetch(API_BASE + path, {
     credentials: 'include',
     headers: options.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },

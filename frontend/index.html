@@ -63,6 +63,15 @@
 </div>
 
 <!-- ================= APP SHELL ================= -->
+<div class="owner-shell hidden" id="ownerShell">
+  <header class="topbar owner-topbar">
+    <div class="topbar-title"><div class="eyebrow">Infra Capacity Ops</div><h1>Cổng Owner</h1></div>
+    <div class="topbar-actions"><span class="muted-sub" id="ownerUserLabel"></span>
+      <button class="btn btn-secondary btn-sm" type="button" id="ownerLogout"><i data-lucide="log-out"></i>Đăng xuất</button></div>
+  </header>
+  <main class="owner-main" id="ownerMount"></main>
+</div>
+
 <div class="app-shell hidden" id="appShell">
 
   <!-- Sidebar: workflow-grouped navigation -->
@@ -109,6 +118,7 @@
         <select id="vcenterSelect" title="Chọn vCenter" data-scope="vcenter"></select>
         <select id="filterCluster" data-scope="cluster" aria-label="Phạm vi: cluster"><option value="all">Tất cả cluster</option></select>
         <select id="filterHost" data-scope="host" aria-label="Phạm vi: host"><option value="all">Tất cả host</option></select>
+        <button class="btn btn-secondary btn-sm owner-scope-btn" id="ownerScopeBtn" type="button" data-scope="owner" title="Lọc theo hệ thống / owner / phòng ban / dự án"><i data-lucide="users"></i><span id="ownerScopeBtnText">Owner</span></button>
         <span class="pill na" id="dataFootprint" data-scope="footprint">Hosts: 0 | VMs: 0</span>
       </div>
       <div class="topbar-actions">
@@ -121,6 +131,7 @@
     <p class="page-desc" id="pageDesc"></p>
     <div class="sim-tabbar page-tabs hidden" id="pageTabs" role="tablist" aria-label="Trang con"></div>
 
+    <div class="owner-scope-bar hidden" id="ownerScopeBar" role="status"></div>
     <div class="validation-banner" id="validationBanner"></div>
 
     <main id="mainContent">
@@ -1173,6 +1184,8 @@
 <script src="js/views/infra.js?v=__ASSET_V__"></script>
 <script src="js/views/dc_assets.js?v=__ASSET_V__"></script>
 <script src="js/views/owners.js?v=__ASSET_V__"></script>
+<script src="js/owner_scope.js?v=__ASSET_V__"></script>
+<script src="js/views/owner_portal.js?v=__ASSET_V__"></script>
 <script src="js/views/passkey.js?v=__ASSET_V__"></script>
 <script src="js/scope_filter.js?v=__ASSET_V__"></script>
 <script src="js/settings_page.js?v=__ASSET_V__"></script>

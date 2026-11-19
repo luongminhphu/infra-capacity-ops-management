@@ -14,7 +14,7 @@ from ..excel_style import csv_safe, guard_formula
 from ..models import User
 from ..security import get_current_user
 
-from ..scope import scope_keys as _scope_keys
+from ..scope import OwnerScope, owner_scope_query, scope_keys as _scope_keys
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -35,12 +35,14 @@ class _SafeCsvWriter:
 def export_csv(
     type: str = Query(default="hosts", pattern="^(hosts|vms|findings)$"),
     vcenter: Optional[str] = Query(default="all"),
+    osc: OwnerScope = Depends(owner_scope_query),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     settings = get_settings()
     policy = data_access.get_effective_policy(db, settings)
     host_rows, vm_rows, _ = data_access.get_latest_combined(db, _scope_keys(vcenter))
+    host_rows, vm_rows = osc.filter_rows(db, host_rows, vm_rows)
 
     buf = io.StringIO()
     if type == "hosts":

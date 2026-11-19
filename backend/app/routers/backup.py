@@ -19,6 +19,7 @@ from ..database import get_db
 from ..backup import schedule as bschedule
 from ..pagination import set_page_headers
 from ..models import AppSetting, BackupPolicySnapshot, BackupScheduleRule, BackupScopeRule, BackupSyncRun, ReportLogo, User
+from ..scope import OwnerScope, owner_scope_query
 from ..security import get_current_user, require_admin
 from ..timeutil import to_iso_utc
 
@@ -91,8 +92,8 @@ def sync_all(user: User = Depends(require_admin)):
 
 @router.get("/summary")
 def summary(server: Optional[str] = Query(default="all"), days: int = Query(default=7, ge=1, le=90),
-            db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    res = build_summary(db, server, days)
+            osc: OwnerScope = Depends(owner_scope_query), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    res = build_summary(db, server, days, osc=osc)
     res["failedJobs"] = res["failedJobs"][:200]
     return _jsonable(res)
 
@@ -370,28 +371,29 @@ def _fname(prefix: str, days: int, ext: str) -> str:
 @router.get("/report/pdf")
 def report_pdf(server: Optional[str] = Query(default="all"), days: int = Query(default=7, ge=1, le=90),
                appendix: bool = Query(default=True), ai: bool = Query(default=False),
-               db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+               osc: OwnerScope = Depends(owner_scope_query), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     from .. import report_backup
-    res = build_summary(db, server, days)
+    res = build_summary(db, server, days, osc=osc)
     if ai:
         from ..ai_tasks import backup_facts
         from .ai_admin import pdf_ai_box
         pdf_ai_box(db, user, "backup", lambda: backup_facts(res))
     servers = [_server_public(c, db) for c in get_settings().netbackups() if not _keys(server) or c.key in _keys(server)]
-    pdf = report_backup.build_backup_pdf(res, servers, _scope_label(server), logo_data_url=_logo(db), appendix=appendix)
+    label = " · ".join(x for x in (_scope_label(server), osc.describe(db)) if x)
+    pdf = report_backup.build_backup_pdf(res, servers, label, logo_data_url=_logo(db), appendix=appendix)
     return StreamingResponse(iter([pdf]), media_type="application/pdf",
                              headers={"Content-Disposition": f'attachment; filename="{_fname("ICO_Bao_cao_backup", days, "pdf")}"'})
 
 
 @router.get("/report/xlsx")
 def report_xlsx(server: Optional[str] = Query(default="all"), days: int = Query(default=7, ge=1, le=90),
-                db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+                osc: OwnerScope = Depends(owner_scope_query), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     from .. import excel_backup
-    res = build_summary(db, server, days)
+    res = build_summary(db, server, days, osc=osc)
     since = dt.datetime.utcnow() - dt.timedelta(days=days)
     jobs_rows = list(analysis.iter_jobs(db, _keys(server), since))
     servers = [_server_public(c, db) for c in get_settings().netbackups() if not _keys(server) or c.key in _keys(server)]
-    data = excel_backup.build_backup_xlsx(res, jobs_rows, servers, _scope_label(server))
+    data = excel_backup.build_backup_xlsx(res, jobs_rows, servers, " · ".join(x for x in (_scope_label(server), osc.describe(db)) if x))
     return StreamingResponse(iter([data]), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": f'attachment; filename="{_fname("ICO_Thong_ke_backup", days, "xlsx")}"'})
 

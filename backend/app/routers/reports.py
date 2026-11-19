@@ -14,7 +14,7 @@ from ..models import ReportLogo, User
 from ..features import ensure_feature, require_feature
 from ..security import get_current_user
 
-from ..scope import scope_keys as _scope_keys, scope_label as _scope_label, split_csv as _split_csv
+from ..scope import OwnerScope, owner_scope_query, scope_keys as _scope_keys, scope_label as _scope_label, split_csv as _split_csv
 
 logger = logging.getLogger("vco.routers.reports")
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -42,6 +42,7 @@ def export_pdf(
     lead: int = Query(default=3, ge=0, le=12, description="[planning] procurement + deployment lead time in months"),
     target: float = Query(default=80.0, ge=50, le=100, description="[planning] planning target as %% of the overcommit threshold"),
     ai: bool = Query(default=False, description="[executive|technical] add a 'Tổng kết (AI soạn)' box (AI task report_summary)"),
+    osc: OwnerScope = Depends(owner_scope_query),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -54,9 +55,11 @@ def export_pdf(
         # persisted app setting (include_storage) decides.
         policy.include_storage = capacity.parse_bool(storage, default=policy.include_storage)
     host_rows, vm_rows, run_meta = data_access.get_latest_combined(db, _scope_keys(vcenter))
+    host_rows, vm_rows = osc.filter_rows(db, host_rows, vm_rows)
 
     if not host_rows and not vm_rows:
-        raise HTTPException(status_code=404, detail="Chưa có dữ liệu để tạo báo cáo. Hãy đồng bộ hoặc import dữ liệu trước.")
+        raise HTTPException(status_code=404, detail=("Không có VM nào thuộc phạm vi owner đã chọn." if osc.active else
+                                                     "Chưa có dữ liệu để tạo báo cáo. Hãy đồng bộ hoặc import dữ liệu trước."))
 
     def _display_list(items: list, limit: int = 5) -> str:
         shown = ", ".join(items[:limit])
@@ -77,6 +80,8 @@ def export_pdf(
     if (cluster_list is not None or host_list is not None) and not host_rows and not vm_rows:
         raise HTTPException(status_code=404, detail="Không có dữ liệu phù hợp với phạm vi cluster/host đã chọn.")
 
+    if osc.active:
+        scope_parts.append(osc.describe(db))
     scope_label = " · ".join(scope_parts)
 
     include_types = None
@@ -133,6 +138,7 @@ def export_pdf(
 def management_brief(
     vcenter: Optional[str] = Query(default="all"),
     storage: Optional[str] = Query(default=None, description="'1'/'true' to include Storage criteria, '0'/'false' to exclude (omit = use saved setting)"),
+    osc: OwnerScope = Depends(owner_scope_query),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -144,6 +150,7 @@ def management_brief(
     if storage is not None:
         policy.include_storage = capacity.parse_bool(storage, default=policy.include_storage)
     host_rows, vm_rows, _run_meta = data_access.get_latest_combined(db, _scope_keys(vcenter))
+    host_rows, vm_rows = osc.filter_rows(db, host_rows, vm_rows)
     if not host_rows and not vm_rows:
         return {"available": False, "scope": _scope_label(vcenter)}
     brief = report_pdf.build_management_brief(host_rows, vm_rows, policy)
@@ -167,6 +174,7 @@ def planning_result(
     lead: int = Query(default=3, ge=0, le=12),
     target: float = Query(default=80.0, ge=50, le=100),
     months: int = Query(default=12),
+    osc: OwnerScope = Depends(owner_scope_query),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -174,6 +182,7 @@ def planning_result(
     per-cluster need under the base scenario, and the decision list."""
     policy = data_access.get_effective_policy(db, get_settings())
     host_rows, vm_rows, _ = data_access.get_latest_combined(db, _scope_keys(vcenter))
+    host_rows, vm_rows = osc.filter_rows(db, host_rows, vm_rows)
     if not host_rows:
         raise HTTPException(status_code=404, detail="Chưa có dữ liệu host để quy hoạch. Hãy đồng bộ hoặc import dữ liệu trước.")
     import math

@@ -39,7 +39,23 @@ def _clean_prefs(data: Dict[str, Any]) -> Dict[str, Any]:
     for key in ("reportAi", "reportArchive"):
         if isinstance(data.get(key), bool):
             out[key] = data[key]
+    if isinstance(data.get("ownerScope"), str):                 # owner filter of the pages (G2c): JSON text, checked shape
+        out["ownerScope"] = _clean_owner_scope(data["ownerScope"])
     return out
+
+
+OWNER_SCOPE_KEYS = ("systems", "owners", "departments", "projects", "criticality")
+
+
+def _clean_owner_scope(raw: str) -> str:
+    try:
+        d = json.loads(raw[:3000]) if raw else {}
+    except ValueError:
+        return ""
+    if not isinstance(d, dict):
+        return ""
+    clean = {k: [str(x)[:255] for x in d[k][:50]] for k in OWNER_SCOPE_KEYS if isinstance(d.get(k), list)}
+    return json.dumps(clean, ensure_ascii=False) if clean else ""
 
 
 def _stored_prefs(row: Optional[UserPref]) -> Dict[str, Any]:

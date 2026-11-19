@@ -72,10 +72,12 @@ def recently_authenticated(token: Optional[str]) -> bool:
     return bool(payload) and dt.datetime.utcnow().timestamp() - float(payload.get("at") or 0) <= REAUTH_SECONDS
 
 
-def get_current_user(
+def get_session_user(
     vco_session: Optional[str] = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> User:
+    """Authentication only: a valid session of any access scope. Use only for endpoints an owner-scope user must
+    reach (who am I, sign out, the owner portal via owners/access.py); everything else uses get_current_user."""
     if not vco_session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập")
     if not decode_access_token(vco_session):
@@ -86,6 +88,17 @@ def get_current_user(
     if not local_login_allowed(user) and (user.auth_source or "local") == "local":
         # AUTH_MODE=entra: local sessions issued earlier stop working, except break-glass accounts.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tài khoản cục bộ đã bị tắt — đăng nhập bằng Microsoft")
+    return user
+
+
+OWNER_ONLY = "Tài khoản owner chỉ dùng được cổng Owner."
+
+
+def get_current_user(user: User = Depends(get_session_user)) -> User:
+    """Authentication + the full app: a user with access_scope "owner" is refused (403) — deny by default, so every
+    endpoint written before the owner portal (and every new one using this dependency) stays closed to owners."""
+    if (user.access_scope or "full") != "full":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=OWNER_ONLY)
     return user
 
 
