@@ -1,6 +1,12 @@
 {
   "version": 2,
   "skills": {
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/find-skills/SKILL.md",
+      "computedHash": "c00eeea0e13e74fe4a9d84ba0a8542205a1b736d65f13134fe1a6647eb14976f"
+    },
     "hunt-api-misconfig": {
       "source": "elementalsouls/Claude-BugHunter",
       "sourceType": "github",
