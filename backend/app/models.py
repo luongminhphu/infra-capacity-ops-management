@@ -884,3 +884,8 @@ _json(HostHealthState.issues, list, "Cảm biến bất thường", nullable=Fal
 
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).
 from .spend import models as _spend_models  # noqa: E402,F401
+# CI registry (ICO v2 G1).
+from .cmdb import models as _cmdb_models  # noqa: E402,F401
+
+_json(_cmdb_models.Ci.attrs, dict, "Thuộc tính CI", nullable=False)
+_json(_cmdb_models.CiLink.attrs, dict, "Thuộc tính liên kết CI", nullable=False)

@@ -391,6 +391,17 @@ def _ops_alerts() -> Optional[Dict[str, int]]:
         return None
 
 
+def _build_cmdb() -> Optional[Dict[str, Any]]:
+    """Rebuild the CI registry from what this round stored (cmdb/builder.py). None when the build failed."""
+    from ..cmdb import builder
+    try:
+        with SessionLocal() as db:
+            return builder.build_all(db)
+    except Exception:  # noqa: BLE001 — the registry is derived data: a failure must not stop the polling loop
+        logger.exception("CI registry build failed")
+        return None
+
+
 def round_summary(results: List[Dict[str, Any]], seconds: float, alerts: Optional[Dict[str, int]],
                   purge: Optional[Dict[str, int]]) -> str:
     """One key=value line per scheduler round (audit BEQ-11), easy to grep / parse:
@@ -456,6 +467,8 @@ async def scheduler_loop(app_settings: Settings):
         try:
             results = await asyncio.to_thread(sync_everything, app_settings)
             _beat(interval)
+            cmdb = await asyncio.to_thread(_build_cmdb)                # after every source of the round
+            _beat(interval)
             alerts = await asyncio.to_thread(_ops_alerts)
             purge = await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
             from .. import metrics
@@ -463,6 +476,8 @@ async def scheduler_loop(app_settings: Settings):
             line = round_summary(results, time.monotonic() - started, alerts, purge)
             if rolled:
                 line += " " + " ".join(f"metrics_{k}={v}" for k, v in sorted(rolled.items()))
+            line += (f" cmdb_ms={int(cmdb['seconds'] * 1000)} cmdb_cis={cmdb['cis']} cmdb_links={cmdb['links']}"
+                     f" cmdb_retired={cmdb['retired']}") if cmdb else " cmdb=error"
             logger.info("%s", line)
         except asyncio.CancelledError:
             raise

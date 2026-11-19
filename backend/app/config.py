@@ -175,6 +175,9 @@ class Settings(BaseSettings):
     asset_age_limit_months: int = Field(default=60)      # DC device in use this long (Green policy): CẢNH BÁO
     asset_age_warn_months: int = Field(default=48)       # approaching the limit: THEO DÕI
 
+    # ---- CI registry (app/cmdb/): a CI not seen for this many days becomes "retired" (never deleted) ----
+    cmdb_retire_days: int = Field(default=7)
+
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)
     metrics_hourly_days: int = Field(default=90)
