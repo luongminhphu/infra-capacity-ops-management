@@ -531,6 +531,37 @@ Nền cho sổ CI (`docs/design/ico-v2-plan.md`): mỗi lượt đồng bộ ghi
 - **DEMO**: host demo có service tag 7 ký tự kiểu Dell (HPE: 10 ký tự `CZJ…`), cố định theo tên host
   (`vcenter/demo_generator.demo_service_tag`), Nutanix demo `NX…`, Proxmox demo để trống.
 
+### Sổ CI — một định danh cho mỗi đối tượng hạ tầng (ICO v2 G1b)
+
+Sau mỗi vòng đồng bộ, pod leader dựng lại **sổ CI** từ dữ liệu ICO đã lưu (không gọi thêm nguồn nào):
+
+| Loại CI | Nhận diện | Khoá |
+|---|---|---|
+| VM | instanceUuid (thiếu → `<vCenter>:<tên>`) | instance_uuid, tên ngắn, FQDN (hostname trong guest), IP |
+| Host ảo hoá | `<vCenter>:<host>` | FQDN, tên ngắn, serial, UUID phần cứng |
+| Cluster | `<vCenter>:<cluster>` | — |
+| Máy chủ vật lý | serial chuẩn hoá (từ host, Thiết bị DC loại máy chủ, Opex bảo hành phần cứng) | serial |
+| Datastore | `<vCenter>:<moId>` | NAA |
+| Mảng / volume lưu trữ | nguồn Pure / NetApp; `<mảng>:<SVM>:<volume>` | NAA |
+| Client backup | `<NetBackup>:<client>` (job 35 ngày gần nhất + client của policy đang bật) | client NetBackup |
+| Thiết bị DC | asset key | serial, asset tag |
+| Khoản Opex | mã Opex | mã Opex |
+
+- **Liên kết** và độ tin cậy: VM *chạy trên* host, host *thuộc* cluster, host *là* máy chủ vật lý (cùng serial),
+  Thiết bị DC *ghi nhận* máy chủ vật lý, Opex *bảo hành* máy chủ vật lý (cùng serial) — **chắc chắn**; VM *lưu trên*
+  datastore, datastore *nằm trên* volume (NAA: chắc chắn; đường dẫn NFS: **ghép theo tên**), volume *thuộc* mảng.
+  Opex chỉ khai tên host → *bảo hành* host, **ghép theo tên**. VM *được backup bởi* client: luôn **ghép theo tên**
+  (tên VM, hostname trong guest hoặc IP — ghi trong `matchedBy`). Liên kết ghép theo tên không dùng để gom sự cố.
+- Dựng lại không tạo trùng (chạy hai lần liên tiếp không đổi dữ liệu). Liên kết phản ánh hiện trạng: VM chuyển host thì
+  liên kết cũ bị bỏ. CI không còn thấy quá `CMDB_RETIRE_DAYS` (mặc định 7) ngày → **retired**, không xoá; nguồn mất kết
+  nối lâu hơn số ngày này thì CI của nguồn đó cũng chuyển retired. Thấy lại → active, giữ nguyên id.
+- API chỉ đọc (mọi người dùng đã đăng nhập): `GET /api/ci?type=&q=&status=active|retired|all&limit=` (tìm theo tên hoặc
+  khoá: serial, IP, NAA…), `GET /api/ci/{id}` (khoá + liên kết hai chiều), `GET /api/ci/stats` (số CI theo loại, tỷ lệ
+  host có serial, số liên kết ghép theo tên). Client backup ẩn khi tắt tính năng Backup; khoản Opex chỉ hiện với người
+  có quyền xem Chi phí.
+- Log mỗi vòng poll có `cmdb_ms`, `cmdb_cis`, `cmdb_links`, `cmdb_retired` (`cmdb=error` nếu dựng lỗi — vòng poll vẫn chạy).
+  Lưu ý: *Đồng bộ ngay* không dựng lại sổ; sổ cập nhật ở vòng poll kế tiếp.
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh
