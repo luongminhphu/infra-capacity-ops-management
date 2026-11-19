@@ -31,7 +31,8 @@ def _like(q: str) -> str:
 
 
 def _brief(c: Ci) -> Dict[str, Any]:
-    return {"id": c.id, "type": c.type, "name": c.name, "status": c.status}
+    vc = json.loads(c.attrs or "{}").get("vcenterKey") if c.type in ("vm", "hypervisor_host", "datastore", "cluster") else None
+    return {"id": c.id, "type": c.type, "name": c.name, "status": c.status, **({"vcenterKey": vc} if vc is not None else {})}
 
 
 def _out(c: Ci) -> Dict[str, Any]:
@@ -108,3 +109,40 @@ def stats(db: Session, user: User) -> Dict[str, Any]:
             "hosts": hosts, "hostsWithSerial": with_serial,
             "hostSerialPct": round(with_serial * 100.0 / hosts, 1) if hosts else None,
             "weakLinks": weak_q.scalar() or 0}
+
+
+def visible_ci(db: Session, user: User, ci_id: int) -> Ci:
+    c = db.get(Ci, ci_id)
+    if c is None or c.type in hidden_types(db, user):
+        raise HTTPException(404, "Không có CI này.")
+    return c
+
+
+def find(db: Session, type_: str, source_key: str) -> Optional[Ci]:
+    """The CI of one inventory object (identity from cmdb/builder.py), or None before the first build."""
+    return db.query(Ci).filter(Ci.type == type_, Ci.source_key == source_key[:255]).order_by(Ci.id).first()
+
+
+def impact(db: Session, user: User, ci_id: int, direction: str = "down", depth: int = 4) -> Dict[str, Any]:
+    from .impact import walk
+    if direction not in ("down", "up"):
+        raise HTTPException(422, "Hướng không hợp lệ (down, up).")
+    c = visible_ci(db, user, ci_id)
+    return {"root": _brief(c), **walk(db, c.id, direction, depth, hidden_types(db, user))}
+
+
+def card_extras(db: Session, user: User, c: Optional[Ci]) -> Optional[Dict[str, Any]]:
+    """Links (both directions) and downstream impact for an entity card; None when the CI is unknown / hidden."""
+    if c is None or c.type in hidden_types(db, user):
+        return None
+    d = get_ci(db, user, c.id)
+    imp = impact(db, user, c.id, "down")
+    return {"id": c.id, "status": c.status, "keys": d["keys"], "links": d["links"], "linksTruncated": d["linksTruncated"],
+            "impact": {k: imp[k] for k in ("total", "counts", "weak", "truncated")}}
+
+
+def attrs_of(c: Optional[Ci]) -> Dict[str, Any]:
+    try:
+        return json.loads(c.attrs or "{}") if c is not None else {}
+    except ValueError:
+        return {}

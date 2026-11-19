@@ -562,6 +562,30 @@ Sau mỗi vòng đồng bộ, pod leader dựng lại **sổ CI** từ dữ li�
 - Log mỗi vòng poll có `cmdb_ms`, `cmdb_cis`, `cmdb_links`, `cmdb_retired` (`cmdb=error` nếu dựng lỗi — vòng poll vẫn chạy).
   Lưu ý: *Đồng bộ ngay* không dựng lại sổ; sổ cập nhật ở vòng poll kế tiếp.
 
+### Thẻ đối tượng, liên kết và tác động (ICO v2 G1c)
+
+Thẻ đối tượng (Ctrl + K → chọn một kết quả) đọc từ sổ CI:
+
+- **Mọi thẻ** có thêm hai mục:
+  - **Tác động** — "Nếu đối tượng này lỗi: N host, M VM, K client backup…": những gì phụ thuộc vào đối tượng, tối đa 4 tầng
+    (máy chủ vật lý → host → VM → client backup; mảng lưu trữ → volume → datastore → VM; cluster → host → VM). Thiết bị DC và
+    Opex là hồ sơ, không tính vào tác động. Số đối tượng nối qua liên kết ghép theo tên được nêu riêng.
+  - **Liên kết** — nhóm theo quan hệ (chạy trên host, lưu trên datastore, client backup, máy chủ vật lý…), mỗi nhóm hiện 12 mục
+    đầu; liên kết ghép theo tên / IP có nhãn **ghép theo tên**.
+- **Host**: *Service Tag* mở thẻ máy chủ vật lý. Bảo hành / hợp đồng lấy qua máy chủ vật lý (cùng serial — chắc chắn); host
+  không báo serial thì ghép theo tên host khai trong Opex và có nhãn *ghép theo tên*.
+- **VM**: client backup lấy theo liên kết *được backup bởi* của sổ CI (trước lần dựng sổ đầu tiên: theo tên / IP như cũ).
+- **Máy chủ vật lý** (`/api/entities/server/{serial}`, serial viết kiểu nào cũng được): hãng, model, nguồn ghi nhận, host ảo hoá
+  chạy trên máy, dòng Thiết bị Data Center, Opex bảo hành (cần quyền xem Chi phí).
+- **Datastore** (`/api/entities/datastore/{id}`): dung lượng, % đã dùng, cluster, mảng và volume / LUN phía sau (mở được),
+  VM trên datastore.
+- **Đối tượng khác** (mảng, volume, cluster, client backup, thiết bị DC): thẻ chung `#/entity?type=ci&id=…` — thuộc tính,
+  khoá, liên kết, tác động.
+- **Ctrl + K** tìm thêm theo **serial / service tag**, **asset tag** (gõ 3 ký tự đầu trở lên, không phân biệt dấu gạch / hoa
+  thường) và **tên datastore**.
+- **Hỏi ICO** có hai công cụ chỉ đọc: `ci_lookup` (tìm trong sổ CI theo tên / khoá) và `ci_impact` (tác động down / up).
+- API: `GET /api/ci/{id}/impact?direction=down|up&depth=1..4` (tối đa 5.000 đối tượng; mục `truncated` báo đã rút gọn).
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh

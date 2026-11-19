@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 from .. import capacity, data_access
 from ..config import get_settings
 from ..features import get_features, is_on
+from ..cmdb import query as cq
 from ..models import User
+from ..shared.identity import norm_serial
 from ..spend.roles import has_role
 
 PER_TYPE = 8
@@ -116,9 +118,39 @@ def search(db: Session, user: User, q: str) -> Dict[str, Any]:
                 n += 1
                 if n >= PER_TYPE:
                     break
+    out.extend(_ci_hits(db, term))
     if _spend_ok(user, features):
         out.extend(_spend_hits(db, t))
     return {"q": term, "items": out[:60]}
+
+
+def _ci_hits(db: Session, term: str) -> List[Dict[str, Any]]:
+    """Physical servers by serial / asset tag (prefix, through the CI registry) and datastores by name."""
+    from ..cmdb.models import Ci, CiKey, CiLink
+    hits: List[Dict[str, Any]] = []
+    sk = norm_serial(term)
+    if len(sk) >= 3:
+        rows = (db.query(Ci).join(CiKey, CiKey.ci_id == Ci.id)
+                .filter(CiKey.kind.in_(("serial", "asset_tag")), CiKey.value_norm.like(sk + "%"),
+                        Ci.type.in_(("physical_server", "dc_asset")), Ci.status == "active")
+                .distinct().limit(PER_TYPE * 2).all())
+        servers: Dict[int, Any] = {c.id: c for c in rows if c.type == "physical_server"}
+        assets = [c.id for c in rows if c.type == "dc_asset"]
+        if assets:                                   # an asset tag → the server it records
+            for c in (db.query(Ci).join(CiLink, CiLink.to_ci == Ci.id)
+                      .filter(CiLink.from_ci.in_(assets), CiLink.relation == "records", Ci.status == "active")):
+                servers.setdefault(c.id, c)
+        for c in sorted(servers.values(), key=lambda c: c.name)[:PER_TYPE]:
+            a = cq.attrs_of(c)
+            model = " ".join(x for x in (a.get("vendor"), a.get("model")) if x) or "—"
+            hits.append({"type": "server", "label": c.name, "sub": f"Máy chủ vật lý · {model}",
+                         "entity": {"type": "server", "name": c.name, "vcenterKey": ""}})
+    for c in (db.query(Ci).filter(Ci.type == "datastore", Ci.status == "active", func.lower(Ci.name).like(_like(term.lower())))
+              .order_by(Ci.name).limit(PER_TYPE)):
+        a = cq.attrs_of(c)
+        hits.append({"type": "datastore", "label": c.name, "sub": f"Datastore · {a.get('dsType') or '—'} · {a.get('vcenterKey') or '—'}",
+                     "entity": {"type": "datastore", "name": c.name, "vcenterKey": a.get("vcenterKey") or "", "id": c.id}})
+    return hits
 
 
 def _spend_hits(db: Session, t: str) -> List[Dict[str, Any]]:
@@ -172,17 +204,40 @@ def _findings_for(hosts, vms, policy, entity: str) -> List[Dict[str, Any]]:
              "recommendation": f.get("recommendation")} for f in fs if f.get("entity") == entity]
 
 
-def _devices_for_host(db: Session, host: str) -> List[Dict[str, Any]]:
+def _opex_rows(rows) -> List[Dict[str, Any]]:
     from ..spend import service
+    return [{"code": o.code, "title": o.title, "serial": a.serial, "endDate": o.end_date.isoformat(), "status": o.status,
+             "statusLabel": service.STATUS_LABELS.get(o.status, o.status)} for a, o in rows]
+
+
+def _opex_for_server(db: Session, server) -> List[Dict[str, Any]]:
+    """Opex items that cover a physical server: incoming strong "covers" links of the CI registry."""
+    from ..cmdb.models import Ci, CiLink
     from ..spend.models import OpexAsset, OpexItem
+    codes = [code for (code,) in db.query(Ci.source_key).join(CiLink, CiLink.from_ci == Ci.id)
+             .filter(CiLink.to_ci == server.id, CiLink.relation == "covers", CiLink.confidence == "strong", Ci.type == "opex_item")]
+    if not codes:
+        return []
+    rows = (db.query(OpexAsset, OpexItem).join(OpexItem, OpexItem.id == OpexAsset.opex_id)
+            .filter(OpexItem.code.in_(codes)).order_by(OpexItem.end_date.desc()).limit(200).all())
+    return [dict(r, matchedBy="serial") for r in _opex_rows([(a, o) for a, o in rows if norm_serial(a.serial) == server.source_key])][:50]
+
+
+def _devices_for_host(db: Session, host: str, serial: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Warranty / contract lines of a host: through its physical server (same serial, strong) when the host reports
+    a serial known to the CI registry; otherwise by host name (labelled "ghép theo tên")."""
+    from ..spend.models import OpexAsset, OpexItem
+    sk = norm_serial(serial)
+    server = cq.find(db, "physical_server", sk) if sk else None
+    if server is not None:
+        return _opex_for_server(db, server)
     short = host.split(".")[0].lower()
     rows = (db.query(OpexAsset, OpexItem).join(OpexItem, OpexItem.id == OpexAsset.opex_id)
             .filter(or_(func.lower(OpexAsset.host_name) == host.lower(),
                         func.lower(OpexAsset.host_name).startswith(short + ".", autoescape=True),
                         func.lower(OpexAsset.host_name) == short))
             .order_by(OpexItem.end_date.desc()).limit(50).all())
-    return [{"code": o.code, "title": o.title, "serial": a.serial, "endDate": o.end_date.isoformat(), "status": o.status,
-             "statusLabel": service.STATUS_LABELS.get(o.status, o.status)} for a, o in rows]
+    return [dict(r, matchedBy="name") for r in _opex_rows(rows)]
 
 
 def host_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str, Any]:
@@ -210,9 +265,27 @@ def host_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str
         "vms": [{"name": v["vm"], "powerOn": bool(v.get("isPoweredOn")), "vcpu": v.get("vcpu"), "ramGB": v.get("ramGB"),
                  "ip": v.get("ipAddress")} for v in on_host[:300]],
         "findings": _findings_for(hosts, vms, policy, h["host"]),
-        "devices": _devices_for_host(db, h["host"]) if _spend_ok(user, features) else None,
+        "devices": _devices_for_host(db, h["host"], h.get("serial")) if _spend_ok(user, features) else None,
+        "server": _server_ref(db, h.get("serial")),
+        "ci": cq.card_extras(db, user, cq.find(db, "hypervisor_host", f"{h.get('vcenterKey') or ''}:{h['host']}")),
     }
     return out
+
+
+def _server_ref(db: Session, serial: Optional[str]) -> Optional[Dict[str, Any]]:
+    sk = norm_serial(serial)
+    c = cq.find(db, "physical_server", sk) if sk else None
+    return {"serial": c.name, "id": c.id} if c is not None else None
+
+
+def _vm_ci(db: Session, v: Dict[str, Any]):
+    uuid = str(v.get("instanceUuid") or "").strip().lower()
+    vc = v.get("vcenterKey") or ""
+    for key in ([uuid, f"{vc}:{uuid}"] if uuid else []) + [f"{vc}:{v.get('vm')}"]:
+        c = cq.find(db, "vm", key)
+        if c is not None and (cq.attrs_of(c).get("vcenterKey") or "") == vc:
+            return c
+    return None
 
 
 def vm_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str, Any]:
@@ -235,18 +308,34 @@ def vm_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str, 
         "os": {"category": os_.get("category"), "label": os_.get("categoryLabel"), "version": os_.get("osVersion"),
                "edition": os_.get("osEdition"), "source": os_.get("source"), "overridden": bool(os_.get("overridden"))} if os_ else None,
         "findings": _findings_for(hosts, vms, policy, v["vm"]),
-        "backup": _backup_for_vm(db, v) if is_on(features, "backup") else None,
+        "backup": None,
+        "ci": None,
     }
+    ci = _vm_ci(db, v)
+    if is_on(features, "backup"):
+        out["backup"] = _backup_for_vm(db, v, ci)
+    out["ci"] = cq.card_extras(db, user, ci)
     return out
 
 
-def _backup_for_vm(db: Session, v: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _protected_by(db: Session, ci) -> Dict[str, str]:
+    """nbu_client key → matchedBy of the VM's "protected_by" links (CI registry)."""
+    import json
+    from ..cmdb.models import Ci, CiKey, CiLink
+    rows = (db.query(CiKey.value_norm, CiLink.attrs).join(CiLink, CiLink.to_ci == CiKey.ci_id).join(Ci, Ci.id == CiKey.ci_id)
+            .filter(CiLink.from_ci == ci.id, CiLink.relation == "protected_by", CiKey.kind == "nbu_client", Ci.status == "active"))
+    return {k: json.loads(a or "{}").get("matchedBy") or "" for k, a in rows}
+
+
+def _backup_for_vm(db: Session, v: Dict[str, Any], ci=None) -> Optional[Dict[str, Any]]:
     if not get_settings().netbackups():
         return None
     from ..backup.client import client_key
     from ..backup.service import build_summary
     rep = _cached("backup", 60, lambda: build_summary(db, "all", 7))
-    keys = {k for k in (client_key(v.get("vm")), client_key(v.get("guestHostname")), v.get("ipAddress")) if k}
+    linked = _protected_by(db, ci) if ci is not None else {}
+    # The registry link when there is one; before the first build, the same name / IP rule directly.
+    keys = set(linked) or {k for k in (client_key(v.get("vm")), client_key(v.get("guestHostname")), v.get("ipAddress")) if k}
     client = next((c for c in rep.get("clients") or [] if c.get("key") in keys), None)
     cov = rep.get("coverage") or {}
     state = None
@@ -257,4 +346,66 @@ def _backup_for_vm(db: Session, v: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         state = "protected" if client else None
     return {"coverage": state, "client": {k: client.get(k) for k in ("client", "policies", "lastSuccessAt", "hoursSinceSuccess",
                                                                     "rpoHours", "consecutiveFail", "status", "statusLabel",
-                                                                    "lastStatusText", "note")} if client else None}
+                                                                    "lastStatusText", "note")} if client else None,
+            "matchedBy": linked.get(client.get("key")) if client and linked else None}
+
+
+# ================================================================ physical server / datastore (CI registry, G1c)
+def server_card(db: Session, user: User, serial: str) -> Dict[str, Any]:
+    """Physical server by serial: model, DC asset rows, Opex warranty (spend role), ESXi hosts running on it."""
+    from ..cmdb.models import Ci, CiLink
+    from ..models import DcAsset
+    sk = norm_serial(serial)
+    c = cq.find(db, "physical_server", sk) if sk else None
+    if c is None:
+        raise HTTPException(404, f"Không có máy chủ vật lý serial “{serial[:64]}” trong sổ CI.")
+    a = cq.attrs_of(c)
+    peers = (db.query(Ci, CiLink.relation).join(CiLink, CiLink.from_ci == Ci.id)
+             .filter(CiLink.to_ci == c.id, CiLink.relation.in_(("runs_on", "records")), Ci.status == "active").all())
+    hosts = [{"name": p.name, "vcenterKey": cq.attrs_of(p).get("vcenterKey") or "", "cluster": cq.attrs_of(p).get("cluster"),
+              "platform": cq.attrs_of(p).get("platform")} for p, rel in peers if rel == "runs_on"]
+    keys = [p.source_key for p, rel in peers if rel == "records"]
+    assets = []
+    if keys:
+        for d in db.query(DcAsset).filter(DcAsset.asset_key.in_(keys)).order_by(DcAsset.device_id):
+            assets.append({"id": d.id, "deviceId": d.device_id, "category": d.category, "brand": d.brand, "model": d.model,
+                           "serial": d.serial, "assetTag": d.asset_tag, "location": d.location, "env": d.env,
+                           "acquiredOn": d.acquired_on.isoformat() if d.acquired_on else None})
+    return {"type": "server", "name": c.name, "serial": c.name, "status": c.status, "vendor": a.get("vendor"), "model": a.get("model"),
+            "origins": a.get("origins") or [], "hosts": sorted(hosts, key=lambda h: (h["vcenterKey"], h["name"])), "dcAssets": assets,
+            "opex": _opex_for_server(db, c) if _spend_ok(user, get_features(db)) else None,
+            "ci": cq.card_extras(db, user, c)}
+
+
+def datastore_card(db: Session, user: User, ci_id: int) -> Dict[str, Any]:
+    """Datastore by CI id: capacity (latest state), the array volume behind it, VMs on it, impact."""
+    from ..cmdb.models import Ci, CiLink
+    from ..models import DatastoreState
+    c = cq.visible_ci(db, user, ci_id)
+    if c.type != "datastore":
+        raise HTTPException(404, "CI này không phải datastore.")
+    a = cq.attrs_of(c)
+    vc = a.get("vcenterKey") or ""
+    st = db.query(DatastoreState).filter(DatastoreState.vcenter_key == vc,
+                                         DatastoreState.ds_key == c.source_key[len(vc) + 1:]).first()
+    vol = (db.query(Ci, CiLink.confidence, CiLink.attrs).join(CiLink, CiLink.to_ci == Ci.id)
+           .filter(CiLink.from_ci == c.id, CiLink.relation == "backed_by").first())
+    array = None
+    if vol is not None:
+        array = (db.query(Ci).join(CiLink, CiLink.to_ci == Ci.id)
+                 .filter(CiLink.from_ci == vol[0].id, CiLink.relation == "on").first())
+    vms = (db.query(Ci).join(CiLink, CiLink.from_ci == Ci.id)
+           .filter(CiLink.to_ci == c.id, CiLink.relation == "stored_on", Ci.status == "active").order_by(Ci.name).limit(500).all())
+    cap = st.capacity_gb if st else None
+    used_pct = round((cap - st.free_gb) / cap * 100, 1) if st and cap else None
+    import json
+    return {"type": "datastore", "id": c.id, "name": c.name, "vcenterKey": vc, "status": c.status, "dsType": a.get("dsType"),
+            "capacity": {"capacityGB": cap, "freeGB": st.free_gb if st else None, "usedPct": used_pct,
+                         "accessible": st.accessible if st else None, "clusters": json.loads(st.clusters or "[]") if st else []},
+            "storage": {"volume": vol[0].name, "volumeId": vol[0].id, "confidence": vol[1],
+                        "matchedBy": json.loads(vol[2] or "{}").get("matchedBy"),
+                        "array": array.name if array else None, "arrayId": array.id if array else None,
+                        "vendor": cq.attrs_of(array).get("vendor") if array else None} if vol is not None else None,
+            "vms": [{"name": v.name, "vcenterKey": cq.attrs_of(v).get("vcenterKey") or "",
+                     "powerOn": cq.attrs_of(v).get("powerOn")} for v in vms],
+            "ci": cq.card_extras(db, user, c)}

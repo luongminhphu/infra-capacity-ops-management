@@ -73,7 +73,9 @@ def _seed(db):
                    asset_tag="hsc-001"))
     db.add(BackupJob(nbu_key="nbu-t", job_id=1, client_name="VM-A.corp.local", client_key="vm-a", status=0,
                      start_time=T0 - dt.timedelta(days=1)))
-    cat, ven = SpendCategory(code="HW", name="Bảo hành", grp="hw_warranty"), SpendVendor(name="Dell", name_norm="dell")
+    cat = db.query(SpendCategory).filter_by(code="CMDB-HW").first() or \
+        SpendCategory(code="CMDB-HW", name="Bảo hành (test CMDB)", grp="hw_warranty")   # shared DB: kept between tests
+    ven = SpendVendor(name="Dell CMDB", name_norm="dell cmdb")
     db.add_all([cat, ven])
     db.flush()
     op = OpexItem(code="OPX-26-001", fiscal_year=2026, category_id=cat.id, title="Bảo hành R750", vendor_id=ven.id,

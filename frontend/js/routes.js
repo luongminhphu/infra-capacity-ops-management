@@ -14,7 +14,7 @@ const PAGES = [
     { id: 'agenda', view: 'agenda', icon: 'calendar-clock', label: 'Lịch việc & nhắc hạn', title: 'Lịch việc & nhắc hạn',
       desc: 'Mọi mốc có ngày: Opex hết hạn, đợt thanh toán, license hết hạn, báo giá hết hiệu lực.', scope: [] },
     { id: 'entity', view: 'entity', icon: 'box', label: 'Đối tượng', title: 'Đối tượng',
-      desc: 'Mọi thông tin về một host / VM từ các module: capacity, phần cứng, hệ điều hành, backup, compliance, bảo hành.', scope: [] },
+      desc: 'Mọi thông tin về một đối tượng hạ tầng (host, VM, máy chủ vật lý, datastore…): capacity, phần cứng, backup, bảo hành, liên kết và tác động.', scope: [] },
     { id: 'spend-payments', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'payments', icon: 'banknote', label: 'Đợt thanh toán', title: 'Đợt thanh toán',
       desc: 'Mọi đợt thanh toán của mọi hợp đồng, sớm nhất trước, kèm tình trạng hồ sơ.', scope: [] },
     { id: 'executive', view: 'executive', icon: 'briefcase', label: 'Điều hành', title: 'Tổng quan điều hành',

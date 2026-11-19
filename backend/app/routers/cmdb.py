@@ -3,6 +3,7 @@
 GET /api/ci?type=&q=&status=active|retired|all&limit=   — list / search by name or key (serial, IP, NAA…)
 GET /api/ci/stats                                        — CIs per type, hosts with a serial, weak links
 GET /api/ci/{id}                                         — one CI with its keys and links in both directions
+GET /api/ci/{id}/impact?direction=down|up&depth=        — downstream / upstream impact (cmdb/impact.py)
 """
 from typing import Optional
 
@@ -32,3 +33,10 @@ def ci_stats(user: User = Depends(get_current_user), db: Session = Depends(get_d
 @router.get("/{ci_id}")
 def ci_detail(ci_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return svc.get_ci(db, user, ci_id)
+
+
+@router.get("/{ci_id}/impact")
+def ci_impact(ci_id: int, direction: str = Query(default="down", max_length=4), depth: int = Query(default=4, ge=1, le=4),
+              user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """down: what fails with this CI (host → VM → backup client…); up: what this CI depends on."""
+    return svc.impact(db, user, ci_id, direction, depth)

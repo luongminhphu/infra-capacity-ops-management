@@ -3,10 +3,19 @@
    (Ctrl + K command palette). docs/design/super-app.md §2.3–2.4.
    ========================================================= */
 
-/* ---------------------------------------------------------------- entity page (#/entity?type=host&name=…&vc=…) */
+/* ---------------------------------------------------------------- entity page (#/entity?type=host|vm|server|datastore&name=…&vc=…&id=…) */
+const EN_TYPES = ['host', 'vm', 'server', 'datastore', 'ci'];
 function entityParams() {
   const q = new URLSearchParams((location.hash.split('?')[1]) || '');
-  return { type: q.get('type') === 'vm' ? 'vm' : 'host', name: q.get('name') || '', vc: q.get('vc') || '' };
+  const type = EN_TYPES.includes(q.get('type')) ? q.get('type') : 'host';
+  return { type, name: q.get('name') || '', vc: q.get('vc') || '', id: q.get('id') || '' };
+}
+
+function entityUrl(p) {
+  if (p.type === 'server') return `/entities/server/${encodeURIComponent(p.name)}`;
+  if (p.type === 'datastore') return `/entities/datastore/${encodeURIComponent(p.id)}`;
+  if (p.type === 'ci') return `/ci/${encodeURIComponent(p.id)}`;
+  return `/entities/${p.type}?${new URLSearchParams({ name: p.name, vcenter: p.vc })}`;
 }
 
 const enPct = (v) => (v === null || v === undefined) ? '—' : `${Math.round(v)}%`;
@@ -18,14 +27,21 @@ async function renderEntityView() {
   const mount = $('#entityMount');
   if (!mount) return;
   const p = entityParams();
-  if (!p.name) { mount.innerHTML = uiEmpty('Chưa chọn đối tượng — tìm bằng Ctrl + K.'); return; }
+  if (['datastore', 'ci'].includes(p.type) ? !/^\d+$/.test(p.id) : !p.name) { mount.innerHTML = uiEmpty('Chưa chọn đối tượng — tìm bằng Ctrl + K.'); return; }
   mount.innerHTML = uiNote('Đang tải…');
   let d;
-  try { d = await apiRequest(`/entities/${p.type}?${new URLSearchParams({ name: p.name, vcenter: p.vc })}`); }
+  try {
+    d = await apiRequest(entityUrl(p));
+    if (p.type === 'ci') {             // generic CI card: registry entry + its downstream impact
+      const imp = await apiRequest(`/ci/${encodeURIComponent(p.id)}/impact?direction=down`);
+      d.ci = { id: d.id, keys: d.keys, links: d.links, linksTruncated: d.linksTruncated, impact: imp };
+    }
+  }
   catch (err) { mount.innerHTML = `<section class="panel">${uiEmpty(err.message)}</section>`; return; }
   $('#pageTitle').textContent = d.name;
   document.title = `${d.name} — Infra Capacity Ops Management`;
-  mount.innerHTML = p.type === 'host' ? entityHostHtml(d) : entityVmHtml(d);
+  const body = { host: entityHostHtml, vm: entityVmHtml, server: entityServerHtml, datastore: entityDatastoreHtml, ci: entityCiHtml }[p.type](d);
+  mount.innerHTML = body + enCiHtml(d.ci);
   refreshIcons();
 }
 
@@ -43,7 +59,7 @@ function entityHostHtml(d) {
   const dev = d.devices === null ? '' : `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Bảo hành / hợp đồng (Opex)</div>
       ${d.devices.length ? `<ul class="home-list">${d.devices.map(x => `<li class="home-item"><div class="home-item-main">
         <a class="home-item-title" href="${esc(homeLink('spend-opex', `code=${encodeURIComponent(x.code)}`))}">${esc(x.code)} — ${esc(x.title)}</a>
-        <p class="home-item-detail">Serial ${esc(x.serial)} · hết hạn ${esc(spDateSafe(x.endDate))} · ${esc(x.statusLabel)}</p></div></li>`).join('')}</ul>`
+        <p class="home-item-detail">Serial ${esc(x.serial)} · hết hạn ${esc(spDateSafe(x.endDate))} · ${esc(x.statusLabel)}${x.matchedBy === 'name' ? ' ' + uiTag('ghép theo tên', 'Host không báo serial: ghép theo tên host khai trong Opex') : ''}</p></div></li>`).join('')}</ul>`
         : '<p class="muted-sub">Chưa có khoản Opex nào khai báo thiết bị này (Opex → Thiết bị liên quan → tên host).</p>'}</section>`;
   return `
     <section class="panel"><div class="panel-head"><div><div class="eyebrow">Host · ${esc(d.vcenterKey || 'import')}</div>
@@ -54,7 +70,7 @@ function entityHostHtml(d) {
       ${enDl([['CPU dùng (theo ngưỡng)', enPct(c.cpuPct)], ['RAM dùng (theo ngưỡng)', enPct(c.ramPct)], ['vCPU cấp', enVal(c.vcpuUsed)],
               ['RAM cấp (GB)', enVal(c.ramUsedGB)], ['Hãng / model', `${enVal(hw.vendor)} ${hw.model ? esc(hw.model) : ''}`],
               ['CPU', `${enVal(hw.cpuModel)}`], ['Socket × core', `${enVal(hw.cpuSockets)} × ${enVal(hw.cores)}`], ['RAM (GB)', enVal(hw.ramGB)],
-              ['ESXi', `${enVal(hw.esxiVersion)} ${hw.esxiBuild ? `(build ${esc(hw.esxiBuild)})` : ''}`], ['Service Tag', enVal(hw.serial)], ['Trạng thái host', enVal(hw.status)]])}
+              ['ESXi', `${enVal(hw.esxiVersion)} ${hw.esxiBuild ? `(build ${esc(hw.esxiBuild)})` : ''}`], ['Service Tag', d.server ? enServerLink(d.server.serial) : enVal(hw.serial)], ['Trạng thái host', enVal(hw.status)]])}
     </section>
     ${cl ? `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Cluster ${esc(cl.name)} ${uiPill(cl.overall.cls, cl.overall.text)}</div>
       ${enDl([['Host', enVal(cl.hosts)], ['VM', enVal(cl.vms)], ['CPU', enPct(cl.cpuPct)], ['RAM', enPct(cl.ramPct)],
@@ -70,7 +86,7 @@ function entityVmHtml(d) {
   const c = d.config, os = d.os, b = d.backup;
   const cov = b ? { protected: ['ok', 'Có backup'], failing: ['warn', 'Có job nhưng lỗi'], unprotected: ['crit', 'Chưa backup'] }[b.coverage] : null;
   const backup = b === null ? '' : `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Backup ${cov ? uiPill(...cov) : uiPill('na', 'Không xác định')}</div>
-      ${b.client ? enDl([['Client', enVal(b.client.client)], ['Đánh giá', uiPill(({ ok: 'ok', warn: 'warn', crit: 'crit' })[b.client.status] || 'na', b.client.statusLabel)],
+      ${b.client ? enDl([['Client', `${enVal(b.client.client)}${b.matchedBy ? ' ' + uiTag('ghép theo tên', EN_MATCH[b.matchedBy] || '') : ''}`], ['Đánh giá', uiPill(({ ok: 'ok', warn: 'warn', crit: 'crit' })[b.client.status] || 'na', b.client.statusLabel)],
                          ['Policy', enVal((b.client.policies || []).join(', '))], ['Thành công gần nhất', b.client.lastSuccessAt ? esc(spTimeSafe(b.client.lastSuccessAt)) : '—'],
                          ['Đã qua (giờ)', enVal(b.client.hoursSinceSuccess)], ['RPO (giờ)', enVal(b.client.rpoHours)],
                          ['Lỗi liên tiếp', enVal(b.client.consecutiveFail)], ['Kết quả lần cuối', enVal(b.client.lastStatusText)]])
@@ -91,10 +107,136 @@ function entityVmHtml(d) {
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
 }
 
+/* ---------------------------------------------------------------- CI registry: links, impact, server, datastore (ICO v2 G1c) */
+const EN_REL = {       // relation → [label seen from the source (out), label seen from the target (in)]
+  hosted_on: ['Chạy trên host', 'VM trên host'], member_of: ['Thuộc cluster', 'Host trong cluster'],
+  runs_on: ['Máy chủ vật lý', 'Host chạy trên máy này'], records: ['Ghi nhận máy chủ', 'Thiết bị Data Center'],
+  covers: ['Bảo hành / hợp đồng cho', 'Opex bảo hành'], stored_on: ['Lưu trên datastore', 'VM trên datastore'],
+  backed_by: ['Volume lưu trữ', 'Datastore dùng volume'], on: ['Thuộc mảng lưu trữ', 'Volume trên mảng'],
+  protected_by: ['Client backup', 'VM được backup'],
+};
+const EN_CI_TYPE = { vm: 'VM', hypervisor_host: 'host', cluster: 'cluster', physical_server: 'máy chủ vật lý', datastore: 'datastore',
+  storage_volume: 'volume', storage_array: 'mảng lưu trữ', backup_client: 'client backup', dc_asset: 'thiết bị DC', opex_item: 'khoản Opex' };
+const EN_MATCH = { vm_name: 'Ghép theo tên VM', guest_hostname: 'Ghép theo hostname trong guest', ip: 'Ghép theo IP',
+  host_name: 'Ghép theo tên host khai trong Opex', nfs_path: 'Ghép theo đường dẫn NFS' };
+const EN_LINKS_SHOWN = 12;
+
+function enServerLink(serial) {
+  return `<a class="entity-link" href="${esc(uiEntityHref('server', serial))}" title="Mở thẻ máy chủ vật lý">${esc(serial)}</a>`;
+}
+
+function enPeer(p) {
+  if (p.type === 'vm' || p.type === 'hypervisor_host') return uiEntityLink(p.type === 'vm' ? 'vm' : 'host', p.name, p.vcenterKey || '', false);
+  if (p.type === 'physical_server') return enServerLink(p.name);
+  if (p.type === 'datastore') return `<a class="entity-link" href="${esc(uiEntityHref('datastore', p.name, p.vcenterKey || '', p.id))}">${esc(p.name)}</a>`;
+  return enCiLink(p.id, p.name);
+}
+
+function enCiLink(id, name) {
+  return `<a class="entity-link" href="${esc(uiEntityHref('ci', name, '', id))}">${esc(name)}</a>`;
+}
+
+function enImpactText(imp) {
+  if (!imp.total) return 'Không có đối tượng nào phụ thuộc vào đối tượng này.';
+  const order = ['physical_server', 'hypervisor_host', 'cluster', 'datastore', 'storage_volume', 'vm', 'backup_client'];
+  const parts = Object.keys(imp.counts).sort((a, b) => order.indexOf(a) - order.indexOf(b))
+    .map(t => `${uiNumber(imp.counts[t])} ${EN_CI_TYPE[t] || t}`);
+  return `Nếu đối tượng này lỗi: ${parts.join(', ')}${imp.truncated ? ' (đã rút gọn)' : ''}.`;
+}
+
+function enCiHtml(ci) {
+  if (!ci) return '';
+  const groups = new Map();
+  ci.links.forEach(l => {
+    const key = `${l.relation}:${l.direction}`;
+    if (!groups.has(key)) groups.set(key, { label: (EN_REL[l.relation] || [l.relation, l.relation])[l.direction === 'out' ? 0 : 1], items: [] });
+    groups.get(key).items.push(l);
+  });
+  const rows = [...groups.values()].map(g => {
+    const shown = g.items.slice(0, EN_LINKS_SHOWN).map(l => `<li>${enPeer(l.peer)}${l.confidence === 'weak'
+      ? ' ' + uiTag('ghép theo tên', EN_MATCH[(l.attrs || {}).matchedBy] || 'Ghép theo tên / IP, không dùng để gom sự cố') : ''}</li>`).join('');
+    const more = g.items.length > EN_LINKS_SHOWN ? `<li class="muted-sub">và ${uiNumber(g.items.length - EN_LINKS_SHOWN)} đối tượng khác</li>` : '';
+    return `<div class="sp-dl-item"><dt>${esc(g.label)} (${uiNumber(g.items.length)})</dt><dd><ul class="en-links">${shown}${more}</ul></dd></div>`;
+  }).join('');
+  const imp = ci.impact;
+  return `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Tác động</div>
+      <p>${esc(enImpactText(imp))}</p>
+      ${imp.weak ? `<p class="muted-sub">${esc(uiNumber(imp.weak))} đối tượng nối qua liên kết ghép theo tên.</p>` : ''}</section>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Liên kết</div>
+      ${rows ? `<dl class="sp-dl en-dl">${rows}</dl>` : uiEmpty('Chưa có liên kết trong sổ CI.')}
+      ${ci.linksTruncated ? '<p class="muted-sub">Danh sách liên kết đã rút gọn.</p>' : ''}</section>`;
+}
+
+function entityServerHtml(d) {
+  const hosts = d.hosts.length ? `<ul class="en-links">${d.hosts.map(h => `<li>${uiEntityLink('host', h.name, h.vcenterKey, false)}
+      <span class="muted-sub">${esc(h.vcenterKey)} · cluster ${esc(h.cluster || '—')}</span></li>`).join('')}</ul>`
+    : '<p class="muted-sub">Không có host ảo hoá nào báo serial này.</p>';
+  const assets = d.dcAssets.length ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Thiết bị</th><th>Model</th><th>Asset tag</th>
+      <th>Vị trí</th><th>Đưa vào dùng</th></tr></thead><tbody>${d.dcAssets.map(a => `<tr><td>${esc(a.deviceId || '—')}</td>
+      <td>${esc([a.brand, a.model].filter(Boolean).join(' ') || '—')}</td><td>${esc(a.assetTag || '—')}</td><td>${esc(a.location || '—')}</td>
+      <td>${esc(spDateSafe(a.acquiredOn))}</td></tr>`).join('')}</tbody></table></div>
+      <button class="btn btn-ghost btn-sm" type="button" data-nav-link="dc-assets">Thiết bị Data Center</button>`
+    : '<p class="muted-sub">Không có trong danh sách Thiết bị Data Center.</p>';
+  const opex = d.opex === null ? '' : `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Bảo hành / hợp đồng (Opex)</div>
+      ${d.opex.length ? `<ul class="home-list">${d.opex.map(x => `<li class="home-item"><div class="home-item-main">
+        <a class="home-item-title" href="${esc(homeLink('spend-opex', `code=${encodeURIComponent(x.code)}`))}">${esc(x.code)} — ${esc(x.title)}</a>
+        <p class="home-item-detail">Serial ${esc(x.serial)} · hết hạn ${esc(spDateSafe(x.endDate))} · ${esc(x.statusLabel)}</p></div></li>`).join('')}</ul>`
+        : '<p class="muted-sub">Chưa có khoản Opex nào khai serial này.</p>'}</section>`;
+  const src = { host: 'vCenter / hypervisor', dc_asset: 'Thiết bị DC', opex: 'Opex' };
+  return `
+    <section class="panel"><div class="panel-head"><div><div class="eyebrow">Máy chủ vật lý</div>
+      <div class="panel-title" role="heading" aria-level="2">${esc(d.serial)} ${d.status === 'retired' ? uiTag('không còn thấy') : ''}</div>
+      <p class="panel-sub">${esc([d.vendor, d.model].filter(Boolean).join(' ') || 'Chưa rõ model')}</p></div></div>
+      ${enDl([['Serial / Service Tag', esc(d.serial)], ['Hãng', enVal(d.vendor)], ['Model', enVal(d.model)],
+              ['Nguồn ghi nhận', esc(d.origins.map(o => src[o] || o).join(', ') || '—')]])}
+    </section>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Host ảo hoá chạy trên máy (${esc(d.hosts.length)})</div>${hosts}</section>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Thiết bị Data Center</div>${assets}</section>
+    ${opex}`;
+}
+
+function entityDatastoreHtml(d) {
+  const c = d.capacity, st = d.storage;
+  const vms = d.vms.map(v => `<tr><td>${uiEntityLink('vm', v.name, v.vcenterKey, false)}</td>
+      <td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td></tr>`).join('');
+  return `
+    <section class="panel"><div class="panel-head"><div><div class="eyebrow">Datastore · ${esc(d.vcenterKey || '—')}</div>
+      <div class="panel-title" role="heading" aria-level="2">${esc(d.name)} ${d.status === 'retired' ? uiTag('không còn thấy') : ''}</div>
+      <p class="panel-sub">${esc(d.dsType || '—')} · ${esc(uiNumber(d.vms.length))} VM</p></div>
+      <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="infra-ds">Datastore</button></div></div>
+      ${enDl([['Dung lượng (GB)', esc(uiNumber(c.capacityGB, 1))], ['Còn trống (GB)', esc(uiNumber(c.freeGB, 1))],
+              ['Đã dùng', c.usedPct === null ? '—' : `${esc(uiNumber(c.usedPct, 1))}%`],
+              ['Truy cập được', c.accessible === null ? '—' : c.accessible ? 'Có' : 'Không'], ['Cluster', esc((c.clusters || []).join(', ') || '—')],
+              ['Mảng lưu trữ', st && st.array ? `${enCiLink(st.arrayId, st.array)}${st.vendor ? ` <span class="muted-sub">${esc(st.vendor)}</span>` : ''}` : '—'],
+              ['Volume / LUN', st ? `${enCiLink(st.volumeId, st.volume)}${st.confidence === 'weak' ? ' ' + uiTag('ghép theo tên', EN_MATCH[st.matchedBy] || '') : ''}` : '—']])}
+    </section>
+    <section class="table-card"><div class="panel-title" role="heading" aria-level="2">VM trên datastore (${esc(d.vms.length)})</div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>VM</th><th>Nguồn</th></tr></thead>
+      <tbody>${vms || `<tr><td colspan="2">${uiEmpty('Không có VM.')}</td></tr>`}</tbody></table></div></section>`;
+}
+
+const EN_ATTR = { vcenterKey: 'vCenter', cluster: 'Cluster', host: 'Host', platform: 'Nền tảng', vendor: 'Hãng', model: 'Model',
+  dsType: 'Loại', kind: 'Kiểu', container: 'SVM / pod', array: 'Mảng', nbuKey: 'NetBackup', category: 'Nhóm', brand: 'Hãng',
+  location: 'Vị trí', env: 'Môi trường', code: 'Mã', status: 'Trạng thái', endDate: 'Hết hạn', group: 'Nhóm chi phí' };
+const EN_KEY = { serial: 'Serial', hw_uuid: 'UUID phần cứng', instance_uuid: 'instanceUuid', fqdn: 'FQDN', short_name: 'Tên ngắn', ip: 'IP',
+  mac: 'MAC', naa: 'NAA', nbu_client: 'Client NetBackup', asset_tag: 'Asset tag', opex_code: 'Mã Opex', idrac_ip: 'iDRAC IP' };
+
+function entityCiHtml(d) {
+  const attrs = Object.entries(d.attrs || {}).filter(([k, v]) => EN_ATTR[k] && v !== null && typeof v !== 'object')
+    .map(([k, v]) => [EN_ATTR[k], k === 'endDate' ? esc(spDateSafe(v)) : enVal(v)]);
+  const keys = (d.keys || []).map(k => [EN_KEY[k.kind] || k.kind, `<span class="mono">${esc(k.value)}</span>`]);
+  return `
+    <section class="panel"><div class="panel-head"><div><div class="eyebrow">${esc((EN_CI_TYPE[d.type] || d.type).replace(/^./, c => c.toUpperCase()))} · sổ CI</div>
+      <div class="panel-title" role="heading" aria-level="2">${esc(d.name)} ${d.status === 'retired' ? uiTag('không còn thấy') : ''}</div>
+      <p class="panel-sub">Thấy lần cuối ${esc(spTimeSafe(d.lastSeen))}</p></div></div>
+      ${enDl([...attrs, ...keys]) }
+    </section>`;
+}
+
 
 /* ---------------------------------------------------------------- command palette (Ctrl + K) */
 const palState = { timer: null, seq: 0, items: [], active: 0 };
-const PAL_TYPE = { page: 'Trang', action: 'Thao tác', host: 'Host', vm: 'VM', client: 'Client backup', opex: 'Opex', capex: 'Capex',
+const PAL_TYPE = { page: 'Trang', action: 'Thao tác', host: 'Host', vm: 'VM', server: 'Máy chủ', datastore: 'Datastore', client: 'Client backup', opex: 'Opex', capex: 'Capex',
   contract: 'Hợp đồng', quote: 'Báo giá', renovation: 'Cải tạo', proposal: 'Tờ trình', vendor: 'NCC' };
 const PAL_ACTIONS = [
   { label: 'Tạo khoản Opex', page: 'spend-opex', run: () => uiRequire('spend').then(() => spOpenForm()), role: 'editor', feature: 'spend' },
@@ -127,7 +269,7 @@ function openPalette() {
     dlg.id = 'palDialog';
     dlg.className = 'src-dialog pal-dialog';
     dlg.setAttribute('aria-label', 'Tìm kiếm');
-    dlg.innerHTML = `<input type="text" id="palInput" placeholder="Tìm host, VM, mã OPX / CPX / HD / BG / CTVP / TT, nhà cung cấp, trang…" autocomplete="off" aria-controls="palList">
+    dlg.innerHTML = `<input type="text" id="palInput" placeholder="Tìm host, VM, serial, asset tag, datastore, mã OPX / CPX / HD / BG / CTVP / TT, nhà cung cấp, trang…" autocomplete="off" aria-controls="palList">
       <ul class="pal-list" id="palList" role="listbox"></ul><p class="pal-hint">↑ ↓ chọn · Enter mở · Esc đóng</p>`;
     document.body.appendChild(dlg);
     $('#palInput').addEventListener('input', palQuery);
@@ -180,7 +322,7 @@ function palGo(i) {
   const it = palState.items[i];
   if (!it) return;
   $('#palDialog').close();
-  if (it.entity) { location.hash = uiEntityHref(it.entity.type, it.entity.name, it.entity.vcenterKey); return; }
+  if (it.entity) { location.hash = uiEntityHref(it.entity.type, it.entity.name, it.entity.vcenterKey, it.entity.id); return; }
   if (it.action) {
     if (it.action.page) navigateTo(it.action.page);
     setTimeout(() => it.action.run(), 300);
