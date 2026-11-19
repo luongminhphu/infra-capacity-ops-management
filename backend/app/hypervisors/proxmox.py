@@ -73,6 +73,8 @@ def parse(cluster: str, nodes: List[Dict[str, Any]], node_status: Dict[str, Dict
             "cpuModel": ci.get("model"), "cpuSockets": sockets,
             "cpuThreads": int(num(ci.get("cpus"))) or int(num(n.get("maxcpu"))) or None,
             "clusterHa": None, "clusterDrs": None,
+            # The Proxmox API exposes no hardware serial / SMBIOS uuid to an audit token → no hardware key.
+            "serial": None, "hwUuid": None,
         })
         health.append(health_row(name, cluster, online, "Node offline", "connected" if online else "disconnected"))
     vms, ds_vm = [], {}

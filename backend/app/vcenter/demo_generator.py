@@ -42,6 +42,33 @@ def _seeded_random(key: str) -> random.Random:
     return random.Random(seed)
 
 
+# Dell service tags are 7 characters from digits + consonant-heavy letters (no vowels → no words).
+_TAG_ALPHABET = "0123456789BCDFGHJKLMNPQRSTVWXYZ"
+
+
+def demo_service_tag(host_name: str) -> str:
+    """Stable 7-character Dell-style service tag for a demo host (derived from the name only, so it does
+    not consume the inventory's random stream). DC-asset / Opex demo rows can reuse it for a serial match."""
+    n = int(hashlib.sha256(f"svctag/{host_name}".encode()).hexdigest(), 16)
+    out = []
+    for _ in range(7):
+        n, r = divmod(n, len(_TAG_ALPHABET))
+        out.append(_TAG_ALPHABET[r])
+    return "".join(out)
+
+
+def demo_host_identity(vcenter_key: str, platform: str, vendor: str, host_name: str) -> Dict[str, Any]:
+    """serial / hwUuid as each platform's collector reports them: vCenter → service tag (Dell) or
+    serial (HPE) + BIOS uuid; Nutanix → node serial, no uuid; Proxmox → nothing."""
+    if platform == "proxmox":
+        return {"serial": None, "hwUuid": None}
+    tag = demo_service_tag(host_name)
+    serial = tag if str(vendor).startswith("Dell") else f"CZJ{tag}"     # HPE serials: 10 characters "CZJ…"
+    if platform == "nutanix":
+        return {"serial": f"NX{tag}", "hwUuid": None}
+    return {"serial": serial, "hwUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{vcenter_key}/host/{host_name}"))}
+
+
 def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     rnd = _seeded_random(cfg.key)
     # Slow time-based drift so repeated polls show gentle organic growth in the
@@ -73,6 +100,7 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
                 "vendor": vendor, "model": model, "esxiVersion": esxi_ver, "esxiBuild": esxi_build,
                 "cpuModel": cpu_model, "cpuSockets": sockets, "cpuThreads": cores_per_host * 2,
                 "clusterHa": True, "clusterDrs": cluster != "DR-CLUSTER",
+                **demo_host_identity(cfg.key, platform, vendor, host_name),
             })
 
         vm_count = int(host_count * rnd.uniform(6, 10))

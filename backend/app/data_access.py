@@ -42,7 +42,7 @@ def _host_to_row(h: HostSnapshot) -> Dict[str, Any]:
         "status": h.status, "vcenterKey": h.vcenter_key, "platform": _platform(h.vcenter_key),
         "vendor": h.vendor, "model": h.model, "esxiVersion": h.esxi_version, "esxiBuild": h.esxi_build,
         "cpuModel": h.cpu_model, "cpuSockets": h.cpu_sockets, "cpuThreads": h.cpu_threads,
-        "clusterHa": h.cluster_ha, "clusterDrs": h.cluster_drs,
+        "clusterHa": h.cluster_ha, "clusterDrs": h.cluster_drs, "serial": h.serial, "hwUuid": h.hw_uuid,
     }
 
 

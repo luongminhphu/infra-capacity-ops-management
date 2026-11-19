@@ -200,6 +200,22 @@ def _compute_info(compute: Objs, ref) -> Tuple[str, Any, Any]:
             bool(drs.enabled) if drs is not None else None)
 
 
+# Preference order of HostSystemIdentificationInfo.identifierType.key: Dell / most OEMs report the
+# service tag; others only the system / enclosure serial.
+SERIAL_ID_KEYS = ("ServiceTag", "SerialNumberTag", "EnclosureSerialNumberTag")
+
+
+def host_serial(hw: Any) -> Optional[str]:
+    """Hardware serial of a host from summary.hardware.otherIdentifyingInfo (None when not reported)."""
+    found: Dict[str, str] = {}
+    for info in getattr(hw, "otherIdentifyingInfo", None) or []:
+        key = _safe_attr(info, "identifierType", "key")
+        val = str(getattr(info, "identifierValue", None) or "").strip()
+        if key in SERIAL_ID_KEYS and val and key not in found:
+            found[key] = val[:64]
+    return next((found[k] for k in SERIAL_ID_KEYS if k in found), None)
+
+
 def build_rows(hosts: Objs, compute: Objs, vms: Objs, datastores: Objs) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Turn retrieved properties into the app's normalized (host_rows, vm_rows)."""
     host_rows: List[Dict[str, Any]] = []
@@ -240,6 +256,9 @@ def build_rows(hosts: Objs, compute: Objs, vms: Objs, datastores: Objs) -> Tuple
             "cpuThreads": int(_safe_attr(hw, "numCpuThreads", default=0) or 0) or None,
             "clusterHa": ha,
             "clusterDrs": drs,
+            # Hardware identity (CI registry key) — same summary.hardware object, no extra round-trip.
+            "serial": host_serial(hw),
+            "hwUuid": (str(_safe_attr(hw, "uuid") or "")[:64] or None),
         })
 
     vm_rows: List[Dict[str, Any]] = []

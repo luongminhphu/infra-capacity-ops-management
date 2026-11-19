@@ -44,6 +44,7 @@ def ensure_schema() -> None:
             ("vendor", "VARCHAR(128)"), ("model", "VARCHAR(128)"), ("esxi_version", "VARCHAR(64)"),
             ("esxi_build", "VARCHAR(64)"), ("cpu_model", "VARCHAR(255)"), ("cpu_sockets", "INTEGER"),
             ("cpu_threads", "INTEGER"), ("cluster_ha", "BOOLEAN"), ("cluster_drs", "BOOLEAN"),
+            ("serial", "VARCHAR(64)"), ("hw_uuid", "VARCHAR(64)"),
         ],
         "license_entitlements": [
             ("kind", "VARCHAR(16) NOT NULL DEFAULT 'owned'"), ("unit_price_minor", "BIGINT"),

@@ -143,6 +143,9 @@ class HostSnapshot(Base):
     cpu_threads = Column(Integer, nullable=True)      # logical threads (numCpuThreads) — NOT licensable cores
     cluster_ha = Column(Boolean, nullable=True)       # vSphere HA enabled on the parent cluster
     cluster_drs = Column(Boolean, nullable=True)      # DRS enabled on the parent cluster
+    # Hardware identity (CI registry): service tag / serial and SMBIOS uuid; NULL on older rows and Proxmox.
+    serial = Column(String(64), nullable=True)
+    hw_uuid = Column(String(64), nullable=True)
     captured_at = Column(DateTime, default=utcnow, index=True)
 
     run = relationship("SnapshotRun", back_populates="hosts")

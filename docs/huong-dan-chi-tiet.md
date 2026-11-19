@@ -505,6 +505,32 @@ tắt rule và thêm / sửa / xoá entitlement chỉ dành cho **quản trị v
   quyết định** để áp một quyết định (thay thế, dùng tiếp, không mua bảo hành, thanh lý) cho tất cả trong một lần,
   ghi một dòng nhật ký.
 
+### Định danh phần cứng host (Service Tag) và khoá chuẩn — ICO v2 G1a
+
+Nền cho sổ CI (`docs/design/ico-v2-plan.md`): mỗi lượt đồng bộ ghi thêm **số serial** và **UUID phần cứng** của host.
+
+- **vCenter**: đọc từ `summary.hardware` (đã có trong lượt đọc host, không thêm lệnh gọi):
+  - serial = giá trị `otherIdentifyingInfo` loại **ServiceTag** (Dell); không có thì **SerialNumberTag**, rồi
+    **EnclosureSerialNumberTag** (HPE, Lenovo…);
+  - UUID = `summary.hardware.uuid` (SMBIOS / BIOS UUID).
+- **Nutanix**: serial của node (`serial` trong Prism v2.0 `/hosts`; trên Dell XC / HPE DX là service tag của hãng).
+  Không dùng `block_serial` (một chassis nhiều node). UUID để trống (uuid của Nutanix không phải BIOS UUID).
+- **Proxmox VE**: API không cung cấp serial → để trống.
+- Lưu ở `host_snapshots.serial`, `host_snapshots.hw_uuid`; dữ liệu cũ (trước bản này) để trống, không lỗi.
+  Thẻ Host (Ctrl + K → host) hiện dòng **Service Tag**.
+- **Khoá chuẩn** dùng chung (`backend/app/shared/identity.py`), mọi module so khớp qua đây:
+
+  | Khoá | Chuẩn hoá | Ví dụ |
+  |---|---|---|
+  | Serial | chữ hoa, chỉ chữ + số (giống ghép SN của Thiết bị Data Center ↔ Opex) | `71fhkz3 ` → `71FHKZ3` |
+  | FQDN / tên ngắn | chữ thường, bỏ dấu chấm cuối; tên ngắn = nhãn đầu, IP giữ nguyên | `ESX01.Corp.Local.` → `esx01` |
+  | MAC | `aa:bb:cc:dd:ee:ff`, nhận cả `AA-BB-…`, `aabb.ccdd.eeff` | |
+  | NAA | chữ thường, bỏ tiền tố `naa.` | `naa.624A93…` → `624a93…` |
+  | IP | dạng chuẩn của IPv4 / IPv6; giá trị sai → bỏ | `FE80:0:…:1` → `fe80::1` |
+  | Client NetBackup | tên ngắn chữ thường, IPv4 giữ nguyên | `SQL01.corp.local` → `sql01` |
+- **DEMO**: host demo có service tag 7 ký tự kiểu Dell (HPE: 10 ký tự `CZJ…`), cố định theo tên host
+  (`vcenter/demo_generator.demo_service_tag`), Nutanix demo `NX…`, Proxmox demo để trống.
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh
