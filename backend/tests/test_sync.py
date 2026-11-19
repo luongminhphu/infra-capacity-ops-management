@@ -140,13 +140,21 @@ def _inventory():
                          (h3, {"name": "esx-solo", "summary": hsum, "parent": standalone})],
         vim.ComputeResource: [(cl, {"name": "PROD", "configurationEx": NS(dasConfig=NS(enabled=True), drsConfig=NS(enabled=False))}),
                               (standalone, {"name": "esx-solo", "configurationEx": NS()})],
-        vim.VirtualMachine: [(vm, {"name": "app01", "summary": vmsum, "datastore": [ds], "guest.guestFamily": "windowsGuest"})],
+        vim.VirtualMachine: [(vm, {"name": "app01", "summary": vmsum, "datastore": [ds], "guest.guestFamily": "windowsGuest",
+                                   "parent": vim.Folder("group-v3"), "resourcePool": vim.ResourcePool("resgroup-7"),
+                                   "customValue": [NS(key=301, value="Core Banking")]})],
         vim.Datastore: [(ds, {"name": "DS-PROD-01"})],
+        # G2b owner sources: the datacenter's hidden "vm" folder → /Apps/Core; a named resource pool
+        vim.Folder: [(vim.Folder("group-v1"), {"name": "vm", "parent": vim.Datacenter("datacenter-1")}),
+                     (vim.Folder("group-v2"), {"name": "Apps", "parent": vim.Folder("group-v1")}),
+                     (vim.Folder("group-v3"), {"name": "Core", "parent": vim.Folder("group-v2")})],
+        vim.ResourcePool: [(vim.ResourcePool("resgroup-7"), {"name": "RP-Prod"})],
     }
 
 
 def _content(collector):
     return NS(propertyCollector=collector, rootFolder=object(),
+              customFieldsManager=NS(field=[NS(key=301, name="System", managedObjectType=None)]),
               viewManager=NS(CreateContainerView=lambda root, types, recursive: FakeView("session[test]view")))
 
 
@@ -156,8 +164,9 @@ def test_bulk_retrieval_builds_same_rows(monkeypatch):
     monkeypatch.setattr(vc, "_connect", lambda cfg: si)
     monkeypatch.setattr(vc, "Disconnect", lambda si: None)
     hosts, vms = vc.collect_inventory(NS(key="vc-x"))
-    # 4 object types, the 3-host type spans 2 pages → 5 calls in total, whatever the inventory size.
-    assert collector.calls == 5
+    # 6 object types (+ Folder, ResourcePool since G2b), the 3-host / 3-folder types span 2 pages → 8 calls in
+    # total, whatever the number of VMs.
+    assert collector.calls == 8
     by_name = {h["host"]: h for h in hosts}
     assert by_name["esx01"]["cluster"] == "PROD" and by_name["esx01"]["clusterHa"] is True
     assert by_name["esx01"]["clusterDrs"] is False and by_name["esx01"]["cores"] == 32.0
@@ -169,6 +178,7 @@ def test_bulk_retrieval_builds_same_rows(monkeypatch):
     assert v["isPoweredOn"] and v["vcpu"] == 4.0 and v["ramGB"] == 8.0
     assert v["diskProvGB"] == pytest.approx(100.0) and v["diskUsedGB"] == pytest.approx(50.0)
     assert v["toolsGuestFamily"] == "windowsGuest" and v["ipAddress"] == "10.0.0.5" and v["instanceUuid"] == "uuid-1"
+    assert (v["folderPath"], v["resourcePool"], v["customAttrs"]) == ("/Apps/Core", "RP-Prod", {"System": "Core Banking"})
 
 
 def test_falls_back_to_per_object_reads(monkeypatch):
