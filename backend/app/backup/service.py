@@ -39,13 +39,24 @@ def schedule_rules(db: Session) -> List[Dict[str, Any]]:
             for r in db.query(BackupScheduleRule).order_by(BackupScheduleRule.system).all()]
 
 
-def build_summary(db: Session, server: Optional[str], days: int, check_feature: bool = False) -> Dict[str, Any]:
+def build_summary(db: Session, server: Optional[str], days: int, check_feature: bool = False, osc=None) -> Dict[str, Any]:
     """Full backup report for a server ("all" = every server) over `days`. check_feature: answer 404
-    when the Backup module is switched off (callers outside the gated router)."""
+    when the Backup module is switched off (callers outside the gated router).
+    osc (scope.OwnerScope): coverage counts only the VMs of the selected systems / owners, and the client list keeps
+    the clients matching those VMs (name, guest hostname or IP — the coverage rule); job KPIs stay server-wide."""
     if check_feature:
         from ..features import ensure_feature
         ensure_feature(db, "backup")
-    return analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=_vms(db), scope=scope_rules(db),
-                                 schedules=schedule_rules(db))
+    vms = _vms(db)
+    if osc is not None and osc.active:
+        vms = osc.filter_vms(db, vms)
+    rep = analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=vms, scope=scope_rules(db),
+                                schedules=schedule_rules(db))
+    if osc is not None and osc.active:
+        from .client import client_key
+        keys = {k for v in vms for k in (client_key(v.get("vm")), client_key(v.get("guestHostname")), v.get("ipAddress")) if k}
+        rep["clients"] = [c for c in rep.get("clients") or [] if c.get("key") in keys]
+        rep["ownerScope"] = osc.describe(db)
+    return rep
 
 

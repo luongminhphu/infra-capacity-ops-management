@@ -15,6 +15,7 @@ def utcnow():
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (CheckConstraint("access_scope IN ('full', 'owner')", name="ck_user_access_scope"),)
 
     id = Column(Integer, primary_key=True)
     username = Column(String(255), unique=True, nullable=False, index=True)   # UPN can exceed 64 chars
@@ -37,6 +38,9 @@ class User(Base):
     session_version = Column(Integer, nullable=False, default=0)
     # Hệ thống & Owner: may create / edit systems and assign VMs (set by an admin; admins always may).
     owner_admin = Column(Boolean, nullable=False, default=False)
+    # "full" = the app; "owner" = only the owner portal (Entra app role ICO.Owner alone). get_current_user refuses
+    # "owner" (403), so every existing endpoint stays closed to them by default (ico-v2-plan.md §7).
+    access_scope = Column(String(8), nullable=False, default="full")
 
 
 class ApiToken(Base):

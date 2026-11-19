@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .. import alert_rules, infra
 from ..database import get_db
 from ..models import AuditLog, User
-from ..scope import Scope
+from ..scope import OwnerScope, Scope, in_vm_scope, owner_scope_query
 from ..security import get_current_user, require_admin
 
 router = APIRouter(prefix="/api", tags=["infra"])
@@ -63,14 +63,19 @@ def storage_history(source_key: str, days: int = 30, user: User = Depends(get_cu
 
 @router.get("/infra/snapshots")
 def snapshots(vcenter: Optional[str] = "all", clusters: Optional[str] = None, hosts: Optional[str] = None,
-              user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return infra.snapshots(db, _scope(vcenter, clusters, hosts))
+              osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return osc.filter_vms(db, infra.snapshots(db, _scope(vcenter, clusters, hosts)))
 
 
 @router.get("/infra/alarms")
 def alarms(vcenter: Optional[str] = "all", clusters: Optional[str] = None, hosts: Optional[str] = None,
-           user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return infra.alarms(db, _scope(vcenter, clusters, hosts))
+           osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = infra.alarms(db, _scope(vcenter, clusters, hosts))
+    r = osc.resolve(db)
+    if r is None:
+        return rows
+    # owner filter: VM alarms of the VMs in scope only (host / cluster alarms are not owned by a system)
+    return [a for a in rows if a["entityType"] == "vm" and in_vm_scope(r, {"vcenterKey": a["vcenterKey"], "vm": a["entity"]})]
 
 
 @router.get("/infra/health")

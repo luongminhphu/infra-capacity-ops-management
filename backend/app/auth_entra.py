@@ -146,7 +146,7 @@ def validate_id_token(s: Settings, id_token: str, nonce: str, access_token: Opti
         raise EntraError("Đăng nhập chưa qua xác thực đa yếu tố (MFA).")
     groups, roles = _csv(s.entra_allowed_groups), _csv(s.entra_allowed_roles)
     if roles:
-        roles = roles + s.entra_admin_role_list()     # admins are always allowed in
+        roles = roles + s.entra_admin_role_list() + s.entra_owner_role_list()   # admins and system owners are always allowed in
     if groups or roles:
         if groups and "_claim_names" in claims and "groups" in (claims.get("_claim_names") or {}):
             raise EntraError("Tài khoản thuộc quá nhiều nhóm để kiểm tra trong token — dùng app role thay cho nhóm.")
@@ -154,6 +154,19 @@ def validate_id_token(s: Settings, id_token: str, nonce: str, access_token: Opti
         if not ok:
             raise EntraError("Tài khoản chưa được cấp quyền truy cập ứng dụng này.")
     return claims
+
+
+def access_scope_for(s: Settings, claims: Dict[str, Any]) -> str:
+    """"owner" when the token carries the owner app role and nothing that grants the full app (admin, an allowed role,
+    a spend role, an allowed group); otherwise "full". Without the owner role nothing changes: "full"."""
+    roles = set(claims.get("roles") or [])
+    if not roles & set(s.entra_owner_role_list()):
+        return "full"
+    full = set(s.entra_admin_role_list()) | set(_csv(s.entra_allowed_roles)) | {
+        r.strip() for v in (s.entra_spend_viewer_roles, s.entra_spend_editor_roles, s.entra_spend_approver_roles)
+        for r in (v or "").split(",") if r.strip()}
+    in_group = bool(set(_csv(s.entra_allowed_groups)) & set(claims.get("groups") or []))
+    return "full" if (roles & full or in_group) else "owner"
 
 
 def complete_login(s: Settings, flow_cookie: Optional[str], state: Optional[str], code: Optional[str]) -> Tuple[Dict[str, Any], str]:

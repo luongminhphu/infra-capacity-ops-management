@@ -270,7 +270,7 @@ function reportArchiveOn() { return uiPref('reportArchive', false) === true; }
    localStorage mirrors them (theme is applied before sign-in, no flash) and holds the old values once,
    which are sent up the first time the server has none. */
 const UI_PREF_KEYS = { theme: 'vco.theme', historyMonths: 'vco.historyMonths', historyGroup: 'vco.historyGroupV2',
-  reportAi: 'vco.reportAi', reportArchive: 'vco.reportArchive' };
+  reportAi: 'vco.reportAi', reportArchive: 'vco.reportArchive', ownerScope: 'ico.ownerScope' };
 const uiPrefs = { data: {}, loaded: false, loading: null, timer: null, pending: {} };
 function uiPrefLocal(key) {
   try {
@@ -320,6 +320,7 @@ function uiResetPrefs() { uiPrefs.data = {}; uiPrefs.loaded = false; uiPrefs.loa
 
 /* Download what an API endpoint returns (PDF / Excel / CSV). Throws ApiError with the server's detail. */
 async function uiDownload(url, options = {}, fallbackName = 'download') {
+  if (typeof ownerScopeApply === 'function') url = ownerScopeApply(url);       // PDF / Excel follow the owner filter
   const headers = new Headers(options.headers || undefined);
   if (reportArchiveOn()) headers.set('X-ICO-Archive', '1');
   const res = await fetch(url, { credentials: 'include', ...options, headers });

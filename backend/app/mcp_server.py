@@ -335,7 +335,8 @@ def _authenticate(request: Request, db: Session) -> Optional[tuple]:
     if not tok or tok.revoked_at or tok.expires_at < now:
         return None
     user = db.get(User, tok.user_id)
-    if not user or not is_admin(user) or ((user.auth_source or "local") == "local" and not local_login_allowed(user)):
+    if not user or not is_admin(user) or (user.access_scope or "full") != "full" or \
+            ((user.auth_source or "local") == "local" and not local_login_allowed(user)):
         return None
     if not tok.last_used_at or (now - tok.last_used_at).total_seconds() > 60:
         tok.last_used_at = now

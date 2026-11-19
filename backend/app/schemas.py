@@ -19,6 +19,7 @@ class UserOut(BaseModel):
     is_admin: bool = False
     spend_role: str = "none"     # effective role in Chi phí & Hợp đồng: none|viewer|editor|approver|admin
     owner_admin: bool = False    # may manage Hệ thống & Owner (admins always may)
+    access_scope: str = "full"   # "full" = the app, "owner" = the owner portal only
 
 
 class ImportPayload(BaseModel):

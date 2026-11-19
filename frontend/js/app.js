@@ -216,6 +216,7 @@ async function applyUserPrefs() {
 function showLoginScreen() {
   $('#loginScreen').classList.remove('hidden');
   $('#appShell').classList.add('hidden');
+  const os = $('#ownerShell'); if (os) os.classList.add('hidden');
 }
 function showAppShell() {
   $('#loginScreen').classList.add('hidden');
@@ -227,6 +228,7 @@ window.onApiUnauthorized = () => showLoginScreen();
 async function finishLogin(user) {
   try { sessionStorage.removeItem('ico.autoTried'); } catch (err) { /* ignore */ }
   currentUser = user;
+  if (user.accessScope === 'owner') { showOwnerShell(user); refreshIcons(); return; }   // owner portal only (G2c)
   $('#currentUserLabel').textContent = user.displayName || user.username;
   showAppShell();
   await initAppData();
@@ -385,6 +387,7 @@ async function loadLiveData() {
     // demand (MASTER.md, trang-chu.md; was a 2-line sentence on phones).
     showValidationBanner([], []);
     renderSourceMeta(data.runMeta || []);
+    if (typeof ownerScopeSetServerLabel === 'function') ownerScopeSetServerLabel(data.ownerScope);
     refreshAll(); // renders whichever page is active, including Điều hành
   } catch (err) {
     console.error('Không tải được dữ liệu vCenter', err);
@@ -409,6 +412,7 @@ async function persistImportIfReady() {
 async function initAppData() {
   applyInitialRoute();
   await Promise.all([loadFeatures(), applyUserPrefs()]);
+  if (typeof ownerScopeLoad === 'function') ownerScopeLoad();     // owner filter remembered per user (before data loads)
   if (typeof initAdminSettings === 'function') initAdminSettings(currentUser);
   applySharedConfigGates();
   if (typeof homeRefreshBadges === 'function') homeRefreshBadges();   // sidebar counts (MASTER.md §6)
@@ -475,6 +479,7 @@ async function bootstrap() {
   try {
     const user = await api.me();
     currentUser = user;
+    if (user.accessScope === 'owner') { showOwnerShell(user); refreshIcons(); return; }  // owner portal only (G2c)
     $('#currentUserLabel').textContent = user.displayName || user.username;
     showAppShell();
     await initAppData();

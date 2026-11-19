@@ -260,6 +260,8 @@ def apply(db: Session, p: Dict[str, Any], username: str = "system") -> Dict[str,
     for i in range(0, len(rm), 500):
         db.execute(delete(SystemMember).where(SystemMember.ci_id.in_(rm[i:i + 500]), SystemMember.source.in_(MANAGED)))
     _save_proposals(db, p["proposals"], now)
+    from .service import invalidate_scope_cache
+    invalidate_scope_cache()
     c = p["counts"]
     if c["add"] or c["change"] or c["remove"]:
         db.add(AuditLog(username=username, action="owners.rules.apply",

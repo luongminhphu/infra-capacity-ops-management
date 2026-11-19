@@ -11,7 +11,7 @@ from ..models import ClusterAggregate, SnapshotRun, User
 from ..security import get_current_user
 from ..timeutil import to_vn_date
 
-from ..scope import scope_keys as _scope_keys, split_csv as _split_csv
+from ..scope import OwnerScope, owner_scope_query, scope_keys as _scope_keys, split_csv as _split_csv
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -174,6 +174,7 @@ def executive_overview(
     months: int = Query(default=12, description="History look-back window: 3, 6 or 12 months"),
     group: str = Query(default="cluster", pattern="^(vcenter|cluster)$"),
     days: int = Query(default=90, ge=1, le=365, description="Trend window, as /api/dashboard/trend?days="),
+    osc: OwnerScope = Depends(owner_scope_query),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -188,10 +189,17 @@ def executive_overview(
     from . import reports
     vcenter = vcenter or "all"
     brief_scope = "all" if vcenter == "import" else vcenter
-    return {
+    by_vc = data_access.get_latest_grouped(db, include_import=True).get("byVcenter", {})
+    if osc.active:                      # owner filter: per-vCenter KPIs and the brief on the VMs in scope (trend / history stay global)
+        for part in by_vc.values():
+            part["hosts"], part["vms"] = osc.filter_rows(db, part.get("hosts") or [], part.get("vms") or [])
+    out = {
         "trend": trend_history(days=days, db=db, user=user),
-        "byVcenter": data_access.get_latest_grouped(db, include_import=True).get("byVcenter", {}),
-        "brief": reports.management_brief(vcenter=brief_scope, storage=storage, db=db, user=user),
+        "byVcenter": by_vc,
+        "brief": reports.management_brief(vcenter=brief_scope, storage=storage, osc=osc, db=db, user=user),
         "history": resource_history(vcenter=vcenter, months=months, group=group, clusters=None, db=db, user=user),
         "vmChanges": vm_changes(vcenter=vcenter, months=months, clusters=None, hosts=None, db=db, user=user),
     }
+    if osc.active:                      # the unfiltered response keeps its exact shape
+        out["ownerScope"] = osc.describe(db)
+    return out

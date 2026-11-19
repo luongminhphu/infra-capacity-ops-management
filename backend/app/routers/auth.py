@@ -13,7 +13,7 @@ from ..database import get_db
 from ..models import ApiToken, User, UserPasskey
 from ..schemas import LoginRequest, UserOut
 from ..spend.roles import apply_entra_roles, effective_role
-from ..security import (COOKIE_NAME, create_access_token, decode_session, get_current_user, is_admin, local_login_allowed,
+from ..security import (COOKIE_NAME, create_access_token, decode_session, get_current_user, get_session_user, is_admin, local_login_allowed,
                         hash_password, recently_authenticated, session_user, verify_password)
 
 logger = logging.getLogger("vco.routers.auth")
@@ -75,7 +75,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
     db.commit()
     _set_session(response, user)
     return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user),
-                   spend_role=effective_role(user), owner_admin=_owner_admin(user))
+                   spend_role=effective_role(user), owner_admin=_owner_admin(user), access_scope=user.access_scope or "full")
 
 
 # ---- Microsoft Entra ID (OIDC) ----
@@ -137,6 +137,12 @@ def oidc_callback(request: Request, code: Optional[str] = None, state: Optional[
     was_admin = bool(user.is_admin)
     user.is_admin = bool(set(s.entra_admin_role_list()) & set(claims.get("roles") or []))
     apply_entra_roles(user, s, claims.get("roles") or [])
+    scope = auth_entra.access_scope_for(s, claims)
+    if user.id and (user.access_scope or "full") != scope:
+        # full ⇄ owner: every session opened under the old scope ends now (session_version is in the cookie).
+        user.session_version = (user.session_version or 0) + 1
+        logger.info("Entra sign-in: access scope of user id %s changed to %s", user.id, scope)
+    user.access_scope = scope
     if was_admin and not user.is_admin and user.id:
         # Admin role removed in Entra: the user's MCP tokens stop working at once.
         db.query(ApiToken).filter(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None)).update(
@@ -182,7 +188,7 @@ def passkey_login_verify(request: Request, response: Response, data: dict = Body
     passkeys.clear_state(response)
     _set_session(response, user)
     return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user), spend_role=effective_role(user),
-                   owner_admin=_owner_admin(user))
+                   owner_admin=_owner_admin(user), access_scope=user.access_scope or "full")
 
 
 @router.post("/passkey/invite")
@@ -343,6 +349,7 @@ def logout(response: Response, vco_session: Optional[str] = Cookie(default=None)
 
 
 @router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)):
+def me(user: User = Depends(get_session_user)):
+    """Any access scope: the frontend reads accessScope to pick the shell (full app or owner portal)."""
     return UserOut(username=user.username, display_name=user.display_name, is_admin=is_admin(user),
-                   spend_role=effective_role(user), owner_admin=_owner_admin(user))
+                   spend_role=effective_role(user), owner_admin=_owner_admin(user), access_scope=user.access_scope or "full")

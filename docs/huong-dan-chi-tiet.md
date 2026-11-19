@@ -630,6 +630,32 @@ Sau mỗi vòng đồng bộ (pod leader, ngay sau bộ dựng sổ CI) ICO gán
     (sửa tên / owner / phòng ban) thì VM được gán ngay, hoặc *Bỏ qua*.
 - Log vòng poll có `owners_add`, `owners_change`, `owners_remove`; mỗi lần đổi ghi nhật ký `owners.rules.apply`.
 
+### Lọc theo owner và Cổng Owner (ICO v2 G2c)
+
+**Lọc theo hệ thống / owner** (nút **Owner** trên thanh phạm vi): chọn Hệ thống, Owner / người thay thế, Phòng ban, Dự án, Mức
+quan trọng (tìm được, chọn nhiều). Nhiều nhóm = VM phải khớp mọi nhóm; nhiều lựa chọn trong một nhóm = khớp bất kỳ. Lựa chọn
+được nhớ theo người dùng. Khi bật, dòng **Đang lọc theo owner** hiện dưới tiêu đề trang (bấm *Bỏ lọc* để tắt).
+
+- Lọc ở **server**, trên tập VM trước mọi phép tính: Capacity (cluster / host chỉ còn VM thuộc phạm vi; host của cluster đó giữ
+  nguyên để đo trên toàn cluster, cluster không còn VM nào bị ẩn), Compliance, Host & VM, Điều hành (KPI theo vCenter, bản tóm
+  tắt), Quy hoạch, Backup (độ phủ VM, danh sách client khớp VM; KPI job vẫn tính toàn server), Sức khoẻ (snapshot VM, alarm của
+  VM — alarm host / cluster ẩn khi lọc), báo cáo PDF / Excel / CSV (dòng phạm vi ghi rõ bộ lọc, có mã SYS). Xu hướng theo thời gian
+  (lịch sử snapshot) chưa lọc theo owner.
+- API: tham số `systems` (id hoặc mã SYS), `owners`, `departments`, `projects`, `criticality` (phân tách bằng dấu phẩy) trên
+  `/api/data/latest`, `/api/compliance/findings`, `/api/dashboard/executive`, `/api/reports/pdf|brief|planning`, `/api/export/csv`,
+  `/api/backup/summary|report/pdf|report/xlsx`, `/api/infra/snapshots|alarms`.
+
+**Phạm vi truy cập Owner** (`docs/design/ico-v2-plan.md` mục 7):
+
+- Đăng nhập Microsoft Entra với app role **`ICO.Owner`** (`ENTRA_OWNER_ROLE`) và không có role nào mở app đầy đủ (admin, role trong
+  `ENTRA_ALLOWED_ROLES`, role Chi phí, nhóm `ENTRA_ALLOWED_GROUPS`) → tài khoản thành **owner** (`users.access_scope = owner`).
+  Role ICO.Owner luôn được phép đăng nhập kể cả khi `ENTRA_ALLOWED_ROLES` giới hạn. Xét lại mỗi lần đăng nhập; đổi phạm vi thì
+  mọi phiên cũ của tài khoản bị huỷ ngay.
+- **Mặc định chặn**: tài khoản owner gọi bất kỳ API nào của app (Capacity, Backup, Hệ thống, Chi phí, tìm kiếm…) nhận **403**. Chỉ
+  vào được `/api/auth/me`, đăng xuất và **Cổng Owner** — giao diện riêng, không có menu: hệ thống mà email (UPN) của mình là owner
+  hoặc người thay thế, và VM của các hệ thống đó. Hệ thống của người khác (kể cả đoán id) trả 404 như id không tồn tại.
+- Tài khoản đầy đủ không bị ảnh hưởng; vào `/api/owner/*` thấy mọi hệ thống.
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh

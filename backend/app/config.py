@@ -148,6 +148,8 @@ class Settings(BaseSettings):
     admin_users: str = Field(default="")
     # Entra app role values that make a user admin (checked at every Microsoft sign-in).
     entra_admin_roles: str = Field(default="ICO.Admin")
+    # App role of system owners: allowed to sign in; a user holding only this role gets the owner portal (access_scope=owner).
+    entra_owner_role: str = Field(default="ICO.Owner")
 
     # ---- MCP server (read-only app logs & performance for an AI client) ----
     mcp_enabled: bool = Field(default=False)
@@ -205,6 +207,9 @@ class Settings(BaseSettings):
     def admin_user_list(self) -> List[str]:
         names = [u.strip().lower() for u in self.admin_users.split(",") if u.strip()]
         return names or [self.admin_username.strip().lower()]
+
+    def entra_owner_role_list(self) -> List[str]:
+        return [r.strip() for r in self.entra_owner_role.split(",") if r.strip()]
 
     def entra_admin_role_list(self) -> List[str]:
         return [r.strip() for r in self.entra_admin_roles.split(",") if r.strip()]
