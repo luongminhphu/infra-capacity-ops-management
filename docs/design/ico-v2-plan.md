@@ -93,7 +93,7 @@ itsm_label_map     (label_norm, field)                                          
 
 | Đợt | GĐ | Nội dung | Phụ thuộc | Nghiệm thu |
 |---|---|---|---|---|
-| A | 1 | Khoá chuẩn + serial host + sổ CI + thẻ đối tượng / tác động (G1a: #108; G1b: #109) | — | Host nối DC asset / Opex qua serial; datastore → array → VM → backup client |
+| A | 1 | Khoá chuẩn + serial host + sổ CI + thẻ đối tượng / tác động (G1a: #108; G1b: #109; G1c: #110) | — | Host nối DC asset / Opex qua serial; datastore → array → VM → backup client |
 | A | 2 | Hệ thống & owner: gán 4 cách, lọc khắp app, phạm vi truy cập Owner (mặc định chặn) | 1 | Lọc mọi trang theo owner; test IDOR đạt |
 | A | 3 | Rà soát owner 6 tháng: email, xác nhận, nhắc, leo thang, đóng kỳ, thu hồi, đối chiếu kỳ sau | 2 | Một kỳ demo chạy trọn, không gửi trùng |
 | B | 4 | Dell OME: sức khoẻ linh kiện, ổ dự báo hỏng, firmware, bảo hành ↔ Opex, trang Phần cứng | 1 | Máy bảo hành OME ≠ Opex được liệt kê |
