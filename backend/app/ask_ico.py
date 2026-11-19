@@ -188,7 +188,7 @@ class Toolbox:
     def viec_can_lam(self, a):
         from . import inbox
         items, _ = inbox.collect(self.db)
-        src = a.get("source") if a.get("source") in ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "license", "spend", "system") else None
+        src = a.get("source") if a.get("source") in ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "license", "spend", "system", "review") else None
         vis = [i for i in items if inbox.visible(i, self.user, self.features) and (src is None or i["source"] == src)]
         return {"tong": len(vis), "viec": [{"muc": inbox.LEVEL_LABELS[i["level"]], "nguon": inbox.SOURCE_LABELS.get(i["source"], i["source"]),
                                             "noi_dung": i["title"], "chi_tiet": (i.get("detail") or "")[:200],

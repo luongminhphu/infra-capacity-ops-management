@@ -13,6 +13,8 @@ const PAGES = [
       desc: 'Hôm nay cần làm: bản tin, trạng thái từng miền và hộp việc gom từ mọi module theo quyền của bạn.', scope: [] },
     { id: 'agenda', view: 'agenda', icon: 'calendar-clock', label: 'Lịch việc & nhắc hạn', title: 'Lịch việc & nhắc hạn',
       desc: 'Mọi mốc có ngày: Opex hết hạn, đợt thanh toán, license hết hạn, báo giá hết hiệu lực.', scope: [] },
+    { id: 'owner-review', view: 'ownerreview', icon: 'clipboard-check', label: 'Rà soát của tôi', title: 'Rà soát owner',
+      desc: 'Xác nhận VM của bạn trong kỳ rà soát: còn dùng, thu hồi, giảm cấu hình, chuyển owner.', scope: [] },
     { id: 'entity', view: 'entity', icon: 'box', label: 'Đối tượng', title: 'Đối tượng',
       desc: 'Mọi thông tin về một đối tượng hạ tầng (host, VM, máy chủ vật lý, datastore…): capacity, phần cứng, backup, bảo hành, liên kết và tác động.', scope: [] },
     { id: 'spend-payments', feature: 'spend', spendRole: 'viewer', view: 'spend', sub: 'payments', icon: 'banknote', label: 'Đợt thanh toán', title: 'Đợt thanh toán',
@@ -200,6 +202,7 @@ const VIEWS = {
     sub: { get: () => (typeof infraState !== 'undefined' && infraState.sub) || 'datastores',
            set: (s) => { if (typeof infraState !== 'undefined') infraState.sub = s || 'datastores'; }, fallback: 'infra-ds' } },
   entity: { section: '#viewEntity', render: () => callIf('renderEntityView') },
+  ownerreview: { section: '#viewOwnerReview', render: () => callIf('renderOwnerReviewView') },
   executive: { section: '#viewExecutive', render: () => callIf('renderExecutiveView') },
   dashboard: { section: '#viewDashboard', render: () => {
     renderCapacityKpis(); renderDashboardCharts(); renderClusterTable();
