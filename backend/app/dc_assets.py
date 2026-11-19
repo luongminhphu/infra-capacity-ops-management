@@ -422,7 +422,7 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
     links = opex_links(db, (a.serial_key for a in assets))
     hosts = _host_names(db)
     items = []
-    summary = {"total": 0, "removed": 0, "noCover": 0, "ge5": 0, "3to5": 0, "le3": 0, "unknown": 0, "crit": 0, "bad": 0, "warn": 0,
+    summary = {"total": 0, "removed": 0, "transferred": 0, "noCover": 0, "ge5": 0, "3to5": 0, "le3": 0, "unknown": 0, "crit": 0, "bad": 0, "warn": 0,
                "hwActive": 0, "hwNone": 0, "hwExpired": 0, "licActive": 0, "linked": 0}
     for a in assets:
         lk = links.get(a.serial_key or "", [])
@@ -430,6 +430,7 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
         bucket = age_bucket(ev["months"], limit)
         if a.removed:
             summary["removed"] += 1
+            summary["transferred"] += bool(a.disposed_on) and a.exit_kind == "transfer"
         else:
             summary["total"] += a.qty or 1
             summary[bucket] += a.qty or 1
@@ -448,7 +449,10 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
             "disposedOn": a.disposed_on.isoformat() if a.disposed_on else None,
             "ageMonths": ev["months"], "ageText": age_text(ev["months"]), "ageBucket": bucket,
             "limitDate": _add_months(a.acquired_on, limit).isoformat() if a.acquired_on else None,
-            "level": ev["level"], "levelText": "Đã thanh lý" if a.removed else LEVEL_TEXT[ev["level"]], "reasons": ev["reasons"],
+            "level": ev["level"], "reasons": ev["reasons"],
+            "levelText": (EXIT_DONE.get(a.exit_kind or "dispose", "Đã thanh lý") if a.disposed_on else "Đã thanh lý")
+            if a.removed else LEVEL_TEXT[ev["level"]],
+            "exitKind": (a.exit_kind or "dispose") if a.disposed_on else None,
             "hw": _cov_public(ev["hw"], opex_detail), "license": _cov_public(ev["lic"], opex_detail),
             "opex": [{"id": o["id"], "code": o["code"], "title": o["title"], "grp": o["grp"], "category": o["category"],
                       "vendor": o["vendor"], "endDate": o["end"].isoformat(), "status": o["status"], "contractRef": o["contractRef"]}
@@ -464,6 +468,9 @@ def listing(db: Session, today: dt.date, limit: int, warn: int, opex_detail: boo
 # ---------------------------------------------------------------- lifecycle decision (thay thế / dùng tiếp)
 DECISIONS = {"replace": "Thay thế", "extend": "Dùng tiếp, gia hạn Opex", "nocover": "Dùng tiếp, không mua bảo hành"}
 KEEP_DECISIONS = ("extend", "nocover")          # kept in use instead of replaced
+# Leaving the Data Center (removed from alerts and plans, with a date); stored in disposed_on + exit_kind.
+EXITS = {"dispose": "Thanh lý", "transfer": "Luân chuyển cho HN"}
+EXIT_DONE = {"dispose": "Đã thanh lý", "transfer": "Đã luân chuyển HN"}
 DECISION_REASONS = {"budget": "Vượt ngân sách", "good": "Thiết bị còn tốt", "support": "Hãng còn hỗ trợ",
                     "project": "Chờ dự án / chuyển đổi khác", "other": "Lý do khác"}
 
@@ -479,7 +486,8 @@ def extended_until(a: DcAsset, on: dt.date) -> Optional[dt.date]:
 
 def decision_public(a: DcAsset) -> Optional[Dict[str, Any]]:
     if a.disposed_on:
-        return {"decision": "dispose", "label": "Thanh lý", "reason": None, "reasonLabel": "", "note": a.decision_note,
+        kind = a.exit_kind if a.exit_kind in EXITS else "dispose"
+        return {"decision": kind, "label": EXITS[kind], "reason": None, "reasonLabel": "", "note": a.decision_note,
                 "until": a.disposed_on.isoformat(), "by": a.decision_by,
                 "at": a.decision_at.isoformat() if a.decision_at else None}
     if not a.decision:
@@ -492,10 +500,10 @@ def decision_public(a: DcAsset) -> Optional[Dict[str, Any]]:
 
 def set_decision(db: Session, assets: List[DcAsset], d: Dict[str, Any], username: str) -> int:
     """Record the decision for the devices (None / "" clears it). Keeping a device needs a reason. "dispose"
-    (Thanh lý) marks the devices removed on `until` (default today); any other choice brings a device disposed
-    in ICO back into use."""
+    (Thanh lý) and "transfer" (Luân chuyển cho HN) mark the devices removed on `until` (default today); any other
+    choice brings such a device back into use."""
     decision = d.get("decision") or None
-    if decision not in (None, "dispose", *DECISIONS):
+    if decision not in (None, *EXITS, *DECISIONS):
         raise ImportError_("Quyết định không hợp lệ.")
     reason = d.get("reason") or None
     if decision in KEEP_DECISIONS and reason not in DECISION_REASONS:
@@ -505,16 +513,16 @@ def set_decision(db: Session, assets: List[DcAsset], d: Dict[str, Any], username
         raise ImportError_("Ngày xem lại không hợp lệ.")
     note = _text(d.get("note"))[:500] or None
     now = dt.datetime.utcnow()
-    if decision == "dispose":
+    if decision in EXITS:
         from .spend.fiscal import today_vn
         for a in assets:
-            a.removed, a.disposed_on = True, until or today_vn()
+            a.removed, a.disposed_on, a.exit_kind = True, until or today_vn(), decision
             a.decision = a.decision_reason = a.decision_until = None
             a.decision_note, a.decision_by, a.decision_at = note, username, now
         return len(assets)
     for a in assets:
-        if a.disposed_on:                           # undo a disposal made in ICO
-            a.removed, a.disposed_on = False, None
+        if a.disposed_on:                           # undo a disposal / transfer made in ICO
+            a.removed, a.disposed_on, a.exit_kind = False, None, None
         a.decision = decision
         a.decision_reason = reason if decision else None
         a.decision_note = note if decision else None
@@ -672,7 +680,7 @@ def save_manual(db: Session, a: Optional[DcAsset], d: Dict[str, Any], username: 
             setattr(a, c, v)
         a.asset_key, a.imported_at, a.updated_by = key, dt.datetime.utcnow(), username
         if not a.removed:
-            a.disposed_on = None                    # put back into use from the edit form
+            a.disposed_on = a.exit_kind = None      # put back into use from the edit form
     return a
 
 

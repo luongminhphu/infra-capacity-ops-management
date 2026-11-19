@@ -847,7 +847,8 @@ class DcAsset(Base):
     decision_until = Column(Date)                  # "extend": review date (NULL = until changed)
     decision_by = Column(String(255))
     decision_at = Column(DateTime)
-    disposed_on = Column(Date)                     # "Thanh lý" decided in ICO (removed = true); kept over re-imports
+    disposed_on = Column(Date)                     # exit date decided in ICO (removed = true); kept over re-imports
+    exit_kind = Column(String(16))                 # dispose (Thanh lý) | transfer (Luân chuyển cho HN); NULL = dispose
 
 
 # SCH-10: JSON / CSV kept in Text columns are checked on every ORM write (type stays Text, rule 4).

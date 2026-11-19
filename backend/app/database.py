@@ -60,7 +60,7 @@ def ensure_schema() -> None:
         "proposals": [("quote_request_id", "INTEGER REFERENCES quote_requests(id)")],
         "spend_notify_channels": [("ops_alerts", "BOOLEAN DEFAULT FALSE")],
         "budget_plan_lines": [("detail", "VARCHAR(1000)")],
-        "dc_assets": [("disposed_on", "DATE")],
+        "dc_assets": [("disposed_on", "DATE"), ("exit_kind", "VARCHAR(16)")],
         "ops_alert_state": [("source", "VARCHAR(16)"), ("sent_channels", "TEXT")],
         "spend_ai_config": [("tasks_json", "TEXT"), ("mask_names", "BOOLEAN DEFAULT TRUE"), ("budget_usd", "INTEGER DEFAULT 100"),
                             ("alert_usd", "INTEGER DEFAULT 50"), ("alert_month", "VARCHAR(7)"), ("rate_per_hour", "INTEGER DEFAULT 30")],
