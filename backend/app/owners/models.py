@@ -4,7 +4,7 @@ Table names are plural like the rest of the app ("system" is an SQL keyword). In
 code / normalised name UNIQUE, criticality 1–4, env and status in fixed sets, e-mails stored lower case,
 a VM (CI) in at most one system (UNIQUE ci_id), assignment source in a fixed set.
 """
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from ..database import Base
 from ..models import utcnow
@@ -127,3 +127,93 @@ class OwnerProposal(Base):
 from ..shared.stored_text import json_column as _json  # noqa: E402
 
 _json(OwnerProposal.sample, list, "VM của đề xuất", nullable=False)
+
+
+# ---------------------------------------------------------------- owner reviews (G3)
+CAMPAIGN_STATUSES = ("draft", "open", "closed")
+DECISIONS = ("keep", "decommission", "resize", "transfer", "not_mine")
+NOTICE_KINDS = ("open", "reminder1", "reminder2", "escalation", "closing")
+NOTICE_STATUSES = ("preview", "pending", "sending", "sent", "failed")
+
+
+class ReviewCampaign(Base):
+    """One review period ("2027-H1"). UNIQUE period_label: a period is opened exactly once, whoever opens it."""
+    __tablename__ = "review_campaigns"
+    __table_args__ = (
+        UniqueConstraint("period_label", name="uq_review_campaign_period"),
+        CheckConstraint(_in("status", CAMPAIGN_STATUSES), name="ck_review_campaign_status"),
+        CheckConstraint("closed_at IS NULL OR closed_at >= opened_at", name="ck_review_campaign_dates"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    period_label = Column(String(16), nullable=False)
+    opened_at = Column(DateTime, nullable=False, default=utcnow)
+    opened_by = Column(String(255), nullable=False, default="system")
+    due_at = Column(Date, nullable=False)
+    closed_at = Column(DateTime)
+    status = Column(String(8), nullable=False, default="open")
+    dry_run = Column(Boolean, nullable=False, default=True)       # True: e-mails are built and kept for preview, never sent
+    item_count = Column(Integer, nullable=False, default=0)
+
+
+class ReviewItem(Base):
+    """One VM in a campaign. Names are copied (evidence survives renames); owner_email NULL = VM without owner
+    (listed for the infrastructure team, nobody is e-mailed)."""
+    __tablename__ = "review_items"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "ci_id", name="uq_review_item_vm"),
+        CheckConstraint("decision IS NULL OR " + _in("decision", DECISIONS), name="ck_review_item_decision"),
+        CheckConstraint(_lower("owner_email"), name="ck_review_item_owner_lower"),
+        Index("ix_review_items_owner", "campaign_id", "owner_email"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("review_campaigns.id", ondelete="CASCADE"), nullable=False)
+    ci_id = Column(Integer, ForeignKey("ci.id", ondelete="SET NULL"), index=True)
+    vm_name = Column(String(255), nullable=False)
+    vcenter_key = Column(String(64), nullable=False, default="")
+    system_id = Column(Integer, ForeignKey("systems.id", ondelete="SET NULL"), index=True)
+    system_code = Column(String(12))
+    system_name = Column(String(255))
+    owner_email = Column(String(255))
+    signals = Column(Text, nullable=False, default="{}")       # JSON object (owners/review.py SIGNALS)
+    flagged = Column(Boolean, nullable=False, default=False)   # "nên rà": one of the cleanup signals fired
+    reasons = Column(Text, nullable=False, default="[]")       # JSON list of Vietnamese reasons
+    decision = Column(String(16))                              # G3b
+    decide_by_date = Column(Date)
+    decided_by = Column(String(255))
+    decided_at = Column(DateTime)
+    note = Column(String(500))
+    escalated_at = Column(DateTime)
+    verified_at = Column(DateTime)
+
+
+class ReviewNotice(Base):
+    """Outbox of the review e-mails. UNIQUE (campaign, recipient, kind): an e-mail is built once and sent at most once
+    (a send is claimed by moving pending/failed → sending in its own transaction before the SMTP call)."""
+    __tablename__ = "review_notices"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "recipient", "kind", name="uq_review_notice"),
+        CheckConstraint(_in("kind", NOTICE_KINDS), name="ck_review_notice_kind"),
+        CheckConstraint(_in("status", NOTICE_STATUSES), name="ck_review_notice_status"),
+        CheckConstraint("attempts >= 0", name="ck_review_notice_attempts"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("review_campaigns.id", ondelete="CASCADE"), nullable=False)
+    recipient = Column(String(255), nullable=False)
+    kind = Column(String(12), nullable=False)
+    status = Column(String(8), nullable=False, default="pending")
+    subject = Column(String(255), nullable=False)
+    body_text = Column(Text, nullable=False)
+    body_html = Column(Text, nullable=False)
+    vm_count = Column(Integer, nullable=False, default=0)
+    attempts = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    claimed_at = Column(DateTime)
+    sent_at = Column(DateTime)
+    error = Column(String(300))
+
+
+_json(ReviewItem.signals, dict, "Tín hiệu rà soát", nullable=False)
+_json(ReviewItem.reasons, list, "Lý do nên rà", nullable=False)

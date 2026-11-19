@@ -115,7 +115,7 @@ function syncNavState() {
 
 const PAGE_TAB_GROUPS = {
   settings: [['Đánh giá', ['settings', 'bk-config']], ['Dữ liệu & tính năng', ['set-sources', 'set-features', 'set-ai']],
-    ['Người dùng & bảo mật', ['set-users', 'set-owners', 'set-auth']], ['Chi phí & giao diện', ['set-spend', 'set-brand']]],
+    ['Người dùng & bảo mật', ['set-users', 'set-owners', 'set-reviews', 'set-auth']], ['Chi phí & giao diện', ['set-spend', 'set-brand']]],
 };
 
 /* In-page tabs of the current menu entry (hidden when the entry has a single page). */

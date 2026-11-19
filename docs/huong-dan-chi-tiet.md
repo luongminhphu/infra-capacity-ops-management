@@ -656,6 +656,27 @@ quan trọng (tìm được, chọn nhiều). Nhiều nhóm = VM phải khớp m
   hoặc người thay thế, và VM của các hệ thống đó. Hệ thống của người khác (kể cả đoán id) trả 404 như id không tồn tại.
 - Tài khoản đầy đủ không bị ảnh hưởng; vào `/api/owner/*` thấy mọi hệ thống.
 
+### Rà soát owner — mở kỳ và email (ICO v2 G3a)
+
+Mỗi kỳ (mặc định 6 tháng) ICO lập danh sách **mọi VM có owner** kèm tín hiệu dọn dẹp và gửi **mỗi owner một email** tổng hợp.
+
+- **Mở kỳ**: pod leader tự mở vào tháng `REVIEW_START_MONTHS` (mặc định 1 và 7) — kỳ `2027-H1`, `2027-H2`…, **mỗi kỳ đúng một
+  lần** (tên kỳ là duy nhất). Quản trị viên mở tay được ở **Cài đặt → Rà soát owner** (*Mở kỳ ngay*: tên kỳ, số ngày hạn, chạy thử).
+  Hạn xác nhận = ngày mở + `REVIEW_DUE_DAYS` (21). Danh sách VM, owner và tín hiệu được chốt tại lúc mở.
+- **Tín hiệu mỗi VM**: số ngày tắt, số ngày không hoạt động, % CPU / RAM, vCPU, RAM, disk, tình trạng backup, tuổi snapshot cũ nhất,
+  quyết định ở kỳ trước. **Nên rà** khi: tắt hoặc không hoạt động ≥ ngưỡng VM idle của Tiêu chí (mặc định 30 ngày), chưa có backup /
+  backup đang lỗi, snapshot ≥ `REVIEW_SNAPSHOT_DAYS` (14) ngày.
+- **VM chưa có owner** (chưa thuộc hệ thống, hoặc hệ thống chưa có owner) vào danh sách riêng cho team hạ tầng — không gửi ai.
+- **Email** (tiếng Việt): tiêu đề `[ICO] Rà soát hệ thống <kỳ> — <n> VM cần xác nhận trước <ngày>`; bảng VM (VM nên rà lên đầu,
+  kèm lý do), tổng vCPU / RAM / disk, nút **Xác nhận trên ICO** → `PUBLIC_URL/#/owner/review/<kỳ>` (xác nhận ở G3b). Email
+  **không chứa liên kết đăng nhập**; người nhận đăng nhập bằng tài khoản Microsoft. Mọi chuỗi lấy từ vCenter được escape.
+- **Chạy thử**: kỳ đầu tiên luôn chạy thử (các kỳ sau theo `REVIEW_DRY_RUN`, mặc định tắt) — email được lập và lưu để **xem trước**
+  ở Cài đặt → Rà soát owner, không gửi ai. Quản trị viên bấm **Gửi email** để gửi thật.
+- **Gửi an toàn**: mỗi email là một dòng duy nhất (kỳ, người nhận, loại); dòng được "giành" trước khi gửi nên không bao giờ gửi
+  trùng (kể cả bấm gửi cùng lúc với vòng đồng bộ). Lỗi SMTP được ghi lại và gửi lại ở vòng sau (tối đa 5 lần); chưa cấu hình SMTP
+  thì email chờ, không mất lượt. Dùng máy chủ SMTP ở Cài đặt → Chi phí & nhắc hạn.
+- Log vòng poll có `review_opened`, `review_sent`, `review_failed`, `review_waiting`.
+
 ### Inventory — lọc VM theo cluster & xuất Excel
 
 Trang **Host & VM** có bộ lọc **cluster riêng cho bảng VM** (độc lập với bộ lọc chung trên thanh

@@ -177,6 +177,13 @@ class Settings(BaseSettings):
     asset_age_limit_months: int = Field(default=60)      # DC device in use this long (Green policy): CẢNH BÁO
     asset_age_warn_months: int = Field(default=48)       # approaching the limit: THEO DÕI
 
+    # ---- Owner reviews (owners/review.py): a campaign every REVIEW_PERIOD_MONTHS, opened in the listed months ----
+    review_period_months: int = Field(default=6)
+    review_start_months: str = Field(default="1,7")
+    review_due_days: int = Field(default=21)
+    review_snapshot_days: int = Field(default=14)        # snapshot older than this → "nên rà" (idle / power-off use idle_days)
+    review_dry_run: bool = Field(default=False)          # campaigns after the first; the first one is always a dry run
+
     # ---- CI registry (app/cmdb/): a CI not seen for this many days becomes "retired" (never deleted) ----
     cmdb_retire_days: int = Field(default=7)
 
