@@ -1,6 +1,216 @@
 {
   "version": 2,
   "skills": {
+    "hunt-api-misconfig": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-api-misconfig/SKILL.md",
+      "computedHash": "d27a00337ac1c708ddd7540e8425d6131c61af27cc964f4de3bf845372b6a8cd"
+    },
+    "hunt-ato": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-ato/SKILL.md",
+      "computedHash": "f2afcab5682c117c77259b1ead3eb746aeefaa70c07c019b581b79ede09c7596"
+    },
+    "hunt-auth-bypass": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-auth-bypass/SKILL.md",
+      "computedHash": "bfd90637ddc4299c41c5fc4edc628c0fcc13e06ac9b0e3b0245e4d4fbf17e1cf"
+    },
+    "hunt-brute-force": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-brute-force/SKILL.md",
+      "computedHash": "cca90153a3154dc7b188addb2ec3da804cea91f0d619fb9e17e289dcd3c4b1ce"
+    },
+    "hunt-business-logic": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-business-logic/SKILL.md",
+      "computedHash": "c498fee1e663deeebed2332ba9248cadee782b7f65e2b61089623b02fca1ce89"
+    },
+    "hunt-cache-poison": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-cache-poison/SKILL.md",
+      "computedHash": "a64dea2f7b69bcfbc6d03c21ca8fa0ddf78bc481ecc6531c9f6064737879f25d"
+    },
+    "hunt-clickjacking": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-clickjacking/SKILL.md",
+      "computedHash": "4d47fdcec28fcce2e01ec9c3097cd7d1d2eda21d212ad13a2ceff770370cd939"
+    },
+    "hunt-cors": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-cors/SKILL.md",
+      "computedHash": "00e0e9e866db6729eaf67361d3194be684b2712ea6f74b9701042beff4677f57"
+    },
+    "hunt-csrf": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-csrf/SKILL.md",
+      "computedHash": "d311dce06a0715587abb25f7a28d946111b55d8439697d75e047f8a5a3cd3e79"
+    },
+    "hunt-deserialization": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-deserialization/SKILL.md",
+      "computedHash": "4c30e08e46bc5721b12a7d92e237060c0ea440581f3295bc0912b28230ff168b"
+    },
+    "hunt-dom": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-dom/SKILL.md",
+      "computedHash": "c3f6bdc38bdfc1304d0b2d5ecd3456f6e4a391941d0dad1346d875600cdc9f49"
+    },
+    "hunt-exceptional-conditions": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-exceptional-conditions/SKILL.md",
+      "computedHash": "dceb38f2a35b862989cf737068835e08da7b847a11989a7cf2998fb78e70bfd9"
+    },
+    "hunt-file-upload": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-file-upload/SKILL.md",
+      "computedHash": "2ce6b6bd65376b22d9145997c4639edcc8b8033f646957e3e2c4b915e42eb52c"
+    },
+    "hunt-forgot-password": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-forgot-password/SKILL.md",
+      "computedHash": "b484286559f091f3dc8cab21a43e47f4d7fbe00382f5bade799fb40c7101fb1e"
+    },
+    "hunt-host-header": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-host-header/SKILL.md",
+      "computedHash": "ef6054768ad32a55d094884acaaa02b4bbe7d2efd811f64076bf38ff6defb8d1"
+    },
+    "hunt-html-injection": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-html-injection/SKILL.md",
+      "computedHash": "5fe67c0256124d39821d1d63eb45b8a6c0ca20ca2018c5aba7ead72b343ea51e"
+    },
+    "hunt-http-smuggling": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-http-smuggling/SKILL.md",
+      "computedHash": "9ebd33dbdd534d08df689a4b7fd8a8dcef770d6d0358c0cf22252d2a8cf2da45"
+    },
+    "hunt-idor": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-idor/SKILL.md",
+      "computedHash": "c264f8d251a21c88b127bfa831acd819e7363ec1b138bcecbf226dc98b74ed3e"
+    },
+    "hunt-jwt-crypto": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-jwt-crypto/SKILL.md",
+      "computedHash": "8ecbc4b840be4e814e600bd0d6b22aac179d5085a6ac8dc38aba238972deee51"
+    },
+    "hunt-lfi": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-lfi/SKILL.md",
+      "computedHash": "ccc93c6c750c37d941af16556ec3fa6d29ee5e71fa9ccf96aa29ab9f8be1251c"
+    },
+    "hunt-llm-ai": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-llm-ai/SKILL.md",
+      "computedHash": "44968fc1b2ff3210e481aafbdf7f160d9a1fcbcce995df1edf0329cbff9b7658"
+    },
+    "hunt-mfa-bypass": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-mfa-bypass/SKILL.md",
+      "computedHash": "453126b12df075d941f5a39552d4b17b623aaa692fe3d87442dae104384aafed"
+    },
+    "hunt-misc": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-misc/SKILL.md",
+      "computedHash": "1da165c46da0cb8c2ef9d4e110cb6b876081619b7d96acad43ff96850d2a029e"
+    },
+    "hunt-oauth": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-oauth/SKILL.md",
+      "computedHash": "05ef8cb632293ab8e0ae0399a7e5b08587e2645e778eb51377573cb4023de685"
+    },
+    "hunt-open-redirect": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-open-redirect/SKILL.md",
+      "computedHash": "eda49dc99c2775bf034a5f7d3b4b187061bc8a38d76e92ca3a598592fe1ad5ad"
+    },
+    "hunt-race-condition": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-race-condition/SKILL.md",
+      "computedHash": "783248a920928a4aaa981c268be436af91a7d6251a29730d729a4f678f83c768"
+    },
+    "hunt-rce": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-rce/SKILL.md",
+      "computedHash": "86246654cdbafbadf622e3d3a387f587512412df6e83f13a16db443223601140"
+    },
+    "hunt-session": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-session/SKILL.md",
+      "computedHash": "d7e1a5c418d8f86180d9e242c9e5e2fd186efe61b3633c68f914160586968ecc"
+    },
+    "hunt-shadow-api": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-shadow-api/SKILL.md",
+      "computedHash": "05567a1fe7b58e95d28e0b5c5a2ca74372d4a1e7e1710ec872c51f30214bdcbc"
+    },
+    "hunt-spa-api": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-spa-api/SKILL.md",
+      "computedHash": "6b37e5dde646cb603738915b39768e88685b8dd1aa53a4b7c5e04dfa491713f4"
+    },
+    "hunt-sqli": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-sqli/SKILL.md",
+      "computedHash": "fc5627c37b1028172413285c322c76d1105ebffbbb5af4e0ca0eaa81811fd7c0"
+    },
+    "hunt-ssrf": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-ssrf/SKILL.md",
+      "computedHash": "e9723e4a78a3a2113efd88b0d49df02f9dded113569964d5b1b6aa2f592df058"
+    },
+    "hunt-ssti": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-ssti/SKILL.md",
+      "computedHash": "edab65afe43abcd2d0d19f7dde29c91f54fbd8720f66e9161a58a4552f1092af"
+    },
+    "hunt-xss": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-xss/SKILL.md",
+      "computedHash": "fad790ac05164299eff8f2206160d23b79d2508ac930721e3d8835d746443714"
+    },
+    "hunt-xxe": {
+      "source": "elementalsouls/Claude-BugHunter",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/hunt-xxe/SKILL.md",
+      "computedHash": "a74b466dfb2220787cd61c65860fa50c914b77c30151f04e63284a565c269069"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",

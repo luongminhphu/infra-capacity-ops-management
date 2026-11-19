@@ -128,6 +128,7 @@ của kế hoạch và được thêm vào quy tắc 1 trong cùng PR. Đánh d�
 - `pdf-report` — quy ước báo cáo PDF A4 bằng WeasyPrint.
 - `spend-module` — module Chi phí & Hợp đồng: tiền VND số nguyên, năm tài chính, phân quyền 4 mức, trạng thái suy ra,
   nhắc hạn idempotent, upload an toàn, khung danh sách → chi tiết (`spPaneOrDialog`).
+- `hunt-*` (35 skill) — tập con **phòng thủ** của [elementalsouls/Claude-BugHunter](https://github.com/elementalsouls/Claude-BugHunter) (MIT + CC-BY-4.0, pin trong `skills-lock.json`; nguồn / commit ở `.claude/skills/BUGHUNTER-LICENSE.md`). Dùng để tự rà lỗ hổng trên code ICO khi chạy `/security-review` (IDOR/BOLA, XSS/DOM, SQLi, CSRF, SSRF/LFI/XXE, RCE/SSTI/deserialization, upload, auth/session/JWT/OAuth/MFA, host-header, CORS, race-condition, business-logic, LLM/MCP…). **Không** cài phần OSINT / red-team / tấn công bên thứ ba của bộ gốc. Chỉ dùng cho tài sản mình sở hữu hoặc được uỷ quyền.
 - `ui-ux-pro-max` — tra cứu style / bảng màu / font / UX guideline (bên thứ ba, `nextlevelbuilder/ui-ux-pro-max-skill`,
   cài bằng `npx skills add`; mã nằm ở `.agents/skills/`, `.claude/skills/ui-ux-pro-max` là symlink, phiên bản ghim trong
   `skills-lock.json`). Cách tra:
