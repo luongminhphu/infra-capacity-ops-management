@@ -41,6 +41,18 @@ TOOLS = [
     {"name": "viec_can_lam", "description": "Hộp việc của người hỏi: cảnh báo capacity / backup / license / hạn Opex / thanh toán… (đã lọc theo quyền).",
      "input_schema": {"type": "object", "properties": {"source": {"type": "string", "enum": ["all", "capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "asset", "license", "spend", "system"]}}}},
 ]
+TOOLS += [
+    {"name": "ci_lookup", "description": "Tra sổ CI: tìm đối tượng hạ tầng (VM, host, cluster, máy chủ vật lý, datastore, mảng / volume "
+                                         "lưu trữ, client backup, thiết bị DC) theo tên hoặc khoá (serial, IP, NAA, asset tag). Trả id để gọi ci_impact.",
+     "input_schema": {"type": "object", "properties": {
+         "q": {"type": "string", "description": "Tên hoặc khoá, ≥ 2 ký tự"},
+         "type": {"type": "string", "description": "Lọc loại: vm, hypervisor_host, cluster, physical_server, datastore, storage_array, "
+                                                  "storage_volume, backup_client, dc_asset, opex_item"}}, "required": ["q"]}},
+    {"name": "ci_impact", "description": "Phân tích tác động của một CI (id từ ci_lookup): direction=down → những gì bị ảnh hưởng nếu CI lỗi "
+                                         "(host, VM, client backup…); direction=up → CI phụ thuộc vào gì (host, datastore, mảng lưu trữ, máy chủ vật lý).",
+     "input_schema": {"type": "object", "properties": {"id": {"type": "integer"},
+                                                       "direction": {"type": "string", "enum": ["down", "up"]}}, "required": ["id"]}},
+]
 TOOL_NAMES = {t["name"] for t in TOOLS}
 
 
@@ -139,6 +151,39 @@ class Toolbox:
         for r in rows[:MAX_LIST]:
             self._note("vm", r.get("vm"), r.get("vcenterKey"))
         return {"tong": len(rows), "vm": [{k: r.get(k) for k in ("vm", "cluster", "host", "trang_thai")} for r in rows[:MAX_LIST]]}
+
+    def _note_ci(self, item: Dict[str, Any]) -> None:
+        kind = {"vm": "vm", "hypervisor_host": "host"}.get(item.get("type"))
+        if kind:
+            self._note(kind, item.get("name"), item.get("vcenterKey") or (item.get("attrs") or {}).get("vcenterKey"))
+
+    def ci_lookup(self, a):
+        from .cmdb import query as cq
+        q = _str(a.get("q"), 80)
+        if len(q) < 2:
+            raise ValueError("cần ít nhất 2 ký tự")
+        t = a.get("type") if isinstance(a.get("type"), str) and a.get("type") else None
+        res = cq.list_cis(self.db, self.user, t, q, "active", MAX_LIST)
+        for it in res["items"]:
+            self._note_ci(it)
+        return {"tong": res["total"], "ci": [{"id": it["id"], "loai": it["type"], "ten": it["name"],
+                                               "thuoc_tinh": {k: v for k, v in (it.get("attrs") or {}).items()
+                                                              if k in ("vcenterKey", "cluster", "host", "vendor", "model", "dsType",
+                                                                       "category", "location", "nbuKey", "status", "endDate")}}
+                                              for it in res["items"]]}
+
+    def ci_impact(self, a):
+        from .cmdb import query as cq
+        ci_id = a.get("id")
+        if not isinstance(ci_id, int) or isinstance(ci_id, bool):
+            raise ValueError("id phải là số nguyên")
+        r = cq.impact(self.db, self.user, ci_id, "up" if a.get("direction") == "up" else "down")
+        for it in r["items"][:MAX_LIST]:
+            self._note_ci(it)
+        return {"goc": {"loai": r["root"]["type"], "ten": r["root"]["name"]}, "huong": r["direction"], "tong": r["total"],
+                "theo_loai": r["counts"], "ghep_theo_ten": r["weak"],
+                "doi_tuong": [{"loai": it["type"], "ten": it["name"], "tang": it["level"], "ghep_theo_ten": it["weak"]}
+                              for it in r["items"][:MAX_LIST]], "rut_gon": r["truncated"] or r["total"] > MAX_LIST}
 
     def viec_can_lam(self, a):
         from . import inbox

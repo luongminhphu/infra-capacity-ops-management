@@ -363,9 +363,10 @@ function uiEmptyRow(colspan, text) {
 }
 
 /* Link to the page of one object (thẻ Host / VM). */
-function uiEntityHref(type, name, vcenterKey) {
+function uiEntityHref(type, name, vcenterKey, id) {
   const q = new URLSearchParams({ type, name: name || '' });
   if (vcenterKey) q.set('vc', vcenterKey);
+  if (id) q.set('id', id);                      // datastore cards are addressed by CI id
   return `#/entity?${q}`;
 }
 function uiEntityLink(type, name, vcenterKey, strong = true) {
