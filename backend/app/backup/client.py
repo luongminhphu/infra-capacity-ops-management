@@ -25,6 +25,7 @@ import urllib.request
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from ..config import NetBackupConfig
+from ..shared.identity import nbu_client_key
 
 logger = logging.getLogger("vco.netbackup")
 
@@ -102,16 +103,8 @@ def parse_time(value: Any) -> Optional[dt.datetime]:
 
 def client_key(name: Optional[str]) -> Optional[str]:
     """Normalised host name used to match NetBackup clients with VMs / policy clients:
-    lower-case short name (FQDN domain dropped), IP addresses kept as-is."""
-    if not name:
-        return None
-    n = str(name).strip().lower()
-    if not n:
-        return None
-    parts = n.split(".")
-    if len(parts) == 4 and all(p.isdigit() for p in parts):
-        return n
-    return parts[0]
+    lower-case short name (FQDN domain dropped), IP addresses kept as-is (core: shared.identity)."""
+    return nbu_client_key(name)
 
 
 def _first(d: Dict[str, Any], *keys, default=None):

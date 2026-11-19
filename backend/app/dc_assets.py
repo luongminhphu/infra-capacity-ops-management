@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from .models import DcAsset
+from .shared.identity import norm_serial
 from .shared.text import norm_text
 from .shared.xlsx_io import XlsxError, read_rows
 
@@ -58,9 +59,7 @@ class ImportError_(ValueError):
 
 
 # ---------------------------------------------------------------- normalisation
-def serial_key(s: Any) -> str:
-    """Identity of a serial number: upper case, letters and digits only ("71FHKZ3 " = "71fhkz3")."""
-    return re.sub(r"[^A-Z0-9]", "", str(s or "").upper())[:128]
+serial_key = norm_serial     # legacy name kept for existing callers ("71FHKZ3 " = "71fhkz3")
 
 
 def _text(v: Any) -> str:

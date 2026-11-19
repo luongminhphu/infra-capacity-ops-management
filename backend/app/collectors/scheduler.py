@@ -119,7 +119,13 @@ def _host_inventory_cols(h: Dict[str, Any]) -> Dict[str, Any]:
         "esxi_build": h.get("esxiBuild"), "cpu_model": h.get("cpuModel"),
         "cpu_sockets": _int_or_none(h.get("cpuSockets")), "cpu_threads": _int_or_none(h.get("cpuThreads")),
         "cluster_ha": h.get("clusterHa"), "cluster_drs": h.get("clusterDrs"),
+        "serial": _str64(h.get("serial")), "hw_uuid": _str64(h.get("hwUuid")),
     }
+
+
+def _str64(v: Any) -> Optional[str]:
+    s = str(v).strip() if v is not None else ""
+    return s[:64] or None
 
 
 def _vm_inventory_cols(v: Dict[str, Any]) -> Dict[str, Any]:

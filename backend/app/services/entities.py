@@ -200,7 +200,7 @@ def host_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str
     out = {
         "type": "host", "name": h["host"], "vcenterKey": h.get("vcenterKey") or "", "cluster": h.get("cluster"),
         "hardware": {k: h.get(k) for k in ("vendor", "model", "cpuModel", "cpuSockets", "cores", "cpuThreads", "ramGB", "status",
-                                           *(("esxiVersion", "esxiBuild") if is_on(features, "license") else ()))},
+                                           "serial", "hwUuid", *(("esxiVersion", "esxiBuild") if is_on(features, "license") else ()))},
         "capacity": {"vcpuUsed": row.get("vcpuUsed"), "ramUsedGB": row.get("ramUsedGB"), "cpuPct": _num(row.get("cpuPct")),
                      "ramPct": _num(row.get("ramPct")), "vmCount": row.get("vmCount"),
                      "overall": _status(row["overall"]) if row.get("overall") else None},

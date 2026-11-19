@@ -54,7 +54,7 @@ function entityHostHtml(d) {
       ${enDl([['CPU dùng (theo ngưỡng)', enPct(c.cpuPct)], ['RAM dùng (theo ngưỡng)', enPct(c.ramPct)], ['vCPU cấp', enVal(c.vcpuUsed)],
               ['RAM cấp (GB)', enVal(c.ramUsedGB)], ['Hãng / model', `${enVal(hw.vendor)} ${hw.model ? esc(hw.model) : ''}`],
               ['CPU', `${enVal(hw.cpuModel)}`], ['Socket × core', `${enVal(hw.cpuSockets)} × ${enVal(hw.cores)}`], ['RAM (GB)', enVal(hw.ramGB)],
-              ['ESXi', `${enVal(hw.esxiVersion)} ${hw.esxiBuild ? `(build ${esc(hw.esxiBuild)})` : ''}`], ['Trạng thái host', enVal(hw.status)]])}
+              ['ESXi', `${enVal(hw.esxiVersion)} ${hw.esxiBuild ? `(build ${esc(hw.esxiBuild)})` : ''}`], ['Service Tag', enVal(hw.serial)], ['Trạng thái host', enVal(hw.status)]])}
     </section>
     ${cl ? `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Cluster ${esc(cl.name)} ${uiPill(cl.overall.cls, cl.overall.text)}</div>
       ${enDl([['Host', enVal(cl.hosts)], ['VM', enVal(cl.vms)], ['CPU', enPct(cl.cpuPct)], ['RAM', enPct(cl.ramPct)],

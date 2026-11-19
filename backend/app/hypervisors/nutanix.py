@@ -90,6 +90,10 @@ def parse(cluster: Dict[str, Any], hosts: List[Dict[str, Any]], vms: List[Dict[s
             "esxiVersion": h.get("hypervisor_full_name") or (f"AHV · AOS {aos}" if aos else "AHV"), "esxiBuild": aos,
             "cpuModel": h.get("cpu_model"), "cpuSockets": int(num(h.get("num_cpu_sockets"))) or None,
             "cpuThreads": int(num(h.get("num_cpu_threads"))) or None, "clusterHa": None, "clusterDrs": None,
+            # Prism v2.0 /hosts reports the node serial ("serial"; the OEM service tag on Dell XC / HPE DX);
+            # "block_serial" is the chassis shared by several nodes, so it is not a host key. Its "uuid" is a
+            # Nutanix-internal id, not the BIOS uuid → hwUuid stays None.
+            "serial": (str(h.get("serial") or "").strip()[:64] or None), "hwUuid": None,
         })
         health.append(health_row(name, cname, ok, f"Trạng thái host {state}", maintenance=maint))
     by_container = {c.get("storage_container_uuid"): str(c.get("name") or "") for c in containers or []}
