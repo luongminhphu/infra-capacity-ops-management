@@ -231,6 +231,19 @@ class ReviewNotice(Base):
     error = Column(String(300))
 
 
+class OwnerMailTemplate(Base):
+    """Editable e-mail template of the periodic owner review drafts (owners/mail_drafts.py). One row per kind;
+    no row = the built-in default. Placeholders {name} are filled with escaped values when a draft is built."""
+    __tablename__ = "owner_mail_templates"
+    __table_args__ = (CheckConstraint("kind IN ('review')", name="ck_owner_mail_template_kind"),)
+
+    kind = Column(String(16), primary_key=True)
+    subject = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_by = Column(String(255))
+
+
 _json(ReviewItem.signals, dict, "Tín hiệu rà soát", nullable=False)
 _json(ReviewItem.reasons, list, "Lý do nên rà", nullable=False)
 

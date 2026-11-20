@@ -481,3 +481,32 @@
 .os-form-group > .sp-h{margin:0 0 var(--space-1);}
 .os-form-group > .muted-sub{margin:0 0 var(--space-2);}
 .os-row-actions{white-space:nowrap;text-align:right;}
+/* Email rà soát (owners.js osMailDialog) */
+.os-mail-tpl{margin-top:var(--space-3);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);}
+.os-mail-tpl>summary{cursor:pointer;font-weight:var(--fw-semibold);}
+.os-mail-tpl[open]>summary{margin-bottom:var(--space-2);}
+.os-mail-tpl .field{display:flex;flex-direction:column;gap:var(--space-1);margin-bottom:var(--space-2);}
+.os-mail-tpl textarea{width:100%;min-height:220px;font-family:var(--font-body);resize:vertical;}
+.os-mail-fields{display:flex;flex-wrap:wrap;gap:var(--space-1);margin-bottom:var(--space-2);}
+.os-mail-fields .btn{font-family:var(--font-mono);font-size:var(--fs-caption);}
+.os-mail-table td{vertical-align:top;}
+.os-mail-intro{margin:0 0 var(--space-3);}
+@media (max-width:600px){
+  .os-mail-table thead{display:none;}
+  .os-mail-table tr{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--border-subtle);padding:var(--space-1) 0;}
+  .os-mail-table td{border:0;padding:2px var(--space-2);}
+  .os-mail-table td:first-child{flex:1 1 60%;}
+  .os-mail-table td.num::after{content:' VM';}
+  .os-mail-table td:nth-child(2),.os-mail-table td:nth-child(4){flex:1 1 100%;font-size:var(--fs-body-sm);color:var(--text-secondary);}
+  .os-mail-table td:nth-child(4):not(:empty)::before{content:'CC: ';}
+  .os-mail-table td.os-row-actions{flex:1 1 100%;text-align:left;}
+  .os-mail-table tr.is-selected{background:var(--brand-tint);}
+  .os-mail-table tr.is-selected td{background:transparent;}
+}
+.os-mail-head{display:grid;grid-template-columns:max-content 1fr;gap:var(--space-1) var(--space-3);margin:0 0 var(--space-2);font-size:var(--fs-body-sm);}
+.os-mail-head dt{color:var(--text-secondary);}
+.os-mail-head dd{margin:0;overflow-wrap:anywhere;}
+.os-mail-frame{display:block;width:100%;height:440px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--white);}
+
+/* dialog footers: several actions wrap on a phone instead of running off the edge */
+.src-dialog-actions{flex-wrap:wrap;}

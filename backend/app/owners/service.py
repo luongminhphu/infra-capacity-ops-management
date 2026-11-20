@@ -196,11 +196,21 @@ def update_system(db: Session, user: User, s: System, data: Dict[str, Any], ip: 
 
 
 def delete(db: Session, user: User, s: System, ip: Optional[str] = None) -> int:
-    n = db.query(SystemMember).filter(SystemMember.system_id == s.id).delete(synchronize_session=False)
-    audit(db, user, "owners.system.delete", ip, id=s.id, code=s.code, name=s.name, members=n)
-    db.delete(s)
+    """Delete a system that has no VM any more. Check and delete are ONE statement (DELETE … WHERE NOT EXISTS member):
+    a VM assigned at the same moment makes the delete fail (409) instead of being unassigned silently by the cascade."""
+    from sqlalchemy import delete as sa_delete, exists
+    n = db.query(func.count(SystemMember.id)).filter(SystemMember.system_id == s.id).scalar() or 0
+    if n:
+        raise HTTPException(409, f"Hệ thống {s.code} còn {n} VM — chuyển VM sang hệ thống khác hoặc bỏ gán hết rồi mới xoá.")
+    code, name, sid = s.code, s.name, s.id
+    res = db.execute(sa_delete(System).where(System.id == sid, ~exists().where(SystemMember.system_id == sid))
+                     .execution_options(synchronize_session=False))
+    if res.rowcount != 1:
+        raise HTTPException(409, f"Hệ thống {code} vừa được gán thêm VM — tải lại rồi thử lại.")
+    db.expunge(s)
+    audit(db, user, "owners.system.delete", ip, id=sid, code=code, name=name)
     invalidate_scope_cache()
-    return n
+    return 0
 
 
 def listing(db: Session, q: str = "", owner: str = "", department: str = "", project: str = "",
@@ -416,19 +426,12 @@ def invalidate_scope_cache() -> None:
         _scope_cache.clear()
 
 
-def resolve_vm_scope(db: Session, sc) -> Dict[str, Any]:
-    """Systems matching the owner filter → their VMs as {(vcenterKey, vm name lower)} / {(vcenterKey, instanceUuid)}."""
-    from ..cmdb.models import CiKey
-    key = (tuple(sc.systems or ()) if sc.systems is not None else None, tuple(sc.owners or ()) if sc.owners is not None else None,
-           tuple(sc.departments or ()) if sc.departments is not None else None,
-           tuple(sc.projects or ()) if sc.projects is not None else None,
-           tuple(sc.criticality or ()) if sc.criticality is not None else None)
-    now = _time.monotonic()
-    with _scope_lock:
-        hit = _scope_cache.get(key)
-        if hit and now - hit[0] < SCOPE_TTL:
-            return hit[1]
-    q = db.query(System.id).filter(System.status == "active")
+def scope_systems(db: Session, sc, *cols):
+    """Active systems matching an OwnerScope (every given dimension ANDed; owners match owner or backup e-mail).
+    `cols` = what to select (default: the System rows)."""
+    q = db.query(*(cols or (System,))).filter(System.status == "active")
+    if sc is None:
+        return q
     if sc.systems is not None:
         ids = [int(x) for x in sc.systems if x.isdigit()]
         codes = [x.upper() for x in sc.systems if not x.isdigit()]
@@ -441,7 +444,22 @@ def resolve_vm_scope(db: Session, sc) -> Dict[str, Any]:
         q = q.filter(func.lower(System.project).in_([p.lower() for p in sc.projects] or [""]))
     if sc.criticality is not None:
         q = q.filter(System.criticality.in_(sc.criticality or [-1]))
-    sids = [i for (i,) in q]
+    return q
+
+
+def resolve_vm_scope(db: Session, sc) -> Dict[str, Any]:
+    """Systems matching the owner filter → their VMs as {(vcenterKey, vm name lower)} / {(vcenterKey, instanceUuid)}."""
+    from ..cmdb.models import CiKey
+    key = (tuple(sc.systems or ()) if sc.systems is not None else None, tuple(sc.owners or ()) if sc.owners is not None else None,
+           tuple(sc.departments or ()) if sc.departments is not None else None,
+           tuple(sc.projects or ()) if sc.projects is not None else None,
+           tuple(sc.criticality or ()) if sc.criticality is not None else None)
+    now = _time.monotonic()
+    with _scope_lock:
+        hit = _scope_cache.get(key)
+        if hit and now - hit[0] < SCOPE_TTL:
+            return hit[1]
+    sids = [i for (i,) in scope_systems(db, sc, System.id)]
     names, uuids, n = set(), set(), 0
     if sids:
         rows = (db.query(Ci.id, Ci.name, Ci.attrs).join(SystemMember, SystemMember.ci_id == Ci.id)
