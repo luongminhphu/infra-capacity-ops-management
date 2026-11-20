@@ -150,6 +150,40 @@ def test_inbox_items_and_default_rules(db):
     assert rules["capacity"].wants({"source": "capacity", "level": "warn", "push": True})  # 90 % decision kept
 
 
+def test_inbox_drill_down_alarm_health_snapshot(db):
+    """Each infra item carries a deep link to its object, key facts and the concrete events behind it."""
+    alarms = _extras()["alarms"] + [
+        {"key": "a3", "entityType": "host", "entity": "esx1", "cluster": "PROD", "alarm": "Host hardware power status",
+         "status": "red", "at": ISO(NOW - dt.timedelta(hours=1)), "acknowledged": False},
+        {"key": "a4", "entityType": "host", "entity": "esx1", "cluster": "PROD", "alarm": "Host connection failure",
+         "status": "yellow", "at": ISO(NOW - dt.timedelta(minutes=50)), "acknowledged": False}]
+    infra.store(db, "vc1", _extras(alarms=alarms), NOW)
+    db.commit()
+    items = {(i["source"], i["title"]): i for i in inbox._compute(db, NOW.date())[0]}
+    ds_alarm = items[("alarm", "Alarm Datastore usage on disk — DS-PROD-01")]
+    assert ds_alarm["page"] == "infra-alarm" and ds_alarm["query"] == "alarm=vc1%7Ca1" and ds_alarm["pageLabel"] == "Xem alarm này"
+    assert {f["label"]: f["value"] for f in ds_alarm["facts"]} == {
+        "Alarm": "Datastore usage on disk", "Trạng thái trên vCenter": "Đỏ", "Đối tượng": "Datastore DS-PROD-01",
+        "Cluster": "PROD", "vCenter": "vc1", "Kích hoạt lúc": ISO(NOW - dt.timedelta(hours=3))}
+    assert [l["label"] for l in ds_alarm["links"]] == ["Datastore DS-PROD-01"]
+    # host alarm: both alarms of esx1 + its failed power sensor, card + health page links
+    host_alarm = items[("alarm", "Alarm Host hardware power status — esx1")]
+    assert [e["title"] for e in host_alarm["events"]] == [
+        "Alarm Host hardware power status", "Alarm Host connection failure", "Cảm biến Power Supply 2: Failure"]
+    assert [e["level"] for e in host_alarm["events"]] == ["crit", "bad", "crit"]
+    assert host_alarm["events"][1]["query"] == "alarm=vc1%7Ca4"
+    assert host_alarm["links"][0] == {"label": "Thẻ host esx1", "entity": {"type": "host", "name": "esx1", "vc": "vc1"}}
+    assert host_alarm["links"][1]["page"] == "infra-health" and host_alarm["links"][1]["query"] == "host=esx1"
+    health = items[("health", "Host esx1: phần cứng vượt ngưỡng")]
+    assert health["query"] == "host=esx1" and [e["title"] for e in health["events"]] == ["Power Supply 2: Failure"]
+    assert {f["label"]: f["value"] for f in health["facts"]}["Trạng thái tổng"] == "red"
+    snap = next(i for (src, _), i in items.items() if src == "snapshot")
+    assert snap["query"] == "vm=app-01" and [e["title"] for e in snap["events"]] == ["Snapshot truoc-va"]
+    assert snap["events"][0]["at"] == ISO(NOW - dt.timedelta(days=8))
+    ds = next(i for (src, _), i in items.items() if src == "datastore")
+    assert ds["query"] == "ds=vc1%7Cdatastore-1" and [e["title"] for e in ds["events"]][0] == "Đã dùng 90,0% (≥ 90%)"
+
+
 def _channel(db, name):
     ch = SpendNotifyChannel(kind="discord", name=name, enabled=True, ops_alerts=True, created_by="t",
                             webhook_enc=secrets_box.encrypt("https://discord.com/api/webhooks/123456789012345678/abcDEF_-1"))

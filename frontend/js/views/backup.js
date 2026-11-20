@@ -640,6 +640,7 @@ function bindBackupBody() {
 
 async function renderBackupView() {
   const st = bkState();
+  bkTakeQuery(st);
   if (!st.servers) await bkLoadServers();
   renderBackupHead();
   bindBackupHead();
@@ -654,6 +655,16 @@ async function renderBackupView() {
   const stale = !st.summary || (Date.now() - (st.loadedAt || 0)) > BK_TTL_MS;
   if (stale) { renderBackupBody(); await bkLoad(true); }
   renderBackupBody();
+}
+
+/* Deep links from the inbox (once per hash): ?client=<name> selects the client, ?q= searches every job (all outcomes). */
+function bkTakeQuery(st) {
+  const raw = location.hash.split('?')[1] || '';
+  if (!raw || st.lastQuery === location.hash) return;
+  st.lastQuery = location.hash;
+  const q = new URLSearchParams(raw);
+  if (q.get('client')) { st.clientFilter = { ...st.clientFilter, status: 'all', q: q.get('client') }; st.clientSel = q.get('client'); }
+  if (q.get('q')) { st.jobFilter = { ...st.jobFilter, q: q.get('q') }; st.jobs = null; }
 }
 
 /* Called after a vCenter sync elsewhere in the app: the next visit (or the current page) reloads. */

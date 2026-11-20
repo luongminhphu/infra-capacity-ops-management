@@ -243,5 +243,10 @@ def test_demo_end_to_end(db, admin):
         assert ds and all(d["storage"] for d in ds)                       # every demo datastore correlated
         assert {d["storage"]["sourceKey"] for d in ds} == {"pure-x20", "pure-rc20", "ntap-a300"}
         assert any(a["level"] == "crit" for a in st["arrays"])            # the demo A300 has a failed PSU
+        from app import inbox
+        a300 = next(i for i in inbox.storage_items(s) if "AFF-A300" in i["title"])
+        assert a300["page"] == "infra-storage" and a300["query"] == "array=ntap-a300" and a300["pageLabel"] == "Xem mảng này"
+        assert "Power supply 2 on node is in a degraded state." in [e["title"] for e in a300["events"]]
+        assert {f["label"] for f in a300["facts"]} >= {"Hãng · model", "Phiên bản", "Đã dùng"}
         s.query(DatastoreState).filter_by(vcenter_key="vcd").delete()
         s.commit()

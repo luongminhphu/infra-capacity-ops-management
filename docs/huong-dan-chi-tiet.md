@@ -98,6 +98,17 @@ thành ngăn kéo (nút ☰).
   - tờ trình chờ duyệt (Duyệt).
 - Mỗi mục mở chi tiết ngay bên phải: **Nên làm gì**, số liệu, nút **Mở trang nguồn** (tới đúng trang, kể cả mở chi tiết
   khoản Opex). Đánh dấu **Xong** hoặc **Ẩn 7 ngày** theo từng người.
+- **Đi sâu tới nguyên nhân** (alarm vCenter, sức khoẻ host, snapshot, datastore, storage, phần cứng Dell OME, backup,
+  capacity): khung chi tiết có thêm
+  - **Chi tiết**: thông tin chính của đối tượng (vCenter, cluster, thời điểm kích hoạt, model, service tag, overcommit…);
+  - **Sự kiện liên quan**: sự kiện cụ thể đứng sau mục, bấm để mở đúng đối tượng — mọi alarm đang kích hoạt trên cùng
+    host / VM / datastore kèm cảm biến phần cứng của host; alert đang mở của mảng storage; linh kiện lỗi và alert OME 7 ngày
+    (mã MessageId); job backup lỗi (job ID, mã status, policy); snapshot của VM; host tải cao nhất của cluster;
+  - **Đi tới**: thẻ host / VM / máy chủ vật lý, trang sức khoẻ host.
+- Nút mở trang nguồn đưa tới **đúng đối tượng**, không chỉ trang chung: `#/health/alarms?alarm=<vCenter>|<mã alarm>` mở
+  hộp thoại alarm (alarm khác cùng đối tượng + cảm biến), `?ds=` mở biểu đồ datastore, `?host=` / `?vm=` / `?q=` lọc bảng,
+  `?array=` cuộn tới mảng storage và mở danh sách alert, `#/backup/clients?client=` chọn client, `#/backup/jobs?q=` tìm job,
+  `#/hardware?s=&d=` mở máy chủ OME. Trên trang Alarm vCenter, bấm một dòng cũng mở hộp thoại này.
 - **Giao việc / Ai xử lý**: bấm **Giao việc** để giao mục cho một người (ghi nhật ký). Người được giao phải có quyền xem
   module của mục đó. Chế độ xem: *Cần xử lý · Giao cho tôi · Chưa giao · Đã xong*.
   Mục xấu đi (lên mức cao hơn) sẽ hiện lại.
