@@ -1,0 +1,31 @@
+{
+  "@odata.context": "/api/$metadata#Collection(DeviceService.Device)",
+  "@odata.count": 4,
+  "value": [
+    {
+      "Id": 10080,
+      "Type": 2000,
+      "Identifier": "CHS0001",
+      "DeviceServiceTag": "CHS0001",
+      "Model": "PowerEdge MX7000",
+      "PowerState": 17,
+      "Status": 1000,
+      "ConnectionState": true,
+      "DeviceName": "mx-chassis-01",
+      "DeviceManagement": []
+    },
+    {
+      "Id": 10091,
+      "Type": 1000,
+      "Identifier": "4BMDB21",
+      "DeviceServiceTag": "4BMDB21",
+      "Model": "PowerEdge R760",
+      "PowerState": 1,
+      "Status": 5000,
+      "ConnectionState": false,
+      "DeviceName": "db-oracle-01",
+      "LastInventoryTime": null,
+      "DeviceManagement": [{"ManagementId": 4010, "NetworkAddress": "10.30.90.11", "ManagementType": 2}]
+    }
+  ]
+}

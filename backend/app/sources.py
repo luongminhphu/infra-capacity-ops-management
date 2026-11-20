@@ -21,8 +21,9 @@ from . import secrets_box
 
 logger = logging.getLogger("vco.sources")
 
-KINDS = ("vcenter", "proxmox", "nutanix", "netbackup", "pure", "netapp")
+KINDS = ("vcenter", "proxmox", "nutanix", "netbackup", "pure", "netapp", "ome")
 STORAGE_KINDS = ("pure", "netapp")
+HARDWARE_KINDS = ("ome",)        # Dell OpenManage Enterprise (hardware/)
 # Hypervisor managers: one history family (snapshot runs keyed by the source key), so keys are unique across them.
 HYPERVISOR_KINDS = ("vcenter", "proxmox", "nutanix")
 NBU_DOMAIN_TYPES = ("unixpwd", "vx", "NT", "ldap", "msad")
@@ -63,6 +64,11 @@ def _secret(row: DataSource, field: str) -> str:
 
 
 def to_config(row: DataSource):
+    if row.kind in HARDWARE_KINDS:
+        from .hardware import HardwareConfig
+        return HardwareConfig(key=row.key, name=row.name, host=row.host, port=row.port, username=row.username or "",
+                              password=_secret(row, "password_enc"), verify_ssl=bool(row.verify_ssl), ca_pem=row.ca_pem or "",
+                              demo=bool(row.demo), timeout=int(_opts(row).get("timeout") or 60), kind=row.kind)
     if row.kind in STORAGE_KINDS:
         from .storage import StorageConfig
         return StorageConfig(key=row.key, name=row.name, vendor=row.kind, host=row.host, port=row.port,
@@ -134,6 +140,11 @@ def netbackup_configs(settings: Settings) -> List[NetBackupConfig]:
 def storage_configs(settings: Settings) -> list:
     """Pure FlashArray + NetApp ONTAP sources (Settings only — no environment variables)."""
     return _merged("pure", settings) + _merged("netapp", settings)
+
+
+def hardware_configs(settings: Settings) -> list:
+    """Dell OpenManage Enterprise sources (Settings only — no environment variables)."""
+    return _merged("ome", settings)
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +251,15 @@ def apply_input(row: DataSource, data: Dict[str, Any], creating: bool) -> None:
         row.options = json.dumps({"timeout": _storage_timeout(data, row)})
         if not row.demo and not (row.username and row.password_enc):
             raise SourceError("Cần user + mật khẩu của tài khoản ONTAP role readonly (ứng dụng http).")
+    elif kind == "ome":
+        row.api_key_enc = None
+        try:
+            timeout = max(10, min(int(data.get("timeout") or _opts(row).get("timeout") or 60), 300))
+        except (TypeError, ValueError):
+            raise SourceError("Timeout không hợp lệ.") from None
+        row.options = json.dumps({"timeout": timeout})
+        if not row.demo and not (row.username and row.password_enc):
+            raise SourceError("Cần user + mật khẩu của tài khoản OME role Viewer (chỉ đọc).")
     elif kind == "proxmox":
         from .hypervisors.proxmox import TOKEN_ID
         row.api_key_enc = None
@@ -322,6 +342,12 @@ def row_from_env(cfg, kind: str, user: str) -> DataSource:
 def test_connection(cfg, kind: str) -> str:
     if cfg.demo:
         return "Chế độ DEMO — không kết nối máy chủ thật."
+    if kind in HARDWARE_KINDS:
+        from .hardware import HardwareError, ome
+        try:
+            return ome.test(cfg)
+        except HardwareError as exc:
+            raise SourceError(str(exc)) from exc
     if kind in STORAGE_KINDS:
         from .storage import StorageError, netapp, pure
         try:

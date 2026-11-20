@@ -8,7 +8,8 @@ Types and identities (source_key):
   vm               instanceUuid (fallback "<vcenter>:<name>")          keys instance_uuid, short_name, fqdn, ip
   hypervisor_host  "<vcenter>:<host>"                                  keys fqdn, short_name, ip, serial, hw_uuid
   cluster          "<vcenter>:<cluster>"
-  physical_server  norm_serial(serial)  (host serial / DC asset server / Opex hardware warranty)   key serial
+  physical_server  norm_serial(serial)  (host serial / Dell OME device / DC asset server / Opex hardware warranty)
+                                                                       keys serial, idrac_ip (OME)
   datastore        "<vcenter>:<ds_key>"                                keys naa
   storage_array    array source key;  storage_volume "<array>:<container>:<name>"   keys naa
   backup_client    "<nbu>:<client key>"                                key nbu_client
@@ -236,6 +237,29 @@ def _backup(db: Session, g: Graph, now: dt.datetime, vms: List[Dict[str, Any]], 
                     done.add(client)
 
 
+def _hardware(db: Session, g: Graph, now: dt.datetime, days: int) -> None:
+    """Dell OME servers (configured sources, synced within the retire window) → physical_server by service tag.
+    A device matching no host is still a physical_server (bare-metal), named after its OME device name."""
+    from ..hardware.models import HwDeviceState
+    keys = [c.key for c in get_settings().hardware()]
+    if not keys:
+        return
+    for d in db.query(HwDeviceState).filter(HwDeviceState.source_key.in_(keys),
+                                            HwDeviceState.captured_at >= now - dt.timedelta(days=days)):
+        ident = _physical(g, d.service_tag, "ome", "Dell Inc.", d.model)
+        if ident is None:
+            continue
+        attrs = g.cis[ident]["attrs"]
+        attrs.update({k: v for k, v in {"omeSource": d.source_key, "omeDeviceId": d.device_id, "omeName": d.name,
+                                         "idracIp": d.idrac_ip, "hwStatus": d.status, "powerState": d.power_state}.items()
+                      if v not in (None, "")})
+        if not attrs.get("model") and d.model:
+            attrs["model"] = d.model
+        if attrs.get("origins") == ["ome"] and d.name:
+            g.cis[ident]["name"] = d.name[:255]              # bare-metal: the OME name says more than the tag
+        g.key(ident, "idrac_ip", norm_ip(d.idrac_ip))
+
+
 def _dc_assets(db: Session, g: Graph) -> None:
     from ..models import DcAsset
     for a in db.query(DcAsset).filter(DcAsset.removed.is_(False)):
@@ -285,6 +309,7 @@ def collect(db: Session, now: dt.datetime, retire_days: int) -> Graph:
     ds_by_name = _datastores(db, g, vcs)
     vms, host_ci, vm_ci = _inventory(db, g, vcs, ds_by_name)
     _backup(db, g, now, vms, vm_ci)
+    _hardware(db, g, now, retire_days)
     _dc_assets(db, g)
     _opex(db, g, host_ci)
     return g

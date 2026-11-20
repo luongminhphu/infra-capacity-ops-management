@@ -19,10 +19,11 @@ from .models import (
     SnapshotRun, StorageAlertState, StorageArrayState, StorageVolumeState, VcAlarmState, VmOsOverride, VmSnapshot,
     VmSnapshotState,
 )
+from .hardware.models import HwComponentHealth, HwDeviceState, HwSourceState
 
-FAMILIES = {"vcenter": "Nền tảng ảo hoá", "netbackup": "Máy chủ backup", "storage": "Storage"}
+FAMILIES = {"vcenter": "Nền tảng ảo hoá", "netbackup": "Máy chủ backup", "storage": "Storage", "hardware": "Phần cứng (Dell OME)"}
 KIND_FAMILY = {"vcenter": "vcenter", "proxmox": "vcenter", "nutanix": "vcenter", "netbackup": "netbackup",
-               "pure": "storage", "netapp": "storage"}
+               "pure": "storage", "netapp": "storage", "ome": "hardware"}
 NOT_A_SOURCE = {None, "", "import"}
 CHUNK = 5000
 
@@ -43,6 +44,10 @@ TABLES: Dict[str, List[Tuple[str, Any, str]]] = {
     "storage": [
         ("Volume / LUN", StorageVolumeState, "source_key"), ("Alert", StorageAlertState, "source_key"),
         ("Mảng", StorageArrayState, "source_key"),
+    ],
+    "hardware": [
+        ("Sức khoẻ linh kiện", HwComponentHealth, "source_key"), ("Máy chủ", HwDeviceState, "source_key"),
+        ("Trạng thái nguồn", HwSourceState, "source_key"),
     ],
 }
 # Time series: family → metric kind, entity = key (array) or "key:datastore".
@@ -76,6 +81,8 @@ def _last_seen(db: Session, family: str, key: str) -> Optional[dt.datetime]:
         return db.query(func.max(SnapshotRun.started_at)).filter(SnapshotRun.vcenter_key == key).scalar()
     if family == "netbackup":
         return db.query(func.max(BackupSyncRun.started_at)).filter(BackupSyncRun.nbu_key == key).scalar()
+    if family == "hardware":
+        return db.query(func.max(HwSourceState.captured_at)).filter(HwSourceState.source_key == key).scalar()
     return db.query(func.max(StorageArrayState.captured_at)).filter(StorageArrayState.source_key == key).scalar()
 
 

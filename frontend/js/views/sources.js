@@ -14,9 +14,11 @@ const SRC_DEFAULTS = {
   netbackup: { port: 1556, user: '', title: 'máy chủ backup (NetBackup)', label: 'Backup', keyLabel: 'API key (thay cho user / mật khẩu)' },
   pure: { port: 443, user: '', title: 'mảng Pure FlashArray', label: 'Pure FlashArray', keyLabel: 'API token (user role readonly)' },
   netapp: { port: 443, user: 'ico_ro', title: 'cụm NetApp ONTAP', label: 'NetApp ONTAP' },
+  ome: { port: 443, user: '', title: 'Dell OpenManage Enterprise', label: 'Dell OME', userLabel: 'Tài khoản Viewer (chỉ đọc)',
+    userHint: 'ico_ro', hostHint: 'ome01.corp.local' },
 };
 /* Which credential fields each kind uses: user + password, API key / token, NetBackup-only fields. */
-const SRC_FIELDS = { vcenter: ['up'], proxmox: ['up'], nutanix: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'] };
+const SRC_FIELDS = { vcenter: ['up'], proxmox: ['up'], nutanix: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'], ome: ['up'] };
 
 function srcSetStatus(msg, isErr) { uiSetStatus('#srcStatus', msg, isErr ? 'error' : ''); }
 
@@ -60,7 +62,7 @@ async function loadSources() {
     srcKeyBox(r);
     $('#btnSrcImportEnv').classList.toggle('hidden', !r.items.some(i => i.origin === 'env' && !i.replacedByUi));
     $('#srcTable tbody').innerHTML = r.items.length ? r.items.map(srcRow).join('')
-      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Proxmox VE”, “+ Nutanix”, “+ Máy chủ backup”, “+ Pure FlashArray” hoặc “+ NetApp ONTAP”.');
+      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Proxmox VE”, “+ Nutanix”, “+ Máy chủ backup”, “+ Pure FlashArray”, “+ NetApp ONTAP” hoặc “+ Dell OME”.');
   } catch (err) { srcSetStatus(err.message, true); }
   loadOrphans();
 }

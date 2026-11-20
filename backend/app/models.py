@@ -899,3 +899,5 @@ from .spend import models as _spend_models  # noqa: E402,F401
 from .cmdb import models as _cmdb_models  # noqa: E402,F401
 from .owners import models as _owners_models  # noqa: E402,F401
 
+# Server hardware from Dell OME (G4).
+from .hardware import models as _hardware_models  # noqa: E402,F401

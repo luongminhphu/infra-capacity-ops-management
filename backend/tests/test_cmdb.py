@@ -33,7 +33,7 @@ def _settings(monkeypatch, vcs=("vct",), nbus=("nbu-t",), arrays=("pure-t",), re
     from app.config import get_settings
     real = get_settings()
     fake = NS(vcenters=lambda: [NS(key=k, platform="vmware") for k in vcs], netbackups=lambda: [NS(key=k) for k in nbus],
-              storages=lambda: [NS(key=k) for k in arrays], cmdb_retire_days=retire_days,
+              storages=lambda: [NS(key=k) for k in arrays], hardware=lambda: [], cmdb_retire_days=retire_days,
               metrics_raw_days=real.metrics_raw_days)
     monkeypatch.setattr(builder, "get_settings", lambda: fake)
     monkeypatch.setattr(infra, "get_settings", lambda: fake)
