@@ -102,8 +102,10 @@ async function infraOpenAlarm(vc, key) {
     ${a.entityType === 'host' ? `<h3 class="sp-h">Cảm biến phần cứng bất thường (${fmtInt(sensors.length)})</h3>
       ${sensors.length ? `<ul class="infra-reasons">${sensors.map(i => `<li>${uiPill(i.state === 'red' ? 'crit' : 'bad', i.state === 'red' ? 'VƯỢT NGƯỠNG' : 'CẢNH BÁO')} ${esc(i.name)} <span class="muted-sub">${esc(i.kind || '')}${i.reading !== null && i.reading !== undefined ? ' · ' + esc(String(i.reading)) : ''}</span></li>`).join('')}</ul>`
         : uiNote('Không có cảm biến nào báo vàng / đỏ.')}` : ''}
-    <p class="muted-sub">ICO chỉ đọc vCenter: xác nhận / xoá alarm làm trên vSphere Client.</p>`;
+    <p class="muted-sub">ICO chỉ đọc vCenter: xác nhận / xoá alarm làm trên vSphere Client${a.vsphereUrl ? ' (nút bên dưới mở đúng đối tượng, cần đăng nhập vCenter)' : ''}.</p>`;
   const jumps = [
+    typeof a.vsphereUrl === 'string' && /^https:\/\//.test(a.vsphereUrl)
+      ? `<a class="btn btn-secondary btn-sm" href="${esc(a.vsphereUrl)}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i>Mở trên vSphere Client<span class="sr-only"> (mở tab mới)</span></a>` : '',
     a.entityType === 'datastore' ? `<a class="btn btn-secondary btn-sm" href="#/health?q=${esc(encodeURIComponent(a.entity))}" data-sp-close>Datastore ${esc(a.entity)}</a>` : '',
     a.entityType === 'host' ? `<a class="btn btn-secondary btn-sm" href="#/health/hosts?host=${esc(encodeURIComponent(a.entity))}" data-sp-close>Sức khoẻ host</a>` : '',
     a.entityType === 'host' || a.entityType === 'vm' ? `<a class="btn btn-secondary btn-sm" href="${esc(uiEntityHref(a.entityType, a.entity, a.vcenterKey))}" data-sp-close>Thẻ ${a.entityType === 'host' ? 'host' : 'VM'}</a>` : ''].join('');

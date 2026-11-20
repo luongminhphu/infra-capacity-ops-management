@@ -109,6 +109,11 @@ thành ngăn kéo (nút ☰).
   hộp thoại alarm (alarm khác cùng đối tượng + cảm biến), `?ds=` mở biểu đồ datastore, `?host=` / `?vm=` / `?q=` lọc bảng,
   `?array=` cuộn tới mảng storage và mở danh sách alert, `#/backup/clients?client=` chọn client, `#/backup/jobs?q=` tìm job,
   `#/hardware?s=&d=` mở máy chủ OME. Trên trang Alarm vCenter, bấm một dòng cũng mở hộp thoại này.
+- **Mở trên vSphere Client**: alarm của vCenter thật (không phải demo, không phải Proxmox / Nutanix) có thêm nút mở đúng
+  host / VM / datastore / cluster trên vSphere Client (tab mới, cần đăng nhập vCenter). Link dựng từ mã đối tượng (moId), loại
+  đối tượng và `about.instanceUuid` đọc cùng phiên vCenter (cột `entity_moid` / `vim_type` / `vc_uuid` của `vc_alarm_states`,
+  có sau lần đồng bộ kế tiếp) và host khai báo ở Kết nối nguồn dữ liệu; phần nào không hợp lệ thì không hiện nút
+  (`vcenter/links.py`). Xác nhận / xoá alarm vẫn làm trên vSphere Client — ICO chỉ đọc.
 - **Giao việc / Ai xử lý**: bấm **Giao việc** để giao mục cho một người (ghi nhật ký). Người được giao phải có quyền xem
   module của mục đó. Chế độ xem: *Cần xử lý · Giao cho tôi · Chưa giao · Đã xong*.
   Mục xấu đi (lên mức cao hơn) sẽ hiện lại.

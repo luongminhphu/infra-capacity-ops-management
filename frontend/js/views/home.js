@@ -33,7 +33,8 @@ const HOME_EVENT_TEXT = { crit: 'VƯỢT NGƯỠNG', bad: 'CẢNH BÁO', warn: '
 function homeDrillHtml(i) {
   const facts = (i.facts || []).filter(f => f && f.value !== null && f.value !== undefined && f.value !== '');
   const events = i.events || [];
-  const links = (i.links || []).filter(l => homeJump(l));
+  const ext = (l) => typeof l.href === 'string' && /^https:\/\//.test(l.href);     // external link (vSphere Client)
+  const links = (i.links || []).filter(l => ext(l) || homeJump(l));
   const factHtml = facts.length ? `<div class="hm-d-sec"><h4>Chi tiết</h4><dl class="bk-facts hm-facts">${facts.map(f => `<div><dt>${esc(f.label)}</dt><dd>${
     f.kind === 'datetime' ? uiDateTime(f.value) : typeof f.value === 'number' ? esc(fmtNum(f.value, 0)) : esc(String(f.value))}</dd></div>`).join('')}</dl></div>` : '';
   const evHtml = events.length ? `<div class="hm-d-sec"><h4>Sự kiện liên quan <span class="muted-sub">${esc(fmtInt(events.length))}</span></h4>
@@ -44,8 +45,9 @@ function homeDrillHtml(i) {
           ${e.detail ? `<span class="hm-ev-d">${esc(e.detail)}</span>` : ''}`;
         return `<li>${href ? `<a class="hm-ev" href="${esc(href)}">${body}</a>` : `<div class="hm-ev">${body}</div>`}</li>`;
       }).join('')}</ul></div>` : '';
-  const linkHtml = links.length ? `<div class="hm-d-sec"><h4>Đi tới</h4><div class="hm-jumps">${links.map(l =>
-    `<a class="btn btn-secondary btn-sm" href="${esc(homeJump(l))}"><i data-lucide="${l.entity || l.page === 'entity' ? 'box' : 'arrow-up-right'}"></i>${esc(l.label)}</a>`).join('')}</div></div>` : '';
+  const linkHtml = links.length ? `<div class="hm-d-sec"><h4>Đi tới</h4><div class="hm-jumps">${links.map(l => ext(l)
+    ? `<a class="btn btn-secondary btn-sm" href="${esc(l.href)}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i>${esc(l.label)}<span class="sr-only"> (mở tab mới)</span></a>`
+    : `<a class="btn btn-secondary btn-sm" href="${esc(homeJump(l))}"><i data-lucide="${l.entity || l.page === 'entity' ? 'box' : 'arrow-up-right'}"></i>${esc(l.label)}</a>`).join('')}</div></div>` : '';
   return factHtml + evHtml + linkHtml;
 }
 

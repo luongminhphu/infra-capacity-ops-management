@@ -5,7 +5,8 @@ Row shapes (camelCase, like the inventory rows) — demo_generator.collect_extra
   datastores: {key, name, type, capacityGB, freeGB, uncommittedGB, accessible, maintenance, clusters[], hostCount, vmCount,
                naa[], nfsHost, nfsPath}
   snapshots:  {vm, instanceUuid, cluster, host, count, oldestAt, newestAt, sizeGB, items[{name, createdAt, description, quiesced}]}
-  alarms:     {key, entityType, entity, cluster, alarm, status ('red'|'yellow'), at, acknowledged}
+  alarms:     {key, entityType, entity, cluster, alarm, status ('red'|'yellow'), at, acknowledged,
+               entityMoid, vimType ('HostSystem'…)} — with vcenterUuid (about.instanceUuid): vSphere Client deep link
   health:     {host, cluster, overallStatus, connection, maintenance, issues[{kind, name, state, reading}]}
 """
 import datetime as dt
@@ -21,6 +22,9 @@ GB = 1024 ** 3
 SNAPSHOT_FILE = re.compile(r"-\d{6}(-delta|-sesparse)?\.vmdk$|\.vmsn$|\.vmem$", re.I)
 ENTITY_TYPES = {vim.HostSystem: "host", vim.VirtualMachine: "vm", vim.Datastore: "datastore",
                 vim.ClusterComputeResource: "cluster", vim.ComputeResource: "cluster"}
+
+
+VIM_TYPE = {"host": "HostSystem", "vm": "VirtualMachine", "datastore": "Datastore", "cluster": "ClusterComputeResource"}
 
 
 def _sa(obj, *path, default=None):
@@ -181,5 +185,7 @@ def build_extras(content, hosts, compute, vms, datastores, host_info: Dict[str, 
             "key": _sa(a, "key") or f"{aid}.{eid}", "entityType": etype, "entity": ename or eid, "cluster": cluster,
             "alarm": (names.get(aid, {}).get("info.name") or aid or "Alarm")[:255], "status": status,
             "at": _utc(_sa(a, "time")), "acknowledged": bool(_sa(a, "acknowledged")),
+            "entityMoid": eid, "vimType": getattr(ent, "_wsdlName", None) or VIM_TYPE.get(etype),
         })
-    return {"datastores": ds_rows, "snapshots": snap_rows, "alarms": alarm_rows, "health": health_rows}
+    return {"datastores": ds_rows, "snapshots": snap_rows, "alarms": alarm_rows, "health": health_rows,
+            "vcenterUuid": _sa(content, "about", "instanceUuid")}

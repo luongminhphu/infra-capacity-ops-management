@@ -48,7 +48,8 @@ def item(source: str, level: str, key: str, title: str, detail: str = "", page: 
     change, so a worsened item reappears after "Xong"); defaults to the key.
     page_label: text of the "open page" button when page + query point at this very object.
     facts: deep-dive rows of the detail pane, {label, value, kind?} (kind 'datetime' = ISO time).
-    links: extra jumps, {label, page, query} (a page of the app) or {label, entity: {type, name, vc}} (an entity card).
+    links: extra jumps, {label, page, query} (a page of the app), {label, entity: {type, name, vc}} (an entity card)
+    or {label, href} (an external https link built by a checked helper, e.g. vcenter/links.object_url).
     events: the concrete events behind the item (alerts, failed jobs, sensors, parts), newest / worst first,
     {level, title, detail?, at?, page?, query?, entity?} — the drill-down to the root cause (max MAX_EVENTS)."""
     return {"key": key[:255], "source": source, "level": level, "title": title[:300], "detail": detail[:600], "page": page,
@@ -357,7 +358,8 @@ def alarm_items(db: Session) -> List[Dict[str, Any]]:
                                   f"{i.get('kind') or ''}{(' · ' + str(i['reading'])) if i.get('reading') is not None else ''}".strip(" ·"),
                                   page="infra-health", query=f"host={quote(a['entity'])}")
                            for i in (sensors.get((a["vcenterKey"], a["entity"])) or {}).get("issues", []) if a["entityType"] == "host"],
-                        links=_entity_link(a["entityType"], a["entity"], a["vcenterKey"])
+                        links=([{"label": "Mở trên vSphere Client", "href": a["vsphereUrl"]}] if a.get("vsphereUrl") else [])
+                        + _entity_link(a["entityType"], a["entity"], a["vcenterKey"])
                         + ([{"label": f"Datastore {a['entity']}", "page": "infra-ds", "query": f"q={quote(a['entity'])}"}]
                            if a["entityType"] == "datastore" else [])
                         + ([{"label": f"Sức khoẻ phần cứng {a['entity']}", "page": "infra-health", "query": f"host={quote(a['entity'])}"}]
