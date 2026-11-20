@@ -869,6 +869,48 @@ máy chủ Dell; máy HPE / hãng khác không có ở đây.
 - **DEMO**: mỗi host Dell của các vCenter demo có một PowerEdge cùng service tag, thêm 2 máy bare-metal, 1 máy hỏng bộ nguồn,
   1 máy cảnh báo quạt.
 
+### Phần cứng — inventory sâu, firmware, bảo hành, alert (ICO v2 G4b)
+
+Cùng phiên đăng nhập OME của vòng poll, ICO đọc thêm (vẫn chỉ GET):
+
+- **Inventory sâu** mỗi `OME_INVENTORY_HOURS` (12 giờ), không phải mỗi vòng:
+  - ổ đĩa: trạng thái, **dự báo hỏng** (SMART);
+  - RAID controller, bộ nguồn, thanh RAM;
+  - MAC của card mạng → khoá `mac` trên máy chủ trong sổ CI;
+  - hostname HĐH → khoá tên (liên kết yếu tới host khi không khớp serial);
+  - firmware đang cài.
+- **Firmware so baseline**: so với các baseline trong OME (Cập nhật → Baseline), mỗi linh kiện là *đúng baseline*,
+  *cũ hơn* hoặc *mới hơn*. OME chưa có baseline → *chưa cấu hình baseline*, không báo lỗi.
+- **Bảo hành Dell** mỗi `OME_WARRANTY_HOURS` (24 giờ). OME cần ra Internet (qua proxy) để lấy bảo hành từ Dell.
+- **Alert phần cứng** (nhóm System Health của máy chủ) mỗi vòng:
+  - đọc tăng dần từ alert mới nhất đã lưu, lần đầu lùi `OME_ALERT_BACKFILL_DAYS` (7) ngày; không lưu trùng;
+  - giữ `HW_ALERT_RETENTION_MONTHS` (13) tháng;
+  - ICO không acknowledge / xoá alert trong OME.
+- Một phần đọc lỗi (vd bảo hành khi OME không ra được Internet) được ghi chú lại và đọc lại vòng sau. Danh sách máy và
+  sức khoẻ vẫn cập nhật bình thường.
+
+**Hộp việc nguồn Phần cứng máy chủ** (Cài đặt → Cảnh báo có nguồn *Phần cứng máy chủ (Dell OME)*, mặc định gửi từ CẢNH BÁO):
+- máy có linh kiện hỏng → VƯỢT NGƯỠNG, linh kiện cảnh báo → CẢNH BÁO;
+- **ổ đĩa dự báo hỏng → VƯỢT NGƯỠNG** (mỗi ổ một mục);
+- máy có firmware lệch baseline → THEO DÕI (gộp một mục).
+
+Mỗi mục mở thẻ Máy chủ vật lý.
+
+**Đối chiếu bảo hành Dell ↔ Opex** (Tài sản → Thiết bị Data Center, khối *Bảo hành Dell ↔ Opex*; hộp việc nguồn *Thiết bị
+Data Center*). Ghép service tag của máy trong OME với danh sách SN của Opex nhóm bảo hành phần cứng. Mỗi dòng có mã đối soát ổn định:
+
+| Mã | Chênh lệch | Mức |
+|---|---|---|
+| `WNOP-…` | Có bảo hành Dell, không có Opex | THEO DÕI |
+| `WOPE-…` | Opex hết hạn trước Dell | THEO DÕI |
+| `WDLE-…` | Dell hết hạn nhưng Opex còn (bảo hành bên thứ ba? sai danh sách SN?) | THEO DÕI |
+| `WCRT-…` | Hết bảo hành, không Opex nào còn hiệu lực, đang chạy VM bật của hệ thống mức 1–2 | VƯỢT NGƯỠNG |
+
+Mã Opex chỉ hiện với người có quyền xem Chi phí. **Kế hoạch năm sau** có dòng *Bảo hành Dell* (Opex):
+- dòng gồm các máy còn chạy, bảo hành Dell hết trước cuối năm kế hoạch, chưa có Opex bảo hành phủ hết năm;
+- mức *Bắt buộc* khi có máy đã hết hạn hoặc đang chạy VM mức 1–2;
+- nhập giá dự toán; khi kế hoạch được duyệt, dòng này tạo Opex Dự kiến kèm danh sách service tag.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**

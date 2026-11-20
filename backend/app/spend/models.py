@@ -775,7 +775,7 @@ class RenovationCost(Base):
 
 # ---------------------------------------------------------------- Kế hoạch ngân sách năm sau (docs/design/spend-budget-plan.md)
 PLAN_STATUSES = ("draft", "submitted", "approved", "superseded")
-PLAN_LINE_SOURCES = ("renewal", "committed", "capex", "replace", "extend", "new")
+PLAN_LINE_SOURCES = ("renewal", "committed", "capex", "replace", "extend", "warranty", "new")
 PLAN_PRIORITIES = ("must", "should", "could")
 
 
@@ -813,8 +813,9 @@ class BudgetPlanLine(Base):
     amount_mode 'auto' follows base × (1 + uplift); 'manual' keeps the amount typed by the user."""
     __tablename__ = "budget_plan_lines"
     __table_args__ = (
-        # v2: "replace" added; the old ck_bpl_source is dropped by database._drop_retired_checks().
-        CheckConstraint(_in("source", PLAN_LINE_SOURCES), name="ck_bpl_source_v2"),
+        # v3: "warranty" added (Dell warranty renewal, G4b); older ck_bpl_source / _v2 are dropped by
+        # database._drop_retired_checks().
+        CheckConstraint(_in("source", PLAN_LINE_SOURCES), name="ck_bpl_source_v3"),
         CheckConstraint(_in("kind", ("opex", "capex")), name="ck_bpl_kind"),
         CheckConstraint(_in("priority", PLAN_PRIORITIES), name="ck_bpl_priority"),
         CheckConstraint("amount_mode IN ('auto', 'manual')", name="ck_bpl_amount_mode"),

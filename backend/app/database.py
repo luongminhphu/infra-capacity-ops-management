@@ -69,6 +69,8 @@ def ensure_schema() -> None:
         "quotation_lines": [("cost_group_id", "INTEGER REFERENCES renovation_cost_groups(id) ON DELETE SET NULL"),
                             ("vat_pct", "NUMERIC(5, 2)"), ("vat_amount", "NUMERIC(18, 2)"), ("sets", "NUMERIC(10, 3)")],
         "datastore_states": [("backing", "TEXT")],
+        "hw_source_state": [("inventory_at", "TIMESTAMP"), ("warranty_at", "TIMESTAMP"), ("alert_cursor", "TIMESTAMP"),
+                            ("baseline_configured", "BOOLEAN"), ("last_warning", "TEXT")],
         "review_items": [("action_date", "DATE"), ("new_vcpu", "INTEGER"), ("new_ram_gb", "INTEGER"),
                          ("transfer_to", "VARCHAR(255)"), ("resolved_at", "TIMESTAMP"), ("resolved_by", "VARCHAR(255)")],
         "users": [
@@ -161,7 +163,8 @@ def ensure_schema() -> None:
 
 # CHECK constraints replaced by a wider one under a new name (the new one is added by _ensure_checks):
 # dropping the old one never breaks a pod of the previous release, whose values the new one still allows.
-RETIRED_CHECKS = (("budget_plan_lines", "ck_bpl_source"), ("dc_assets", "ck_dc_asset_decision"))
+RETIRED_CHECKS = (("budget_plan_lines", "ck_bpl_source"), ("dc_assets", "ck_dc_asset_decision"),
+                  ("budget_plan_lines", "ck_bpl_source_v2"))
 
 
 def _drop_retired_checks() -> None:

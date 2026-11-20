@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from .. import data_access, metrics
 from ..config import get_settings
 from ..models import utcnow
-from ..shared.identity import nbu_client_key, norm_fqdn, norm_ip, norm_naa, norm_serial, short_name
+from ..shared.identity import nbu_client_key, norm_fqdn, norm_ip, norm_mac, norm_naa, norm_serial, short_name
 from . import registry
 from .registry import Identity
 
@@ -240,10 +240,17 @@ def _backup(db: Session, g: Graph, now: dt.datetime, vms: List[Dict[str, Any]], 
 def _hardware(db: Session, g: Graph, now: dt.datetime, days: int) -> None:
     """Dell OME servers (configured sources, synced within the retire window) → physical_server by service tag.
     A device matching no host is still a physical_server (bare-metal), named after its OME device name."""
-    from ..hardware.models import HwDeviceState
+    from ..hardware.models import HwDeviceInventory, HwDeviceState
     keys = [c.key for c in get_settings().hardware()]
     if not keys:
         return
+    inv = {(i.source_key, i.device_id): i for i in db.query(HwDeviceInventory).filter(HwDeviceInventory.source_key.in_(keys))}
+    hosts_by_name: Dict[str, List[Identity]] = defaultdict(list)
+    for ident, ks in g.keys.items():
+        if ident[0] == "hypervisor_host":
+            for kind, v in ks:
+                if kind in ("short_name", "fqdn"):
+                    hosts_by_name[f"{kind}:{v}"].append(ident)
     for d in db.query(HwDeviceState).filter(HwDeviceState.source_key.in_(keys),
                                             HwDeviceState.captured_at >= now - dt.timedelta(days=days)):
         ident = _physical(g, d.service_tag, "ome", "Dell Inc.", d.model)
@@ -258,6 +265,26 @@ def _hardware(db: Session, g: Graph, now: dt.datetime, days: int) -> None:
         if attrs.get("origins") == ["ome"] and d.name:
             g.cis[ident]["name"] = d.name[:255]              # bare-metal: the OME name says more than the tag
         g.key(ident, "idrac_ip", norm_ip(d.idrac_ip))
+        i = inv.get((d.source_key, d.device_id))
+        if i is None:
+            continue
+        try:
+            macs = json.loads(i.macs or "[]")
+        except ValueError:
+            macs = []
+        for m in macs:
+            g.key(ident, "mac", norm_mac(m))
+        if i.os_name:
+            attrs.setdefault("os", i.os_name)
+        if i.os_hostname:
+            attrs.setdefault("osHostname", i.os_hostname)
+            _name_keys(g, ident, i.os_hostname)
+            if "host" not in attrs.get("origins", []):
+                # no serial match: the OS host name is a weak hint of the hypervisor host on this server
+                n = norm_fqdn(i.os_hostname)
+                cands = hosts_by_name.get(f"fqdn:{n}") or hosts_by_name.get(f"short_name:{short_name(n)}") or []
+                if len(cands) == 1:
+                    g.link(cands[0], ident, "runs_on", "hardware", "weak", {"matchedBy": "hostname"})
 
 
 def _dc_assets(db: Session, g: Graph) -> None:

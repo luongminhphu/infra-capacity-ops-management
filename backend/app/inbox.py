@@ -26,7 +26,7 @@ LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
 SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
                  "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "asset": "Thiết bị Data Center", "license": "License", "spend": "Chi phí & hợp đồng",
-                 "system": "Hệ thống", "review": "Rà soát owner"}
+                 "system": "Hệ thống", "review": "Rà soát owner", "hardware": "Phần cứng máy chủ"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
 PUSH_LEVEL_PCT = 90.0          # decision 5: Discord alert at the 90 % level
@@ -287,7 +287,85 @@ def asset_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
         out.append(item("asset", level, _key("as", level, len(rows)), titles[level].format(n=vn_g(len(rows))),
                         f"{names}{more}. Đưa vào Kế hoạch năm sau → Thay thế thiết bị.", page="dc-assets",
                         query=f"level={level}", alert_key=_key("as", level)))
+    out.extend(warranty_items(db, today))
     return out
+
+
+WARRANTY_TITLES = {
+    "no_opex": "{n} máy chủ có bảo hành Dell nhưng chưa có Opex bảo hành",
+    "opex_before_dell": "{n} máy chủ có Opex bảo hành hết hạn trước bảo hành Dell",
+    "dell_expired_opex_active": "{n} máy chủ hết bảo hành Dell nhưng Opex bảo hành còn hiệu lực",
+    "expired_critical": "{n} máy chủ hết bảo hành đang chạy VM của hệ thống quan trọng (mức 1–2)",
+}
+WARRANTY_ACTIONS = {
+    "no_opex": "Bổ sung service tag vào Opex bảo hành, hoặc ghi nhận bảo hành đi kèm máy.",
+    "opex_before_dell": "Kiểm tra lại ngày Opex / có cần gia hạn khi Dell còn bảo hành.",
+    "dell_expired_opex_active": "Kiểm tra Opex có đúng máy (bảo hành bên thứ ba?) hay danh sách SN sai.",
+    "expired_critical": "Gia hạn bảo hành hoặc chuyển VM — dòng gia hạn có ở Kế hoạch năm sau → Bảo hành Dell.",
+}
+
+
+def warranty_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
+    """Dell warranty (OME) ↔ Opex reconciliation (hardware/warranty.py), one item per case with its codes."""
+    from .hardware import warranty
+    by_case: Dict[str, List[Dict[str, Any]]] = {}
+    for f in warranty.reconcile(db, today):
+        by_case.setdefault(f["case"], []).append(f)
+    out = []
+    for case, rows in by_case.items():
+        level = warranty.CASES[case][2]
+        refs = ", ".join(f"{r['code']} {r['serviceTag']}" for r in rows[:6]) + (f" và {len(rows) - 6} máy khác" if len(rows) > 6 else "")
+        out.append(item("asset", level, _key("aw", case, len(rows)), WARRANTY_TITLES[case].format(n=vn_g(len(rows))),
+                        f"Đối soát: {refs}. {WARRANTY_ACTIONS[case]}", page="dc-assets", query=f"warranty={case}",
+                        alert_key=_key("aw", case)))
+    return out
+
+
+def hardware_items(db: Session) -> List[Dict[str, Any]]:
+    """Dell OME (G4b): servers with a failed / degraded part, disks predicting failure (VƯỢT NGƯỠNG), firmware
+    behind the baseline (THEO DÕI, grouped)."""
+    from .hardware.models import HwComponentHealth, HwDeviceState, HwDiskState, HwFirmwareState, HwPartState
+    from .config import get_settings
+    keys = [c.key for c in get_settings().hardware()]
+    if not keys:
+        return []
+    devs = {(d.source_key, d.device_id): d for d in db.query(HwDeviceState).filter(HwDeviceState.source_key.in_(keys))}
+    if not devs:
+        return []
+
+    def link(d) -> Dict[str, str]:            # physical server card (CI registry) by service tag
+        return {"page": "entity", "query": f"type=server&name={quote(d.service_tag)}"} if d.service_tag else {"page": "set-sources"}
+    reasons: Dict[Tuple[str, int], List[str]] = {}
+    for h in db.query(HwComponentHealth).filter(HwComponentHealth.source_key.in_(keys), HwComponentHealth.status.in_(("bad", "crit"))):
+        reasons.setdefault((h.source_key, h.device_id), []).append(f"{h.subsystem}: {h.detail or h.status}")
+    for p in db.query(HwPartState).filter(HwPartState.source_key.in_(keys), HwPartState.status.in_(("bad", "crit"))):
+        reasons.setdefault((p.source_key, p.device_id), []).append(f"{p.name}{(' (' + p.model + ')') if p.model else ''} lỗi")
+    out = []
+    for k, d in devs.items():
+        level = d.status if d.status in ("bad", "crit") else ("bad" if k in reasons else None)
+        if level is None:
+            continue
+        out.append(item("hardware", level, _key("hw", d.source_key, d.device_id, level),
+                        f"Máy chủ {d.name} ({d.service_tag or d.device_id}): linh kiện {'hỏng' if level == 'crit' else 'cảnh báo'}",
+                        "; ".join(dict.fromkeys(reasons.get(k) or [f"Trạng thái OME {d.status_code or '—'}"]))[:500] + ".",
+                        alert_key=_key("hw", d.source_key, d.device_id), **link(d)))
+    for x in db.query(HwDiskState).filter(HwDiskState.source_key.in_(keys), HwDiskState.predictive_failure.is_(True)):
+        d = devs.get((x.source_key, x.device_id))
+        if d is None:
+            continue
+        out.append(item("hardware", "crit", _key("hwd", x.source_key, x.device_id, x.slot),
+                        f"Ổ đĩa dự báo hỏng — {d.name} ({d.service_tag or d.device_id})",
+                        f"{x.slot}{(' · ' + x.model) if x.model else ''}{(' · SN ' + x.serial) if x.serial else ''}. Thay ổ trước khi hỏng hẳn.",
+                        **link(d)))
+    behind = {(f.source_key, f.device_id) for f in db.query(HwFirmwareState.source_key, HwFirmwareState.device_id)
+              .filter(HwFirmwareState.source_key.in_(keys), HwFirmwareState.compliance.in_(("upgrade", "downgrade")))}
+    behind &= set(devs)
+    if behind:
+        names = sorted(devs[k].name for k in behind)
+        out.append(item("hardware", "warn", _key("hwf", len(behind)), f"{vn_g(len(behind))} máy chủ có firmware lệch baseline OME",
+                        ", ".join(names[:6]) + (f" và {len(names) - 6} máy khác" if len(names) > 6 else "") + ".",
+                        page="set-sources", alert_key="hwf"))
+    return out[:MAX_PER_SOURCE]
 
 
 def review_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
@@ -321,7 +399,7 @@ PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("datastore", datastore_items, False), ("snapshot", snapshot_items, False),
     ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False), ("asset", asset_items, True),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
-    ("review", review_items, True),
+    ("review", review_items, True), ("hardware", hardware_items, False),
 ]
 
 _cache: Dict[str, Any] = {"at": 0.0, "items": None, "errors": []}

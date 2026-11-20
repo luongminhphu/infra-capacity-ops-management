@@ -1,0 +1,12 @@
+{
+  "baselines": {"@odata.count": 1, "value": [{"Id": 7, "Name": "PowerEdge 2026-Q3", "CatalogId": 3, "LastRun": "2026-11-10 02:00:00.000"}]},
+  "reports": {"@odata.count": 1, "value": [
+    {"Id": 1201, "DeviceId": 10074, "ServiceTag": "7FHKZ53", "DeviceModel": "PowerEdge R750", "ComplianceStatus": "CRITICAL",
+     "ComponentComplianceReports": [
+       {"Id": 1, "Name": "BIOS", "CurrentVersion": "1.9.2", "Version": "1.12.1", "UpdateAction": "UPGRADE", "ComplianceStatus": "CRITICAL", "Criticality": "Recommended"},
+       {"Id": 2, "Name": "Integrated Dell Remote Access Controller", "CurrentVersion": "7.00.00.171", "Version": "7.00.00.171", "UpdateAction": "EQUAL", "ComplianceStatus": "OK"},
+       {"Id": 3, "Name": "PERC H755 Front", "CurrentVersion": "52.16.1-4405", "Version": "52.14.0-3901", "UpdateAction": "DOWNGRADE", "ComplianceStatus": "DOWNGRADE"},
+       {"Id": 4, "Name": "Broadcom Adv. Dual 25Gb Ethernet", "CurrentVersion": "22.31.6", "Version": "22.31.6", "UpdateAction": "EQUAL", "ComplianceStatus": "OK"}
+     ]}
+  ]}
+}

@@ -1,0 +1,13 @@
+{
+  "@odata.count": 3,
+  "value": [
+    {"Id": 501, "DeviceId": 10074, "DeviceModel": "PowerEdge R750", "DeviceIdentifier": "7FHKZ53", "DeviceType": 1000,
+     "CustomerNumber": 123456, "OrderNumber": 987654, "SystemShipDate": "2023-03-01 00:00:00.000",
+     "ServiceLevelCode": "ND", "ServiceLevelDescription": "Next Business Day Onsite", "ServiceLevelEntitlementType": "INITIAL",
+     "ServiceProvider": "UNY", "StartDate": "2023-03-01 00:00:00.000", "EndDate": "2024-03-01 23:59:59.000", "DaysRemaining": 0},
+    {"Id": 502, "DeviceId": 10074, "DeviceModel": "PowerEdge R750", "DeviceIdentifier": "7fhkz53", "DeviceType": 1000,
+     "ServiceLevelCode": "PM", "ServiceLevelDescription": "ProSupport Plus Mission Critical 4 Hour", "ServiceLevelEntitlementType": "EXTENDED",
+     "StartDate": "2024-03-02T00:00:00Z", "EndDate": "2028-03-01T23:59:59Z", "DaysRemaining": 467},
+    {"Id": 503, "DeviceIdentifier": null, "ServiceLevelDescription": "x", "EndDate": "2027-01-01 00:00:00.000"}
+  ]
+}
