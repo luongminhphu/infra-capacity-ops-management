@@ -69,6 +69,8 @@ def store(db: Session, vcenter_key: str, extras: Dict[str, Any], now: Optional[d
         "vcenter_key": vcenter_key, "alarm_key": str(a["key"])[:255], "entity_type": a.get("entityType") or "other",
         "entity": str(a.get("entity") or "")[:255], "cluster": a.get("cluster"), "alarm": str(a.get("alarm") or "")[:255],
         "status": a.get("status") or "yellow", "triggered_at": _parse(a.get("at")), "acknowledged": bool(a.get("acknowledged")),
+        "entity_moid": (a.get("entityMoid") or None) and str(a["entityMoid"])[:64], "vim_type": (a.get("vimType") or None) and str(a["vimType"])[:32],
+        "vc_uuid": (extras.get("vcenterUuid") or None) and str(extras["vcenterUuid"])[:64],
         "captured_at": now} for a in extras.get("alarms") or []])
     db.bulk_insert_mappings(HostHealthState, [{
         "vcenter_key": vcenter_key, "host": h["host"][:255], "cluster": h.get("cluster"), "overall_status": (h.get("overallStatus") or "gray")[:8],
@@ -211,7 +213,15 @@ ALARM_LEVEL = {"red": "crit", "yellow": "bad"}
 HEALTH_LEVEL = {"red": "crit", "yellow": "bad"}
 
 
-def alarms(db: Session, scope: Optional[Scope] = None) -> List[Dict[str, Any]]:
+def alarms(db: Session, scope: Optional[Scope] = None, ui: Optional[Dict[str, tuple]] = None) -> List[Dict[str, Any]]:
+    """ui: vCenter key → (host, port) for the vSphere Client link (default: the configured real vCenters)."""
+    from .vcenter import links
+    if ui is None:
+        from .config import get_settings
+        try:
+            ui = links.ui_hosts(get_settings())
+        except Exception:  # noqa: BLE001 — a settings problem must not hide the alarms
+            ui = {}
     out = []
     for r in db.query(VcAlarmState):
         if not _in_scope(scope, r.vcenter_key, [r.cluster] if r.cluster else [], r.entity if r.entity_type == "host" else None):
@@ -219,7 +229,8 @@ def alarms(db: Session, scope: Optional[Scope] = None) -> List[Dict[str, Any]]:
         level = ALARM_LEVEL.get(r.status, "warn")
         out.append({"vcenterKey": r.vcenter_key, "key": r.alarm_key, "entityType": r.entity_type, "entity": r.entity,
                     "cluster": r.cluster, "alarm": r.alarm, "status": r.status, "at": _iso(r.triggered_at),
-                    "acknowledged": r.acknowledged, "level": level, "levelText": LEVEL_TEXT[level]})
+                    "acknowledged": r.acknowledged, "level": level, "levelText": LEVEL_TEXT[level],
+                    "vsphereUrl": links.object_url(*(ui.get(r.vcenter_key) or (None, None)), r.vim_type, r.entity_moid, r.vc_uuid)})
     out.sort(key=lambda d: (LEVEL_RANK[d["level"]], d["acknowledged"], d["at"] or ""), reverse=False)
     return out
 

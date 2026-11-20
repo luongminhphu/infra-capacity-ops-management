@@ -186,7 +186,8 @@ function bindNavigation() {
   });
   window.addEventListener('hashchange', () => {
     const id = navIdFromHash();
-    if (id && (id !== activeNavId || id === 'entity' || id === 'hardware')) navigateTo(id);   // entity / hardware: same page, other object
+    // entity / hardware / any ?query deep link: same page, other object
+    if (id && (id !== activeNavId || id === 'entity' || id === 'hardware' || location.hash.includes('?'))) navigateTo(id);
     else if (!id) syncNavState();   // unknown or switched-off page: restore the current one
   });
   const open = $('#btnSidebarOpen'), close = $('#btnSidebarClose'), scrim = $('#sidebarScrim');
@@ -573,7 +574,7 @@ function renderSourceMeta(runMeta) {
     : 'Dữ liệu: chưa rõ giờ cập nhật';
   const detail = runMeta.map(r => `${name(r)} (${when(r) ? when(r).toLocaleString('vi-VN') : 'chưa rõ giờ'})`).join(', ');
   banner.classList.add('show', 'info');
-  banner.classList.remove('error', 'warn');
+  banner.classList.remove('error', 'warn', 'ok');
   banner.innerHTML = `<details class="src-meta"><summary>${esc(summary)}</summary><span>${esc(detail)}</span></details>`;
 }
 

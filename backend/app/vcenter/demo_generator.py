@@ -277,4 +277,10 @@ def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows:
         health.append({"host": h["host"], "cluster": h["cluster"],
                        "overallStatus": "red" if any(i["state"] == "red" for i in issues) else "yellow" if issues else "green",
                        "connection": "connected", "maintenance": False, "issues": issues})
-    return {"datastores": datastores, "snapshots": snapshots, "alarms": alarms, "health": health}
+    # same fields as a real read (entity moId + vim type + vCenter instance UUID → vSphere Client link)
+    vim_type = {"host": "HostSystem", "vm": "VirtualMachine", "datastore": "Datastore", "cluster": "ClusterComputeResource"}
+    for i, a in enumerate(alarms):
+        a["entityMoid"] = f"{a['entityType']}-{1001 + i}"
+        a["vimType"] = vim_type.get(a["entityType"])
+    return {"datastores": datastores, "snapshots": snapshots, "alarms": alarms, "health": health,
+            "vcenterUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cfg.key}/vcenter"))}

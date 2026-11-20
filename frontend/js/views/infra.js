@@ -9,6 +9,9 @@ const INFRA_LEVEL = { crit: 'VƯỢT NGƯỠNG', bad: 'CẢNH BÁO', warn: 'THEO
 const INFRA_ENTITY = { host: 'Host', vm: 'VM', datastore: 'Datastore', cluster: 'Cluster', other: 'Khác' };
 let infraChart = null;
 
+/* "vc|key": the key may itself hold "|", the vCenter key does not. */
+function infraSplit(v) { const i = String(v).indexOf('|'); return i < 0 ? ['', v] : [v.slice(0, i), v.slice(i + 1)]; }
+
 function infraVc() {
   return (typeof currentVcenterFilter === 'undefined' || !currentVcenterFilter || currentVcenterFilter === 'import') ? 'all' : currentVcenterFilter;
 }
@@ -33,9 +36,86 @@ async function renderInfraView() {
   const mount = $('#infraMount');
   if (!mount) return;
   infraBind();
+  const target = infraTakeQuery();
   if (!infraState.data[infraState.sub]) mount.innerHTML = uiLoading();
   await infraLoad();
   infraRender();
+  if (target) infraOpenTarget(target);
+}
+
+/* Deep links from the inbox / alerts (once per hash): ?alarm=vc|key · ?ds=vc|key · ?vm= · ?host= · ?array= · ?q= (search). */
+function infraTakeQuery() {
+  const raw = location.hash.split('?')[1] || '';
+  if (!raw || infraState.lastQuery === location.hash) return null;
+  infraState.lastQuery = location.hash;
+  const q = new URLSearchParams(raw);
+  const t = { alarm: q.get('alarm'), ds: q.get('ds'), vm: q.get('vm'), host: q.get('host'), array: q.get('array') };
+  if (q.get('q')) infraState.q = q.get('q');
+  if (t.vm) infraState.q = t.vm;
+  if (t.host) infraState.q = t.host;
+  if (t.alarm || t.ds || t.array) infraState.q = '';
+  infraState.onlyIssues = false;
+  return t;
+}
+
+function infraOpenTarget(t) {
+  const split = infraSplit;
+  if (t.alarm) { const [vc, key] = split(t.alarm); infraOpenAlarm(vc, key); return; }
+  if (t.ds) { const [vc, key] = split(t.ds); infraOpenDatastore(vc, key); return; }
+  if (t.array) {
+    const card = [...document.querySelectorAll('[data-infra-array]')].find(el => el.dataset.infraArray === t.array);
+    if (!card) return;
+    card.classList.add('is-target');
+    const det = card.querySelector('details'); if (det) det.open = true;
+    card.scrollIntoView({ block: 'start' });
+  }
+}
+
+/* Alarm deep dive: the alarm, every active alarm on the same object, its host sensors, jumps to the object. */
+async function infraOpenAlarm(vc, key) {
+  const all = infraState.data.alarms || [];
+  const a = all.find(x => x.vcenterKey === vc && x.key === key);
+  if (!a) { uiAlert('Alarm này không còn kích hoạt trên vCenter (đã hết sau lần đồng bộ gần nhất).'); return; }
+  infraHighlight(`[data-infra-alarm="${CSS.escape(vc + '|' + key)}"]`);
+  const same = all.filter(x => x !== a && x.vcenterKey === a.vcenterKey && x.entityType === a.entityType && x.entity === a.entity);
+  let sensors = [];
+  if (a.entityType === 'host') {
+    try {
+      if (!infraState.data.hosts) infraState.data.hosts = await apiRequest(`/infra/health?vcenter=${encodeURIComponent(infraVc())}`);
+      const h = infraState.data.hosts.find(x => x.vcenterKey === a.vcenterKey && x.host === a.entity);
+      sensors = h ? h.issues || [] : [];
+    } catch (err) { sensors = []; }
+  }
+  const card = (a.entityType === 'host' || a.entityType === 'vm') ? uiEntityLink(a.entityType, a.entity, a.vcenterKey) : esc(a.entity);
+  const body = `
+    <dl class="sp-dl">
+      <div class="sp-dl-item"><dt>Trạng thái</dt><dd>${infraPill(a)} <span class="muted-sub">${a.status === 'red' ? 'Đỏ' : 'Vàng'} trên vCenter</span></dd></div>
+      <div class="sp-dl-item"><dt>Kích hoạt lúc</dt><dd>${uiDateTime(a.at)}</dd></div>
+      <div class="sp-dl-item"><dt>Đối tượng</dt><dd>${uiTag(INFRA_ENTITY[a.entityType] || a.entityType)} ${card}</dd></div>
+      <div class="sp-dl-item"><dt>Cluster · vCenter</dt><dd>${esc(a.cluster || '—')} · ${esc(a.vcenterKey)}</dd></div>
+      <div class="sp-dl-item"><dt>Xác nhận</dt><dd>${a.acknowledged ? 'Đã xác nhận trên vCenter' : 'Chưa xác nhận'}</dd></div>
+      <div class="sp-dl-item"><dt>Mã alarm</dt><dd class="mono">${esc(a.key)}</dd></div>
+    </dl>
+    <h3 class="sp-h">Alarm khác trên cùng đối tượng (${fmtInt(same.length)})</h3>
+    ${same.length ? `<ul class="infra-reasons">${same.map(x => `<li>${infraPill(x)} <a href="#/health/alarms?alarm=${esc(encodeURIComponent(x.vcenterKey + '|' + x.key))}">${esc(x.alarm)}</a> <span class="muted-sub">${uiDateTime(x.at, 'short')}</span></li>`).join('')}</ul>`
+      : uiNote('Không có alarm nào khác đang kích hoạt trên đối tượng này.')}
+    ${a.entityType === 'host' ? `<h3 class="sp-h">Cảm biến phần cứng bất thường (${fmtInt(sensors.length)})</h3>
+      ${sensors.length ? `<ul class="infra-reasons">${sensors.map(i => `<li>${uiPill(i.state === 'red' ? 'crit' : 'bad', i.state === 'red' ? 'VƯỢT NGƯỠNG' : 'CẢNH BÁO')} ${esc(i.name)} <span class="muted-sub">${esc(i.kind || '')}${i.reading !== null && i.reading !== undefined ? ' · ' + esc(String(i.reading)) : ''}</span></li>`).join('')}</ul>`
+        : uiNote('Không có cảm biến nào báo vàng / đỏ.')}` : ''}
+    <p class="muted-sub">ICO chỉ đọc vCenter: xác nhận / xoá alarm làm trên vSphere Client${a.vsphereUrl ? ' (nút bên dưới mở đúng đối tượng, cần đăng nhập vCenter)' : ''}.</p>`;
+  const jumps = [
+    typeof a.vsphereUrl === 'string' && /^https:\/\//.test(a.vsphereUrl)
+      ? `<a class="btn btn-secondary btn-sm" href="${esc(a.vsphereUrl)}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i>Mở trên vSphere Client<span class="sr-only"> (mở tab mới)</span></a>` : '',
+    a.entityType === 'datastore' ? `<a class="btn btn-secondary btn-sm" href="#/health?q=${esc(encodeURIComponent(a.entity))}" data-sp-close>Datastore ${esc(a.entity)}</a>` : '',
+    a.entityType === 'host' ? `<a class="btn btn-secondary btn-sm" href="#/health/hosts?host=${esc(encodeURIComponent(a.entity))}" data-sp-close>Sức khoẻ host</a>` : '',
+    a.entityType === 'host' || a.entityType === 'vm' ? `<a class="btn btn-secondary btn-sm" href="${esc(uiEntityHref(a.entityType, a.entity, a.vcenterKey))}" data-sp-close>Thẻ ${a.entityType === 'host' ? 'host' : 'VM'}</a>` : ''].join('');
+  uiPanelDialog(`Alarm ${esc(a.alarm)}`, body, `${jumps}<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>`);
+}
+
+function infraHighlight(sel) {
+  document.querySelectorAll('#infraMount .is-target').forEach(el => el.classList.remove('is-target'));
+  const el = $(`#infraMount ${sel}`);
+  if (el) { el.classList.add('is-target'); el.scrollIntoView({ block: 'nearest' }); }
 }
 
 function infraKpis() {
@@ -115,13 +195,13 @@ function infraAlarms(rows) {
   return `<div class="table-scroll" role="region" tabindex="0" aria-label="Alarm vCenter"><table class="data-table infra-table">
     <caption class="sr-only">Alarm vCenter đang kích hoạt</caption>
     <thead><tr><th>Trạng thái</th><th>Alarm</th><th>Đối tượng</th><th>Cluster</th><th>Kích hoạt lúc</th><th>Xác nhận</th></tr></thead>
-    <tbody>${list.map(a => `<tr>
+    <tbody>${list.map(a => `<tr class="infra-row" tabindex="0" data-infra-alarm="${esc(a.vcenterKey)}|${esc(a.key)}" title="Xem chi tiết alarm">
       <td>${infraPill(a)}</td><td><b>${esc(a.alarm)}</b><span class="muted-sub">${esc(a.vcenterKey)}</span></td>
       <td>${uiTag(INFRA_ENTITY[a.entityType] || a.entityType)} ${a.entityType === 'host' || a.entityType === 'vm' ? (typeof uiEntityLink === 'function' ? uiEntityLink(a.entityType, a.entity) : esc(a.entity)) : esc(a.entity)}</td>
       <td>${esc(a.cluster || '—')}</td><td>${uiDateTime(a.at, 'short')}</td>
       <td>${a.acknowledged ? uiTag('Đã xác nhận') : '<span class="muted-sub">Chưa</span>'}</td></tr>`).join('')
       || uiEmptyRow(6, 'Không có alarm khớp bộ lọc.')}</tbody></table></div>
-    <p class="muted-sub">Đỏ = VƯỢT NGƯỠNG, vàng = CẢNH BÁO. Alarm đã xác nhận trên vCenter không vào hộp việc Trang chủ.</p>`;
+    <p class="muted-sub">Đỏ = VƯỢT NGƯỠNG, vàng = CẢNH BÁO. Alarm đã xác nhận trên vCenter không vào hộp việc Trang chủ. Bấm một dòng để xem alarm cùng đối tượng và cảm biến.</p>`;
 }
 
 function infraHosts(rows) {
@@ -143,7 +223,7 @@ const infraMs = (v) => (v === null || v === undefined) ? '—' : `${fmtNum(v, 2)
 function infraStorage(data) {
   const arrays = (data && data.arrays) || [], vols = (data && data.volumes) || [];
   if (!arrays.length) return uiEmpty('Chưa có mảng lưu trữ — thêm Pure FlashArray / NetApp ONTAP ở Cài đặt → Nguồn dữ liệu.');
-  const cards = arrays.filter(a => !infraState.onlyIssues || a.level !== 'ok').map(a => `<article class="infra-array">
+  const cards = arrays.filter(a => !infraState.onlyIssues || a.level !== 'ok').map(a => `<article class="infra-array" data-infra-array="${esc(a.sourceKey)}">
       <header><div><b>${esc(a.name)}</b><span class="muted-sub">${esc(a.model || (a.vendor === 'pure' ? 'Pure FlashArray' : 'NetApp ONTAP'))} · ${esc(a.version || '—')}</span></div>${infraPill(a)}</header>
       <div class="infra-use">${uiBullet(a.usedPct, a.name)}<b class="num">${a.usedPct === null ? '—' : fmtNum(a.usedPct, 1) + '%'}</b></div>
       <dl class="sp-dl">
@@ -208,7 +288,7 @@ function infraBind() {
   mount.addEventListener('change', (e) => {
     if (e.target.matches('[data-infra-issues]')) { infraState.onlyIssues = e.target.checked; infraRender(); }
   });
-  const open = (row) => { const [vc, key] = row.dataset.infraDs.split('|'); infraOpenDatastore(vc, key); };
+  const open = (row) => infraOpenDatastore(...infraSplit(row.dataset.infraDs));
   mount.addEventListener('click', async (e) => {
     if (e.target.closest('[data-infra-reload], [data-infra-retry]')) { await infraLoad(true); infraRender(); return; }
     const sync = e.target.closest('[data-infra-storage-sync]');
@@ -224,10 +304,14 @@ function infraBind() {
     }
     const row = e.target.closest('[data-infra-ds]');
     if (row && !e.target.closest('a, button')) open(row);
+    const al = e.target.closest('[data-infra-alarm]');
+    if (al && !e.target.closest('a, button')) infraOpenAlarm(...infraSplit(al.dataset.infraAlarm));
   });
   mount.addEventListener('keydown', (e) => {
     const row = e.target.closest('[data-infra-ds]');
     if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(row); }
+    const al = e.target.closest('[data-infra-alarm]');
+    if (al && e.target === al && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); infraOpenAlarm(...infraSplit(al.dataset.infraAlarm)); }
   });
 }
 

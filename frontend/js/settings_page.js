@@ -225,7 +225,7 @@ async function handleSyncNow() {
     await refreshVcenterList();
     await loadLiveData();
     if (res && res.failed) showValidationBanner([res.message], []);
-    else showValidationBanner([], [res ? res.message : `Đã đồng bộ vCenter ${currentVcenterFilter} lúc ${new Date().toLocaleString('vi-VN')}.`]);
+    else showSuccessBanner(res ? res.message : `Đã đồng bộ vCenter ${currentVcenterFilter} lúc ${new Date().toLocaleString('vi-VN')}.`);
     if (typeof bkInvalidate === 'function') bkInvalidate();
     if (typeof renderHardwareView === 'function' && /^#\/hardware/.test(location.hash)) renderHardwareView();
   } catch (err) {

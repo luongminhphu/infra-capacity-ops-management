@@ -150,6 +150,40 @@ def test_inbox_items_and_default_rules(db):
     assert rules["capacity"].wants({"source": "capacity", "level": "warn", "push": True})  # 90 % decision kept
 
 
+def test_inbox_drill_down_alarm_health_snapshot(db):
+    """Each infra item carries a deep link to its object, key facts and the concrete events behind it."""
+    alarms = _extras()["alarms"] + [
+        {"key": "a3", "entityType": "host", "entity": "esx1", "cluster": "PROD", "alarm": "Host hardware power status",
+         "status": "red", "at": ISO(NOW - dt.timedelta(hours=1)), "acknowledged": False},
+        {"key": "a4", "entityType": "host", "entity": "esx1", "cluster": "PROD", "alarm": "Host connection failure",
+         "status": "yellow", "at": ISO(NOW - dt.timedelta(minutes=50)), "acknowledged": False}]
+    infra.store(db, "vc1", _extras(alarms=alarms), NOW)
+    db.commit()
+    items = {(i["source"], i["title"]): i for i in inbox._compute(db, NOW.date())[0]}
+    ds_alarm = items[("alarm", "Alarm Datastore usage on disk — DS-PROD-01")]
+    assert ds_alarm["page"] == "infra-alarm" and ds_alarm["query"] == "alarm=vc1%7Ca1" and ds_alarm["pageLabel"] == "Xem alarm này"
+    assert {f["label"]: f["value"] for f in ds_alarm["facts"]} == {
+        "Alarm": "Datastore usage on disk", "Trạng thái trên vCenter": "Đỏ", "Đối tượng": "Datastore DS-PROD-01",
+        "Cluster": "PROD", "vCenter": "vc1", "Kích hoạt lúc": ISO(NOW - dt.timedelta(hours=3))}
+    assert [l["label"] for l in ds_alarm["links"]] == ["Datastore DS-PROD-01"]
+    # host alarm: both alarms of esx1 + its failed power sensor, card + health page links
+    host_alarm = items[("alarm", "Alarm Host hardware power status — esx1")]
+    assert [e["title"] for e in host_alarm["events"]] == [
+        "Alarm Host hardware power status", "Alarm Host connection failure", "Cảm biến Power Supply 2: Failure"]
+    assert [e["level"] for e in host_alarm["events"]] == ["crit", "bad", "crit"]
+    assert host_alarm["events"][1]["query"] == "alarm=vc1%7Ca4"
+    assert host_alarm["links"][0] == {"label": "Thẻ host esx1", "entity": {"type": "host", "name": "esx1", "vc": "vc1"}}
+    assert host_alarm["links"][1]["page"] == "infra-health" and host_alarm["links"][1]["query"] == "host=esx1"
+    health = items[("health", "Host esx1: phần cứng vượt ngưỡng")]
+    assert health["query"] == "host=esx1" and [e["title"] for e in health["events"]] == ["Power Supply 2: Failure"]
+    assert {f["label"]: f["value"] for f in health["facts"]}["Trạng thái tổng"] == "red"
+    snap = next(i for (src, _), i in items.items() if src == "snapshot")
+    assert snap["query"] == "vm=app-01" and [e["title"] for e in snap["events"]] == ["Snapshot truoc-va"]
+    assert snap["events"][0]["at"] == ISO(NOW - dt.timedelta(days=8))
+    ds = next(i for (src, _), i in items.items() if src == "datastore")
+    assert ds["query"] == "ds=vc1%7Cdatastore-1" and [e["title"] for e in ds["events"]][0] == "Đã dùng 90,0% (≥ 90%)"
+
+
 def _channel(db, name):
     ch = SpendNotifyChannel(kind="discord", name=name, enabled=True, ops_alerts=True, created_by="t",
                             webhook_enc=secrets_box.encrypt("https://discord.com/api/webhooks/123456789012345678/abcDEF_-1"))
@@ -263,7 +297,8 @@ def test_build_extras_from_vcenter_objects(monkeypatch):
     h = out["health"][0]
     assert h["overallStatus"] == "red" and [i["name"] for i in h["issues"]] == ["PSU 2", "DIMM A1"]
     assert out["alarms"] == [{"key": "alarm-7.host-1", "entityType": "host", "entity": "esx1", "cluster": "PROD",
-                              "alarm": "Host hardware power status", "status": "red", "at": "2026-11-10T08:00:00Z", "acknowledged": False}]
+                              "alarm": "Host hardware power status", "status": "red", "at": "2026-11-10T08:00:00Z", "acknowledged": False,
+                              "entityMoid": "host-1", "vimType": "HostSystem"}]
 
 
 def test_demo_sync_fills_states(db):
@@ -279,3 +314,47 @@ def test_demo_sync_fills_states(db):
         assert s.query(VcAlarmState).filter_by(vcenter_key="vcdemo").count() >= 3
         assert any(h["level"] == "crit" for h in infra.host_health(s))
         assert s.query(MetricPoint).filter_by(kind="datastore").count() == 3 * len(rows)
+
+
+# ---------------------------------------------------------------- vSphere Client deep link
+def test_vsphere_object_url_checks_every_part():
+    from app.vcenter import links
+    uuid = "6B9A1F2C-3D4E-4F50-8A6B-7C8D9E0F1A2B"
+    assert links.object_url("vc01.hsc.local", 443, "HostSystem", "host-1012", uuid) == (
+        "https://vc01.hsc.local/ui/#?extensionId=vsphere.core.inventory.serverObjectViewsExtension"
+        "&objectId=urn:vmomi:HostSystem:host-1012:6b9a1f2c-3d4e-4f50-8a6b-7c8d9e0f1a2b"
+        "&navigator=vsphere.core.viTree.hostsAndClustersView")
+    assert links.object_url("10.0.0.5", 8443, "Datastore", "datastore-7", uuid).startswith("https://10.0.0.5:8443/ui/#?")
+    assert "vmsAndTemplatesView" in links.object_url("vc01", None, "VirtualMachine", "vm-45", uuid)
+    bad = [("evil.com/x", "HostSystem", "host-1", uuid), ("vc01", "Bogus", "host-1", uuid),
+           ("vc01", "HostSystem", "host-1&x=<script>", uuid), ("vc01", "HostSystem", "host-1", "not-a-uuid"),
+           ("vc01", "HostSystem", None, uuid), ("javascript:alert(1)", "HostSystem", "host-1", uuid)]
+    assert all(links.object_url(h, 443, t, m, u) is None for h, t, m, u in bad)
+    assert links.object_url("vc01", 70000, "HostSystem", "host-1", uuid) is None
+
+
+def test_alarm_vsphere_link_stored_and_in_inbox(db, monkeypatch):
+    uuid = "6b9a1f2c-3d4e-4f50-8a6b-7c8d9e0f1a2b"
+    ex = _extras()
+    ex["alarms"][0].update(entityMoid="datastore-1", vimType="Datastore")
+    ex["vcenterUuid"] = uuid
+    infra.store(db, "vc1", ex, NOW)
+    db.commit()
+    rows = {a["key"]: a for a in infra.alarms(db, ui={"vc1": ("vc01.hsc.local", 443)})}
+    assert rows["a1"]["vsphereUrl"].endswith("objectId=urn:vmomi:Datastore:datastore-1:" + uuid + "&navigator=vsphere.core.viTree.storageView")
+    assert rows["a2"]["vsphereUrl"] is None                         # no moId read for this one
+    assert infra.alarms(db, ui={})[0]["vsphereUrl"] is None         # demo / unknown vCenter: no link
+    real = infra.alarms
+    monkeypatch.setattr(infra, "alarms", lambda db, scope=None, ui=None: real(db, scope, {"vc1": ("vc01.hsc.local", 443)}))
+    item = next(i for i in inbox.alarm_items(db) if i["title"].startswith("Alarm Datastore usage"))
+    assert item["links"][0] == {"label": "Mở trên vSphere Client", "href": rows["a1"]["vsphereUrl"]}
+
+
+def test_demo_extras_carry_moid_and_vcenter_uuid():
+    from app.config import VCenterConfig
+    from app.vcenter import demo_generator
+    cfg = VCenterConfig("vcd", "VC demo", "demo", 443, "u", "p", False, demo=True)
+    hosts, vms = demo_generator.collect_inventory(cfg)
+    ex = demo_generator.collect_extras(cfg, hosts, vms)
+    assert ex["vcenterUuid"] and all(a["entityMoid"] and a["vimType"] for a in ex["alarms"])
+    assert {a["vimType"] for a in ex["alarms"]} == {"Datastore", "HostSystem", "VirtualMachine"}

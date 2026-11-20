@@ -112,5 +112,8 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--brand);width:16px;
 .validation-banner.show{display:block;}
 .validation-banner.error{background:var(--status-crit-bg);border-color:var(--status-crit-border);color:var(--status-crit);}
 .validation-banner.warn{background:var(--bg-surface);border-color:var(--border);color:var(--text-secondary);}
+.validation-banner.ok{background:var(--bg-surface);border-color:var(--border);color:var(--text-secondary);}
+.validation-banner .vb-ok{display:inline-flex;align-items:flex-start;gap:var(--space-2);}
+.validation-banner .vb-ok::before{content:"";width:13px;height:13px;flex:0 0 auto;margin-top:2px;background:var(--status-ok);-webkit-mask:var(--g-ok) center/contain no-repeat;mask:var(--g-ok) center/contain no-repeat;}
 .validation-banner ul{margin:var(--space-1) 0 0 18px;}
 

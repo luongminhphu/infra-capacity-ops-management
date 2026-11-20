@@ -744,6 +744,9 @@ class VcAlarmState(Base):
     status = Column(String(8), nullable=False)
     triggered_at = Column(DateTime)
     acknowledged = Column(Boolean, nullable=False, default=False)
+    entity_moid = Column(String(64))          # managed object id (host-123) — vSphere Client deep link
+    vim_type = Column(String(32))             # HostSystem | VirtualMachine | Datastore | ClusterComputeResource …
+    vc_uuid = Column(String(64))              # vCenter about.instanceUuid
     captured_at = Column(DateTime, nullable=False, default=utcnow)
 
 
