@@ -610,3 +610,32 @@ const uiSeriesStylePlugin = {
   },
 };
 if (typeof Chart !== 'undefined') Chart.register(uiChartTablePlugin, uiSeriesStylePlugin);
+
+/* uiMultiSelect: filter with several values (details + checkbox list). options [{value, label, count}], selected = array.
+   The summary shows "Tất cả" / the chosen labels / first + "+n" (chips never clipped — MASTER §6, ui-ux-pro-max
+   "Chip Collection Reflow"). Change events bubble from the checkboxes; read the values with uiMultiValues(id). */
+function uiMultiSelect(id, label, options, selected = [], open = false) {
+  const sel = new Set(selected.map(String));
+  const chosen = options.filter(o => sel.has(String(o.value)));
+  const text = !chosen.length ? 'Tất cả' : chosen.length <= 2 ? chosen.map(o => o.label).join(', ') : `${chosen[0].label} +${chosen.length - 1}`;
+  const items = options.map((o, i) => `<li><label class="ms-opt"><input type="checkbox" data-ms-opt value="${esc(o.value)}"${sel.has(String(o.value)) ? ' checked' : ''}>
+      <span class="ms-opt-label">${esc(o.label)}</span>${o.count !== undefined ? `<span class="ms-count">${esc(uiNumber(o.count))}</span>` : ''}</label></li>`).join('');
+  return `<details class="ms${chosen.length ? ' has-value' : ''}" id="${esc(id)}" data-ms${open ? ' open' : ''}>
+    <summary class="ms-sum"><span class="ms-label">${esc(label)}:</span> <span class="ms-val">${esc(text)}</span></summary>
+    <div class="ms-pop" role="group" aria-label="${esc(label)}">
+      ${options.length > 8 ? `<input type="search" class="ms-find" data-ms-find placeholder="Tìm ${esc(label.toLowerCase())}…" aria-label="Tìm trong danh sách ${esc(label)}">` : ''}
+      <ul class="ms-list">${items || '<li class="muted-sub">Không có lựa chọn.</li>'}</ul>
+      ${chosen.length ? '<button class="btn btn-ghost btn-sm" type="button" data-ms-clear>Bỏ chọn</button>' : ''}
+    </div></details>`;
+}
+function uiMultiValues(id) {
+  return $$(`#${id} [data-ms-opt]`).filter(x => x.checked).map(x => x.value);
+}
+document.addEventListener('input', (e) => {                 // in-menu search: hide options that do not match
+  if (!e.target.matches || !e.target.matches('[data-ms-find]')) return;
+  const q = e.target.value.trim().toLowerCase();
+  e.target.closest('.ms').querySelectorAll('.ms-list li').forEach(li => { li.hidden = q && !li.textContent.toLowerCase().includes(q); });
+});
+document.addEventListener('click', (e) => {                 // one menu open at a time; click outside closes it
+  document.querySelectorAll('details.ms[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});

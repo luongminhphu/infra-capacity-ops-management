@@ -205,3 +205,70 @@ def test_vm_card_shows_system_and_owner(app_, admin, vms, monkeypatch):  # noqa:
     entities._cache.clear()
     assert _login(app_, "viewer1").get("/api/entities/vm?name=own-app-01&vcenter=vc-own").json()["canAssignSystem"] is False
     entities._cache.clear()
+
+
+# ---------------------------------------------------------------- support (project team) + backup name
+def test_support_and_backup_fields(app_, admin, vms):  # noqa: F811
+    r = _sys(admin, deputyEmail="Backup.CB@corp.example", deputyName="Lê C",
+             supportEmails="Dev.A@corp.example; dev.b@corp.example dev.a@corp.example", supportName="Nhóm dự án CB",
+             supportContact="Teams: #cb-support · 0901 234 567")
+    assert r.status_code == 200, r.text
+    s = r.json()
+    assert s["supportEmails"] == ["dev.a@corp.example", "dev.b@corp.example"]           # lower case, de-duplicated, order kept
+    assert (s["deputyEmail"], s["deputyName"], s["supportName"]) == ("backup.cb@corp.example", "Lê C", "Nhóm dự án CB")
+    assert s["supportContact"] == "Teams: #cb-support · 0901 234 567"
+    too_many = ",".join(f"d{i}@corp.example" for i in range(6))
+    assert admin.put(f"/api/systems/{s['id']}", json={"supportEmails": too_many}).json()["detail"] == "Email support: tối đa 5 email."
+    assert "không đúng định dạng" in admin.put(f"/api/systems/{s['id']}", json={"supportEmails": "x@"}).json()["detail"]
+    r = admin.put(f"/api/systems/{s['id']}", json={"supportEmails": ["ops@corp.example"]})
+    assert r.json()["supportEmails"] == ["ops@corp.example"] and r.json()["deputyName"] == "Lê C"   # partial update keeps the rest
+    found = admin.get("/api/systems?owner=ops@corp").json()["items"]
+    assert [x["id"] for x in found] == [s["id"]]                                          # owner filter also finds support
+    assert admin.put(f"/api/systems/{s['id']}", json={"supportEmails": ""}).json()["supportEmails"] == []
+    # clone = a new system with the same metadata (the UI posts the copied fields under a new name)
+    c = _sys(admin, name="Core Banking DR", deputyEmail="backup.cb@corp.example", supportEmails="ops@corp.example").json()
+    assert c["code"] != s["code"] and c["supportEmails"] == ["ops@corp.example"] and c["vmCount"] == 0
+
+
+def test_excel_round_trip_keeps_support(app_, admin, vms):  # noqa: F811
+    _sys(admin, deputyEmail="backup.cb@corp.example", deputyName="Lê C", supportEmails="dev.a@corp.example,dev.b@corp.example",
+         supportName="Nhóm CB", supportContact="Teams #cb")
+    x = admin.get("/api/systems/export.xlsx")
+    ws = load_workbook(io.BytesIO(x.content))["Hệ thống"]
+    rows = [[c.value for c in r] for r in ws.iter_rows() if r[0].value]
+    hdr = next(r for r in rows if r[0] == "Mã")
+    data = next(r for r in rows if str(r[0]).startswith("SYS-"))
+    rec = dict(zip(hdr, data))
+    assert rec["Backup (email)"] == "backup.cb@corp.example" and rec["Tên backup"] == "Lê C"
+    assert rec["Support (email)"] == "dev.a@corp.example, dev.b@corp.example" and rec["Tên support"] == "Nhóm CB"
+    assert rec["Liên hệ support"] == "Teams #cb"
+
+
+# ---------------------------------------------------------------- "VM chưa có owner": filters with several values, select all
+def test_unowned_filters_multi_values_and_select_all(app_, admin, vms):  # noqa: F811
+    s = SessionLocal()
+    extra = [("lot-core-01", "vc-own", "PRD", True, "/DC/LOT"), ("lot-core-02", "vc-b", "UAT", False, "/DC/LOT/uat"),
+             ("lot-gw-01", "vc-b", "PRD", True, "/DC/GW")]
+    for name, vc, cl, on, folder in extra:
+        s.add(Ci(type="vm", name=name, source_kind="vcenter", source_key=f"u-{name}", status="active",
+                 attrs=json.dumps({"vcenterKey": vc, "cluster": cl, "powerOn": on, "folderPath": folder})))
+    s.commit()
+    s.close()
+    get = lambda **q: admin.get("/api/systems/coverage", params=q).json()  # noqa: E731
+    names = lambda r: sorted(v["vm"] for v in r["items"])  # noqa: E731
+    assert names(get(q="lot-core*")) == ["lot-core-01", "lot-core-02"]
+    assert names(get(q="lot-gw, own-db")) == ["lot-gw-01", "own-db-01"]                 # several terms = any of them
+    assert names(get(q="lot", vcenter="vc-b")) == ["lot-core-02", "lot-gw-01"]
+    assert names(get(q="lot", vcenter="vc-b,vc-own", cluster="PRD")) == ["lot-core-01", "lot-gw-01"]
+    assert names(get(q="lot", power="off")) == ["lot-core-02"]
+    assert names(get(folder="dc/lot")) == ["lot-core-01", "lot-core-02"]
+    r = get(q="lot", cluster="PRD")
+    assert {x["value"]: x["count"] for x in r["facets"]["vcenters"]} == {"vc-b": 1, "vc-own": 1}     # counts under the cluster filter
+    assert {x["value"]: x["count"] for x in r["facets"]["clusters"]} == {"PRD": 2, "UAT": 1}        # all clusters to choose from
+    all_ids = get(q="lot", limit=1, ids="true")
+    assert len(all_ids["items"]) == 1 and len(all_ids["ids"]) == 3 and all_ids["itemsTotal"] == 3
+    assert admin.get("/api/systems/coverage", params={"power": "maybe"}).status_code == 422
+    sid = _sys(admin).json()["id"]
+    assert admin.post(f"/api/systems/{sid}/members", json={"ciIds": all_ids["ids"]}).json()["added"] == 3
+    assert get(q="lot")["itemsTotal"] == 0
+    assert admin.post(f"/api/systems/{sid}/members", json={"ciIds": list(range(service.MAX_SELECT + 1))}).status_code == 422

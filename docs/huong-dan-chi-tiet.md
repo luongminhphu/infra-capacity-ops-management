@@ -609,6 +609,39 @@ Thẻ đối tượng (Ctrl + K → chọn một kết quả) đọc từ sổ C
 - **Quyền**: mọi người dùng xem được; tạo / sửa / xoá hệ thống, gán VM, nhập Excel cần quyền **Quản trị Hệ thống & Owner**
   (Cài đặt → Người dùng & quyền, mặc định chỉ admin). Mọi thay đổi ghi nhật ký (`owners.*`; đổi owner: `owners.system.owner_change`).
 
+### Hệ thống & Owner — Backup, Support, nhân bản, lọc VM chưa có owner
+
+- **Ba vai trò liên hệ** của một hệ thống (form *Thêm / Sửa hệ thống* chia 3 nhóm):
+  - **Vận hành — Owner & Backup**:
+    - Owner (Team Lead) và Backup (người thay thế, có tên) là đội vận hành;
+    - nhận email rà soát định kỳ và cảnh báo, vào được cổng Owner;
+    - Quản lý trực tiếp nhận leo thang.
+  - **Hỗ trợ — đội dự án (Support)**: đội được gọi khi vận hành cần hỗ trợ.
+    - Email support: tối đa 5, cách nhau dấu phẩy;
+    - Nhóm / người support;
+    - Liên hệ: điện thoại, kênh Teams, hàng đợi ticket.
+
+    Chỉ để liên hệ: **không** nhận email rà soát, **không** có quyền cổng Owner.
+- Support và Backup hiện ở:
+  - danh sách hệ thống (cột *Owner · backup*, *Support*);
+  - hộp chi tiết hệ thống;
+  - thẻ VM.
+
+  Ô lọc *Email / tên owner* tìm cả backup và support.
+- **Nhân bản**: nút *Nhân bản* trên mỗi dòng hệ thống (và trong hộp chi tiết) mở form *Thêm* đã điền sẵn mọi thông tin của hệ
+  thống đó (tên thêm "(bản sao)"). Sửa tên và trường cần đổi rồi bấm Thêm; VM không được chép.
+- **Excel**: sheet *Hệ thống* thêm cột *Backup (email)*, *Tên backup*, *Support (email)*, *Tên support*, *Liên hệ support*.
+  File xuất nhập lại được; file mẫu cũ có cột *Người thay thế (email)* vẫn đọc được.
+- **Tab VM chưa có owner** có bộ lọc:
+  - **tên VM**: nhiều tên cách nhau dấu phẩy, `*` thay cho đoạn bất kỳ, vd `lot-core*, lot-gw`;
+  - **vCenter** và **Cluster** chọn nhiều giá trị, có số VM mỗi lựa chọn;
+  - **nguồn bật / tắt**;
+  - **thư mục vCenter**;
+  - *Xoá lọc*.
+
+  Ô tiêu đề bảng chọn mọi VM đang hiện. **Chọn cả N VM khớp lọc** chọn toàn bộ kết quả lọc (tối đa 5.000 VM mỗi lần gán), rồi
+  *Gán vào hệ thống*.
+
 ### Gán owner tự động — thuộc tính vCenter và quy tắc (ICO v2 G2b)
 
 Sau mỗi vòng đồng bộ (pod leader, ngay sau bộ dựng sổ CI) ICO gán VM vào hệ thống theo thứ tự ưu tiên
@@ -844,6 +877,28 @@ snapshot hay xác nhận alarm — thao tác trên vCenter.
   lưu theo tầng thời gian như các chỉ số khác (`GET /api/infra/storage/{mã}/history`).
 - Đã kiểm với FlashArray//X20R3, FlashArray//RC20 (dòng Refurbished, Purity REST 2.x giống //C) và NetApp
   AFF A300 (ONTAP 9.6+ REST). Model hiển thị lấy từ API của mảng.
+
+### IPAM — nguồn GestióIP
+
+ICO đọc danh sách IP khai báo từ **GestióIP 3.5** (module API thương mại của GestióIP) để đối chiếu với IP thực tế mà vCenter,
+OME, storage và backup báo (Hồ sơ thiết bị / Đối soát — `docs/design/ico-correlation.md`).
+
+- **Khai báo** ở Cài đặt → Nguồn dữ liệu → **+ GestióIP**:
+  - địa chỉ, cổng, tài khoản GestióIP (chỉ cần quyền đọc client) và mật khẩu (lưu mã hoá);
+  - **Client GestióIP** (mặc định `DEFAULT`);
+  - **Đường dẫn API** (mặc định `/gestioip/api/api.cgi`);
+  - tuỳ chọn tên **cột tuỳ chỉnh chứa serial** (vd `SN`) và **chứa MAC** — để so với service tag / MAC thực tế.
+- **Kiểm tra kết nối** đọc phiên bản API và một trang host.
+- **Đọc gì** (mỗi vòng poll):
+  - mọi network (CIDR, site, category, VLAN);
+  - mọi IP (hostname, mô tả, site, category, trạng thái alive, cột tuỳ chỉnh);
+  - danh sách VLAN.
+- **Chỉ đọc**: GestióIP nhận cả lệnh ghi qua GET, nên ICO chặn theo loại yêu cầu. Chỉ các loại đọc (`version`, `listHosts`,
+  `listNetworks`, `listVlans`, `readHost`, `readNetwork`, `usedNetworkAddresses`, `readVlan`, `listClients`) được gửi. Mọi loại
+  tạo / sửa / xoá / cấp IP / discovery bị chặn trước khi gửi.
+- Trạng thái kết nối nằm ở nhóm **IPAM** trên thanh trên.
+- Xoá nguồn chỉ ngắt kết nối; dữ liệu còn lại ở *Dữ liệu mồ côi* (họ *IPAM (GestióIP)*).
+- **DEMO** sinh IP khớp VM và iDRAC demo. Có vài chênh lệch cố ý (IP chưa khai, tên khác, SN sai, IP đã thanh lý) để thử đối soát.
 
 ### Trạng thái kết nối của mọi nguồn dữ liệu
 

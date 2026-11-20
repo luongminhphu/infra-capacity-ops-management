@@ -19,12 +19,16 @@ from . import service
 from .models import System, SystemMember
 
 SYS_SHEET, VM_SHEET = "Hệ thống", "VM"
-SYS_HEAD = ["Mã", "Tên hệ thống", "Dự án", "Phòng ban", "Owner (email)", "Tên owner", "Người thay thế (email)",
-            "Quản lý trực tiếp (email)", "Mức độ quan trọng", "Môi trường", "Ghi chú"]
+SYS_HEAD = ["Mã", "Tên hệ thống", "Dự án", "Phòng ban", "Owner (email)", "Tên owner", "Backup (email)", "Tên backup",
+            "Quản lý trực tiếp (email)", "Support (email)", "Tên support", "Liên hệ support", "Mức độ quan trọng", "Môi trường",
+            "Ghi chú"]
 VM_HEAD = ["VM", "vCenter", "Hệ thống (mã hoặc tên)"]
 SYS_COLS = {"ma": "code", "ma he thong": "code", "ten he thong": "name", "ten": "name", "he thong": "name", "du an": "project",
             "phong ban": "department", "owner email": "ownerEmail", "owner": "ownerEmail", "email owner": "ownerEmail",
             "ten owner": "ownerName", "nguoi thay the email": "deputyEmail", "nguoi thay the": "deputyEmail", "deputy": "deputyEmail",
+            "backup email": "deputyEmail", "backup": "deputyEmail", "ten backup": "deputyName", "ten nguoi thay the": "deputyName",
+            "support email": "supportEmails", "support": "supportEmails", "email support": "supportEmails",
+            "ten support": "supportName", "nhom support": "supportName", "lien he support": "supportContact",
             "quan ly truc tiep email": "managerEmail", "quan ly truc tiep": "managerEmail", "manager": "managerEmail",
             "muc do quan trong": "criticality", "criticality": "criticality", "moi truong": "env", "env": "env", "ghi chu": "note"}
 VM_COLS = {"vm": "vm", "ten vm": "vm", "vcenter": "vcenter", "he thong ma hoac ten": "system", "he thong": "system",
@@ -204,8 +208,10 @@ def export(db: Session) -> bytes:
     now = dt.datetime.utcnow() + dt.timedelta(hours=7)
     row = _sheet_title(ws, "Hệ thống & Owner", f"ICO · xuất lúc {now.strftime('%d/%m/%Y %H:%M')} · nhập lại được bằng chính file này", len(SYS_HEAD))
     _write_rows(ws, row, SYS_HEAD, [[s.code, s.name, s.project, s.department, s.owner_email, s.owner_name, s.deputy_email,
-                                     s.manager_email, s.criticality, s.env, s.note] for s in systems])
-    _widths(ws, {"A": 11, "B": 34, "C": 22, "D": 22, "E": 30, "F": 22, "G": 30, "H": 30, "I": 12, "J": 12, "K": 40})
+                                     s.deputy_name, s.manager_email, (s.support_emails or "").replace(",", ", ") or None,
+                                     s.support_name, s.support_contact, s.criticality, s.env, s.note] for s in systems])
+    _widths(ws, {"A": 11, "B": 34, "C": 22, "D": 22, "E": 30, "F": 22, "G": 30, "H": 22, "I": 30, "J": 40, "K": 24, "L": 28,
+                 "M": 12, "N": 12, "O": 40})
     ws.freeze_panes = ws.cell(row=row + 1, column=1)
     wv = wb.create_sheet(VM_SHEET)
     rows = (db.query(Ci.name, Ci.attrs, System.code).join(SystemMember, SystemMember.ci_id == Ci.id)

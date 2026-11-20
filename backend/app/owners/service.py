@@ -19,9 +19,13 @@ ENV_ALIASES = {"production": "prod", "prd": "prod", "test": "uat", "staging": "u
                "disaster recovery": "dr", "khac": "other"}
 ENV_LABELS = {"prod": "Production", "uat": "UAT", "dev": "Dev", "dr": "DR", "other": "Khác"}
 CRITICALITY_LABELS = {1: "1 — Rất quan trọng", 2: "2 — Quan trọng", 3: "3 — Trung bình", 4: "4 — Thấp"}
-LIMITS = {"name": 255, "project": 128, "department": 128, "owner_name": 128, "cost_center": 64, "note": 500}
+LIMITS = {"name": 255, "project": 128, "department": 128, "owner_name": 128, "deputy_name": 128, "cost_center": 64, "note": 500,
+          "support_name": 128, "support_contact": 255}
+MAX_SUPPORT_EMAILS = 5
+MAX_SELECT = 5000                 # "select all" of the unowned list (assign accepts lists this long)
 FIELDS = {"name": "name", "project": "project", "department": "department", "ownerEmail": "owner_email",
-          "ownerName": "owner_name", "deputyEmail": "deputy_email", "managerEmail": "manager_email",
+          "ownerName": "owner_name", "deputyEmail": "deputy_email", "deputyName": "deputy_name", "managerEmail": "manager_email",
+          "supportEmails": "support_emails", "supportName": "support_name", "supportContact": "support_contact",
           "costCenter": "cost_center", "criticality": "criticality", "env": "env", "status": "status", "note": "note"}
 MAX_ASSIGN = 2000
 
@@ -65,6 +69,23 @@ def norm_email(v: Any, label: str) -> Optional[str]:
     return s
 
 
+def norm_emails(v: Any, label: str) -> Optional[str]:
+    """A list or a text separated by , ; or spaces → validated, de-duplicated CSV (at most MAX_SUPPORT_EMAILS)."""
+    items = v if isinstance(v, (list, tuple)) else re.split(r"[,;\s]+", str(v or ""))
+    out: List[str] = []
+    for x in items:
+        e = norm_email(x, label)
+        if e and e not in out:
+            out.append(e)
+    if len(out) > MAX_SUPPORT_EMAILS:
+        raise Invalid(f"{label}: tối đa {MAX_SUPPORT_EMAILS} email.")
+    return ",".join(out) or None
+
+
+def emails_of(csv: Optional[str]) -> List[str]:
+    return [e for e in (csv or "").split(",") if e]
+
+
 def norm_env(v: Any) -> str:
     s = norm_text(str(v or "")) or "prod"
     s = ENV_ALIASES.get(s, s)
@@ -95,6 +116,8 @@ def clean(data: Dict[str, Any], partial: bool = False) -> Dict[str, Any]:
         if col in ("owner_email", "deputy_email", "manager_email"):
             label = {"owner_email": "Email owner", "deputy_email": "Email người thay thế", "manager_email": "Email quản lý trực tiếp"}[col]
             out[col] = norm_email(v, label)
+        elif col == "support_emails":
+            out[col] = norm_emails(v, "Email support")
         elif col == "criticality":
             out[col] = norm_criticality(v)
         elif col == "env":
@@ -117,8 +140,9 @@ def clean(data: Dict[str, Any], partial: bool = False) -> Dict[str, Any]:
 # ---------------------------------------------------------------- systems
 def out(s: System, members: Optional[int] = None) -> Dict[str, Any]:
     return {"id": s.id, "code": s.code, "name": s.name, "project": s.project, "department": s.department,
-            "ownerEmail": s.owner_email, "ownerName": s.owner_name, "deputyEmail": s.deputy_email,
-            "managerEmail": s.manager_email, "costCenter": s.cost_center, "criticality": s.criticality,
+            "ownerEmail": s.owner_email, "ownerName": s.owner_name, "deputyEmail": s.deputy_email, "deputyName": s.deputy_name,
+            "managerEmail": s.manager_email, "supportEmails": emails_of(s.support_emails), "supportName": s.support_name,
+            "supportContact": s.support_contact, "costCenter": s.cost_center, "criticality": s.criticality,
             "criticalityLabel": CRITICALITY_LABELS.get(s.criticality, str(s.criticality)), "env": s.env,
             "envLabel": ENV_LABELS.get(s.env, s.env), "status": s.status, "note": s.note,
             "updatedAt": s.updated_at.isoformat() + "Z" if s.updated_at else None, "updatedBy": s.updated_by,
@@ -190,7 +214,9 @@ def listing(db: Session, q: str = "", owner: str = "", department: str = "", pro
             qry = qry.filter(func.lower(col) == val.strip().lower())
     if owner:
         o = _like(owner)
-        qry = qry.filter(or_(System.owner_email.like(o), System.deputy_email.like(o), func.lower(System.owner_name).like(o)))
+        qry = qry.filter(or_(System.owner_email.like(o), System.deputy_email.like(o), func.lower(System.owner_name).like(o),
+                             func.lower(System.deputy_name).like(o), System.support_emails.like(o),
+                             func.lower(System.support_name).like(o)))
     if criticality:
         qry = qry.filter(System.criticality == criticality)
     if env:
@@ -223,6 +249,7 @@ def facets(db: Session) -> Dict[str, List[str]]:
 def _vm_out(c: Ci, m: Optional[SystemMember] = None) -> Dict[str, Any]:
     a = json.loads(c.attrs or "{}")
     return {"ciId": c.id, "vm": c.name, "vcenterKey": a.get("vcenterKey") or "", "cluster": a.get("cluster"), "host": a.get("host"),
+            "folderPath": a.get("folderPath"),
             "powerOn": a.get("powerOn"), "vcpu": a.get("vcpu"), "ramGB": a.get("ramGB"), "status": c.status,
             **({"source": m.source, "assignedBy": m.assigned_by,
                 "assignedAt": m.assigned_at.isoformat() + "Z" if m.assigned_at else None} if m is not None else {})}
@@ -313,8 +340,13 @@ def system_of_vm(db: Session, ci_id: int) -> Optional[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------- coverage (tab "VM chưa có owner")
-def coverage(db: Session, q: str = "", vcenter: str = "", offset: int = 0, limit: int = 100) -> Dict[str, Any]:
-    """Active VMs of the CI registry: with an owner (system with owner e-mail), in a system without owner, unassigned."""
+def coverage(db: Session, q: str = "", vcenter: str = "", offset: int = 0, limit: int = 100, cluster: str = "",
+             power: str = "", folder: str = "", ids: bool = False) -> Dict[str, Any]:
+    """Active VMs of the CI registry: with an owner (system with owner e-mail), in a system without owner, unassigned.
+    The unassigned list is filtered by name (several terms separated by commas = any of them; * = any text), vCenter and
+    cluster (comma-separated = any of them), power (on / off) and folder (substring). `facets` count the unassigned VMs per
+    vCenter / cluster (before those two filters) for the filter menus; ids=True also returns every matching CI id
+    (select all, at most MAX_SELECT)."""
     total = db.query(func.count(Ci.id)).filter(Ci.type == "vm", Ci.status == "active").scalar() or 0
     rows = (db.query(System.owner_email, func.count(SystemMember.id)).join(SystemMember, SystemMember.system_id == System.id)
             .join(Ci, Ci.id == SystemMember.ci_id).filter(Ci.type == "vm", Ci.status == "active").group_by(System.owner_email).all())
@@ -322,14 +354,34 @@ def coverage(db: Session, q: str = "", vcenter: str = "", offset: int = 0, limit
     no_owner = sum(n for email, n in rows if not email)
     unq = (db.query(Ci).outerjoin(SystemMember, SystemMember.ci_id == Ci.id)
            .filter(Ci.type == "vm", Ci.status == "active", SystemMember.id.is_(None)))
-    if q:
-        unq = unq.filter(func.lower(Ci.name).like(_like(q)))
+    terms = [t.strip().lower() for t in (q or "").split(",") if t.strip()][:20]
+    if terms:
+        unq = unq.filter(or_(*[func.lower(Ci.name).like(_like(t).replace("*", "%")) for t in terms]))
     vms = [_vm_out(c) for c in unq.order_by(Ci.name, Ci.id).all()]
-    if vcenter:
-        vms = [v for v in vms if v["vcenterKey"] == vcenter]
+    if power in ("on", "off"):
+        vms = [v for v in vms if bool(v["powerOn"]) == (power == "on")]
+    if folder.strip():
+        f = folder.strip().lower()
+        vms = [v for v in vms if f in (v.get("folderPath") or "").lower()]
+    vcs = {x for x in (vcenter or "").split(",") if x}
+    cls = {x for x in (cluster or "").split(",") if x}
+    facets_vc: Dict[str, int] = {}
+    facets_cl: Dict[str, int] = {}
+    for v in vms:                                   # menus: counts with the other filters applied
+        if not cls or (v["cluster"] or "") in cls:
+            facets_vc[v["vcenterKey"]] = facets_vc.get(v["vcenterKey"], 0) + 1
+        if not vcs or v["vcenterKey"] in vcs:
+            facets_cl[v["cluster"] or ""] = facets_cl.get(v["cluster"] or "", 0) + 1
+    if vcs:
+        vms = [v for v in vms if v["vcenterKey"] in vcs]
+    if cls:
+        vms = [v for v in vms if (v["cluster"] or "") in cls]
     return {"total": total, "owned": owned, "inSystemNoOwner": no_owner, "unassigned": total - owned - no_owner,
             "ownedPct": round(owned * 100.0 / total, 1) if total else None,
-            "items": vms[offset:offset + limit], "itemsTotal": len(vms)}
+            "items": vms[offset:offset + limit], "itemsTotal": len(vms),
+            "facets": {"vcenters": [{"value": k, "count": n} for k, n in sorted(facets_vc.items())],
+                       "clusters": [{"value": k, "count": n} for k, n in sorted(facets_cl.items(), key=lambda x: x[0].lower())]},
+            **({"ids": [v["ciId"] for v in vms[:MAX_SELECT]]} if ids else {})}
 
 
 def find_vms(db: Session, pairs: Iterable[Tuple[str, str]]) -> Dict[Tuple[str, str], List[Ci]]:
