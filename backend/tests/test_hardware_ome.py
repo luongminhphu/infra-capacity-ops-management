@@ -233,7 +233,8 @@ def test_demo_sync_joins_every_dell_host_and_lists_bare_metal(db, admin):
         assert phys.type == "physical_server" and "ome" in a["origins"] and "host" in a["origins"]
         assert a["omeSource"] == "ome-demo" and a["idracIp"].startswith("10.30.")
     bare = [c for c in db.query(Ci).filter_by(type="physical_server") if json.loads(c.attrs).get("origins") == ["ome"]]
-    assert sorted(c.name for c in bare) == ["backup-media-01", "db-oracle-01"]
+    assert sorted(json.loads(c.attrs)["omeName"] for c in bare) == ["backup-media-01", "db-oracle-01"]
+    assert all(c.name == c.source_key for c in bare)                 # the CI name stays the service tag
     assert all(db.query(CiKey).filter_by(ci_id=c.id, kind="idrac_ip").count() == 1 for c in bare)
     assert db.query(CiLink).filter(CiLink.to_ci.in_([c.id for c in bare])).count() == 0   # no host on top: bare-metal
 

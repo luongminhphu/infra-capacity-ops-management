@@ -239,7 +239,8 @@ def _backup(db: Session, g: Graph, now: dt.datetime, vms: List[Dict[str, Any]], 
 
 def _hardware(db: Session, g: Graph, now: dt.datetime, days: int) -> None:
     """Dell OME servers (configured sources, synced within the retire window) → physical_server by service tag.
-    A device matching no host is still a physical_server (bare-metal), named after its OME device name."""
+    A device matching no host is still a physical_server (bare-metal). The CI name stays the service tag (cards and
+    links address physical servers by it); the OME device name is attrs.omeName."""
     from ..hardware.models import HwDeviceInventory, HwDeviceState
     keys = [c.key for c in get_settings().hardware()]
     if not keys:
@@ -262,8 +263,6 @@ def _hardware(db: Session, g: Graph, now: dt.datetime, days: int) -> None:
                       if v not in (None, "")})
         if not attrs.get("model") and d.model:
             attrs["model"] = d.model
-        if attrs.get("origins") == ["ome"] and d.name:
-            g.cis[ident]["name"] = d.name[:255]              # bare-metal: the OME name says more than the tag
         g.key(ident, "idrac_ip", norm_ip(d.idrac_ip))
         i = inv.get((d.source_key, d.device_id))
         if i is None:

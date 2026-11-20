@@ -186,7 +186,7 @@ function bindNavigation() {
   });
   window.addEventListener('hashchange', () => {
     const id = navIdFromHash();
-    if (id && (id !== activeNavId || id === 'entity')) navigateTo(id);   // entity: same page, other object
+    if (id && (id !== activeNavId || id === 'entity' || id === 'hardware')) navigateTo(id);   // entity / hardware: same page, other object
     else if (!id) syncNavState();   // unknown or switched-off page: restore the current one
   });
   const open = $('#btnSidebarOpen'), close = $('#btnSidebarClose'), scrim = $('#sidebarScrim');
