@@ -34,7 +34,8 @@ POD = (os.environ.get("HOSTNAME") or __import__("socket").gethostname() or "?")[
 JOB_RUN_RETENTION_DAYS = 90
 # Library loggers that write a line per font / glyph table on every PDF: kept at WARNING (or ERROR) so the in-memory
 # ring and app_logs keep the app's own records. The HarfBuzz notice is logged once per process instead of per PDF.
-QUIET_LOGGERS = {"fontTools": logging.WARNING, "fontTools.subset": logging.WARNING, "fontTools.ttLib": logging.WARNING}
+QUIET_LOGGERS = {"fontTools": logging.WARNING, "fontTools.subset": logging.WARNING, "fontTools.ttLib": logging.WARNING,
+                 "weasyprint.progress": logging.WARNING}           # "Step 1 - Fetching the HTML", … per PDF
 _ONCE_PREFIXES = ("Using fontTools instead of HarfBuzz-Subset",)
 
 _lock = threading.Lock()
