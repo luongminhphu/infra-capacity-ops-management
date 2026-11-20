@@ -146,12 +146,19 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
 - **Công tắc từng tác vụ**: soạn tờ trình, đọc báo giá PDF scan, tóm tắt khác biệt báo giá, **bản tin trang chủ**,
   **tổng kết báo cáo PDF**, **phân tích lỗi backup**, **ánh xạ cột file nhập**, **phân loại hệ điều hành**,
   **tóm tắt biến động VM**, **nhận định sizing**, **tóm tắt thay đổi hợp đồng**, **đọc hoá đơn**, **Hỏi ICO**.
-- **Che tên** host / IP / VM / client backup trước khi gửi (bật mặc định): thay bằng mã `<host:…>` / `<ip:…>`, rồi
-  khôi phục trong kết quả.
+- **Che tên** trước khi gửi (bật mặc định), thay bằng mã `<host:…>` / `<ip:…>` / `<email:…>`, rồi khôi phục trong
+  kết quả. Phạm vi che:
+  - host, IP, VM, client backup;
+  - datastore, mảng / volume storage, thiết bị Dell OME, hostname IPAM;
+  - **mọi địa chỉ email** (owner / backup / support là dữ liệu cá nhân).
+- **Hạn mức được giữ chỗ trong DB**: mỗi lượt gọi giữ trước chi phí tối đa của nó trong một lệnh UPDATE có điều kiện, nên
+  nhiều pod cùng gọi cũng không vượt hạn mức. Phần giữ chỗ được trả lại sau lượt gọi; phần còn sót do pod chết tự hết
+  sau 15 phút.
 - **Hạn mức 100 USD / tháng**: chạm hạn mức thì AI tạm dừng, các chức năng quay về văn bản theo luật.
   **Cảnh báo ở 50 USD**: gửi Discord (kênh có tick *Nhận cả cảnh báo vận hành*) và hiện trong hộp việc của admin,
   mỗi tháng một lần. Có giới hạn số lượt gọi mỗi người mỗi giờ.
-- **Nhật ký và thống kê**: mỗi lượt (tác vụ, người, model, token, chi phí, thời gian; không lưu nội dung) vào `ai_runs`.
+- **Nhật ký và thống kê**: mỗi lượt (tác vụ, người, model, token, chi phí, thời gian, mã request, phiên bản prompt,
+  phản hồi 👍 / 👎; không lưu nội dung) vào `ai_runs`. Admin xem qua MCP `ico_ai_usage`.
   Thống kê theo tác vụ và 30 lượt gần nhất.
   - Chi phí tính theo giá niêm yết của model đã trả lời; model lạ tính theo giá cao nhất.
   - Cùng dữ kiện thì dùng lại kết quả trong 6 giờ, không tính phí lần sau.
@@ -184,8 +191,20 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
   thống** đối chiếu với số tiền đợt, MST nhà cung cấp, mã / tên hợp đồng và kiểm tra tiền trước thuế + VAT = tổng.
   Không tự tick hồ sơ; có nhật ký. Cùng file thì dùng lại kết quả.
 - **Hỏi ICO** (nút trên thanh trên cùng): hỏi bằng tiếng Việt. AI chỉ dùng công cụ **chỉ đọc**, chạy với quyền của người
-  hỏi: tìm kiếm, thẻ host / VM, capacity cluster, client backup, VM chưa backup, hộp việc. Module tắt hoặc dữ liệu chi phí
-  không đủ quyền thì công cụ không trả. Tối đa 5 vòng tra cứu mỗi câu; câu trả lời kèm link tới thẻ host / VM.
+  hỏi.
+  - Công cụ có sẵn:
+    - tìm kiếm, thẻ host / VM, capacity cluster;
+    - client backup, VM chưa backup;
+    - hộp việc (đủ mọi nguồn, kể cả Phần cứng và Rà soát owner);
+    - sổ CI và tác động;
+    - **phần cứng Dell OME**: trạng thái, ổ dự báo hỏng, firmware, bảo hành;
+    - **hệ thống & owner**: tìm hệ thống, hoặc VM thuộc hệ thống nào;
+    - **trạng thái nguồn dữ liệu**;
+    - **tra IP**: IPAM và đối tượng mang IP.
+  - Module tắt hoặc dữ liệu chi phí không đủ quyền thì công cụ không trả.
+  - Tối đa 5 vòng tra cứu mỗi câu; câu trả lời kèm link tới thẻ host / VM.
+  - Mỗi câu trả lời có nút **👍 / 👎**: chỉ người hỏi bấm được, bấm lại để bỏ. Tỷ lệ hài lòng theo tác vụ hiện trong
+    `ico_ai_usage`, dùng để so trước / sau khi đổi model hay prompt.
 - **Tài liệu → Kho báo cáo**: tick *Lưu vào kho* ở Trung tâm báo cáo, mỗi PDF xuất ra (Capacity, Backup, License, Sizing,
   Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Mỗi người giữ tối đa 100 bản (bản cũ nhất của chính
   người đó bị thay), 400 ngày, 25 MB mỗi bản; cùng nội dung không lưu hai lần. Chỉ các route báo cáo trong danh sách được lưu. Báo cáo chi phí chỉ người có vai trò Chi phí xem được; người lưu hoặc admin xoá được.

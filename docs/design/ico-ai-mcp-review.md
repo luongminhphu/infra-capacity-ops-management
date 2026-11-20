@@ -159,7 +159,8 @@ Tiến độ:
   - B1–B4;
   - B6: bộ đánh giá `docs/design/ico-mcp-eval.xml` và test schema / annotation / chạy mọi tool;
   - B5 làm phần ghi `pod` trên output. Đẩy request chậm / SQL chậm vào DB để lại sau, vì hiện đã ghi rõ “theo pod”.
-- **Đợt C–D** — chưa làm.
+- **Đợt C** — xong (C1–C4). 👍 / 👎 mới có ở Hỏi ICO; các tác vụ AI khác có cột `feedback` sẵn nếu sau này cần.
+- **Đợt D** — chưa làm.
 | Đợt | PR | Nghiệm thu |
 |---|---|---|
 | A | 1 PR | Demo tạo 2 PDF → `error_summary` không còn nhóm `weasyprint`. `search_logs` INFO không còn `fontTools`. Log WARNING có `request_id`, `pod`. `job_runs` đủ mọi họ nguồn + job dựng CI / owner / rà soát. |

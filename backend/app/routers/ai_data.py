@@ -142,6 +142,17 @@ def ask_ico(data: Dict[str, Any] = Body(...), user: User = Depends(get_current_u
         raise HTTPException(400, str(exc)) from None
 
 
+@router.post("/ai/ask/{run_id}/feedback")
+def ask_feedback(run_id: int, data: Dict[str, Any] = Body(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """👍 / 👎 on one Hỏi ICO answer of the caller (value: up | down | null to clear)."""
+    from .. import ask_ico as ask_mod
+    try:
+        ask_mod.feedback(db, user, run_id, data.get("value"))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------- A6
 @router.post("/ai/vm-changes")
 def vm_changes(vcenter: Optional[str] = Query(default="all"), months: int = Query(default=12),

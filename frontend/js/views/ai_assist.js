@@ -82,17 +82,40 @@ function askDialog() {
       askRender();
       try {
         const r = await apiRequest('/ai/ask', { method: 'POST', body: JSON.stringify({ question: q }) });
-        Object.assign(askLog[askLog.length - 1], { pending: false, answer: r.answer, links: r.links });
+        Object.assign(askLog[askLog.length - 1], { pending: false, answer: r.answer, links: r.links, runId: r.runId });
         input.value = '';
       } catch (err) { Object.assign(askLog[askLog.length - 1], { pending: false, error: err.message }); }
       finally { btn.disabled = false; askRender(); input.focus(); }
     };
-    dlg.addEventListener('click', (e) => { if (e.target.closest('.entity-link')) dlg.close(); });
+    dlg.addEventListener('click', (e) => {
+      if (e.target.closest('.entity-link')) { dlg.close(); return; }
+      const fb = e.target.closest('[data-ask-fb]');
+      if (fb) askFeedback(Number(fb.dataset.askRun), fb.dataset.askFb);
+    });
     refreshIcons();
   }
   askRender();
   dlg.showModal();
   $('#askInput', dlg).focus();
+}
+
+/* 👍 / 👎 on an answer (review C3): stored on the ai_runs row of this answer; clicking the chosen one again clears it. */
+function askFeedbackHtml(x) {
+  if (!x.runId) return '';
+  const btn = (v, icon, label) => `<button class="btn btn-ghost btn-sm${x.feedback === v ? ' is-active' : ''}" type="button" data-ask-fb="${v}"
+    data-ask-run="${esc(x.runId)}" aria-pressed="${x.feedback === v}" aria-label="${label}" title="${label}"><i data-lucide="${icon}"></i></button>`;
+  return `<div class="ask-feedback">${btn('up', 'thumbs-up', 'Câu trả lời hữu ích')}${btn('down', 'thumbs-down', 'Câu trả lời chưa đúng')}</div>`;
+}
+
+async function askFeedback(runId, value) {
+  const x = askLog.find(i => i.runId === runId);
+  if (!x) return;
+  const next = x.feedback === value ? null : value;
+  try {
+    await apiRequest(`/ai/ask/${runId}/feedback`, { method: 'POST', body: JSON.stringify({ value: next }) });
+    x.feedback = next;
+    askRender();
+  } catch (err) { uiAlert(err.message); }
 }
 
 function askRender() {
@@ -101,8 +124,9 @@ function askRender() {
   log.innerHTML = askLog.slice(-10).map(x => `<div class="ask-q">${esc(x.q)}</div>
     <div class="ask-a">${x.pending ? '<span class="muted-sub">ICO đang tra cứu…</span>'
       : x.error ? `<span class="criteria-status error">${esc(x.error)}</span>`
-      : `${esc(x.answer).replace(/\n/g, '<br>')}${(x.links || []).length ? `<div class="ask-links">${x.links.map(l => uiEntityLink(l.type, l.name, l.vcenterKey, false)).join(' · ')}</div>` : ''}`}</div>`).join('')
+      : `${esc(x.answer).replace(/\n/g, '<br>')}${(x.links || []).length ? `<div class="ask-links">${x.links.map(l => uiEntityLink(l.type, l.name, l.vcenterKey, false)).join(' · ')}</div>` : ''}${askFeedbackHtml(x)}`}</div>`).join('')
     || uiEmpty('Chưa có câu hỏi.');
+  refreshIcons();
   log.scrollTop = log.scrollHeight;
 }
 

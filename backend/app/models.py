@@ -602,6 +602,9 @@ class AiRun(Base):
     input_hash = Column(String(64), nullable=True)
     latency_ms = Column(Integer, nullable=True)
     message = Column(String(300), nullable=True)
+    request_id = Column(String(64), nullable=True)          # X-Request-ID / job id: links the run to app_logs
+    prompt_version = Column(String(32), nullable=True)
+    feedback = Column(String(4), nullable=True)             # up | down, given by the user who asked (Hỏi ICO)
     created_at = Column(DateTime, nullable=False, default=utcnow, index=True)
 
 

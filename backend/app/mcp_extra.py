@@ -140,12 +140,16 @@ def tool_ai_usage(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
     cfg = ai_platform.config(db)
     states = ai_platform.task_states(cfg)
     by: Dict[str, Dict[str, Any]] = {}
-    for task, status, ms, micros, tin, tout, model in (
+    for task, status, ms, micros, tin, tout, model, fb, pv in (
             db.query(AiRun.task, AiRun.status, AiRun.latency_ms, AiRun.cost_usd_micros, AiRun.input_tokens, AiRun.output_tokens,
-                     AiRun.model).filter(AiRun.created_at >= since)):
+                     AiRun.model, AiRun.feedback, AiRun.prompt_version).filter(AiRun.created_at >= since)):
         t = by.setdefault(task, {"task": task, "label": ai_platform.TASKS.get(task, (task,))[0], "enabled": states.get(task),
                                  "ok": 0, "cached": 0, "blocked": 0, "error": 0, "costUsd": 0, "inputTokens": 0, "outputTokens": 0,
-                                 "models": set(), "_ms": []})
+                                 "feedbackUp": 0, "feedbackDown": 0, "promptVersions": set(), "models": set(), "_ms": []})
+        t["feedbackUp"] += fb == "up"
+        t["feedbackDown"] += fb == "down"
+        if pv:
+            t["promptVersions"].add(pv)
         t[status] = t.get(status, 0) + 1
         t["costUsd"] += micros or 0
         t["inputTokens"] += tin or 0
@@ -158,6 +162,7 @@ def tool_ai_usage(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
     for t in by.values():
         ms = t.pop("_ms")
         tasks.append({**t, "costUsd": round(micros_to_usd(t["costUsd"]), 4), "models": sorted(t["models"]),
+                      "promptVersions": sorted(t["promptVersions"]),
                       "p50Ms": _pct(ms, 0.5), "p95Ms": _pct(ms, 0.95)})
     tasks.sort(key=lambda t: (-(t["error"] + t["blocked"]), t["task"]))
     recent = (db.query(AiRun).filter(AiRun.created_at >= since, AiRun.status.in_(("error", "blocked")))
@@ -173,7 +178,9 @@ def tool_ai_usage(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
         "monthCostUsd": round(ai_platform.month_cost(db), 4),
         "tasks": tasks,
         "recentProblems": [{"at": _iso(r.created_at), "task": r.task, "status": r.status, "user": _user_tag(r.username),
-                            "latencyMs": r.latency_ms, "message": obs.mask_infra(r.message or "")[:300]} for r in recent],
+                            "latencyMs": r.latency_ms, "requestId": r.request_id,
+                            "message": obs.mask_infra(r.message or "")[:300]} for r in recent],
+        "reservedUsd": round(micros_to_usd(ai_platform._held_micros(cfg)), 4) if cfg else 0,
         "hint": "Only counts and safe messages are stored (never prompts or answers). blocked = policy refused the call "
                 "(module off, task off, budget, per-user rate) — the message says which. Users are shown as stable hashes.",
     }

@@ -25,7 +25,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .models import AiCache, AiRun, User
-from .shared.money import micros_to_usd, usd_to_micros
+from .shared.money import micros_to_usd, usd_to_micros  # noqa: F401  (micros_to_usd used in messages)
 
 logger = logging.getLogger("vco.ai")
 
@@ -134,7 +134,7 @@ def check(db: Session, task: str, user: Optional[User]):
     if not task_states(cfg)[task]:
         raise AiBlocked(f"Tác vụ “{TASKS[task][0]}” đang tắt (Cài đặt → AI & MCP).")
     budget = cfg.budget_usd if cfg.budget_usd is not None else 100
-    spent_micros = month_cost_micros(db) + usd_to_micros(_reserved["usd"])
+    spent_micros = month_cost_micros(db) + _held_micros(cfg)
     spent = micros_to_usd(spent_micros)
     if spent_micros >= usd_to_micros(budget):
         raise AiBlocked(f"Đã dùng hết hạn mức AI tháng này ({spent:.2f} / {budget} USD) — AI tạm dừng tới đầu tháng sau.".replace(".", ",", 1))
@@ -149,6 +149,7 @@ def check(db: Session, task: str, user: Optional[User]):
 
 # ---------------------------------------------------------------- masking
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_EMAIL = re.compile(r"[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{2,}")
 _names_cache: Dict[str, Any] = {"at": 0.0, "names": None}
 _names_lock = threading.Lock()
@@ -191,6 +192,7 @@ class Masker:
         return tok
 
     def _mask_str(self, s: str) -> str:
+        s = _EMAIL.sub(lambda m: self._token("email", m.group(0)), s)        # owners / support contacts: personal data
         s = _IPV4.sub(lambda m: self._token("ip", m.group(0)), s)
 
         def word(m: "re.Match") -> str:
@@ -215,7 +217,7 @@ class Masker:
 
     def unmask(self, obj: Any) -> Any:
         if isinstance(obj, str):
-            return re.sub(r"<(?:host|ip):[0-9a-f]{12,64}>", lambda m: self.back.get(m.group(0), m.group(0)), obj)
+            return re.sub(r"<(?:host|ip|email):[0-9a-f]{12,64}>", lambda m: self.back.get(m.group(0), m.group(0)), obj)
         if isinstance(obj, list):
             return [self.unmask(x) for x in obj]
         if isinstance(obj, dict):
@@ -234,11 +236,27 @@ def _known_names(db: Session) -> set:
     hosts, vms, _ = data_access.get_latest_combined(db, None)
     names = {h.get("host") for h in hosts} | {v.get("vm") for v in vms} | {v.get("guestHostname") for v in vms}
     names |= {c for (c,) in db.query(BackupJob.client_name).distinct() if c}
+    names |= _source_names(db)
     names = {n for n in names if n}
     names |= {n.split(".")[0] for n in names if "." in n}
     out = {n.lower() for n in names if len(n) >= 3}
     with _names_lock:
         _names_cache.update(at=time.monotonic(), names=out)
+    return out
+
+
+def _source_names(db: Session) -> set:
+    """Names of the other sources an AI fact can carry: datastores, storage arrays / volumes, Dell OME devices, IPAM
+    hostnames (review C1). Each table is optional (module never synced → empty)."""
+    from .hardware.models import HwDeviceState
+    from .ipam.models import IpamHost
+    from .models import DatastoreState, StorageArrayState, StorageVolumeState
+    out: set = set()
+    for col in (DatastoreState.name, StorageArrayState.name, StorageVolumeState.name, HwDeviceState.name, IpamHost.hostname):
+        try:
+            out |= {n for (n,) in db.query(col).distinct() if n}
+        except Exception:  # noqa: BLE001 — table missing on an old install: mask what we know
+            db.rollback()
     return out
 
 
@@ -248,15 +266,65 @@ def masker_for(db: Session) -> Masker:
 
 # ---------------------------------------------------------------- running a task
 PROMPT_VERSION = "2026-11-sa6"
+# Per task, when a task's prompt changes on its own (bump it with the prompt; the cache and ai_runs follow).
+PROMPT_VERSIONS: Dict[str, str] = {"ask_ico": "2026-11-c2"}
+_last = threading.local()
+
+
+def last_run_id() -> Optional[int]:
+    """Id of the ai_runs row written last by this thread (Hỏi ICO returns it for 👍 / 👎)."""
+    return getattr(_last, "run_id", None)
 RUN_RETENTION_DAYS = 400
-# Budget reserved by calls in flight (this process): worst-case cost of one call.
-_reserved = {"usd": 0.0}
-_budget_lock = threading.Lock()
+# Budget reserved by calls in flight: worst-case cost of one call, held in spend_ai_config.reserved_micros so every pod
+# sees it (review C4; it was a per-process number, so N pods could overshoot by N reservations).
 RESERVE_USD = 0.5
+RESERVE_STALE = dt.timedelta(minutes=15)                 # longer than any call (transport deadline): leftover of a crash
+
+
+def _held_micros(cfg) -> int:
+    at = getattr(cfg, "reserved_at", None)
+    if not at or dt.datetime.utcnow() - at > RESERVE_STALE:
+        return 0
+    return int(getattr(cfg, "reserved_micros", 0) or 0)
+
+
+def _reserve(db: Session, task: str, micros: int) -> None:
+    """Hold `micros` of the month budget in ONE conditional UPDATE (no read-then-write race between pods).
+    Raises AiBlocked when the budget cannot hold it."""
+    from sqlalchemy import case, update
+    from .spend.models import SpendAiConfig
+    from .database import SessionLocal
+    cfg = config(db)
+    budget = usd_to_micros(cfg.budget_usd if cfg.budget_usd is not None else 100)
+    spent = month_cost_micros(db)
+    now = dt.datetime.utcnow()
+    held = case((SpendAiConfig.reserved_at < now - RESERVE_STALE, 0), else_=func.coalesce(SpendAiConfig.reserved_micros, 0))
+    with SessionLocal() as own:                          # own transaction: never commits / rolls back the caller's work
+        res = own.execute(update(SpendAiConfig).where(SpendAiConfig.id == 1, held + micros + spent <= budget)
+                          .values(reserved_micros=held + micros, reserved_at=now).execution_options(synchronize_session=False))
+        own.commit()
+    if res.rowcount != 1:
+        raise AiBlocked(f"Hạn mức AI tháng này không đủ cho lượt gọi “{TASKS[task][0]}” "
+                        f"({micros_to_usd(spent):.2f} / {micros_to_usd(budget):.0f} USD, kể cả lượt đang chạy) — thử lại sau.".replace(".", ",", 1))
+
+
+def _release(db: Session, micros: int) -> None:
+    from sqlalchemy import case, update
+    from .spend.models import SpendAiConfig
+    from .database import SessionLocal
+    try:
+        cur = func.coalesce(SpendAiConfig.reserved_micros, 0)
+        with SessionLocal() as own:
+            own.execute(update(SpendAiConfig).where(SpendAiConfig.id == 1)
+                        .values(reserved_micros=case((cur > micros, cur - micros), else_=0))
+                        .execution_options(synchronize_session=False))
+            own.commit()
+    except Exception:  # noqa: BLE001 — a lost release expires after RESERVE_STALE
+        logger.warning("Could not release the AI budget reservation", exc_info=True)
 
 
 def _hash(task: str, facts: Any, cfg=None) -> str:
-    extra = f"{getattr(cfg, 'model', '')}|{getattr(cfg, 'effort', '')}|{PROMPT_VERSION}"
+    extra = f"{getattr(cfg, 'model', '')}|{getattr(cfg, 'effort', '')}|{PROMPT_VERSIONS.get(task, PROMPT_VERSION)}"
     return hashlib.sha256((task + "|" + extra + "|" + json.dumps(facts, ensure_ascii=False, sort_keys=True, default=str)).encode()).hexdigest()
 
 
@@ -268,11 +336,16 @@ def record(db: Session, task: str, user: Optional[User], status: str, h: Optiona
             AiRun.created_at >= dt.datetime.utcnow() - dt.timedelta(minutes=1)).first():
         return                                             # at most one "blocked" row per user / task / minute
     cost = price(usage.get("model"), usage.get("in"), usage.get("out")) if status in ("ok", "error") else 0.0
-    db.add(AiRun(task=task, username=user.username if user else None, model=usage.get("model"), status=status,
-                 input_tokens=usage.get("in") or None, output_tokens=usage.get("out") or None,
-                 cost_usd_micros=usd_to_micros(cost),                     # DAT-10: integer micro-USD only
-                 input_hash=h, latency_ms=int((time.monotonic() - started) * 1000), message=message[:300] or None))
+    from .observability import current_request_id
+    run = AiRun(task=task, username=user.username if user else None, model=usage.get("model"), status=status,
+                input_tokens=usage.get("in") or None, output_tokens=usage.get("out") or None,
+                cost_usd_micros=usd_to_micros(cost),                     # DAT-10: integer micro-USD only
+                input_hash=h, latency_ms=int((time.monotonic() - started) * 1000), message=message[:300] or None,
+                request_id=(current_request_id() or None) and current_request_id()[:64],
+                prompt_version=PROMPT_VERSIONS.get(task, PROMPT_VERSION))
+    db.add(run)
     db.commit()
+    _last.run_id = run.id
 
 
 _record = record      # old private name
@@ -285,10 +358,10 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
     AiError (both have safe messages)."""
     from .shared.ai_transport import AiError
     started = time.monotonic()
+    micros = usd_to_micros(reserve)
     try:
-        with _budget_lock:                                 # check + reserve atomically (this process)
-            cfg = check(db, task, user)
-            _reserved["usd"] += reserve
+        cfg = check(db, task, user)
+        _reserve(db, task, micros)                         # atomic on every pod
     except AiBlocked as exc:
         record(db, task, user, "blocked", None, started, message=str(exc))
         raise
@@ -296,8 +369,7 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
     try:
         return _run_reserved(db, user, task, call, h, cache, started, AiError)
     finally:
-        with _budget_lock:
-            _reserved["usd"] = max(0.0, _reserved["usd"] - reserve)
+        _release(db, micros)
 
 
 def _run_reserved(db, user, task, call, h, cache, started, AiError):
