@@ -217,6 +217,12 @@
       "skillPath": ".claude/skills/hunt-xxe/SKILL.md",
       "computedHash": "a74b466dfb2220787cd61c65860fa50c914b77c30151f04e63284a565c269069"
     },
+    "mcp-builder": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/mcp-builder/SKILL.md",
+      "computedHash": "b483b56d6673134497e45489c317f26ae0f1429c194db0297e43073e17e6748c"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",

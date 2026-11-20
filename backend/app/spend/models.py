@@ -471,6 +471,9 @@ class SpendAiConfig(Base):
     budget_usd = Column(Integer, nullable=True, default=100)    # monthly hard limit
     alert_usd = Column(Integer, nullable=True, default=50)      # admin alert threshold
     alert_month = Column(String(7), nullable=True)              # "2026-11": alert already sent this month
+    # Budget held by AI calls in flight, on every pod (ai_platform._reserve): worst-case cost, released after the call.
+    reserved_micros = Column(BigInteger, nullable=True, default=0)
+    reserved_at = Column(DateTime, nullable=True)               # last reservation; older than RESERVE_STALE = leftover of a crash
     rate_per_hour = Column(Integer, nullable=True, default=30)  # calls per user per hour
     updated_at = Column(DateTime, nullable=False, default=utcnow)
     updated_by = Column(String(255), nullable=False)

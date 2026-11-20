@@ -58,8 +58,8 @@ def test_protocol_handshake_and_tools(client):
     assert n.status_code == 202
     tools = _rpc(client, tok, "tools/list").json()["result"]["tools"]
     names = {t["name"] for t in tools}
-    assert {"app_overview", "search_logs", "error_summary", "endpoint_performance", "slow_queries",
-            "sync_history", "performance_trend", "slow_requests"} <= names
+    assert {"ico_app_overview", "ico_search_logs", "ico_error_summary", "ico_endpoint_performance", "ico_slow_queries",
+            "ico_sync_history", "ico_performance_trend", "ico_slow_requests"} <= names          # old names: aliases
     assert all(t["annotations"]["readOnlyHint"] for t in tools)
     assert _rpc(client, tok, "prompts/get", {"name": "health_review"}).json()["result"]["messages"]
     assert _rpc(client, tok, "nope").json()["error"]["code"] == -32601
@@ -130,7 +130,7 @@ def test_logs_are_redacted_grouped_and_masked(client, monkeypatch):
     db.close()
     # Every tool call is audited.
     audit = client.get("/api/admin/mcp/audit").json()
-    assert any(a["action"] == "mcp.tool" and a["detail"]["tool"] == "error_summary" for a in audit)
+    assert any(a["action"] == "mcp.tool" and a["detail"]["tool"] == "ico_error_summary" for a in audit)   # old name resolved
 
 
 def test_performance_is_captured_per_route_template(client):

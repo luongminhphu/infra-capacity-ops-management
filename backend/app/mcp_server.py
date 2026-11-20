@@ -21,10 +21,10 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from . import observability as obs
+from . import mcp_extra, observability as obs
 from .config import get_settings
 from .database import get_db
-from .models import ApiToken, AppLog, AuditLog, BackupSyncRun, SnapshotRun, User
+from .models import ApiToken, AppLog, AuditLog, BackupSyncRun, JobRun, SnapshotRun, User
 from .security import is_admin, local_login_allowed
 
 logger = logging.getLogger("vco.mcp")
@@ -40,7 +40,9 @@ INSTRUCTIONS = (
     "Use it to diagnose errors and slowness and to propose code or configuration changes with evidence "
     "(tool output, timestamps, app version). Do not claim a change is deployed: fixes go through a pull "
     "request in the ICO repository, reviewed by a human, then a manual redeploy on Rancher. "
-    "Times are UTC. Host names and IPs may be masked as <host:xxxxxx>/<ip:xxxxxx> (same value → same tag)."
+    "Times are UTC. Host names and IPs may be masked as <host:xxxxxx>/<ip:xxxxxx> (same value → same tag). "
+    "Start with ico_app_overview, ico_config_check and ico_source_status; follow ids with ico_trace_request. "
+    "Several pods may run: INFO logs, slow requests and slow SQL are per pod (field pod), the rest is shared."
 )
 
 
@@ -75,8 +77,17 @@ def _level(name: Any) -> int:
     return lv if isinstance(lv, int) else logging.WARNING
 
 
+def _like(text: str) -> str:
+    """Literal substring for LIKE / ILIKE ('%' and '_' typed by the client are not wildcards)."""
+    return "%" + str(text).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 def _log_out(e: Dict[str, Any], with_trace: bool) -> Dict[str, Any]:
     out = {"at": _iso(e["at"]), "level": e["level"], "logger": e["logger"], "message": obs.mask_infra(e["message"])}
+    if e.get("request_id"):
+        out["requestId"] = e["request_id"]
+    if e.get("pod"):
+        out["pod"] = e["pod"]
     if e.get("exc_type"):
         out["exception"] = e["exc_type"]
     if with_trace and e.get("traceback"):
@@ -106,6 +117,7 @@ def tool_app_overview(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
         "logs": {"last1h": counts_1h, "last24h": counts},
         "requestsLast1h": obs.summarize(obs.buckets_since(db, hour)),
         "requestsLast24h": obs.summarize(obs.buckets_since(db, day)),
+        "pod": obs.POD,
         "lastVcenterSync": _run_out(last_vc, "vcenter") if last_vc else None,
         "lastBackupSync": _run_out(last_nb, "backup") if last_nb else None,
     }
@@ -115,42 +127,65 @@ def tool_search_logs(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
     level = _level(args.get("level"))
     since = _since(args.get("since_minutes"), 60)
     limit = _limit(args.get("limit"), 100)
+    offset = int(args.get("offset") or 0)
     prefix, contains = args.get("logger"), args.get("contains")
+    rid = str(args.get("request_id") or "").strip()[:64] or None
     with_trace = bool(args.get("include_traceback", True))
     if level >= logging.WARNING:
         obs.flush()
         q = db.query(AppLog).filter(AppLog.at >= since,
                                     AppLog.level.in_([n for n in ("WARNING", "ERROR", "CRITICAL") if _level(n) >= level]))
         if prefix:
-            q = q.filter(AppLog.logger.like(f"{prefix}%"))
+            q = q.filter(AppLog.logger.like(str(prefix).replace("%", "").replace("_", "\\_") + "%", escape="\\"))
         if contains:
-            q = q.filter(AppLog.message.ilike(f"%{contains}%"))
-        rows = q.order_by(AppLog.at.desc()).limit(limit).all()
-        items = [_log_out({"at": r.at, "level": r.level, "logger": r.logger, "message": r.message,
-                           "exc_type": r.exc_type, "traceback": r.traceback}, with_trace) for r in rows]
-        source = "database (WARNING+, kept %d days)" % get_settings().obs_retention_days
+            q = q.filter(AppLog.message.ilike(_like(contains), escape="\\"))
+        if rid:
+            q = q.filter(AppLog.request_id == rid)
+        rows = q.order_by(AppLog.at.desc(), AppLog.id.desc()).offset(offset).limit(limit + 1).all()
+        page = _page(rows, offset, limit)
+        rows = rows[:limit]
+        items = [_log_out({"at": r.at, "level": r.level, "logger": r.logger, "message": r.message, "exc_type": r.exc_type,
+                           "traceback": r.traceback, "request_id": r.request_id, "pod": r.pod}, with_trace) for r in rows]
+        source = "database (WARNING+, kept %d days, every pod)" % get_settings().obs_retention_days
     else:
-        items = [_log_out(e, with_trace) for e in obs.recent_logs(level, since, prefix, contains, limit)]
-        source = "memory (INFO+, since the last restart, last 5000 records)"
-    return {"source": source, "count": len(items), "logs": items}
+        mem = obs.recent_logs(level, since, prefix, contains, offset + limit + 1, rid)[offset:]
+        page = _page(mem, offset, limit)
+        items = [_log_out(e, with_trace) for e in mem[:limit]]
+        source = f"memory of pod {obs.POD} (INFO+, since the last restart, last 5000 records)"
+    return {"source": source, "pod": obs.POD, "count": len(items), "logs": items, **page}
 
 
 def tool_error_summary(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
     obs.flush()
     since = _since(args.get("since_minutes"), 1440)
     limit = _limit(args.get("limit"), 30, 200)
+    offset = int(args.get("offset") or 0)
     groups = (db.query(AppLog.fingerprint, func.count(AppLog.id), func.min(AppLog.at), func.max(AppLog.at),
                        func.max(AppLog.id))
               .filter(AppLog.at >= since).group_by(AppLog.fingerprint)
-              .order_by(func.count(AppLog.id).desc()).limit(limit).all())
+              .order_by(func.count(AppLog.id).desc(), func.max(AppLog.at).desc(), AppLog.fingerprint)
+              .offset(offset).limit(limit + 1).all())          # ties: most recent first
+    page = _page(groups, offset, limit)
+    groups = groups[:limit]
+    # 3 queries in all (was 2 per group): the sample rows, then versions and pods of every group at once
+    fps = [g[0] for g in groups]
+    samples = {r.id: r for r in db.query(AppLog).filter(AppLog.id.in_([g[4] for g in groups] or [-1]))}
+    versions: Dict[str, set] = defaultdict(set)
+    pods: Dict[str, set] = defaultdict(set)
+    for fp, v, pod in (db.query(AppLog.fingerprint, AppLog.app_version, AppLog.pod)
+                       .filter(AppLog.fingerprint.in_(fps or [""]), AppLog.at >= since).distinct()):
+        versions[fp].add(v)
+        if pod:
+            pods[fp].add(pod)
     out = []
     for fp, n, first, last, sample_id in groups:
-        r = db.get(AppLog, sample_id)
-        versions = [v for (v,) in db.query(AppLog.app_version).filter(AppLog.fingerprint == fp, AppLog.at >= since).distinct()]
+        r = samples[sample_id]
         out.append({"count": n, "firstSeen": _iso(first), "lastSeen": _iso(last), "level": r.level, "logger": r.logger,
                     "exception": r.exc_type, "sampleMessage": obs.mask_infra(r.message)[:1500],
-                    "sampleTraceback": obs.mask_infra(r.traceback or "")[-2500:] or None, "appVersions": versions})
-    return {"since": _iso(since), "groups": out}
+                    "sampleTraceback": obs.mask_infra(r.traceback or "")[-2500:] or None,
+                    "sampleRequestId": r.request_id, "appVersions": sorted(versions[fp], key=lambda x: x or ""),
+                    "pods": sorted(pods[fp])})
+    return {"since": _iso(since), "groups": out, **page}
 
 
 def tool_endpoint_performance(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -219,10 +254,33 @@ def _run_out(r, kind: str) -> Dict[str, Any]:
     return out
 
 
+FAMILIES = ("virtualization", "backup", "storage", "hardware", "ipam")
+JOBS = ("sync", "cmdb", "owners", "reviews", "alerts", "retention", "metrics", "poll")
+
+
 def tool_sync_history(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Every background run from job_runs (all source families + the derived jobs). Before the first recorded run
+    (an upgraded install), falls back to the legacy vCenter / NetBackup tables."""
+    from . import jobruns
     src = args.get("source") or "all"
     limit = _limit(args.get("limit"), 20, 200)
     status = args.get("status")
+    if db.query(JobRun.id).first() is not None:
+        q = db.query(JobRun).filter(JobRun.started_at >= _since(args.get("since_minutes"), 1440))
+        if src in FAMILIES:
+            q = q.filter(JobRun.job == "sync", JobRun.family == src)
+        elif src == "vcenter":                       # old name of the parameter
+            q = q.filter(JobRun.job == "sync", JobRun.family == "virtualization")
+        elif src in JOBS:
+            q = q.filter(JobRun.job == src)
+        if status in ("ok", "error", "skipped", "timeout"):
+            q = q.filter(JobRun.status == status)
+        if args.get("key"):
+            q = q.filter(JobRun.source_key == str(args["key"])[:64])
+        offset = int(args.get("offset") or 0)
+        rows = q.order_by(JobRun.started_at.desc(), JobRun.id.desc()).offset(offset).limit(limit + 1).all()
+        return {"source": "job_runs (every pod, kept %d days)" % obs.JOB_RUN_RETENTION_DAYS,
+                "runs": [jobruns.out(r) for r in rows[:limit]], **_page(rows, offset, limit)}
     out: List[Dict[str, Any]] = []
     if src in ("all", "vcenter"):
         q = db.query(SnapshotRun).filter(SnapshotRun.source == "live")
@@ -235,83 +293,237 @@ def tool_sync_history(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
             q = q.filter(BackupSyncRun.status == status)
         out += [_run_out(r, "backup") for r in q.order_by(BackupSyncRun.started_at.desc()).limit(limit)]
     out.sort(key=lambda r: r["startedAt"] or "", reverse=True)
-    return {"runs": out[:limit]}
+    return {"source": "legacy snapshot_runs / backup_sync_runs", "runs": out[:limit], "offset": 0, "hasMore": False,
+            "nextOffset": None}
 
 
 _STR = {"type": "string"}
-_INT = {"type": "integer"}
+
+
+def _int(default: int, lo: int, hi: int, desc: str = "") -> Dict[str, Any]:
+    return {"type": "integer", "default": default, "minimum": lo, "maximum": hi, **({"description": desc} if desc else {})}
+
+
+def _obj(props: Dict[str, Any], required: tuple = ()) -> Dict[str, Any]:
+    return {"type": "object", "properties": props, **({"required": list(required)} if required else {})}
+
+
+_ARR = {"type": "array"}
+_OBJ = {"type": "object"}
+_PAGE_IN = {"offset": _int(0, 0, 10000, "Skip this many items (pagination: pass nextOffset of the previous page)")}
+_PAGE_OUT = {"offset": {"type": "integer"}, "hasMore": {"type": "boolean"}, "nextOffset": {"type": ["integer", "null"]}}
+_MINUTES = _int(60, 1, 43200, "Look back this many minutes (max 30 days)")
+
+# name → fn, title, description, input schema, output schema. Every tool is read only, idempotent, closed world.
 TOOLS: Dict[str, Dict[str, Any]] = {
-    "app_overview": {
-        "fn": tool_app_overview,
-        "description": "Health snapshot: app version, uptime, memory/CPU, DB ping and pool, log counts by level, "
-                       "request volume/latency/error rate for the last 1h and 24h, last collector runs.",
-        "schema": {"type": "object", "properties": {}},
+    "ico_app_overview": {
+        "fn": tool_app_overview, "title": "App health overview",
+        "description": "Start here. Health snapshot of the pod that answers: app version, uptime, memory/CPU, DB ping and pool, "
+                       "log counts by level, request volume / latency / error rate for the last 1h and 24h (all pods), last "
+                       "vCenter and backup syncs. Then: ico_config_check, ico_source_status, ico_error_summary.",
+        "schema": _obj({}),
+        "output": _obj({"appVersion": _STR, "pod": _STR, "uptimeHours": {"type": "number"}, "database": _OBJ, "logs": _OBJ,
+                        "requestsLast1h": _OBJ, "requestsLast24h": _OBJ}, ("appVersion", "pod", "logs")),
     },
-    "search_logs": {
-        "fn": tool_search_logs,
-        "description": "Search the app's logs. WARNING/ERROR come from the database (kept across restarts); "
-                       "INFO/DEBUG only from memory since the last restart. Newest first.",
-        "schema": {"type": "object", "properties": {
+    "ico_search_logs": {
+        "fn": tool_search_logs, "title": "Search logs",
+        "description": "Search the app's logs, newest first. WARNING/ERROR come from the database (every pod, kept "
+                       "OBS_RETENTION_DAYS); INFO/DEBUG only from the memory of the pod that answers, since its restart. Each "
+                       "record has requestId (X-Request-ID, or job-<name>-<id> for background work) and pod. Use request_id to "
+                       "follow one request / scheduler round, or ico_trace_request for logs + job runs together.",
+        "schema": _obj({
             "level": {"type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], "default": "WARNING"},
-            "since_minutes": {**_INT, "default": 60}, "logger": {**_STR, "description": "Logger name prefix, e.g. vco.netbackup"},
-            "contains": {**_STR, "description": "Case-insensitive text filter"},
-            "include_traceback": {"type": "boolean", "default": True}, "limit": {**_INT, "default": 100}}},
+            "since_minutes": _MINUTES, "logger": {**_STR, "description": "Logger name prefix, e.g. vco.netbackup"},
+            "contains": {**_STR, "description": "Case-insensitive literal text filter (% and _ are plain characters)"},
+            "request_id": {**_STR, "description": "Only records of this request / job id"},
+            "include_traceback": {"type": "boolean", "default": True}, "limit": _int(100, 1, 500), **_PAGE_IN}),
+        "output": _obj({"source": _STR, "pod": _STR, "count": {"type": "integer"}, "logs": _ARR, **_PAGE_OUT},
+                       ("source", "count", "logs", "hasMore")),
     },
-    "error_summary": {
-        "fn": tool_error_summary,
-        "description": "WARNING+ log records grouped by recurring error (same logger, exception and message shape): "
-                       "count, first/last seen, app versions affected, a sample message and traceback.",
-        "schema": {"type": "object", "properties": {"since_minutes": {**_INT, "default": 1440}, "limit": {**_INT, "default": 30}}},
+    "ico_error_summary": {
+        "fn": tool_error_summary, "title": "Recurring errors",
+        "description": "WARNING+ records grouped by recurring problem (same logger, exception and message shape), most "
+                       "frequent first: count, first/last seen, app versions and pods affected, a sample message, traceback "
+                       "and sampleRequestId (pass it to ico_trace_request).",
+        "schema": _obj({"since_minutes": _int(1440, 1, 43200, "Look back this many minutes (max 30 days)"),
+                        "limit": _int(30, 1, 200), **_PAGE_IN}),
+        "output": _obj({"since": _STR, "groups": _ARR, **_PAGE_OUT}, ("since", "groups", "hasMore")),
     },
-    "endpoint_performance": {
-        "fn": tool_endpoint_performance,
-        "description": "Per API endpoint (route template): requests, 4xx/5xx, avg/p50/p95/p99/max latency, "
-                       "average DB time and SQL queries per request.",
-        "schema": {"type": "object", "properties": {
-            "since_minutes": {**_INT, "default": 60},
-            "sort": {"type": "string", "enum": ["p95", "avg", "count", "errors", "max", "db"], "default": "p95"},
-            "limit": {**_INT, "default": 25}}},
+    "ico_endpoint_performance": {
+        "fn": tool_endpoint_performance, "title": "Endpoint performance",
+        "description": "Per API endpoint (route template): requests, 4xx/5xx, avg / p50 / p95 / p99 / max latency (percentiles "
+                       "interpolated inside histogram buckets), average DB time and SQL queries per request (a high count "
+                       "suggests N+1).",
+        "schema": _obj({"since_minutes": _MINUTES,
+                        "sort": {"type": "string", "enum": ["p95", "avg", "count", "errors", "max", "db"], "default": "p95"},
+                        "limit": _int(25, 1, 200)}),
+        "output": _obj({"since": _STR, "overall": _OBJ, "endpoints": _ARR}, ("since", "overall", "endpoints")),
     },
-    "performance_trend": {
-        "fn": tool_performance_trend,
-        "description": "Latency / volume / errors over time (optionally for one endpoint, e.g. 'GET /api/backup/overview'), "
-                       "with the app versions seen in each interval — use it to spot regressions after a deploy.",
-        "schema": {"type": "object", "properties": {
-            "hours": {**_INT, "default": 24}, "bucket_minutes": {**_INT, "default": 60}, "endpoint": _STR}},
+    "ico_performance_trend": {
+        "fn": tool_performance_trend, "title": "Performance over time",
+        "description": "Latency / volume / errors per interval (optionally for one endpoint, e.g. 'GET /api/backup/summary') "
+                       "with the app versions seen in each interval — spot regressions after a deploy.",
+        "schema": _obj({"hours": _int(24, 1, 720), "bucket_minutes": _int(60, 5, 1440), "endpoint": _STR}),
+        "output": _obj({"endpoint": _STR, "bucketMinutes": {"type": "integer"}, "points": _ARR}, ("points",)),
     },
-    "slow_requests": {
-        "fn": tool_slow_requests,
-        "description": "Slowest recent requests (over OBS_SLOW_REQUEST_MS, or with >= 100 SQL queries) with DB time and query count.",
-        "schema": {"type": "object", "properties": {"limit": {**_INT, "default": 20}}},
+    "ico_slow_requests": {
+        "fn": tool_slow_requests, "title": "Slowest requests",
+        "description": "Slowest recent requests of the pod that answers (over OBS_SLOW_REQUEST_MS, or with >= 100 SQL "
+                       "queries) with DB time and query count, since its restart.",
+        "schema": _obj({"limit": _int(20, 1, 200)}),
+        "output": _obj({"thresholdMs": {"type": "number"}, "requests": _ARR}, ("requests",)),
     },
-    "slow_queries": {
-        "fn": tool_slow_queries,
-        "description": "Slow SQL statements (over OBS_SLOW_QUERY_MS) since the last restart, normalised, by total time.",
-        "schema": {"type": "object", "properties": {"limit": {**_INT, "default": 20}}},
+    "ico_slow_queries": {
+        "fn": tool_slow_queries, "title": "Slowest SQL",
+        "description": "Slow SQL statements of the pod that answers (over OBS_SLOW_QUERY_MS) since its restart, normalised "
+                       "(never with parameters), by total time.",
+        "schema": _obj({"limit": _int(20, 1, 200)}),
+        "output": _obj({"thresholdMs": {"type": "number"}, "queries": _ARR}, ("queries",)),
     },
-    "sync_history": {
-        "fn": tool_sync_history,
-        "description": "Recent collector runs (vCenter inventory and backup server polls): status, duration, error.",
-        "schema": {"type": "object", "properties": {
-            "source": {"type": "string", "enum": ["all", "vcenter", "backup"], "default": "all"},
-            "status": {"type": "string", "enum": ["ok", "error"]}, "limit": {**_INT, "default": 20}}},
+    "ico_sync_history": {
+        "fn": tool_sync_history, "title": "Background runs",
+        "description": "Individual background runs, newest first: source syncs of every family (virtualization = vCenter / "
+                       "Proxmox / Nutanix, backup, storage, hardware = Dell OME, ipam) and the derived jobs (cmdb build, "
+                       "owners rules, reviews, alerts, retention, metrics, poll = whole round): trigger, pod, duration, "
+                       "status, counters, error. runId → ico_trace_request. For totals per job use ico_job_runs.",
+        "schema": _obj({
+            "source": {"type": "string", "enum": ["all", "virtualization", "backup", "storage", "hardware", "ipam", "vcenter",
+                                                  "sync", "cmdb", "owners", "reviews", "alerts", "retention", "metrics", "poll"],
+                       "default": "all"},
+            "status": {"type": "string", "enum": ["ok", "error", "skipped", "timeout"]},
+            "key": {**_STR, "description": "Source key, e.g. vc1"},
+            "since_minutes": _int(1440, 1, 43200, "Look back this many minutes (max 30 days)"), "limit": _int(20, 1, 200), **_PAGE_IN}),
+        "output": _obj({"source": _STR, "runs": _ARR, **_PAGE_OUT}, ("runs",)),
+    },
+    "ico_job_runs": {
+        "fn": mcp_extra.tool_job_runs, "title": "Background runs — totals",
+        "description": "Background runs aggregated per job (and per source for syncs): runs, ok / error / skipped / timeout, "
+                       "manual runs, p50 / p95 / max duration, last status and error. Failing or slow groups first.",
+        "schema": _obj({"since_hours": _int(24, 1, 720)}),
+        "output": _obj({"sinceHours": {"type": "integer"}, "groups": _ARR}, ("groups",)),
+    },
+    "ico_source_status": {
+        "fn": mcp_extra.tool_source_status, "title": "Data source status",
+        "description": "Connection state of every configured data source (vCenter / Proxmox / Nutanix, NetBackup, Pure / NetApp, "
+                       "Dell OME, GestióIP) from its real last syncs: ok / stale / error / never, last OK, last error.",
+        "schema": _obj({"family": {"type": "string", "enum": ["virtualization", "backup", "storage", "hardware", "ipam"]}}),
+        "output": _obj({"summary": _OBJ, "sources": _ARR, "staleAfterMinutes": {"type": "integer"}}, ("summary", "sources")),
+    },
+    "ico_data_freshness": {
+        "fn": mcp_extra.tool_data_freshness, "title": "Data freshness",
+        "description": "How old the data is: age of the least recent successful sync per source family, last CI registry "
+                       "build, CI counts by type (active / retired), owner coverage of VMs.",
+        "schema": _obj({}),
+        "output": _obj({"families": _ARR, "cmdb": _OBJ, "ownerCoverage": {"type": ["object", "null"]}}, ("families", "cmdb")),
+    },
+    "ico_ai_usage": {
+        "fn": mcp_extra.tool_ai_usage, "title": "AI module usage",
+        "description": "The app's own AI module (Settings → AI & MCP): configuration flags (no key), month cost vs budget, per "
+                       "task calls / cached / blocked / errors, latency p50 / p95, tokens, cost, and the recent errors / "
+                       "blocks with their safe message. Never prompts or answers; users shown as hashes.",
+        "schema": _obj({"since_hours": _int(168, 1, 720)}),
+        "output": _obj({"config": _OBJ, "monthCostUsd": {"type": "number"}, "tasks": _ARR, "recentProblems": _ARR},
+                       ("config", "tasks")),
+    },
+    "ico_config_check": {
+        "fn": mcp_extra.tool_config_check, "title": "Configuration check",
+        "description": "Configuration sanity (flags only, no secret values): PUBLIC_URL / HTTPS, Secure cookie, scheduler and "
+                       "leader pod, PDF font library, SMTP, MCP host masking, AI module, features switched off, retention.",
+        "schema": _obj({}),
+        "output": _obj({"appVersion": _STR, "pod": _STR, "status": _STR, "checks": _ARR}, ("status", "checks")),
+    },
+    "ico_trace_request": {
+        "fn": mcp_extra.tool_trace_request, "title": "Trace one request / run",
+        "description": "Everything recorded for one request id or job id, in time order: logs (WARNING+ of every pod, INFO of "
+                       "the pod that answers) and background runs. Ids come from a response's X-Request-ID, requestId in "
+                       "logs, sampleRequestId of ico_error_summary or runId of ico_sync_history.",
+        "schema": _obj({"request_id": {**_STR, "minLength": 8, "maxLength": 64}}, ("request_id",)),
+        "output": _obj({"requestId": _STR, "count": {"type": "integer"}, "events": _ARR}, ("requestId", "events")),
     },
 }
+ANNOTATIONS = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+# Names before review phase B: still callable for one release (an AI client may have cached them), not listed.
+ALIASES = {n[len("ico_"):]: n for n in TOOLS if n[len("ico_"):] in (
+    "app_overview", "search_logs", "error_summary", "endpoint_performance", "performance_trend", "slow_requests",
+    "slow_queries", "sync_history")}
+
+
+def _check_args(name: str, schema: Dict[str, Any], args: Dict[str, Any]) -> None:
+    """Validate against the tool's input schema; the message says how to fix the call (no silent clamping)."""
+    props = schema.get("properties") or {}
+    unknown = sorted(set(args) - set(props))
+    if unknown:
+        raise mcp_extra.ToolInputError(f"Unknown argument(s) {', '.join(unknown)} for {name}. "
+                                       f"Allowed: {', '.join(sorted(props)) or '(none)'}.")
+    for req in schema.get("required") or []:
+        if args.get(req) in (None, ""):
+            raise mcp_extra.ToolInputError(f"{req} is required for {name}.")
+    for k, v in args.items():
+        p = props[k]
+        if v is None:
+            continue
+        t = p.get("type")
+        if t == "integer":
+            if not isinstance(v, int) or isinstance(v, bool):
+                raise mcp_extra.ToolInputError(f"{k} must be an integer (got {v!r}).")
+            if not p.get("minimum", v) <= v <= p.get("maximum", v):
+                raise mcp_extra.ToolInputError(f"{k} must be from {p['minimum']} to {p['maximum']} (got {v}). "
+                                               "Use a smaller window with offset paging for more.")
+        elif t == "boolean" and not isinstance(v, bool):
+            raise mcp_extra.ToolInputError(f"{k} must be true or false (got {v!r}).")
+        elif t == "string":
+            if not isinstance(v, str):
+                raise mcp_extra.ToolInputError(f"{k} must be a string (got {v!r}).")
+            if len(v) > p.get("maxLength", 500):
+                raise mcp_extra.ToolInputError(f"{k} is too long (max {p.get('maxLength', 500)} characters).")
+            if "enum" in p and v not in p["enum"]:
+                raise mcp_extra.ToolInputError(f"{k} must be one of {', '.join(p['enum'])} (got {v!r}).")
+
+
+def _page(items: List[Any], offset: int, limit: int) -> Dict[str, Any]:
+    """Paging fields. `items` = the rows of this page fetched with limit + 1: the extra row only says there is more."""
+    more = len(items) > limit
+    return {"offset": offset, "hasMore": more, "nextOffset": offset + limit if more else None}
+
 
 PROMPTS = {
     "health_review": {
         "description": "Review ICO health and performance and propose prioritised fixes with evidence.",
-        "text": ("Review the health of Infra Capacity Ops using the ico tools: start with app_overview, then error_summary "
-                 "(last 24h), endpoint_performance (last 24h, sorted by p95), slow_requests, slow_queries and sync_history. "
-                 "For each problem give: symptom, evidence (tool output with timestamps and app version), likely cause in the "
-                 "code (file and function if you have the repository), proposed fix, and risk. Do not change anything in "
-                 "production; if a code change is warranted, prepare it as a pull request for human review."),
+        "text": ("Review the health of Infra Capacity Ops with the ico tools: ico_app_overview, ico_config_check, "
+                 "ico_source_status, ico_error_summary (24h), ico_job_runs (24h), ico_endpoint_performance (24h, sort p95), "
+                 "ico_slow_requests and ico_slow_queries. Follow any interesting id with ico_trace_request. For each problem "
+                 "give: symptom, evidence (tool output with timestamps, app version, pod), likely cause in the code (file and "
+                 "function if you have the repository), proposed fix, risk. Do not change anything in production; if a code "
+                 "change is warranted, prepare it as a pull request for human review."),
     },
     "error_triage": {
         "description": "Explain the most frequent recent errors and propose fixes.",
-        "text": ("Use error_summary for the last 24 hours, then search_logs around the first occurrence of the top 3 groups. "
-                 "Explain the root cause of each, whether it is a bug, a configuration or an external system problem, "
-                 "and propose a fix (code change via pull request, or a configuration step for the operator)."),
+        "text": ("Use ico_error_summary for the last 24 hours, then ico_trace_request on the sampleRequestId of the top 3 "
+                 "groups (or ico_search_logs around their first occurrence). Explain the root cause of each, whether it is a "
+                 "bug, a configuration or an external system problem, and propose a fix (code change via pull request, or a "
+                 "configuration step for the operator)."),
+    },
+    "sync_triage": {
+        "description": "Find data sources that fail, are stale or slow, and say why and what to do.",
+        "text": ("Use ico_source_status, ico_data_freshness and ico_job_runs (since_hours=48). For every source in error / "
+                 "stale / never, or a job with errors, timeouts or a p95 far above its p50: list its last runs with "
+                 "ico_sync_history(source=<family>, key=<key>), read the logs of the failing runId with ico_trace_request, "
+                 "and classify the cause (credentials / network / remote API / our code / capacity of the run). Give the "
+                 "operator's next step or the code change, with evidence. Sources are read only: never suggest a write call."),
+    },
+    "ai_module_review": {
+        "description": "Review the app's AI module: errors, blocks, latency, cost, settings.",
+        "text": ("Use ico_ai_usage (since_hours=168) and ico_config_check. Report per task: calls, errors and blocks with their "
+                 "messages, p95 latency, cost and month cost against the budget. Flag tasks with an error or block rate above "
+                 "10 %, slow tasks, masking switched off, and spend that will exceed the budget at the current pace. Propose "
+                 "setting changes (which task, which limit) or code changes with evidence."),
+    },
+    "release_regression": {
+        "description": "Compare errors and latency before and after the latest deploy.",
+        "text": ("Use ico_app_overview for the current appVersion, ico_performance_trend (hours=72, bucket_minutes=60) overall "
+                 "and for the 5 slowest endpoints of ico_endpoint_performance (since_minutes=4320), and ico_error_summary "
+                 "(since_minutes=4320) with its appVersions. Say whether the current version is slower or fails more than the "
+                 "previous one, on which endpoints / errors, with the numbers before and after."),
     },
 }
 
@@ -321,6 +533,11 @@ PROMPTS = {
 # ---------------------------------------------------------------------------
 def _rpc_error(id_: Any, code: int, message: str) -> Dict[str, Any]:
     return {"jsonrpc": "2.0", "id": id_, "error": {"code": code, "message": message}}
+
+
+def _tool_error(id_: Any, message: str) -> Dict[str, Any]:
+    """A failed tool call is a result with isError (the model reads it and can retry), not a protocol error."""
+    return {"jsonrpc": "2.0", "id": id_, "result": {"content": [{"type": "text", "text": message}], "isError": True}}
 
 
 def _authenticate(request: Request, db: Session) -> Optional[tuple]:
@@ -369,8 +586,8 @@ def _handle(msg: Dict[str, Any], db: Session, user: User, tok: ApiToken, request
         return {"jsonrpc": "2.0", "id": id_, "result": {}}
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": id_, "result": {"tools": [
-            {"name": n, "description": t["description"], "inputSchema": t["schema"],
-             "annotations": {"readOnlyHint": True, "openWorldHint": False}} for n, t in TOOLS.items()]}}
+            {"name": n, "title": t["title"], "description": t["description"], "inputSchema": t["schema"],
+             "outputSchema": t["output"], "annotations": {**ANNOTATIONS, "title": t["title"]}} for n, t in TOOLS.items()]}}
     if method == "prompts/list":
         return {"jsonrpc": "2.0", "id": id_, "result": {"prompts": [
             {"name": n, "description": p["description"]} for n, p in PROMPTS.items()]}}
@@ -382,25 +599,36 @@ def _handle(msg: Dict[str, Any], db: Session, user: User, tok: ApiToken, request
             {"role": "user", "content": {"type": "text", "text": p["text"]}}]}}
     if method == "tools/call":
         name, args = params.get("name"), params.get("arguments") or {}
+        name = ALIASES.get(name, name)
         tool = TOOLS.get(name)
-        if not tool or not isinstance(args, dict):
-            return _rpc_error(id_, -32602, f"Unknown tool: {name}")
+        if not tool:
+            return _tool_error(id_, f"Unknown tool {str(name)[:60]!r}. Available tools: {', '.join(TOOLS)}. "
+                                    "Start with ico_app_overview.")
+        if not isinstance(args, dict):
+            return _tool_error(id_, "arguments must be a JSON object.")
         detail = json.dumps({"tool": name, "args": args, "token": tok.prefix}, default=str)
         if len(detail) > 2000:   # keep the audit row valid JSON (slicing the text cut it mid-string, SCH-10)
             detail = json.dumps({"tool": name, "argsTruncated": json.dumps(args, default=str)[:1500], "token": tok.prefix})
         db.add(AuditLog(username=user.username, action="mcp.tool", client_ip=_client_ip(request), detail=detail))
         db.commit()
         try:
+            _check_args(name, tool["schema"], args)
             data = tool["fn"](db, args)
-            body = json.dumps(data, ensure_ascii=False, default=str)
-            if len(body) > MAX_TEXT:
-                body = body[:MAX_TEXT] + "\n…(truncated — use a smaller limit or time range)"
-            return {"jsonrpc": "2.0", "id": id_, "result": {"content": [{"type": "text", "text": body}], "isError": False}}
+        except mcp_extra.ToolInputError as exc:
+            db.rollback()
+            return _tool_error(id_, f"Invalid arguments: {exc}")
         except Exception as exc:  # noqa: BLE001
             db.rollback()
             logger.exception("MCP tool %s failed", name)
-            return {"jsonrpc": "2.0", "id": id_, "result": {
-                "content": [{"type": "text", "text": f"Tool error: {type(exc).__name__}"}], "isError": True}}
+            return _tool_error(id_, f"{name} failed ({type(exc).__name__}). Details are in the server log under request id "
+                                    f"{obs.current_request_id()} — read them with ico_trace_request. Retry with a smaller "
+                                    "window or limit if the data set is large.")
+        body = json.dumps(data, ensure_ascii=False, default=str)
+        if len(body) > MAX_TEXT:
+            return _tool_error(id_, f"Result too large ({len(body):,} characters, max {MAX_TEXT:,}). Use a smaller limit or "
+                                    "time window, or page with offset / nextOffset.")
+        return {"jsonrpc": "2.0", "id": id_, "result": {"content": [{"type": "text", "text": body}],
+                                                         "structuredContent": json.loads(body), "isError": False}}
     return _rpc_error(id_, -32601, f"Method not found: {method}")
 
 

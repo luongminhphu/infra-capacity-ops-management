@@ -1,0 +1,52 @@
+<!--
+  Evaluation of the ICO MCP server (skill mcp-builder, Phase 4) — 10 read-only questions that need several ico_* tools.
+  Data: the demo started by .claude/skills/web-layout/scripts/run_demo.sh (2 demo vCenters vc1 / vc2, 1 demo NetBackup
+  "demo", poll every 60 min), after its first poll round. Answers are deterministic for that demo.
+  Run (needs an Anthropic API key and an MCP token of the demo, see docs/huong-dan-chi-tiet.md "AI / MCP server"):
+    pip install -r .claude/skills/mcp-builder/scripts/requirements.txt
+    python .claude/skills/mcp-builder/scripts/evaluation.py -t http -u http://localhost:8765/mcp \
+      -H "Authorization: Bearer <token>" docs/design/ico-mcp-eval.xml
+  Target: at least 8 / 10 correct. Re-run when a tool, its description or the default model changes.
+-->
+<evaluation>
+  <qa_pair>
+    <question>The ICO demo polls virtualization sources. Which virtualization source key reported the larger number of VMs in its most recent successful sync? Answer with the key only.</question>
+    <answer>vc2</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many VMs did the most recent successful sync of virtualization source vc1 report?</question>
+    <answer>91</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Add up the ESXi hosts reported by the latest successful sync of every virtualization source. What is the total?</question>
+    <answer>26</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In the CI registry of ICO, how many active CIs of type vm are there?</question>
+    <answer>206</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many active backup client CIs does the CI registry hold?</question>
+    <answer>70</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many data sources does ICO poll in total, counting every family?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>After how many minutes without a successful sync does ICO mark a source as stale?</question>
+    <answer>180</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>For how many days does ICO keep its background job run records?</question>
+    <answer>90</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What percentage of VMs currently belongs to a system with an owner? Give the number only.</question>
+    <answer>0.0</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Every scheduler round stores one record per step. How many sources did the most recent poll round attempt?</question>
+    <answer>3</answer>
+  </qa_pair>
+</evaluation>

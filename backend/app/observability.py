@@ -30,6 +30,13 @@ from .config import get_settings
 LATENCY_BUCKETS_MS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000]  # + overflow
 BUCKET_MINUTES = 5
 STARTED_AT = dt.datetime.utcnow()
+POD = (os.environ.get("HOSTNAME") or __import__("socket").gethostname() or "?")[:64]   # Kubernetes sets HOSTNAME = pod name
+JOB_RUN_RETENTION_DAYS = 90
+# Library loggers that write a line per font / glyph table on every PDF: kept at WARNING (or ERROR) so the in-memory
+# ring and app_logs keep the app's own records. The HarfBuzz notice is logged once per process instead of per PDF.
+QUIET_LOGGERS = {"fontTools": logging.WARNING, "fontTools.subset": logging.WARNING, "fontTools.ttLib": logging.WARNING,
+                 "weasyprint.progress": logging.WARNING}           # "Step 1 - Fetching the HTML", … per PDF
+_ONCE_PREFIXES = ("Using fontTools instead of HarfBuzz-Subset",)
 
 _lock = threading.Lock()
 _ring: "collections.deque[Dict[str, Any]]" = collections.deque(maxlen=5000)
@@ -119,6 +126,31 @@ def fingerprint(logger_name: str, exc_type: Optional[str], message: str) -> str:
 # ---------------------------------------------------------------------------
 # Log capture
 # ---------------------------------------------------------------------------
+class _OnceFilter(logging.Filter):
+    """Let a known repetitive library notice through once per process (it stays visible, it stops flooding)."""
+
+    def __init__(self):
+        super().__init__()
+        self.seen: set = set()
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        for p in _ONCE_PREFIXES:
+            if msg.startswith(p):
+                if p in self.seen:
+                    return False
+                self.seen.add(p)
+        return True
+
+
+def quiet_libraries() -> None:
+    for name, level in QUIET_LOGGERS.items():
+        logging.getLogger(name).setLevel(level)
+    wp = logging.getLogger("weasyprint")
+    if not any(isinstance(f, _OnceFilter) for f in wp.filters):
+        wp.addFilter(_OnceFilter())
+
+
 class CaptureHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if record.name.startswith("ico.obs"):
@@ -130,7 +162,8 @@ class CaptureHandler(logging.Handler):
                 exc_type = record.exc_info[0].__name__
                 trace = redact("".join(tb_mod.format_exception(*record.exc_info))[-6000:])
             entry = {"at": dt.datetime.utcfromtimestamp(record.created), "level": record.levelname,
-                     "logger": record.name, "message": message[:4000], "exc_type": exc_type, "traceback": trace}
+                     "logger": record.name, "message": message[:4000], "exc_type": exc_type, "traceback": trace,
+                     "request_id": current_request_id(), "pod": POD}
             with _lock:
                 _ring.append(entry)
                 if record.levelno >= logging.WARNING:
@@ -142,12 +175,14 @@ class CaptureHandler(logging.Handler):
 
 
 def recent_logs(min_level: int, since: dt.datetime, logger_prefix: Optional[str], contains: Optional[str],
-                limit: int) -> List[Dict[str, Any]]:
+                limit: int, request_id: Optional[str] = None) -> List[Dict[str, Any]]:
     with _lock:
         items = list(_ring)
     out = []
     for e in reversed(items):
         if e["at"] < since or logging.getLevelName(e["level"]) < min_level:
+            continue
+        if request_id and e.get("request_id") != request_id:
             continue
         if logger_prefix and not e["logger"].startswith(logger_prefix):
             continue
@@ -353,7 +388,8 @@ def flush(force_all_buckets: bool = False) -> None:
         for e in logs:
             db.add(AppLog(at=e["at"], level=e["level"], logger=e["logger"][:128], message=e["message"],
                           exc_type=(e["exc_type"] or None) and e["exc_type"][:128], traceback=e["traceback"],
-                          fingerprint=e["fingerprint"], app_version=s.app_version))
+                          fingerprint=e["fingerprint"], app_version=s.app_version,
+                          request_id=(e.get("request_id") or None) and e["request_id"][:64], pod=e.get("pod")))
         for (start, method, route), b in done.items():
             # with_for_update: two pods merge into the same 5-minute row without losing counts
             row = (db.query(PerfBucket).filter_by(bucket_start=start, method=method, route=route[:255])
@@ -392,7 +428,7 @@ def flush(force_all_buckets: bool = False) -> None:
 
 def purge_old() -> None:
     from .database import SessionLocal
-    from .models import AppLog, AuditLog, PerfBucket
+    from .models import AppLog, AuditLog, JobRun, PerfBucket
 
     s = get_settings()
     cutoff = dt.datetime.utcnow() - dt.timedelta(days=s.obs_retention_days)
@@ -400,6 +436,8 @@ def purge_old() -> None:
     db = SessionLocal()
     try:
         db.query(AppLog).filter(AppLog.at < cutoff).delete(synchronize_session=False)
+        db.query(JobRun).filter(JobRun.started_at < dt.datetime.utcnow() - dt.timedelta(days=JOB_RUN_RETENTION_DAYS)) \
+            .delete(synchronize_session=False)
         db.query(PerfBucket).filter(PerfBucket.bucket_start < cutoff).delete(synchronize_session=False)
         db.query(AuditLog).filter(AuditLog.at < dt.datetime.utcnow() - dt.timedelta(days=365)).delete(synchronize_session=False)
         db.commit()
@@ -426,15 +464,20 @@ async def flush_loop() -> None:
 # Reading performance back
 # ---------------------------------------------------------------------------
 def percentile(hist: List[int], q: float, max_ms: float) -> Optional[float]:
-    """Upper bound of the latency bucket holding the q-quantile (conservative)."""
+    """q-quantile, interpolated linearly inside the latency bucket that holds it (bounds: previous bucket edge →
+    this edge, capped by the slowest request seen). The old "upper bound of the bucket" read 5 000 ms for anything
+    between 2,5 and 5 s; the histogram itself is unchanged (pods of both versions keep merging the same rows)."""
     total = sum(hist)
     if not total:
         return None
     rank, acc = q * total, 0
     for i, c in enumerate(hist):
+        if c and acc + c >= rank:
+            lo = float(LATENCY_BUCKETS_MS[i - 1]) if i > 0 else 0.0
+            hi = float(LATENCY_BUCKETS_MS[i]) if i < len(LATENCY_BUCKETS_MS) else float(max_ms)
+            hi = max(lo, min(hi, float(max_ms)))
+            return round(lo + (hi - lo) * (rank - acc) / c, 1)
         acc += c
-        if acc >= rank:
-            return round(float(min(LATENCY_BUCKETS_MS[i], max_ms)) if i < len(LATENCY_BUCKETS_MS) else float(max_ms), 1)
     return round(float(max_ms), 1)
 
 

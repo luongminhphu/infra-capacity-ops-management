@@ -162,12 +162,19 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
 - **Công tắc từng tác vụ**: soạn tờ trình, đọc báo giá PDF scan, tóm tắt khác biệt báo giá, **bản tin trang chủ**,
   **tổng kết báo cáo PDF**, **phân tích lỗi backup**, **ánh xạ cột file nhập**, **phân loại hệ điều hành**,
   **tóm tắt biến động VM**, **nhận định sizing**, **tóm tắt thay đổi hợp đồng**, **đọc hoá đơn**, **Hỏi ICO**.
-- **Che tên** host / IP / VM / client backup trước khi gửi (bật mặc định): thay bằng mã `<host:…>` / `<ip:…>`, rồi
-  khôi phục trong kết quả.
+- **Che tên** trước khi gửi (bật mặc định), thay bằng mã `<host:…>` / `<ip:…>` / `<email:…>`, rồi khôi phục trong
+  kết quả. Phạm vi che:
+  - host, IP, VM, client backup;
+  - datastore, mảng / volume storage, thiết bị Dell OME, hostname IPAM;
+  - **mọi địa chỉ email** (owner / backup / support là dữ liệu cá nhân).
+- **Hạn mức được giữ chỗ trong DB**: mỗi lượt gọi giữ trước chi phí tối đa của nó trong một lệnh UPDATE có điều kiện, nên
+  nhiều pod cùng gọi cũng không vượt hạn mức. Phần giữ chỗ được trả lại sau lượt gọi; phần còn sót do pod chết tự hết
+  sau 15 phút.
 - **Hạn mức 100 USD / tháng**: chạm hạn mức thì AI tạm dừng, các chức năng quay về văn bản theo luật.
   **Cảnh báo ở 50 USD**: gửi Discord (kênh có tick *Nhận cả cảnh báo vận hành*) và hiện trong hộp việc của admin,
   mỗi tháng một lần. Có giới hạn số lượt gọi mỗi người mỗi giờ.
-- **Nhật ký và thống kê**: mỗi lượt (tác vụ, người, model, token, chi phí, thời gian; không lưu nội dung) vào `ai_runs`.
+- **Nhật ký và thống kê**: mỗi lượt (tác vụ, người, model, token, chi phí, thời gian, mã request, phiên bản prompt,
+  phản hồi 👍 / 👎; không lưu nội dung) vào `ai_runs`. Admin xem qua MCP `ico_ai_usage`.
   Thống kê theo tác vụ và 30 lượt gần nhất.
   - Chi phí tính theo giá niêm yết của model đã trả lời; model lạ tính theo giá cao nhất.
   - Cùng dữ kiện thì dùng lại kết quả trong 6 giờ, không tính phí lần sau.
@@ -200,8 +207,20 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
   thống** đối chiếu với số tiền đợt, MST nhà cung cấp, mã / tên hợp đồng và kiểm tra tiền trước thuế + VAT = tổng.
   Không tự tick hồ sơ; có nhật ký. Cùng file thì dùng lại kết quả.
 - **Hỏi ICO** (nút trên thanh trên cùng): hỏi bằng tiếng Việt. AI chỉ dùng công cụ **chỉ đọc**, chạy với quyền của người
-  hỏi: tìm kiếm, thẻ host / VM, capacity cluster, client backup, VM chưa backup, hộp việc. Module tắt hoặc dữ liệu chi phí
-  không đủ quyền thì công cụ không trả. Tối đa 5 vòng tra cứu mỗi câu; câu trả lời kèm link tới thẻ host / VM.
+  hỏi.
+  - Công cụ có sẵn:
+    - tìm kiếm, thẻ host / VM, capacity cluster;
+    - client backup, VM chưa backup;
+    - hộp việc (đủ mọi nguồn, kể cả Phần cứng và Rà soát owner);
+    - sổ CI và tác động;
+    - **phần cứng Dell OME**: trạng thái, ổ dự báo hỏng, firmware, bảo hành;
+    - **hệ thống & owner**: tìm hệ thống, hoặc VM thuộc hệ thống nào;
+    - **trạng thái nguồn dữ liệu**;
+    - **tra IP**: IPAM và đối tượng mang IP.
+  - Module tắt hoặc dữ liệu chi phí không đủ quyền thì công cụ không trả.
+  - Tối đa 5 vòng tra cứu mỗi câu; câu trả lời kèm link tới thẻ host / VM.
+  - Mỗi câu trả lời có nút **👍 / 👎**: chỉ người hỏi bấm được, bấm lại để bỏ. Tỷ lệ hài lòng theo tác vụ hiện trong
+    `ico_ai_usage`, dùng để so trước / sau khi đổi model hay prompt.
 - **Tài liệu → Kho báo cáo**: tick *Lưu vào kho* ở Trung tâm báo cáo, mỗi PDF xuất ra (Capacity, Backup, License, Sizing,
   Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Mỗi người giữ tối đa 100 bản (bản cũ nhất của chính
   người đó bị thay), 400 ngày, 25 MB mỗi bản; cùng nội dung không lưu hai lần. Chỉ các route báo cáo trong danh sách được lưu. Báo cáo chi phí chỉ người có vai trò Chi phí xem được; người lưu hoặc admin xoá được.
@@ -2142,10 +2161,100 @@ Mật khẩu, client secret, API key, JWT, bearer token, `password=…`, mật k
 biến môi trường `*PASSWORD*` / `*SECRET*` / `*TOKEN*` / `*API_KEY*` được che **trước khi lưu** vào DB.
 Mỗi bản ghi có `APP_VERSION` (commit của image) để gắn lỗi / chậm với từng lần deploy.
 
+Mỗi bản ghi log cũng có **mã lần chạy** và **pod**:
+- Mã lần chạy là `requestId`: header `X-Request-ID` của request, hoặc `job-<tên>-<mã>` với việc chạy nền.
+- Pod là `HOSTNAME` của pod đã ghi.
+
+Gọi `search_logs(request_id=…)` để xem mọi dòng log của một request hay một vòng đồng bộ.
+
+Log thư viện dựng PDF được giảm bớt:
+- `fontTools` chỉ ghi từ mức WARNING.
+- Thông báo “HarfBuzz-Subset” của WeasyPrint chỉ ghi một lần mỗi pod.
+- Image cài `libharfbuzz-subset0`, nên cắt font nhanh hơn và thông báo này không còn xuất hiện.
+
+**Đồng bộ ngay** (thanh trên cùng, admin) chạy nền:
+- Request trả ngay `202` cùng mã lần chạy; trang hỏi tiến độ mỗi 2 giây qua `GET /api/sources/sync-runs/{mã}`.
+- Vì vậy một nguồn chậm không còn giữ request lâu tới mức App Proxy cắt.
+- Mỗi pod chỉ chạy một lượt *Đồng bộ ngay* cùng lúc; bấm thêm khi đang chạy sẽ báo đang đồng bộ.
+
+**Sổ lần chạy job** (`job_runs`, giữ 90 ngày) có một dòng cho mỗi việc chạy nền:
+- Đồng bộ từng nguồn, thuộc mọi nhóm:
+  - Ảo hoá (vCenter / Proxmox / Nutanix);
+  - Backup;
+  - Storage;
+  - Dell OME;
+  - IPAM.
+- Dựng sổ CI.
+- Gán owner tự động.
+- Rà soát owner.
+- Cảnh báo.
+- Dọn dữ liệu cũ.
+- Gộp số đo.
+- Cả vòng poll.
+
+Mỗi dòng ghi: kiểu chạy (theo lịch hoặc *Đồng bộ ngay*), pod, thời lượng, trạng thái (ok / error / skipped / timeout),
+bộ đếm (host, VM, job, CI…) và lỗi đã che. Tool `sync_history` đọc sổ này.
+
+Phân vị độ trễ (p50 / p95 / p99) được nội suy trong ô histogram, nên không còn làm tròn lên cận trên. Trước đây mọi
+request từ 2,5 đến 5 giây đều hiện là 5.000 ms.
+
 ### Công cụ MCP
 
-`app_overview`, `search_logs`, `error_summary`, `endpoint_performance`, `performance_trend`,
-`slow_requests`, `slow_queries`, `sync_history`; prompt mẫu `health_review`, `error_triage`.
+14 tool, đều có tiền tố `ico_`, đều chỉ đọc.
+
+Mỗi tool khai đủ:
+- `title`;
+- annotation `readOnlyHint` / `destructiveHint: false` / `idempotentHint` / `openWorldHint: false`;
+- `outputSchema`, và trả `structuredContent` khớp schema (kèm bản text JSON).
+
+Tên cũ không có `ico_` (vd `search_logs`) vẫn gọi được thêm một bản phát hành nhưng không còn trong `tools/list`.
+
+**Log và hiệu năng:**
+
+| Tool | Làm gì |
+|---|---|
+| `ico_app_overview` | Bắt đầu ở đây: phiên bản, pod, DB, số log, request 1 giờ / 24 giờ. |
+| `ico_search_logs` | Tìm log; lọc theo `request_id`; `contains` so khớp đúng chữ. |
+| `ico_error_summary` | Lỗi lặp lại, kèm pod và `sampleRequestId`. |
+| `ico_endpoint_performance` | Độ trễ, lỗi, số SQL theo endpoint. |
+| `ico_performance_trend` | Diễn biến theo thời gian, so giữa các phiên bản. |
+| `ico_slow_requests` | Request chậm nhất (theo pod). |
+| `ico_slow_queries` | SQL chậm nhất (theo pod). |
+
+**Chạy nền và nguồn dữ liệu:**
+
+| Tool | Làm gì |
+|---|---|
+| `ico_sync_history` | Từng lần chạy: lọc theo nhóm nguồn / loại việc / `status` / `key`. |
+| `ico_job_runs` | Tổng theo loại việc và nguồn: số lần, lỗi, timeout, p50 / p95 thời lượng. |
+| `ico_source_status` | Trạng thái mọi nguồn: ok / stale / error / never. |
+| `ico_data_freshness` | Tuổi dữ liệu theo nhóm nguồn, lần dựng sổ CI gần nhất, số CI theo loại, độ phủ owner. |
+
+**Module AI, cấu hình và lần vết:**
+
+| Tool | Làm gì |
+|---|---|
+| `ico_ai_usage` | Module AI: cấu hình (không có API key); chi phí tháng; theo tác vụ: gọi / cache / bị chặn / lỗi, độ trễ, token; lỗi gần đây. Người dùng hiện dạng mã băm. |
+| `ico_config_check` | Kiểm tra cờ cấu hình (PUBLIC_URL, cookie Secure, scheduler / leader, thư viện font PDF, SMTP, che host, AI, tính năng tắt). Không có giá trị bí mật. |
+| `ico_trace_request` | Mọi log và lần chạy của một mã request / job, theo thời gian. |
+
+Tham số được kiểm theo schema. Tham số lạ, sai kiểu hay ngoài khoảng cho phép trả **lỗi tool** (`isError`) kèm cách sửa,
+không lặng lẽ chỉnh giá trị. Tool không tồn tại cũng trả lỗi tool, kèm danh sách tool.
+
+`ico_search_logs`, `ico_error_summary` và `ico_sync_history` phân trang bằng `offset`, trả `hasMore` / `nextOffset`.
+
+Prompt mẫu:
+- `health_review`;
+- `error_triage`;
+- `sync_triage`: nguồn lỗi / cũ / chậm → nguyên nhân → bước xử lý;
+- `ai_module_review`: lỗi, bị chặn, độ trễ, chi phí AI;
+- `release_regression`: so trước / sau lần deploy.
+
+Bộ đánh giá MCP: `docs/design/ico-mcp-eval.xml` gồm 10 câu hỏi trên bản demo.
+- Chạy bằng `.claude/skills/mcp-builder/scripts/evaluation.py`; cần API key nên chạy tay.
+- Mục tiêu ≥ 8/10 câu đúng; chạy lại khi đổi tool, mô tả tool hoặc model.
+
+Rà soát module AI / MCP và lộ trình cải tiến: `docs/design/ico-ai-mcp-review.md`.
 
 ### Quản trị viên
 

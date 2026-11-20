@@ -432,7 +432,7 @@ def _css() -> str:
 .rec-label {{ font-size:7.4px; font-weight:700;   color:{COLORS['muted']}; margin-bottom:2px; }}
 .decision-action {{ color:{COLORS['muted']}; font-size:7.8px; margin-top:1px; line-height:1.4; }}
 .appendix-table th, .appendix-table td {{ font-size:7.6px; padding:3px 5px; }}
-.appendix-table td {{ word-break:break-word; }}
+.appendix-table td {{ overflow-wrap:anywhere; }}
 .meta-row {{ margin-bottom:8px; }}
 .sched-grid th, .sched-grid td {{ font-size:7.6px; padding:3px 3px; }}
 """

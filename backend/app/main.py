@@ -32,6 +32,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 for _h in logging.getLogger().handlers:   # request id on every line (audit OBS-02); "-" outside a request
     _h.addFilter(observability.RequestIdLogFilter())
 logger = logging.getLogger("vco.main")
+observability.quiet_libraries()      # fontTools / WeasyPrint chatter would drown the app's own logs (review E1, E2)
 observability.install(engine)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
