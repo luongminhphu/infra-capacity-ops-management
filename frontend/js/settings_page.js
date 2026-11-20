@@ -216,17 +216,20 @@ async function handleSyncNow() {
   btn.disabled = true;
   btn.textContent = 'Đang đồng bộ...';
   try {
+    let res = null;
     if (currentVcenterFilter === 'all' || currentVcenterFilter === 'import') {
-      await api.syncAll();
+      res = await syncAllSources();             // every source: vCenter, backup, storage, Dell OME
     } else {
       await api.syncVcenter(currentVcenterFilter);
     }
     await refreshVcenterList();
     await loadLiveData();
-    showValidationBanner([], [`Đã đồng bộ dữ liệu từ vCenter lúc ${new Date().toLocaleString('vi-VN')}.`]);
+    if (res && res.failed) showValidationBanner([res.message], []);
+    else showValidationBanner([], [res ? res.message : `Đã đồng bộ vCenter ${currentVcenterFilter} lúc ${new Date().toLocaleString('vi-VN')}.`]);
     if (typeof bkInvalidate === 'function') bkInvalidate();
+    if (typeof renderHardwareView === 'function' && /^#\/hardware/.test(location.hash)) renderHardwareView();
   } catch (err) {
-    showValidationBanner([`Đồng bộ vCenter thất bại: ${err.message}`], []);
+    showValidationBanner([`Đồng bộ thất bại: ${err.message}`], []);
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalLabel;

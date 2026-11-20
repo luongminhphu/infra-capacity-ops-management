@@ -198,7 +198,11 @@ def listing(db: Session, today: dt.date, osc=None, status: Optional[str] = None,
     st = db.query(HwSourceState).filter(HwSourceState.source_key.in_(keys or [""])).all()
     sources = [{"key": s.source_key, "name": s.name, "devices": s.device_count, "capturedAt": _iso(s.captured_at),
                 "inventoryAt": _iso(s.inventory_at), "warrantyAt": _iso(s.warranty_at), "baselineConfigured": s.baseline_configured,
-                "lastError": s.last_error, "lastWarning": s.last_warning} for s in st]
+                "lastError": s.last_error, "lastErrorAt": _iso(s.last_error_at), "lastWarning": s.last_warning} for s in st]
+    from ..config import get_settings
+    have = {s.source_key for s in st}
+    sources += [{"key": c.key, "name": c.name or c.key, "devices": None, "capturedAt": None, "never": True}
+                for c in get_settings().hardware() if c.key not in have]
     return {"configured": bool(keys), "sources": sources, "summary": summary, "models": sorted(models), "opexDetail": opex_detail,
             "filters": {"status": status, "model": model, "warrantyDays": warranty_days}, "items": items}
 

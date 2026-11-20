@@ -426,3 +426,33 @@
 .dc-wcase { max-width: 100%; min-width: 0; }
 /* Vận hành → Phần cứng (G4c): filters never widen the page at 390 px */
 .hw-filter { max-width: 100%; min-width: 0; }
+/* Top bar: source status per family (Ảo hoá / Backup / Storage / Dell OME) — a button opening the detail */
+.src-chip{cursor:pointer;font:inherit;font-size:var(--fs-caption);}
+.src-chip:hover{border-color:var(--border-strong, var(--border));color:var(--text-primary);}
+.src-chip:focus-visible{outline:2px solid var(--focus-ring, var(--brand));outline-offset:2px;}
+.vcenter-chip.stale .dot{background:var(--status-warn);}
+.src-chip .src-count{font-family:var(--font-mono, inherit);color:var(--text-primary);}
+.src-chip-all{display:none;}
+@media (max-width: 900px){
+  .src-chip:not(.src-chip-all){display:none;}
+  .src-chip-all{display:inline-flex;}
+}
+.src-status-list{list-style:none;margin:0 0 var(--space-3);padding:0;display:grid;gap:var(--space-2);}
+.src-status-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-1) var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle);}
+.src-status-main,.src-status-state{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.src-status-state{align-items:flex-end;text-align:right;}
+.src-status-error{grid-column:1 / -1;margin:0;font-size:var(--fs-caption);color:var(--text-secondary);overflow-wrap:anywhere;}
+@media (max-width: 480px){
+  .src-status-item{grid-template-columns:1fr;}
+  .src-status-state{align-items:flex-start;text-align:left;}
+}
+/* Settings → Nguồn dữ liệu: connection state column */
+.src-conn{display:flex;flex-direction:column;gap:2px;max-width:280px;}
+.src-conn .src-status-error{font-size:var(--fs-caption);}
+.vcenter-chip.src-chip .vc-name{display:inline;}
+/* Phần cứng: sources not synced / failing */
+.hw-src-box{display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2);margin-bottom:var(--space-3);}
+.hw-src-issues{list-style:none;margin:0;padding:0;display:grid;gap:var(--space-2);overflow-wrap:anywhere;}
+@media (max-width:1024px){ .vcenter-status-row{display:flex;} }      /* phones / tablets: the one "all sources" chip */
+.src-conn,.src-status-main{align-items:flex-start;}
+.src-sync-btn{padding:0 var(--space-2);}

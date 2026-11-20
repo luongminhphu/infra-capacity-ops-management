@@ -34,10 +34,7 @@ function srcAuthLabel(it) {
 
 function srcRow(it) {
   const kind = (SRC_DEFAULTS[it.kind] || {}).label || it.kind;
-  const test = it.lastTest
-    ? `<span class="${it.lastTest.ok ? 'tone-ok' : 'tone-crit'}">${it.lastTest.ok ? 'OK' : 'Lỗi'}</span>
-       <span class="muted-sub">${esc(fmtUtc(it.lastTest.at))}</span>`
-    : '—';
+  const test = srcConnHtml(it);
   const origin = it.origin === 'env'
     ? `Biến môi trường${it.replacedByUi ? '<span class="muted-sub">đã thay bằng cấu hình giao diện — có thể xoá biến</span>' : ''}`
     : `Giao diện<span class="muted-sub">${esc(it.updatedBy || '')}</span>`;
@@ -45,7 +42,8 @@ function srcRow(it) {
     ? `<label class="switch" title="Bật / tắt đồng bộ"><input type="checkbox" role="switch" data-src-toggle="${it.id}" ${it.enabled ? 'checked' : ''} aria-label="Bật ${esc(it.name)}"><span class="slider"></span></label>`
     : `<span class="muted-sub">${it.replacedByUi ? 'Không dùng' : 'Luôn bật'}</span>`;
   const actions = it.origin === 'ui'
-    ? `<button class="btn btn-secondary btn-sm" type="button" data-src-edit="${it.id}">Sửa</button>
+    ? `${it.enabled ? `<button class="btn btn-ghost btn-sm src-sync-btn" type="button" data-src-sync="${it.id}" title="Đồng bộ ${esc(it.name)} ngay (chỉ đọc)" aria-label="Đồng bộ ${esc(it.name)} ngay"><i data-lucide="refresh-cw"></i></button>` : ''}
+       <button class="btn btn-secondary btn-sm" type="button" data-src-edit="${it.id}">Sửa</button>
        <button class="btn btn-secondary btn-sm btn-danger" type="button" data-src-del="${it.id}">Xoá</button>`
     : '';
   return `<tr class="${it.origin === 'env' && it.replacedByUi ? 'muted-row' : ''}">
@@ -208,6 +206,7 @@ async function afterSourcesChanged() {
   await loadSources();
   if (typeof refreshVcenterList === 'function') refreshVcenterList();
   if (typeof bkInvalidate === 'function') bkInvalidate();
+  if (typeof refreshSourceStatus === 'function') refreshSourceStatus();
 }
 
 function bindSourcesPanel() {
@@ -217,6 +216,8 @@ function bindSourcesPanel() {
   panel.addEventListener('click', async e => {
     const orphan = e.target.closest('[data-orphan]');
     if (orphan) { const [family, ...k] = orphan.dataset.orphan.split('|'); purgeOrphanDialog(family, k.join('|')); return; }
+    const sync = e.target.closest('[data-src-sync]');
+    if (sync) { srcSyncOne(sync); return; }
     const add = e.target.closest('[data-src-add]');
     if (add) { openSourceDialog(add.dataset.srcAdd); return; }
     const edit = e.target.closest('[data-src-edit]');
@@ -280,8 +281,13 @@ function bindSourcesPanel() {
         ? await apiRequest(`/admin/sources/${srcState.editing.id}`, { method: 'PUT', body: JSON.stringify(p) })
         : await apiRequest('/admin/sources', { method: 'POST', body: JSON.stringify(p) });
       closeSourceDialog();
-      srcSetStatus(`Đã lưu ${r.name}. Bấm “Đồng bộ ngay” để lấy dữ liệu ngay, hoặc chờ chu kỳ kế tiếp.`);
-      afterSourcesChanged();
+      await afterSourcesChanged();
+      if (r.enabled && r.id) {                // read it at once: no waiting for the next scheduler round
+        const b = document.querySelector(`[data-src-sync="${r.id}"]`);
+        if (b) { srcSetStatus(`Đã lưu ${r.name}. Đang đọc nguồn lần đầu…`); await srcSyncOne(b); }
+      } else {
+        srcSetStatus(`Đã lưu ${r.name}.`);
+      }
     } catch (err) { srcSetResult(err.message, false); }
     finally { btn.disabled = false; }
   });
@@ -294,4 +300,34 @@ function initSourcesSettings(isAdmin) {
   if (!isAdmin) return;
   bindSourcesPanel();
   loadSources();
+}
+
+/* Connection state of a source: its last real sync (scheduler round or Đồng bộ) + the last manual connection test. */
+function srcConnHtml(it) {
+  const parts = [];
+  const s = it.sync;
+  if (s) {
+    parts.push(uiPill(s.level, s.stateText));
+    parts.push(`<span class="muted-sub">${s.lastSyncAt ? `Đồng bộ ${esc(uiDateTime(s.lastSyncAt, 'short'))}` : 'Chưa đồng bộ lần nào — bấm Đồng bộ'}</span>`);
+    if (s.error) parts.push(`<span class="src-status-error">${esc(s.error)}</span>`);
+  } else {
+    parts.push(uiTag(it.enabled === false || it.replacedByUi ? 'Không đồng bộ' : 'Chưa nạp'));
+  }
+  if (it.lastTest) {
+    parts.push(`<span class="muted-sub">Kiểm tra tay: <span class="${it.lastTest.ok ? 'tone-ok' : 'tone-crit'}">${it.lastTest.ok ? 'OK' : 'lỗi'}</span> ${esc(fmtUtc(it.lastTest.at))}</span>`);
+  }
+  return `<div class="src-conn">${parts.join('')}</div>`;
+}
+
+async function srcSyncOne(btn) {
+  const it = srcState.items.find(i => i.id === Number(btn.dataset.srcSync));
+  if (!it) return;
+  btn.disabled = true;
+  srcSetStatus(`Đang đọc ${it.name}…`);
+  try {
+    const r = await apiRequest(`/admin/sources/${it.id}/sync`, { method: 'POST' });
+    srcSetStatus(r.ok ? `${it.name}: đồng bộ thành công.` : `${it.name}: ${r.error || 'đồng bộ thất bại'}.`, !r.ok);
+    await loadSources();
+    if (typeof refreshSourceStatus === 'function') refreshSourceStatus();
+  } catch (err) { srcSetStatus(err.message, true); btn.disabled = false; }
 }
