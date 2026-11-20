@@ -390,12 +390,22 @@ function openSourceStatusDialog(family) {
 }
 
 /* "Đồng bộ ngay" for every source (admin): returns a short Vietnamese summary. */
+/* "Đồng bộ ngay": started in the background (202 + runId), then followed every 2 s until its job runs are written —
+   a long sync no longer holds one HTTP request open past the App Proxy timeout. */
 async function syncAllSources() {
-  const r = await apiRequest('/sources/sync-all', { method: 'POST' });
+  const start = await apiRequest('/sources/sync-all?background=1', { method: 'POST' });
+  const until = Date.now() + (start.deadlineSeconds * 2 + 60) * 1000;
+  let r;
+  for (;;) {
+    await new Promise(ok => setTimeout(ok, 2000));
+    r = await apiRequest(`/sources/sync-runs/${encodeURIComponent(start.runId)}`);
+    if (r.done) break;
+    if (Date.now() > until) throw new Error('Đồng bộ chưa xong sau thời gian chờ — xem trạng thái nguồn sau ít phút.');
+  }
   sourceStatusCache = { ...(sourceStatusCache || {}), summary: r.summary, items: r.items };
   renderSourceStatusChips();
   const failed = r.results.filter(x => !x.ok);
-  const names = failed.map(x => `${x.vcenterKey || x.key}${x.error ? ` (${x.error})` : ''}`);
+  const names = failed.map(x => `${x.key}${x.error ? ` (${x.error})` : ''}`);
   return { failed: failed.length, message: failed.length
     ? `Đồng bộ ${r.results.length - failed.length}/${r.results.length} nguồn; lỗi: ${names.join('; ')}`
     : `Đã đồng bộ ${r.results.length} nguồn lúc ${new Date().toLocaleString('vi-VN', { hour12: false })}.` };

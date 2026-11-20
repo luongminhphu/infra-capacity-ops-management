@@ -1,10 +1,15 @@
 """Settings → Nguồn dữ liệu: add / edit / test / disable / delete vCenter and NetBackup servers.
 Admin only. Secrets are write-only: responses say whether one is saved, never what it is."""
+import contextvars
 import datetime as dt
 import json
+import logging
+import os
+import re
+import threading
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from .. import secrets_box, sources
@@ -43,13 +48,51 @@ def _sync_task(fam: str, cfg, settings):
     return lambda: scheduler._sync_ome_task(cfg)
 
 
+_bg_lock = threading.Lock()                     # one background "sync all" per pod at a time
+_RUN_ID = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
+
+
+def _sync_all_background(sources_total: int) -> None:
+    """Thread body (runs in a copy of the request's context: job_runs rows carry its request id as run_id)."""
+    from .. import inbox
+    from ..collectors import scheduler
+    try:
+        scheduler.sync_everything(get_settings())
+        inbox.invalidate()
+    except Exception:  # noqa: BLE001 — each source already logged / recorded its own failure
+        logging.getLogger("vco.sources").exception("Background sync of every source failed")
+    finally:
+        _bg_lock.release()
+
+
 @status_router.post("/sync-all")
-def sync_all_sources(request: Request, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def sync_all_sources(request: Request, response: Response, background: bool = Query(False),
+                     user: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Read every source now (read-only, same as a scheduler round; each source under its own lock). The CI registry,
-    owner rules and alerts follow at the next scheduler round on the leader pod."""
-    from .. import inbox, source_status
+    owner rules and alerts follow at the next scheduler round on the leader pod.
+
+    background=1 (the web page): returns 202 at once with the runId; GET /api/sources/sync-runs/{runId} reports the
+    results when every source is done (job_runs, readable from any pod). A long sync no longer holds the HTTP request
+    open past the reverse proxy's timeout (review D2). Without it: the old synchronous answer (API clients, tests)."""
+    from .. import inbox, observability, source_status
     from ..collectors import scheduler
     s = get_settings()
+    if background:
+        total = len(source_status.configured())
+        if not _bg_lock.acquire(blocking=False):
+            raise HTTPException(409, "Đang đồng bộ mọi nguồn — chờ lượt hiện tại xong.")
+        rid = observability.current_request_id() or os.urandom(8).hex()
+        db.add(AuditLog(username=user.username, action="sources.sync_all", client_ip=request.client.host if request.client else None,
+                        detail=json.dumps({"background": True, "runId": rid, "total": total})))
+        db.commit()
+        try:
+            threading.Thread(target=contextvars.copy_context().run, args=(_sync_all_background, total),
+                             name="sync-all", daemon=True).start()
+        except Exception:
+            _bg_lock.release()
+            raise
+        response.status_code = 202
+        return {"runId": rid, "total": total, "deadlineSeconds": int(scheduler.deadline_seconds(s))}
     results = scheduler.sync_everything(s)
     db.add(AuditLog(username=user.username, action="sources.sync_all", client_ip=request.client.host if request.client else None,
                     detail=json.dumps({"ok": sum(1 for r in results if r.get("ok")), "total": len(results)})))
@@ -58,6 +101,23 @@ def sync_all_sources(request: Request, user: User = Depends(require_admin), db: 
     items = source_status.status_all(db)
     return {"results": [{k: v for k, v in r.items() if k in ("key", "vcenterKey", "ok", "error", "skipped", "timedOut")} for r in results],
             "summary": source_status.summary(items), "items": items}
+
+
+@status_router.get("/sync-runs/{run_id}")
+def sync_run_status(run_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Progress of a background "sync all": done when its job_runs rows are written (run_syncs writes them together at
+    the end, timeouts included). `items` = source status after the run."""
+    from .. import jobruns, source_status
+    from ..models import JobRun
+    if not _RUN_ID.match(run_id):
+        raise HTTPException(400, "Mã lần chạy không hợp lệ.")
+    rows = db.query(JobRun).filter(JobRun.run_id == run_id, JobRun.job == "sync").order_by(JobRun.id).all()
+    if not rows:
+        return {"done": False}
+    items = source_status.status_all(db)
+    return {"done": True, "results": [{"key": r.source_key, "family": r.family, "ok": r.status == "ok", "status": r.status,
+                                       "error": r.error, "durationMs": r.duration_ms} for r in rows],
+            "runs": [jobruns.out(r) for r in rows], "summary": source_status.summary(items), "items": items}
 
 
 def _audit(db: Session, user: User, action: str, request: Request, row: DataSource, **extra) -> None:

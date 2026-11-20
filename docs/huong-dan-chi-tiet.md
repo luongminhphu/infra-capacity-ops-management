@@ -2156,6 +2156,11 @@ Log thư viện dựng PDF được giảm bớt:
 - Thông báo “HarfBuzz-Subset” của WeasyPrint chỉ ghi một lần mỗi pod.
 - Image cài `libharfbuzz-subset0`, nên cắt font nhanh hơn và thông báo này không còn xuất hiện.
 
+**Đồng bộ ngay** (thanh trên cùng, admin) chạy nền:
+- Request trả ngay `202` cùng mã lần chạy; trang hỏi tiến độ mỗi 2 giây qua `GET /api/sources/sync-runs/{mã}`.
+- Vì vậy một nguồn chậm không còn giữ request lâu tới mức App Proxy cắt.
+- Mỗi pod chỉ chạy một lượt *Đồng bộ ngay* cùng lúc; bấm thêm khi đang chạy sẽ báo đang đồng bộ.
+
 **Sổ lần chạy job** (`job_runs`, giữ 90 ngày) có một dòng cho mỗi việc chạy nền:
 - Đồng bộ từng nguồn, thuộc mọi nhóm:
   - Ảo hoá (vCenter / Proxmox / Nutanix);

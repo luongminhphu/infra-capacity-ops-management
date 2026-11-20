@@ -101,6 +101,24 @@ def test_every_family_has_a_status_and_sync_now(db, admin, editor):
     fams = {f["family"]: f for f in out["summary"]["families"]}
     assert fams["virtualization"]["state"] == "ok" and fams["hardware"]["ok"] == 1
 
+    # background mode (the web page): 202 + runId at once, results from job_runs when every source is done
+    import time
+    with um.patch.object(scheduler, "_sync_storage_task", unreachable):
+        start = admin.post("/api/sources/sync-all?background=1")
+        assert start.status_code == 202 and start.json()["total"] >= 3 and start.json()["runId"]
+        rid = start.json()["runId"]
+        for _ in range(100):
+            st = admin.get(f"/api/sources/sync-runs/{rid}").json()
+            if st["done"]:
+                break
+            time.sleep(0.1)
+    assert st["done"], "background sync did not finish"
+    by = {x["key"]: x for x in st["results"]}
+    assert by["vcs"]["ok"] and by["pure-s"]["status"] == "error" and "timed out" in by["pure-s"]["error"]
+    assert all(r["trigger"] == "manual" and r["runId"] == rid for r in st["runs"])
+    assert admin.get("/api/sources/sync-runs/bad id!").status_code in (400, 404)
+    assert editor.get(f"/api/sources/sync-runs/{rid}").status_code == 403
+
 
 def test_disabled_source_has_no_sync_state(db, admin):
     r = _add(admin, kind="ome", key="ome-off", name="OME off", host="", demo=True)
