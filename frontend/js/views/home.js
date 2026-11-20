@@ -21,6 +21,36 @@ function homeLink(page, query) {
   return `#/${route ? route.path : page}${query ? `?${query}` : ''}`;
 }
 
+/* Drill-down target of a link / event: an app page (page + query) or an entity card. */
+function homeJump(x) {
+  if (x.entity && x.entity.name) return uiEntityHref(x.entity.type, x.entity.name, x.entity.vc);
+  return x.page ? homeLink(x.page, x.query) : '';
+}
+
+const HOME_EVENT_TEXT = { crit: 'VƯỢT NGƯỠNG', bad: 'CẢNH BÁO', warn: 'THEO DÕI', ok: 'AN TOÀN', na: 'Thông tin' };
+
+/* Deep dive of one item: key facts, the concrete events behind it (alerts, failed jobs, sensors, parts), jumps. */
+function homeDrillHtml(i) {
+  const facts = (i.facts || []).filter(f => f && f.value !== null && f.value !== undefined && f.value !== '');
+  const events = i.events || [];
+  const ext = (l) => typeof l.href === 'string' && /^https:\/\//.test(l.href);     // external link (vSphere Client)
+  const links = (i.links || []).filter(l => ext(l) || homeJump(l));
+  const factHtml = facts.length ? `<div class="hm-d-sec"><h4>Chi tiết</h4><dl class="bk-facts hm-facts">${facts.map(f => `<div><dt>${esc(f.label)}</dt><dd>${
+    f.kind === 'datetime' ? uiDateTime(f.value) : typeof f.value === 'number' ? esc(fmtNum(f.value, 0)) : esc(String(f.value))}</dd></div>`).join('')}</dl></div>` : '';
+  const evHtml = events.length ? `<div class="hm-d-sec"><h4>Sự kiện liên quan <span class="muted-sub">${esc(fmtInt(events.length))}</span></h4>
+      <ul class="hm-events">${events.map(e => {
+        const href = homeJump(e), lv = HOME_EVENT_TEXT[e.level] ? e.level : 'na';
+        const body = `<span class="hm-lv lv-${esc(lv)}" aria-hidden="true"></span><span class="sr-only">${esc(HOME_EVENT_TEXT[lv])}: </span>
+          <span class="hm-ev-t">${esc(e.title)}</span>${e.at ? `<span class="hm-ev-at">${uiDateTime(e.at, 'short')}</span>` : ''}
+          ${e.detail ? `<span class="hm-ev-d">${esc(e.detail)}</span>` : ''}`;
+        return `<li>${href ? `<a class="hm-ev" href="${esc(href)}">${body}</a>` : `<div class="hm-ev">${body}</div>`}</li>`;
+      }).join('')}</ul></div>` : '';
+  const linkHtml = links.length ? `<div class="hm-d-sec"><h4>Đi tới</h4><div class="hm-jumps">${links.map(l => ext(l)
+    ? `<a class="btn btn-secondary btn-sm" href="${esc(l.href)}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i>${esc(l.label)}<span class="sr-only"> (mở tab mới)</span></a>`
+    : `<a class="btn btn-secondary btn-sm" href="${esc(homeJump(l))}"><i data-lucide="${l.entity || l.page === 'entity' ? 'box' : 'arrow-up-right'}"></i>${esc(l.label)}</a>`).join('')}</div></div>` : '';
+  return factHtml + evHtml + linkHtml;
+}
+
 async function homeLoadPrefs() {
   if (homeState.prefsLoaded) return;
   homeState.prefsLoaded = true;
@@ -165,11 +195,12 @@ function homeRenderDetail() {
       ${i.ack ? `<button class="btn btn-secondary btn-sm" type="button" data-home-ack="undo" data-key="${esc(i.key)}">Hiện lại</button>`
         : `<button class="btn btn-primary btn-sm" type="button" data-home-ack="done" data-key="${esc(i.key)}"><i data-lucide="check"></i>Đánh dấu xong <kbd>E</kbd></button>
            <button class="btn btn-secondary btn-sm" type="button" data-home-ack="snooze" data-key="${esc(i.key)}"><i data-lucide="clock"></i>Ẩn 7 ngày <kbd>H</kbd></button>`}
-      ${i.page ? `<a class="btn btn-ghost btn-sm" href="${esc(homeLink(i.page, i.query))}"><i data-lucide="external-link"></i>Mở trang ${esc(i.sourceLabel)}</a>` : ''}
+      ${i.page ? `<a class="btn btn-ghost btn-sm" href="${esc(homeLink(i.page, i.query))}"><i data-lucide="external-link"></i>${esc(i.pageLabel || `Mở trang ${i.sourceLabel}`)}</a>` : ''}
       ${assignSel}
     </div>
     ${sd.action ? `<div class="hm-d-sec"><h4>Nên làm gì</h4><p>${esc(sd.action)}</p></div>` : ''}
-    ${sd.context ? `<div class="hm-d-sec"><h4>${sd.action ? 'Chi tiết' : 'Nội dung'}</h4><p>${esc(sd.context)}</p></div>` : ''}
+    ${sd.context ? `<div class="hm-d-sec"><h4>Nội dung</h4><p>${esc(sd.context)}</p></div>` : ''}
+    ${homeDrillHtml(i)}
     <p class="muted-sub" id="homeAssignMsg" role="status"></p>`;
   refreshIcons();
 }

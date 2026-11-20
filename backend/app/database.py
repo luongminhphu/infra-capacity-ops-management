@@ -72,6 +72,7 @@ def ensure_schema() -> None:
         "datastore_states": [("backing", "TEXT")],
         "app_logs": [("request_id", "VARCHAR(64)"), ("pod", "VARCHAR(64)")],
         "ai_runs": [("request_id", "VARCHAR(64)"), ("prompt_version", "VARCHAR(32)"), ("feedback", "VARCHAR(4)")],
+        "vc_alarm_states": [("entity_moid", "VARCHAR(64)"), ("vim_type", "VARCHAR(32)"), ("vc_uuid", "VARCHAR(64)")],
         "systems": [("deputy_name", "VARCHAR(128)"), ("support_emails", "TEXT"), ("support_name", "VARCHAR(128)"),
                     ("support_contact", "VARCHAR(255)")],
         "hw_source_state": [("inventory_at", "TIMESTAMP"), ("warranty_at", "TIMESTAMP"), ("alert_cursor", "TIMESTAMP"),

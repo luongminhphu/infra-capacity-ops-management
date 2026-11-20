@@ -352,8 +352,12 @@ def test_demo_inbox_has_predictive_disk_and_warranty_groups(db, admin):
     builder.build_all(db)
     hw = inbox.hardware_items(db)
     disks = [i for i in hw if i["title"].startswith("Ổ đĩa dự báo hỏng")]
-    assert len(disks) == 1 and disks[0]["level"] == "crit" and disks[0]["page"] == "entity"
-    assert disks[0]["query"].startswith("type=server&name=")
+    assert len(disks) == 1 and disks[0]["level"] == "crit" and disks[0]["page"] == "hardware"
+    assert disks[0]["query"].startswith("s=ome-demo&d=") and disks[0]["pageLabel"] == "Xem máy chủ này"
+    assert disks[0]["links"][0]["page"] == "entity" and disks[0]["links"][0]["query"].startswith("type=server&name=")
+    assert disks[0]["events"][0]["title"].startswith("Ổ ") and "dự báo hỏng" in disks[0]["events"][0]["title"]
+    psu = next(i for i in hw if i["level"] == "crit" and "linh kiện hỏng" in i["title"])
+    assert psu["events"] and {f["label"] for f in psu["facts"]} >= {"Service tag", "Model"}
     assert any(i["level"] == "crit" and "linh kiện hỏng" in i["title"] for i in hw)          # failed PSU
     assert any(i["level"] == "bad" and "backup-media-01" in i["title"] for i in hw)          # fan warning
     fw = [i for i in hw if "firmware lệch" in i["title"]]

@@ -29,7 +29,8 @@ SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datas
                  "system": "Hệ thống", "review": "Rà soát owner", "hardware": "Phần cứng máy chủ"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
-PUSH_LEVEL_PCT = 90.0          # decision 5: Discord alert at the 90 % level
+PUSH_LEVEL_PCT = 90.0
+MAX_EVENTS = 20                # drill-down rows per inbox item          # decision 5: Discord alert at the 90 % level
 
 
 def _key(*parts: Any) -> str:
@@ -39,13 +40,58 @@ def _key(*parts: Any) -> str:
 
 def item(source: str, level: str, key: str, title: str, detail: str = "", page: str = "", query: str = "",
          due: Optional[dt.date] = None, feature: Optional[str] = None, role: Optional[str] = None,
-         push: bool = False, alert_key: Optional[str] = None) -> Dict[str, Any]:
+         push: bool = False, alert_key: Optional[str] = None, page_label: str = "",
+         facts: Optional[List[Dict[str, Any]]] = None, links: Optional[List[Dict[str, Any]]] = None,
+         events: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """role: None (any signed-in user) | 'spend:viewer|editor|approver' | 'admin'.
     alert_key: identity for Discord alerts when it must not change with the level (the inbox key does
-    change, so a worsened item reappears after "Xong"); defaults to the key."""
+    change, so a worsened item reappears after "Xong"); defaults to the key.
+    page_label: text of the "open page" button when page + query point at this very object.
+    facts: deep-dive rows of the detail pane, {label, value, kind?} (kind 'datetime' = ISO time).
+    links: extra jumps, {label, page, query} (a page of the app), {label, entity: {type, name, vc}} (an entity card)
+    or {label, href} (an external https link built by a checked helper, e.g. vcenter/links.object_url).
+    events: the concrete events behind the item (alerts, failed jobs, sensors, parts), newest / worst first,
+    {level, title, detail?, at?, page?, query?, entity?} — the drill-down to the root cause (max MAX_EVENTS)."""
     return {"key": key[:255], "source": source, "level": level, "title": title[:300], "detail": detail[:600], "page": page,
-            "query": query, "due": due, "feature": feature, "role": role, "push": push,
-            "alertKey": (alert_key or key)[:255]}
+            "query": query, "pageLabel": page_label, "due": due, "feature": feature, "role": role, "push": push,
+            "alertKey": (alert_key or key)[:255], "facts": facts or [], "links": links or [],
+            "events": (events or [])[:MAX_EVENTS]}
+
+
+def _fact(label: str, value: Any, kind: str = "") -> Optional[Dict[str, Any]]:
+    if value is None or value == "":
+        return None
+    return {"label": label, "value": value, **({"kind": kind} if kind else {})}
+
+
+def _facts(*rows: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [r for r in rows if r]
+
+
+def _entity_link(etype: str, name: Optional[str], vc: Optional[str]) -> List[Dict[str, Any]]:
+    """Entity card link for a host / VM (other types have no card addressed by name)."""
+    if etype not in ("host", "vm") or not name:
+        return []
+    return [{"label": f"Thẻ {'host' if etype == 'host' else 'VM'} {name}", "entity": {"type": etype, "name": name, "vc": vc or ""}}]
+
+
+def _event(level: str, title: str, detail: str = "", at: Optional[str] = None, **jump: Any) -> Dict[str, Any]:
+    ev = {"level": level, "title": str(title)[:300], "detail": str(detail or "")[:500], "at": at}
+    ev.update({k: v for k, v in jump.items() if v})
+    return ev
+
+
+def _num(v: Optional[float], digits: int = 1) -> str:
+    """vi-VN number for detail text (1.234,5)."""
+    if v is None or not isinstance(v, (int, float)) or not math.isfinite(v):
+        return "—"
+    return f"{v:,.{digits}f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
+ALARM_STATUS_TEXT = {"red": "Đỏ", "yellow": "Vàng"}
+ALARM_EVENT_LEVEL = {"red": "crit", "yellow": "bad"}
+SEVERITY_LEVEL = {"critical": "crit", "error": "crit", "major": "bad", "warning": "warn", "minor": "warn", "info": "na"}
+ENTITY_TEXT = {"host": "Host", "vm": "VM", "datastore": "Datastore", "cluster": "Cluster", "other": "Khác"}
 
 
 def _pct(v: Optional[float]) -> str:
@@ -61,6 +107,12 @@ def capacity_items(db: Session) -> List[Dict[str, Any]]:
         return []
     policy = data_access.get_effective_policy(db, get_settings())
     out = []
+    host_rows: Dict[str, List[Dict[str, Any]]] = {}
+    for h in capacity.build_host_rows(hosts, vms, policy):
+        host_rows.setdefault(h.get("cluster") or "", []).append(h)
+
+    def _hot(h: Dict[str, Any]) -> float:
+        return max([x for x in (h.get("cpuPct"), h.get("ramPct")) if isinstance(x, (int, float)) and math.isfinite(x)] or [0])
     for r in capacity.build_cluster_rows(hosts, vms, policy):
         cls = r["overall"]["cls"]
         m = r["model"]
@@ -73,7 +125,16 @@ def capacity_items(db: Session) -> List[Dict[str, Any]]:
                         f"Cluster {r['name']}: CPU {_pct(cpu)} · RAM {_pct(ram)}",
                         f"{r['hosts']} host, {r['vms']} VM — {r['overall']['text']}. Xem chi tiết và đề xuất ở Capacity.",
                         page="dashboard", push=peak >= PUSH_LEVEL_PCT,
-                        alert_key=_key("cap", r["name"])))      # BEQ-04: one alert per cluster, whatever the level
+                        alert_key=_key("cap", r["name"]),      # BEQ-04: one alert per cluster, whatever the level
+                        facts=_facts(_fact("CPU (so với ngưỡng)", _pct(cpu)), _fact("RAM (so với ngưỡng)", _pct(ram)),
+                                     _fact("Overcommit vCPU : core", _num(m.get("cpuOvercommit"), 2)),
+                                     _fact("RAM cấp / RAM vật lý", _num(m.get("ramOvercommit"), 2)),
+                                     _fact("Host · VM bật", f"{r['hosts']} · {m.get('poweredOnCount', 0)}")),
+                        events=[_event(h["overall"]["cls"] if h["overall"]["cls"] in ("ok", "warn", "bad", "crit") else "na",
+                                       f"Host {h.get('host')}: CPU {_pct(h.get('cpuPct'))} · RAM {_pct(h.get('ramPct'))}",
+                                       f"{h.get('vmCount', 0)} VM bật, {_num(h.get('vcpuUsed'), 0)} vCPU, {_num(h.get('ramUsedGB'), 0)} GB RAM cấp.",
+                                       entity={"type": "host", "name": h.get("host"), "vc": h.get("vcenterKey") or ""})
+                                for h in sorted(host_rows.get(r["name"], []), key=_hot, reverse=True)[:8]]))
     return out
 
 
@@ -95,14 +156,45 @@ def backup_items(db: Session) -> List[Dict[str, Any]]:
             out.append(item("backup", "bad", _key("bk", metric, "lt90"), f"{label}: {v:.1f}% (dưới 90%)".replace(".", ","),
                             "Mức cảnh báo vận hành — đã gửi Discord nếu có kênh nhận cảnh báo.", page=page, feature="backup", push=True))
     sev = {"critical": "bad", "warning": "warn"}     # VƯỢT NGƯỠNG is kept for overdue / > 100 % items
+    failed = rep.get("failedJobs") or []
+    group_key = {g["label"]: g["group"] for g in rep.get("failureGroups") or []}
+
+    def job_event(j: Dict[str, Any]) -> Dict[str, Any]:
+        return _event("crit" if (j.get("status") or 0) > 1 else "warn",
+                      f"Job {j.get('jobId')} · {j.get('client') or '—'} · status {j.get('status')}",
+                      f"{(j.get('statusText') or '').rstrip('.')}. Policy {j.get('policy') or '—'}{(', ' + j['schedule']) if j.get('schedule') else ''}.".strip(),
+                      j.get("startTime"), page="bk-jobs", query=f"q={quote(str(j.get('jobId')))}")
     for f in (rep.get("findings") or [])[:MAX_PER_SOURCE]:
         level = sev.get(f.get("severity"))
         if not level:
             continue
+        area, ent = f.get("area"), f.get("entity") or ""
+        page, query, page_label, events = "bk-overview", "", "", []
+        if area == "Client" and not ent.endswith(" client"):
+            page, query, page_label = "bk-clients", f"client={quote(ent)}", "Xem client này"
+            events = [job_event(j) for j in failed if j.get("client") == ent]
+        elif area == "Client":
+            names = [n.strip() for n in (f.get("detail") or "").split(",") if n.strip()]
+            page = "bk-clients"
+            events = [_event("warn", n, "Quá RPO", page="bk-clients", query=f"client={quote(n)}") for n in names]
+        elif area == "Nguyên nhân lỗi":
+            page, page_label = "bk-jobs", "Xem job lỗi"
+            events = [job_event(j) for j in failed if j.get("group") == ent or group_key.get(ent) == j.get("group")]
+        elif area == "Policy" and not ent.endswith(" policy"):
+            page, query, page_label = "bk-jobs", f"q={quote(ent)}", "Xem job của policy"
+            events = [job_event(j) for j in failed if j.get("policy") == ent]
+        elif area == "Job" and (f.get("title") or "").startswith("Job "):
+            page, query, page_label = "bk-jobs", f"q={quote((f.get('title') or '').split()[1])}", "Xem job này"
+        elif area == "Job" and "thành công" in (f.get("title") or ""):
+            page = "bk-jobs"
+            events = [job_event(j) for j in failed]
+        elif area == "Storage":
+            page = "bk-storage"
         out.append(item("backup", level, _key("bkf", f.get("area"), f.get("entity"), f.get("title")),
                         f"{f.get('title') or ''}{' — ' + f['entity'] if f.get('entity') else ''}",
                         f"{f.get('detail') or ''} {('→ ' + f['action']) if f.get('action') else ''}".strip(),
-                        page="bk-overview", feature="backup"))
+                        page=page, query=query, page_label=page_label, feature="backup",
+                        facts=_facts(_fact("Nhóm", area), _fact("Đối tượng", ent)), events=events))
     return out
 
 
@@ -207,8 +299,13 @@ def datastore_items(db: Session) -> List[Dict[str, Any]]:
                         f"Datastore {d['name']}: dùng {_pct(d['usedPct'])}"
                         + (f" · đầy sau ~{d['daysToFull']:.0f} ngày" if d.get("daysToFull") is not None else ""),
                         "; ".join(d["reasons"]) + f". Cluster: {', '.join(d['clusters']) or '—'}.",
-                        page="infra-ds", query=f"ds={quote(d['vcenterKey'] + ':' + d['key'])}",
-                        alert_key=_key("ds", d["vcenterKey"], d["key"])))
+                        page="infra-ds", query=f"ds={quote(d['vcenterKey'] + '|' + d['key'])}",
+                        page_label="Xem datastore này", alert_key=_key("ds", d["vcenterKey"], d["key"]),
+                        facts=_facts(_fact("vCenter", d["vcenterKey"]), _fact("Cluster", ", ".join(d["clusters"])),
+                                     _fact("Đã dùng", _pct(d["usedPct"])),
+                                     _fact("Đầy sau", f"~{d['daysToFull']:.0f} ngày" if d.get("daysToFull") is not None else None),
+                                     _fact("Storage", f"{d['storage']['array']} · {d['storage']['volume']}" if d.get("storage") else None)),
+                        events=[_event(d["level"], r) for r in d["reasons"]]))
     return out
 
 
@@ -221,20 +318,52 @@ def snapshot_items(db: Session) -> List[Dict[str, Any]]:
         out.append(item("snapshot", s["level"], _key("snap", s["vcenterKey"], s["vm"], s["level"]),
                         f"VM {s['vm']}: {s['count']} snapshot, cũ nhất {s['ageDays']:.0f} ngày".replace(".", ","),
                         "; ".join(s["reasons"]) + ". Xoá / hợp nhất snapshot sau khi xác nhận với chủ VM.",
-                        page="infra-snap", query=f"vm={quote(s['vm'])}", alert_key=_key("snap", s["vcenterKey"], s["vm"])))
+                        page="infra-snap", query=f"vm={quote(s['vm'])}", page_label="Xem snapshot của VM",
+                        alert_key=_key("snap", s["vcenterKey"], s["vm"]),
+                        facts=_facts(_fact("vCenter", s["vcenterKey"]), _fact("Cluster", s.get("cluster")), _fact("Host", s.get("host")),
+                                     _fact("Snapshot cũ nhất", s.get("oldestAt"), "datetime")),
+                        events=[_event(s["level"], f"Snapshot {i.get('name') or '—'}", i.get("description") or "", i.get("createdAt"))
+                                for i in sorted(s.get("items") or [], key=lambda i: i.get("createdAt") or "")],
+                        links=_entity_link("vm", s["vm"], s["vcenterKey"])))
     return out
 
 
 def alarm_items(db: Session) -> List[Dict[str, Any]]:
+    """One item per active alarm; events = every active alarm on the same object + its hardware sensors
+    (several alarms on one host usually share one root cause)."""
     from . import infra
     out = []
-    for a in infra.alarms(db)[:MAX_PER_SOURCE]:
+    every = infra.alarms(db)
+    by_entity: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+    for x in every:
+        by_entity.setdefault((x["vcenterKey"], x["entityType"], x["entity"]), []).append(x)
+    sensors = {(h["vcenterKey"], h["host"]): h for h in infra.host_health(db) if h["level"] != "ok"}
+    for a in every[:MAX_PER_SOURCE]:
         if a["acknowledged"]:
             continue
         out.append(item("alarm", a["level"], _key("alarm", a["vcenterKey"], a["key"], a["status"]),
                         f"Alarm {a['alarm']} — {a['entity']}",
                         f"vCenter {a['vcenterKey']}, {a['entityType']}{(', cluster ' + a['cluster']) if a.get('cluster') else ''}.",
-                        page="infra-alarm", alert_key=_key("alarm", a["vcenterKey"], a["key"])))
+                        page="infra-alarm", query=f"alarm={quote(a['vcenterKey'] + '|' + a['key'])}", page_label="Xem alarm này",
+                        alert_key=_key("alarm", a["vcenterKey"], a["key"]),
+                        facts=_facts(_fact("Alarm", a["alarm"]), _fact("Trạng thái trên vCenter", ALARM_STATUS_TEXT.get(a["status"], a["status"])),
+                                     _fact("Đối tượng", f"{ENTITY_TEXT.get(a['entityType'], a['entityType'])} {a['entity']}"),
+                                     _fact("Cluster", a.get("cluster")), _fact("vCenter", a["vcenterKey"]),
+                                     _fact("Kích hoạt lúc", a.get("at"), "datetime")),
+                        events=[_event(ALARM_EVENT_LEVEL.get(x["status"], "warn"), f"Alarm {x['alarm']}",
+                                       ("Alarm đang xem. " if x is a else "Cùng đối tượng. ") + ("Đã xác nhận trên vCenter." if x["acknowledged"] else "Chưa xác nhận."),
+                                       x.get("at"), page="infra-alarm", query=f"alarm={quote(x['vcenterKey'] + '|' + x['key'])}")
+                                for x in by_entity.get((a["vcenterKey"], a["entityType"], a["entity"]), [])]
+                        + [_event(i.get("state") == "red" and "crit" or "bad", f"Cảm biến {i.get('name')}",
+                                  f"{i.get('kind') or ''}{(' · ' + str(i['reading'])) if i.get('reading') is not None else ''}".strip(" ·"),
+                                  page="infra-health", query=f"host={quote(a['entity'])}")
+                           for i in (sensors.get((a["vcenterKey"], a["entity"])) or {}).get("issues", []) if a["entityType"] == "host"],
+                        links=([{"label": "Mở trên vSphere Client", "href": a["vsphereUrl"]}] if a.get("vsphereUrl") else [])
+                        + _entity_link(a["entityType"], a["entity"], a["vcenterKey"])
+                        + ([{"label": f"Datastore {a['entity']}", "page": "infra-ds", "query": f"q={quote(a['entity'])}"}]
+                           if a["entityType"] == "datastore" else [])
+                        + ([{"label": f"Sức khoẻ phần cứng {a['entity']}", "page": "infra-health", "query": f"host={quote(a['entity'])}"}]
+                           if a["entityType"] == "host" else [])))
     return out
 
 
@@ -247,7 +376,15 @@ def health_items(db: Session) -> List[Dict[str, Any]]:
         out.append(item("health", h["level"], _key("hh", h["vcenterKey"], h["host"], h["level"]),
                         f"Host {h['host']}: phần cứng {infra.LEVEL_TEXT[h['level']].lower()}",
                         "; ".join(h["reasons"][:4]) or "Trạng thái tổng của host không xanh.",
-                        page="infra-health", alert_key=_key("hh", h["vcenterKey"], h["host"])))
+                        page="infra-health", query=f"host={quote(h['host'])}", page_label="Xem sức khoẻ host này",
+                        alert_key=_key("hh", h["vcenterKey"], h["host"]),
+                        facts=_facts(_fact("vCenter", h["vcenterKey"]), _fact("Cluster", h.get("cluster")),
+                                     _fact("Kết nối", h.get("connection")), _fact("Trạng thái tổng", h.get("overallStatus"))),
+                        events=([_event("crit", f"Host {h['connection']} với vCenter")] if h["connection"] != "connected" else [])
+                        + [_event(i.get("state") == "red" and "crit" or "bad", f"{i.get('name')}",
+                                  f"{i.get('kind') or ''}{(' · ' + str(i['reading'])) if i.get('reading') is not None else ''}".strip(" ·"))
+                           for i in h["issues"]],
+                        links=_entity_link("host", h["host"], h["vcenterKey"])))
     return out
 
 
@@ -259,7 +396,21 @@ def storage_items(db: Session) -> List[Dict[str, Any]]:
             continue
         out.append(item("storage", a["level"], _key("st", a["sourceKey"], a["level"]),
                         f"Storage {a['name']}{(' (' + a['model'] + ')') if a.get('model') else ''}: {infra.LEVEL_TEXT[a['level']].lower()}",
-                        "; ".join(a["reasons"][:4]) + ".", page="infra-storage", alert_key=_key("st", a["sourceKey"])))
+                        "; ".join(a["reasons"][:4]) + ".", page="infra-storage", query=f"array={quote(a['sourceKey'])}",
+                        page_label="Xem mảng này", alert_key=_key("st", a["sourceKey"]),
+                        facts=_facts(_fact("Hãng · model", " · ".join(x for x in (a.get("vendor"), a.get("model")) if x)),
+                                     _fact("Phiên bản", a.get("version")), _fact("Đã dùng", _pct(a.get("usedPct"))),
+                                     _fact("Độ trễ đọc / ghi", f"{_num(a.get('latencyReadMs'), 2)} / {_num(a.get('latencyWriteMs'), 2)} ms"
+                                           if a.get("latencyReadMs") is not None else None),
+                                     _fact("Lỗi đọc gần nhất", a.get("lastError")), _fact("Đọc được lần cuối", a.get("lastOkAt"), "datetime")),
+                        events=[_event(SEVERITY_LEVEL.get(str(x.get("severity") or "").lower(), "warn"),
+                                       x.get("summary") or "Alert", f"{(x.get('severity') or '').upper()}{(' · ' + x['component']) if x.get('component') else ''}"
+                                       f"{(' · #' + str(x['id'])) if x.get('id') else ''}", x.get("at"))
+                                for x in sorted(a.get("alerts") or [], key=lambda x: (LEVEL_RANK.get(SEVERITY_LEVEL.get(str(x.get("severity") or "").lower(), "warn"), 9),
+                                                                                   -(dt.datetime.fromisoformat(x["at"].replace("Z", "+00:00")).timestamp() if x.get("at") else 0)))]
+                        + [_event("bad", str(hw.get("name") or hw.get("component") or hw) if isinstance(hw, dict) else str(hw),
+                                  str(hw.get("status") or hw.get("detail") or "") if isinstance(hw, dict) else "")
+                           for hw in a.get("hardwareIssues") or []]))
     return out
 
 
@@ -324,7 +475,7 @@ def warranty_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
 def hardware_items(db: Session) -> List[Dict[str, Any]]:
     """Dell OME (G4b): servers with a failed / degraded part, disks predicting failure (VƯỢT NGƯỠNG), firmware
     behind the baseline (THEO DÕI, grouped)."""
-    from .hardware.models import HwComponentHealth, HwDeviceState, HwDiskState, HwFirmwareState, HwPartState
+    from .hardware.models import HwAlert, HwComponentHealth, HwDeviceState, HwDiskState, HwFirmwareState, HwPartState
     from .config import get_settings
     keys = [c.key for c in get_settings().hardware()]
     if not keys:
@@ -333,13 +484,28 @@ def hardware_items(db: Session) -> List[Dict[str, Any]]:
     if not devs:
         return []
 
-    def link(d) -> Dict[str, str]:            # physical server card (CI registry) by service tag
-        return {"page": "entity", "query": f"type=server&name={quote(d.service_tag)}"} if d.service_tag else {"page": "set-sources"}
+    def link(d) -> Dict[str, Any]:            # Phần cứng → this server (#/hardware?s=&d=), card of the physical server
+        return {"page": "hardware", "query": f"s={quote(d.source_key)}&d={d.device_id}", "page_label": "Xem máy chủ này",
+                "links": ([{"label": f"Thẻ máy chủ {d.service_tag}", "page": "entity", "query": f"type=server&name={quote(d.service_tag)}"}]
+                          if d.service_tag else []),
+                "facts": _facts(_fact("Model", d.model), _fact("Service tag", d.service_tag), _fact("iDRAC", d.idrac_ip),
+                                _fact("Nguồn", d.power_state), _fact("Mã trạng thái OME", d.status_code))}
     reasons: Dict[Tuple[str, int], List[str]] = {}
+    evs: Dict[Tuple[str, int], List[Dict[str, Any]]] = {}
     for h in db.query(HwComponentHealth).filter(HwComponentHealth.source_key.in_(keys), HwComponentHealth.status.in_(("bad", "crit"))):
         reasons.setdefault((h.source_key, h.device_id), []).append(f"{h.subsystem}: {h.detail or h.status}")
+        evs.setdefault((h.source_key, h.device_id), []).append(_event(h.status, f"Nhóm {h.subsystem}", h.detail or f"Mã OME {h.status_code or '—'}"))
     for p in db.query(HwPartState).filter(HwPartState.source_key.in_(keys), HwPartState.status.in_(("bad", "crit"))):
         reasons.setdefault((p.source_key, p.device_id), []).append(f"{p.name}{(' (' + p.model + ')') if p.model else ''} lỗi")
+        evs.setdefault((p.source_key, p.device_id), []).append(
+            _event(p.status, f"{p.name}{(' (' + p.model + ')') if p.model else ''}",
+                   " · ".join(x for x in (p.detail, f"SN {p.serial}" if p.serial else "") if x)))
+    since = dt.datetime.utcnow() - dt.timedelta(days=7)
+    for al in (db.query(HwAlert).filter(HwAlert.source_key.in_(keys), HwAlert.at >= since, HwAlert.severity.in_(("warn", "bad", "crit")))
+               .order_by(HwAlert.at.desc()).limit(500)):
+        evs.setdefault((al.source_key, al.device_id), []).append(
+            _event(al.severity, f"{al.message_id or 'Alert'} · {al.category or ''}".strip(" ·"), al.message or "",
+                   al.at.isoformat() + "Z" if al.at else None))
     out = []
     for k, d in devs.items():
         level = d.status if d.status in ("bad", "crit") else ("bad" if k in reasons else None)
@@ -348,7 +514,7 @@ def hardware_items(db: Session) -> List[Dict[str, Any]]:
         out.append(item("hardware", level, _key("hw", d.source_key, d.device_id, level),
                         f"Máy chủ {d.name} ({d.service_tag or d.device_id}): linh kiện {'hỏng' if level == 'crit' else 'cảnh báo'}",
                         "; ".join(dict.fromkeys(reasons.get(k) or [f"Trạng thái OME {d.status_code or '—'}"]))[:500] + ".",
-                        alert_key=_key("hw", d.source_key, d.device_id), **link(d)))
+                        alert_key=_key("hw", d.source_key, d.device_id), events=evs.get(k, []), **link(d)))
     for x in db.query(HwDiskState).filter(HwDiskState.source_key.in_(keys), HwDiskState.predictive_failure.is_(True)):
         d = devs.get((x.source_key, x.device_id))
         if d is None:
@@ -356,7 +522,9 @@ def hardware_items(db: Session) -> List[Dict[str, Any]]:
         out.append(item("hardware", "crit", _key("hwd", x.source_key, x.device_id, x.slot),
                         f"Ổ đĩa dự báo hỏng — {d.name} ({d.service_tag or d.device_id})",
                         f"{x.slot}{(' · ' + x.model) if x.model else ''}{(' · SN ' + x.serial) if x.serial else ''}. Thay ổ trước khi hỏng hẳn.",
-                        **link(d)))
+                        events=[_event("crit", f"Ổ {x.slot}: dự báo hỏng (predictive failure)",
+                                       " · ".join(v for v in (x.model, x.media, f"{_num(x.size_gb, 0)} GB" if x.size_gb else "", f"SN {x.serial}" if x.serial else "") if v))]
+                        + evs.get((x.source_key, x.device_id), []), **link(d)))
     behind = {(f.source_key, f.device_id) for f in db.query(HwFirmwareState.source_key, HwFirmwareState.device_id)
               .filter(HwFirmwareState.source_key.in_(keys), HwFirmwareState.compliance.in_(("upgrade", "downgrade")))}
     behind &= set(devs)
