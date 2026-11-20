@@ -23,12 +23,12 @@ import math
 import queue
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
-from .. import capacity, data_access, observability
+from .. import capacity, data_access, jobruns, observability
 from ..config import Settings, VCenterConfig, get_settings
 from ..database import SessionLocal
 from ..models import ClusterAggregate, ComplianceFindingSnapshot, HostSnapshot, SnapshotRun, VmSnapshot
@@ -297,6 +297,8 @@ def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, An
     done: "queue.Queue" = queue.Queue()
     results: List[Optional[Dict[str, Any]]] = [None] * n
     running: Dict[int, float] = {}          # task index -> monotonic start
+    starts: Dict[int, Tuple[float, dt.datetime]] = {}
+    ends: Dict[int, float] = {}
     next_idx = 0
 
     def runner(i: int) -> None:
@@ -308,6 +310,7 @@ def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, An
     while next_idx < n or running:
         while next_idx < n and len(running) < workers:
             running[next_idx] = time.monotonic()
+            starts[next_idx] = (running[next_idx], dt.datetime.utcnow())
             # own copy of the caller's context per thread: log lines keep the round's job id
             threading.Thread(target=contextvars.copy_context().run, args=(runner, next_idx),
                              name=f"sync-{next_idx}", daemon=True).start()
@@ -328,6 +331,7 @@ def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, An
             continue
         if i not in running:                 # finished after being abandoned: already reported
             continue
+        ends[i] = time.monotonic()
         del running[i]
         if exc is None:
             results[i] = res
@@ -335,6 +339,7 @@ def run_syncs(tasks: List[Callable[[], Dict[str, Any]]], keys: List[Dict[str, An
             results[i] = {**keys[i], "ok": False, "skipped": True, "error": str(exc)}
         else:                                # already logged and recorded as an error run
             results[i] = {**keys[i], "ok": False, "error": public_error(exc)}
+    jobruns.record_syncs(results, starts, ends)
     return [r for r in results if r is not None]
 
 
@@ -518,16 +523,19 @@ async def scheduler_loop(app_settings: Settings):
         try:
             results = await asyncio.to_thread(sync_everything, app_settings)
             _beat(interval)
-            cmdb = await asyncio.to_thread(_build_cmdb)                # after every source of the round
+            cmdb = await asyncio.to_thread(jobruns.timed, "cmdb", _build_cmdb)      # after every source of the round
             _beat(interval)
-            owners = await asyncio.to_thread(_assign_owners) if cmdb else None
+            owners = await asyncio.to_thread(jobruns.timed, "owners", _assign_owners) if cmdb else None
+            if not cmdb:
+                await asyncio.to_thread(jobruns.skipped, "owners", "Bỏ qua: dựng sổ CI lỗi.")
             _beat(interval)
-            reviews = await asyncio.to_thread(_owner_reviews)
+            reviews = await asyncio.to_thread(jobruns.timed, "reviews", _owner_reviews)
             _beat(interval)
-            alerts = await asyncio.to_thread(_ops_alerts)
-            purge = await asyncio.to_thread(retention.maybe_purge, app_settings.snapshot_retention_months)
+            alerts = await asyncio.to_thread(jobruns.timed, "alerts", _ops_alerts)
+            purge = await asyncio.to_thread(jobruns.timed, "retention", retention.maybe_purge,
+                                            app_settings.snapshot_retention_months, none_is="skipped")
             from .. import metrics
-            rolled = await asyncio.to_thread(metrics.maybe_rollup)     # raw → hourly / daily, at most hourly
+            rolled = await asyncio.to_thread(jobruns.timed, "metrics", metrics.maybe_rollup, none_is="skipped")
             line = round_summary(results, time.monotonic() - started, alerts, purge)
             if rolled:
                 line += " " + " ".join(f"metrics_{k}={v}" for k, v in sorted(rolled.items()))
@@ -539,6 +547,7 @@ async def scheduler_loop(app_settings: Settings):
                 line += (f" review_opened={reviews['opened'] or '-'} review_sent={reviews['sent']} review_failed={reviews['failed']}"
                          f" review_waiting={reviews['waiting']}")
             logger.info("%s", line)
+            await asyncio.to_thread(jobruns.record_round, results, time.monotonic() - started)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001

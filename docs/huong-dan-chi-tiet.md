@@ -2126,10 +2126,53 @@ Mật khẩu, client secret, API key, JWT, bearer token, `password=…`, mật k
 biến môi trường `*PASSWORD*` / `*SECRET*` / `*TOKEN*` / `*API_KEY*` được che **trước khi lưu** vào DB.
 Mỗi bản ghi có `APP_VERSION` (commit của image) để gắn lỗi / chậm với từng lần deploy.
 
+Mỗi bản ghi log cũng có **mã lần chạy** và **pod**:
+- Mã lần chạy là `requestId`: header `X-Request-ID` của request, hoặc `job-<tên>-<mã>` với việc chạy nền.
+- Pod là `HOSTNAME` của pod đã ghi.
+
+Gọi `search_logs(request_id=…)` để xem mọi dòng log của một request hay một vòng đồng bộ.
+
+Log thư viện dựng PDF được giảm bớt:
+- `fontTools` chỉ ghi từ mức WARNING.
+- Thông báo “HarfBuzz-Subset” của WeasyPrint chỉ ghi một lần mỗi pod.
+- Image cài `libharfbuzz-subset0`, nên cắt font nhanh hơn và thông báo này không còn xuất hiện.
+
+**Sổ lần chạy job** (`job_runs`, giữ 90 ngày) có một dòng cho mỗi việc chạy nền:
+- Đồng bộ từng nguồn, thuộc mọi nhóm:
+  - Ảo hoá (vCenter / Proxmox / Nutanix);
+  - Backup;
+  - Storage;
+  - Dell OME;
+  - IPAM.
+- Dựng sổ CI.
+- Gán owner tự động.
+- Rà soát owner.
+- Cảnh báo.
+- Dọn dữ liệu cũ.
+- Gộp số đo.
+- Cả vòng poll.
+
+Mỗi dòng ghi: kiểu chạy (theo lịch hoặc *Đồng bộ ngay*), pod, thời lượng, trạng thái (ok / error / skipped / timeout),
+bộ đếm (host, VM, job, CI…) và lỗi đã che. Tool `sync_history` đọc sổ này.
+
+Phân vị độ trễ (p50 / p95 / p99) được nội suy trong ô histogram, nên không còn làm tròn lên cận trên. Trước đây mọi
+request từ 2,5 đến 5 giây đều hiện là 5.000 ms.
+
 ### Công cụ MCP
 
-`app_overview`, `search_logs`, `error_summary`, `endpoint_performance`, `performance_trend`,
-`slow_requests`, `slow_queries`, `sync_history`; prompt mẫu `health_review`, `error_triage`.
+`app_overview`, `search_logs` (lọc theo `request_id`; `contains` so khớp đúng chữ, `%` / `_` không phải ký tự đại diện),
+`error_summary` (kèm pod và `sampleRequestId`), `endpoint_performance`, `performance_trend`, `slow_requests`, `slow_queries`.
+
+`sync_history` lọc được theo:
+- nhóm nguồn: `virtualization`, `backup`, `storage`, `hardware`, `ipam`;
+- loại việc: `cmdb`, `owners`, `reviews`, `alerts`, `retention`, `metrics`, `poll`;
+- `status`, `key`, `since_minutes`.
+
+Trường `runId` của mỗi lần chạy dùng làm `request_id` khi gọi `search_logs`.
+
+Prompt mẫu: `health_review`, `error_triage`.
+
+Rà soát module AI / MCP và lộ trình cải tiến: `docs/design/ico-ai-mcp-review.md`.
 
 ### Quản trị viên
 

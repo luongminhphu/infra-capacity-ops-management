@@ -85,6 +85,34 @@ class AppLog(Base):
     traceback = Column(Text, nullable=True)
     fingerprint = Column(String(40), nullable=False, index=True)   # groups repeats of the same error
     app_version = Column(String(64), nullable=True)
+    request_id = Column(String(64), nullable=True, index=True)     # X-Request-ID of the request, or job-<name>-<id>
+    pod = Column(String(64), nullable=True)                         # HOSTNAME of the pod that wrote it
+
+
+class JobRun(Base):
+    """One run of background work: a source sync (any family), the CI build, owner rules, review round, alerts,
+    retention, metrics roll-up, or the whole poll round. Written by jobruns.py (best effort, never blocks the job);
+    read by MCP (ico sync_history / job runs) and kept JOB_RUN_RETENTION_DAYS. Errors are the public, redacted text."""
+    __tablename__ = "job_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('ok', 'error', 'skipped', 'timeout')", name="ck_job_run_status"),
+        CheckConstraint("trigger IN ('schedule', 'manual')", name="ck_job_run_trigger"),
+        CheckConstraint("duration_ms IS NULL OR duration_ms >= 0", name="ck_job_run_duration"),
+        Index("ix_job_runs_job_started", "job", "started_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    job = Column(String(16), nullable=False)                 # sync | cmdb | owners | reviews | alerts | retention | metrics | poll
+    family = Column(String(16), nullable=True)               # sync only: virtualization | backup | storage | hardware | ipam
+    source_key = Column(String(64), nullable=True)
+    trigger = Column(String(8), nullable=False, default="schedule")
+    run_id = Column(String(64), nullable=True, index=True)   # job-poll-xxxx or the X-Request-ID of a manual sync
+    pod = Column(String(64), nullable=True)
+    started_at = Column(DateTime, nullable=False, index=True)
+    duration_ms = Column(Integer, nullable=True)
+    status = Column(String(8), nullable=False)
+    counters = Column(Text, nullable=True)                    # JSON object of numbers (hosts, vms, jobs, cis …)
+    error = Column(String(500), nullable=True)
 
 
 class PerfBucket(Base):
@@ -891,6 +919,7 @@ _json(StorageArrayState.nfs_endpoints, list, "Địa chỉ NFS của mảng lưu
 _json(VmSnapshotState.items, list, "Danh sách snapshot", nullable=False)
 _json(VmSnapshot.custom_attrs, dict, "Thuộc tính tuỳ chỉnh của VM")
 _json(HostHealthState.issues, list, "Cảm biến bất thường", nullable=False)
+_json(JobRun.counters, dict, "Bộ đếm lần chạy job")
 
 
 # Tables of the Chi phí & Hợp đồng module register on the same metadata (create_all).

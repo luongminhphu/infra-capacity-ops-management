@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from . import observability as obs
 from .config import get_settings
 from .database import get_db
-from .models import ApiToken, AppLog, AuditLog, BackupSyncRun, SnapshotRun, User
+from .models import ApiToken, AppLog, AuditLog, BackupSyncRun, JobRun, SnapshotRun, User
 from .security import is_admin, local_login_allowed
 
 logger = logging.getLogger("vco.mcp")
@@ -75,8 +75,17 @@ def _level(name: Any) -> int:
     return lv if isinstance(lv, int) else logging.WARNING
 
 
+def _like(text: str) -> str:
+    """Literal substring for LIKE / ILIKE ('%' and '_' typed by the client are not wildcards)."""
+    return "%" + str(text).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 def _log_out(e: Dict[str, Any], with_trace: bool) -> Dict[str, Any]:
     out = {"at": _iso(e["at"]), "level": e["level"], "logger": e["logger"], "message": obs.mask_infra(e["message"])}
+    if e.get("request_id"):
+        out["requestId"] = e["request_id"]
+    if e.get("pod"):
+        out["pod"] = e["pod"]
     if e.get("exc_type"):
         out["exception"] = e["exc_type"]
     if with_trace and e.get("traceback"):
@@ -116,23 +125,26 @@ def tool_search_logs(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
     since = _since(args.get("since_minutes"), 60)
     limit = _limit(args.get("limit"), 100)
     prefix, contains = args.get("logger"), args.get("contains")
+    rid = str(args.get("request_id") or "").strip()[:64] or None
     with_trace = bool(args.get("include_traceback", True))
     if level >= logging.WARNING:
         obs.flush()
         q = db.query(AppLog).filter(AppLog.at >= since,
                                     AppLog.level.in_([n for n in ("WARNING", "ERROR", "CRITICAL") if _level(n) >= level]))
         if prefix:
-            q = q.filter(AppLog.logger.like(f"{prefix}%"))
+            q = q.filter(AppLog.logger.like(str(prefix).replace("%", "").replace("_", "\\_") + "%", escape="\\"))
         if contains:
-            q = q.filter(AppLog.message.ilike(f"%{contains}%"))
+            q = q.filter(AppLog.message.ilike(_like(contains), escape="\\"))
+        if rid:
+            q = q.filter(AppLog.request_id == rid)
         rows = q.order_by(AppLog.at.desc()).limit(limit).all()
-        items = [_log_out({"at": r.at, "level": r.level, "logger": r.logger, "message": r.message,
-                           "exc_type": r.exc_type, "traceback": r.traceback}, with_trace) for r in rows]
-        source = "database (WARNING+, kept %d days)" % get_settings().obs_retention_days
+        items = [_log_out({"at": r.at, "level": r.level, "logger": r.logger, "message": r.message, "exc_type": r.exc_type,
+                           "traceback": r.traceback, "request_id": r.request_id, "pod": r.pod}, with_trace) for r in rows]
+        source = "database (WARNING+, kept %d days, every pod)" % get_settings().obs_retention_days
     else:
-        items = [_log_out(e, with_trace) for e in obs.recent_logs(level, since, prefix, contains, limit)]
-        source = "memory (INFO+, since the last restart, last 5000 records)"
-    return {"source": source, "count": len(items), "logs": items}
+        items = [_log_out(e, with_trace) for e in obs.recent_logs(level, since, prefix, contains, limit, rid)]
+        source = f"memory of pod {obs.POD} (INFO+, since the last restart, last 5000 records)"
+    return {"source": source, "pod": obs.POD, "count": len(items), "logs": items}
 
 
 def tool_error_summary(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -143,13 +155,24 @@ def tool_error_summary(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
                        func.max(AppLog.id))
               .filter(AppLog.at >= since).group_by(AppLog.fingerprint)
               .order_by(func.count(AppLog.id).desc()).limit(limit).all())
+    # 3 queries in all (was 2 per group): the sample rows, then versions and pods of every group at once
+    fps = [g[0] for g in groups]
+    samples = {r.id: r for r in db.query(AppLog).filter(AppLog.id.in_([g[4] for g in groups] or [-1]))}
+    versions: Dict[str, set] = defaultdict(set)
+    pods: Dict[str, set] = defaultdict(set)
+    for fp, v, pod in (db.query(AppLog.fingerprint, AppLog.app_version, AppLog.pod)
+                       .filter(AppLog.fingerprint.in_(fps or [""]), AppLog.at >= since).distinct()):
+        versions[fp].add(v)
+        if pod:
+            pods[fp].add(pod)
     out = []
     for fp, n, first, last, sample_id in groups:
-        r = db.get(AppLog, sample_id)
-        versions = [v for (v,) in db.query(AppLog.app_version).filter(AppLog.fingerprint == fp, AppLog.at >= since).distinct()]
+        r = samples[sample_id]
         out.append({"count": n, "firstSeen": _iso(first), "lastSeen": _iso(last), "level": r.level, "logger": r.logger,
                     "exception": r.exc_type, "sampleMessage": obs.mask_infra(r.message)[:1500],
-                    "sampleTraceback": obs.mask_infra(r.traceback or "")[-2500:] or None, "appVersions": versions})
+                    "sampleTraceback": obs.mask_infra(r.traceback or "")[-2500:] or None,
+                    "sampleRequestId": r.request_id, "appVersions": sorted(versions[fp], key=lambda x: x or ""),
+                    "pods": sorted(pods[fp])})
     return {"since": _iso(since), "groups": out}
 
 
@@ -219,10 +242,32 @@ def _run_out(r, kind: str) -> Dict[str, Any]:
     return out
 
 
+FAMILIES = ("virtualization", "backup", "storage", "hardware", "ipam")
+JOBS = ("sync", "cmdb", "owners", "reviews", "alerts", "retention", "metrics", "poll")
+
+
 def tool_sync_history(db: Session, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Every background run from job_runs (all source families + the derived jobs). Before the first recorded run
+    (an upgraded install), falls back to the legacy vCenter / NetBackup tables."""
+    from . import jobruns
     src = args.get("source") or "all"
     limit = _limit(args.get("limit"), 20, 200)
     status = args.get("status")
+    if db.query(JobRun.id).first() is not None:
+        q = db.query(JobRun).filter(JobRun.started_at >= _since(args.get("since_minutes"), 1440))
+        if src in FAMILIES:
+            q = q.filter(JobRun.job == "sync", JobRun.family == src)
+        elif src == "vcenter":                       # old name of the parameter
+            q = q.filter(JobRun.job == "sync", JobRun.family == "virtualization")
+        elif src in JOBS:
+            q = q.filter(JobRun.job == src)
+        if status in ("ok", "error", "skipped", "timeout"):
+            q = q.filter(JobRun.status == status)
+        if args.get("key"):
+            q = q.filter(JobRun.source_key == str(args["key"])[:64])
+        rows = q.order_by(JobRun.started_at.desc(), JobRun.id.desc()).limit(limit).all()
+        return {"source": "job_runs (every pod, kept %d days)" % obs.JOB_RUN_RETENTION_DAYS,
+                "runs": [jobruns.out(r) for r in rows]}
     out: List[Dict[str, Any]] = []
     if src in ("all", "vcenter"):
         q = db.query(SnapshotRun).filter(SnapshotRun.source == "live")
@@ -249,12 +294,15 @@ TOOLS: Dict[str, Dict[str, Any]] = {
     },
     "search_logs": {
         "fn": tool_search_logs,
-        "description": "Search the app's logs. WARNING/ERROR come from the database (kept across restarts); "
-                       "INFO/DEBUG only from memory since the last restart. Newest first.",
+        "description": "Search the app's logs. WARNING/ERROR come from the database (kept across restarts, every pod); "
+                       "INFO/DEBUG only from the memory of the pod that answers, since its last restart. Newest first. "
+                       "Each record carries requestId (X-Request-ID, or job-<name>-<id> for background work) and pod: "
+                       "pass request_id to see every record of one request or scheduler round.",
         "schema": {"type": "object", "properties": {
             "level": {"type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], "default": "WARNING"},
             "since_minutes": {**_INT, "default": 60}, "logger": {**_STR, "description": "Logger name prefix, e.g. vco.netbackup"},
-            "contains": {**_STR, "description": "Case-insensitive text filter"},
+            "contains": {**_STR, "description": "Case-insensitive literal text filter"},
+            "request_id": {**_STR, "description": "Only records of this request / job id (from requestId or a run's runId)"},
             "include_traceback": {"type": "boolean", "default": True}, "limit": {**_INT, "default": 100}}},
     },
     "error_summary": {
@@ -291,10 +339,17 @@ TOOLS: Dict[str, Dict[str, Any]] = {
     },
     "sync_history": {
         "fn": tool_sync_history,
-        "description": "Recent collector runs (vCenter inventory and backup server polls): status, duration, error.",
+        "description": "Background runs, newest first: source syncs of every family (virtualization = vCenter / Proxmox / "
+                       "Nutanix, backup, storage, hardware = Dell OME, ipam) and the derived jobs (cmdb build, owners rules, "
+                       "reviews, alerts, retention, metrics, poll = whole round): trigger, pod, duration, status, counters, error. "
+                       "runId links to search_logs(request_id=…).",
         "schema": {"type": "object", "properties": {
-            "source": {"type": "string", "enum": ["all", "vcenter", "backup"], "default": "all"},
-            "status": {"type": "string", "enum": ["ok", "error"]}, "limit": {**_INT, "default": 20}}},
+            "source": {"type": "string", "enum": ["all", "virtualization", "backup", "storage", "hardware", "ipam", "vcenter",
+                                                  "sync", "cmdb", "owners", "reviews", "alerts", "retention", "metrics", "poll"],
+                       "default": "all"},
+            "status": {"type": "string", "enum": ["ok", "error", "skipped", "timeout"]},
+            "key": {**_STR, "description": "Source key, e.g. vc1"},
+            "since_minutes": {**_INT, "default": 1440}, "limit": {**_INT, "default": 20}}},
     },
 }
 
