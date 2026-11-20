@@ -59,6 +59,8 @@ def my_vms(system: Optional[int] = Query(default=None, ge=1), p: OwnerPrincipal 
         items.append({"ciId": c.id, "vm": c.name, "vcenterKey": a.get("vcenterKey") or "", "cluster": a.get("cluster"),
                       "powerOn": a.get("powerOn"), "vcpu": a.get("vcpu"), "ramGB": a.get("ramGB"),
                       "systemId": sid, "systemCode": code, "systemName": name})
+    from .. import vm_ip
+    vm_ip.attach(db, items)
     return {"items": items, "total": len(items), "truncated": len(rows) > MAX_VMS}
 
 
@@ -103,7 +105,13 @@ def my_review(cid: int, p: OwnerPrincipal = Depends(get_owner_user), db: Session
     rows = review.visible_items(db, p, c.id).order_by(review.ReviewItem.flagged.desc(), review.ReviewItem.vm_name).limit(MAX_VMS).all()
     return {"id": c.id, "periodLabel": c.period_label, "status": c.status, "dueAt": c.due_at.isoformat(),
             "editable": c.status == "open", "decisions": [{"value": k, "label": v} for k, v in review.DECISION_LABELS.items()],
-            "items": [_item_out(i) for i in rows]}
+            "items": _with_ip(db, [_item_out(i) for i in rows])}
+
+
+def _with_ip(db: Session, rows: list) -> list:
+    from .. import vm_ip
+    vm_ip.attach(db, rows)
+    return rows
 
 
 @router.put("/reviews/{cid}/items")

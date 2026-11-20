@@ -180,7 +180,7 @@ function bkVerdict(s, r) {
 function bkOverview(s) {
   const r = BK_READY[s.readiness];
   const groups = (s.failureGroups || []).map(g => `<tr><td><b>${esc(g.label)}</b><span class="muted-sub bk-wrap">${esc(g.action)}</span></td><td class="num">${bkNum(g.count)}</td><td class="num">${bkNum(g.clientCount)}</td></tr>`).join('');
-  const crit = (s.clients || []).filter(c => c.status !== 'ok').slice(0, 8).map(c => `<tr><td><b>${esc(c.client)}</b><span class="muted-sub">${esc(c.policies.join(', '))}</span></td>
+  const crit = (s.clients || []).filter(c => c.status !== 'ok').slice(0, 8).map(c => `<tr><td><b>${esc(c.client)}</b><span class="muted-sub">${esc(c.policies.join(', '))}</span></td><td class="mono">${esc(c.ip || '—')}</td>
     <td>${bkDate(c.lastSuccessAt)}<span class="muted-sub">${bkHours(c.hoursSinceSuccess)} trước</span></td><td class="wrap">${esc(c.lastStatusText)}</td><td>${bkPill(c.status, c.statusLabel)}</td></tr>`).join('');
   return `
     ${bkVerdict(s, r)}
@@ -203,8 +203,8 @@ function bkOverview(s) {
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Client cần xử lý</div><p class="panel-sub">Lỗi liên tiếp, quá RPO hoặc lần gần nhất không thành công.</p></div>
         <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="bk-clients">Xem tất cả client</button></div></div>
-      <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Client</th><th>Thành công gần nhất</th><th>Kết quả lần cuối</th><th>Đánh giá</th></tr></thead>
-      <tbody>${crit || uiEmptyRow(4, 'Mọi client đều đạt.')}</tbody></table></div>
+      <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th>Client</th><th>IP</th><th>Thành công gần nhất</th><th>Kết quả lần cuối</th><th>Đánh giá</th></tr></thead>
+      <tbody>${crit || uiEmptyRow(5, 'Mọi client đều đạt.')}</tbody></table></div>
     </section>
     <section class="table-card">
       <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Phát hiện &amp; khuyến nghị</div><p class="panel-sub">Theo các ngưỡng tại trang Nguồn &amp; ngưỡng.</p></div></div>
@@ -220,7 +220,7 @@ function bkClients(s) {
   const q = f.q.trim().toLowerCase();
   // The selection is the client NAME (audit FE-20): an array index pointed at another client after a filter / reload.
   const all = (s.clients || []).map((c, i) => ({ ...c, _i: i }));
-  const list = all.filter(c => (f.status === 'all' || c.status === f.status) && (!q || `${c.client} ${c.policies.join(' ')}`.toLowerCase().includes(q)))
+  const list = all.filter(c => (f.status === 'all' || c.status === f.status) && (!q || `${c.client} ${c.ip || ''} ${c.policies.join(' ')}`.toLowerCase().includes(q)))
     .sort((a, b) => (BK_CL_ORDER[a.status] ?? 9) - (BK_CL_ORDER[b.status] ?? 9));   // stable: keeps server order inside a group
   const cnt = (k) => all.filter(c => k === 'all' || c.status === k).length;
   if (!list.some(c => c.client === st.clientSel)) st.clientSel = list.length ? list[0].client : null;
@@ -232,7 +232,7 @@ function bkClients(s) {
         <span class="hm-lv lv-${esc(c.status)}" aria-hidden="true"></span>
         <span class="hm-t">${esc(c.client)}</span>
         <span class="hm-r"><b>${bkHours(c.hoursSinceSuccess)}</b>${c.consecutiveFail ? `${c.consecutiveFail} lần lỗi liền` : 'từ lần thành công'}</span>
-        <span class="hm-m">${esc(c.statusLabel)} · ${esc(c.policies.join(', ') || '—')}</span>
+        <span class="hm-m">IP ${esc(c.ip || '—')} · ${esc(c.statusLabel)} · ${esc(c.policies.join(', ') || '—')}</span>
         <span class="sr-only">${esc(BK_STATUS[c.status] || '')}</span></li>`).join('');
   }).join('');
   const sel = list.find(c => c.client === st.clientSel);
@@ -241,7 +241,7 @@ function bkClients(s) {
       <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Client &amp; RPO</div><p class="panel-sub">RPO = thời gian từ bản backup thành công gần nhất (status 0 hoặc 1). Cảnh báo khi quá ${bkNum(s.thresholds.rpo_hours)} giờ; nghiêm trọng khi quá ${bkNum(s.thresholds.rpo_crit_hours)} giờ hoặc lỗi liên tiếp từ ${s.thresholds.consecutive_fail} lần.</p></div>
         <div class="panel-toolbar">
           <select data-bk-filter="clientStatus" aria-label="Lọc theo đánh giá">${['all', 'crit', 'warn', 'ok'].map(k => `<option value="${k}" ${f.status === k ? 'selected' : ''}>${k === 'all' ? 'Tất cả' : BK_STATUS[k]} (${cnt(k)})</option>`).join('')}</select>
-          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="clientQ" placeholder="Tìm client / policy" aria-label="Tìm client hoặc policy" value="${esc(f.q)}"/></span>
+          <span class="search-box"><i data-lucide="search"></i><input type="text" data-bk-filter="clientQ" placeholder="Tìm client / IP / policy" aria-label="Tìm client, IP hoặc policy" value="${esc(f.q)}"/></span>
         </div></div>
       <div class="hm-split cp-split">
         <div class="hm-list"><ul class="hm-rows" id="bkClientList" role="listbox" tabindex="0" aria-label="Client backup, nhóm theo đánh giá"${sel ? ` aria-activedescendant="bkc-${sel._i}"` : ''}>${groups || `<li role="presentation">${uiEmpty('Không có client phù hợp.')}</li>`}</ul>
@@ -257,7 +257,7 @@ function bkClientDetail(c) {
   const fact = (l, v) => `<div><dt>${l}</dt><dd>${v}</dd></div>`;
   return `
     <div class="hm-d-top">${bkPill(c.status, c.statusLabel)}<h3>${esc(c.client)}</h3></div>
-    <div class="hm-d-meta"><span>${esc(c.policyTypes.join(', ') || '—')}</span><span>${esc(c.policies.join(', ') || '—')}</span></div>
+    <div class="hm-d-meta"><span class="mono">IP ${esc(c.ip || '—')}</span><span>${esc(c.policyTypes.join(', ') || '—')}</span><span>${esc(c.policies.join(', ') || '—')}</span></div>
     ${c.note ? `<div class="hm-d-sec"><h4>Tình trạng</h4><p>${esc(c.note)}</p></div>` : ''}
     <div class="hm-d-sec"><h4>Kết quả job gần nhất</h4><p>${code}${esc(c.lastStatusText || '—')}</p></div>
     <dl class="bk-facts">
@@ -294,12 +294,12 @@ function bkJobs() {
   else {
     const rows = j.rows.map(r => `<tr>
       <td>${esc(String(r.jobId))}${r.parentJobId ? `<span class="muted-sub">cha ${esc(String(r.parentJobId))}</span>` : ''}</td><td>${esc(r.jobType || '')}</td>
-      <td>${esc(r.clientName || '—')}</td><td>${esc(r.policyName || '—')}<span class="muted-sub">${esc(r.scheduleLabel || '')}</span></td>
+      <td>${esc(r.clientName || '—')}</td><td class="mono">${esc(r.ip || '—')}</td><td>${esc(r.policyName || '—')}<span class="muted-sub">${esc(r.scheduleLabel || '')}</span></td>
       <td>${bkDate(r.startTime)}</td><td class="num">${r.elapsedSec ? bkNum(r.elapsedSec / 60, 0) + ' ph' : '—'}</td><td class="num">${bkNum((r.kbytes || 0) / 1048576, 2)}</td>
       <td>${bkPill(BK_OUTCOME[r.outcome].cls, BK_OUTCOME[r.outcome].label)}</td>
       <td class="wrap">${r.status !== null && r.status !== undefined ? `<b>${r.status}</b> · ` : ''}${esc(r.statusText)}${r.group ? `<span class="muted-sub">${esc(r.group)}</span>` : ''}</td></tr>`).join('');
-    body = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Job ID</th><th>Loại</th><th>Client</th><th>Policy / lịch</th><th>Bắt đầu</th><th>Thời lượng</th><th>GB</th><th>Kết quả</th><th>Mã · mô tả</th></tr></thead>
-      <tbody>${rows || uiEmptyRow(9, 'Không có job phù hợp.')}</tbody></table></div>
+    body = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Job ID</th><th>Loại</th><th>Client</th><th>IP</th><th>Policy / lịch</th><th>Bắt đầu</th><th>Thời lượng</th><th>GB</th><th>Kết quả</th><th>Mã · mô tả</th></tr></thead>
+      <tbody>${rows || uiEmptyRow(10, 'Không có job phù hợp.')}</tbody></table></div>
       <div class="row-count">${j.rows.length < j.total ? `Hiển thị ${j.rows.length} / ` : ''}${bkNum(j.total)} job — danh sách đầy đủ trong file Excel.</div>`;
   }
   return `

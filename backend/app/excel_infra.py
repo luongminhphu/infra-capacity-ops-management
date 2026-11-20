@@ -55,18 +55,18 @@ def build_xlsx(d: Dict[str, Any], scope_label: str = "") -> bytes:
     _widths(w, {"A": 22, "B": 32, "C": 8, "D": 14, "E": 10, "F": 36, "G": 30, "H": 36, "I": 8})
 
     w = wb.create_sheet("Snapshot VM")
-    r = _sheet_title(w, "Snapshot VM", "Một dòng một VM; snapshot của phần mềm backup đánh dấu ở cột “Của backup”", 10)
-    _write_rows(w, r, ["Mức", "VM", "vCenter", "Cluster", "Host", "Số snapshot", "Cũ nhất (ngày)", "Dung lượng (GB)", "Của backup", "Lý do"],
-                [[WORD[x["level"]], x["vm"], x["vcenterKey"], x["cluster"], x["host"], x["count"], x["ageDays"], x["sizeGB"],
-                  "Có" if x["backupLike"] else None, "; ".join(x["reasons"])] for x in sn], {7: "0.0", 8: "#,##0.0"})
-    _widths(w, {"A": 14, "B": 30, "C": 10, "D": 18, "E": 22, "F": 10, "G": 12, "H": 12, "I": 10, "J": 36})
+    r = _sheet_title(w, "Snapshot VM", "Một dòng một VM; snapshot của phần mềm backup đánh dấu ở cột “Của backup”", 11)
+    _write_rows(w, r, ["Mức", "VM", "IP", "vCenter", "Cluster", "Host", "Số snapshot", "Cũ nhất (ngày)", "Dung lượng (GB)", "Của backup", "Lý do"],
+                [[WORD[x["level"]], x["vm"], x.get("ip"), x["vcenterKey"], x["cluster"], x["host"], x["count"], x["ageDays"], x["sizeGB"],
+                  "Có" if x["backupLike"] else None, "; ".join(x["reasons"])] for x in sn], {8: "0.0", 9: "#,##0.0"})
+    _widths(w, {"A": 14, "B": 30, "C": 15, "D": 10, "E": 18, "F": 22, "G": 10, "H": 12, "I": 12, "J": 10, "K": 36})
 
     w = wb.create_sheet("Alarm")
-    r = _sheet_title(w, "Alarm vCenter", "Alarm đỏ / vàng đang kích hoạt", 8)
-    _write_rows(w, r, ["Mức", "Alarm", "Loại đối tượng", "Đối tượng", "vCenter", "Cluster", "Từ lúc", "Đã xác nhận"],
-                [[WORD[a["level"]], a["alarm"], a["entityType"], a["entity"], a["vcenterKey"], a["cluster"], a["at"],
+    r = _sheet_title(w, "Alarm vCenter", "Alarm đỏ / vàng đang kích hoạt", 9)
+    _write_rows(w, r, ["Mức", "Alarm", "Loại đối tượng", "Đối tượng", "IP (VM)", "vCenter", "Cluster", "Từ lúc", "Đã xác nhận"],
+                [[WORD[a["level"]], a["alarm"], a["entityType"], a["entity"], a.get("ip"), a["vcenterKey"], a["cluster"], a["at"],
                   "Có" if a["acknowledged"] else "Chưa"] for a in al])
-    _widths(w, {"A": 14, "B": 40, "C": 14, "D": 30, "E": 10, "F": 18, "G": 22, "H": 12})
+    _widths(w, {"A": 14, "B": 40, "C": 14, "D": 30, "E": 15, "F": 10, "G": 18, "H": 22, "I": 12})
 
     w = wb.create_sheet("Sức khoẻ host")
     r = _sheet_title(w, "Sức khoẻ host", "Mọi host: kết nối, bảo trì, cảm biến bất thường", 7)

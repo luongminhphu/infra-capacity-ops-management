@@ -62,13 +62,13 @@ async function aiOsClassify(btn) {
     if (!r.total) return uiEmpty('Không có VM nào ở nhóm Other / Unknown chưa ghi đè.');
     const rows = r.items.map((s, i) => `<tr>
       <td><input type="checkbox" data-ai-os-pick="${i}" ${s.category !== 'other_unknown' && s.confidence === 'high' ? 'checked' : ''} ${s.category === 'other_unknown' ? 'disabled' : ''} aria-label="Chọn ${esc(s.vm)}"></td>
-      <td><b>${esc(s.vm)}</b><span class="muted-sub">${esc(s.cluster || '')}</span></td>
+      <td><b>${esc(s.vm)}</b><span class="muted-sub">${esc(s.cluster || '')}</span></td><td class="mono">${esc(s.ip || '—')}</td>
       <td class="wrap">${esc(s.evidence.toolsGuestFullName || s.evidence.guestFullName || s.evidence.guestId || '—')}</td>
       <td>${esc(LIC_CATEGORY_LABEL[s.category] || s.category)}</td><td>${esc(s.osVersion || '—')}</td><td>${esc(s.osEdition || '—')}</td>
       <td>${uiPill(...(AI_CONF[s.confidence] || AI_CONF.low))}</td><td class="wrap">${esc(s.reason)}</td></tr>`).join('');
     return `<div class="home-ai">
       <div class="home-brief-head"><span class="eyebrow">Đề xuất phân loại HĐH (${esc(r.items.length)} / ${esc(r.total)} VM chưa rõ${r.sent < r.total ? ` — gửi ${esc(r.sent)} VM đầu, chạy lại sau khi ghi đè để xem tiếp` : ''})</span>${aiNote(r.cached)}</div>
-      <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th></th><th>VM</th><th>Bằng chứng</th><th>Phân loại</th><th>Phiên bản</th><th>Edition</th><th>Tin cậy</th><th>Lý do</th></tr></thead><tbody>${rows || `<tr><td colspan="8">${uiEmpty('AI không đưa ra đề xuất nào.')}</td></tr>`}</tbody></table></div>
+      <div class="table-scroll table-scroll-flat"><table class="data-table"><thead><tr><th></th><th>VM</th><th>IP</th><th>Bằng chứng</th><th>Phân loại</th><th>Phiên bản</th><th>Edition</th><th>Tin cậy</th><th>Lý do</th></tr></thead><tbody>${rows || `<tr><td colspan="9">${uiEmpty('AI không đưa ra đề xuất nào.')}</td></tr>`}</tbody></table></div>
       <div class="sim-actions">${uiIsAdmin() ? `<button class="btn btn-primary btn-sm" type="button" data-ai-act="os-apply">Ghi đè các VM đã chọn</button>
         <span class="muted-sub sr-inline">Ghi đè ghi tên bạn và lý do của AI; sửa hoặc xoá được trong bảng bên dưới.</span>` : `<span class="muted-sub sr-inline">${ADMIN_ONLY_NOTE}</span>`}</div>
       <p class="criteria-status" id="licAiOsMsg" role="status"></p></div>`;

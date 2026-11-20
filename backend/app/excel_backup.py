@@ -196,18 +196,18 @@ def _failures(wb, r, subtitle) -> None:
 
 
 def _clients(wb, r, subtitle) -> None:
-    ws, row = _sheet(wb, "Client & RPO", "Client — RPO và lỗi lặp lại", subtitle, 12)
-    rows = [[c["client"], ", ".join(c["policies"]), ", ".join(c["policyTypes"]), _local(c["lastJobAt"]), c["lastStatus"], c["lastStatusText"],
+    ws, row = _sheet(wb, "Client & RPO", "Client — RPO và lỗi lặp lại", subtitle, 14)
+    rows = [[c["client"], c.get("ip"), ", ".join(c["policies"]), ", ".join(c["policyTypes"]), _local(c["lastJobAt"]), c["lastStatus"], c["lastStatusText"],
              _local(c["lastSuccessAt"]), c["hoursSinceSuccess"], c["consecutiveFail"], c["jobs"], c["failed"], STATUS_TXT[c["status"]],
              c["note"]] for c in r["clients"]]
-    last = _write_rows(ws, row, ["Client", "Policy", "Loại", "Job gần nhất", "Mã", "Kết quả gần nhất", "Thành công gần nhất",
+    last = _write_rows(ws, row, ["Client", "IP", "Policy", "Loại", "Job gần nhất", "Mã", "Kết quả gần nhất", "Thành công gần nhất",
                                  "Giờ từ lần thành công", "Lỗi liên tiếp", "Job trong kỳ", "Lỗi trong kỳ", "Đánh giá", "Ghi chú"], rows,
-                       fmts={4: DATE_FMT, 7: DATE_FMT, 8: NUM1}, wrap_cols=(2, 13))
+                       fmts={5: DATE_FMT, 8: DATE_FMT, 9: NUM1}, wrap_cols=(3, 14))
     if rows:
-        _table(ws, f"A{row}:M{last}", "ClientRPO")
-        _status_rules(ws, f"L{row + 1}:L{last}")
-    ws.freeze_panes = ws[f"B{row + 1}"]
-    _widths(ws, {"A": 28, "B": 28, "C": 16, "D": 16, "E": 7, "F": 30, "G": 16, "H": 12, "I": 10, "J": 10, "K": 10, "L": 14, "M": 50})
+        _table(ws, f"A{row}:N{last}", "ClientRPO")
+        _status_rules(ws, f"M{row + 1}:M{last}")
+    ws.freeze_panes = ws[f"C{row + 1}"]
+    _widths(ws, {"A": 28, "B": 15, "C": 28, "D": 16, "E": 16, "F": 7, "G": 30, "H": 16, "I": 12, "J": 10, "K": 10, "L": 10, "M": 14, "N": 50})
 
 
 def _policies(wb, r, subtitle) -> None:

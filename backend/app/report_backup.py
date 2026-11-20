@@ -239,7 +239,7 @@ def _failures(r: Dict[str, Any]) -> str:
 def _clients(r: Dict[str, Any]) -> str:
     th = r["thresholds"]
     bad = [c for c in r["clients"] if c["status"] != "ok"]
-    rows = [[f"<b>{esc(c['client'])}</b>", esc(", ".join(c["policies"][:2])), _t(c["lastSuccessAt"]), _hours(c["hoursSinceSuccess"]),
+    rows = [[f"<b>{esc(c['client'])}</b>", esc(c.get("ip") or "—"), esc(", ".join(c["policies"][:2])), _t(c["lastSuccessAt"]), _hours(c["hoursSinceSuccess"]),
              vn(c["consecutiveFail"], 0) if c["consecutiveFail"] else "—", esc(c["lastStatusText"]),
              _pill(c["statusLabel"], c["status"])] for c in bad[:60]]
     more = f'<div class="small-note">Còn {len(bad) - 60} client khác — xem file Excel.</div>' if len(bad) > 60 else ""
@@ -247,8 +247,8 @@ def _clients(r: Dict[str, Any]) -> str:
   <div class="section breakable">
     <div class="section-title"><span class="sec-num">4</span>Client cần xử lý — RPO và lỗi lặp lại</div>
     <div class="section-sub">{vn(len(bad), 0)} / {vn(len(r['clients']), 0)} client chưa đạt. Quá RPO: không có bản backup thành công trong {vn(th['rpo_hours'], 0)} giờ (nghiêm trọng khi quá {vn(th['rpo_crit_hours'], 0)} giờ hoặc lỗi liên tiếp từ {th['consecutive_fail']} lần).</div>
-    {_table(["Client", "Policy", "Thành công gần nhất", "Đã qua", "Lỗi liên tiếp", "Kết quả lần cuối", "Đánh giá"], rows,
-            widths=["18%", "18%", "13%", "9%", "8%", "22%", "12%"])}
+    {_table(["Client", "IP", "Policy", "Thành công gần nhất", "Đã qua", "Lỗi liên tiếp", "Kết quả lần cuối", "Đánh giá"], rows,
+            widths=["16%", "11%", "15%", "12%", "8%", "7%", "19%", "12%"])}
     {more}
   </div>"""
 
@@ -407,7 +407,8 @@ def _criteria(r: Dict[str, Any], servers: List[Dict[str, Any]]) -> str:
 
 def _appendix(r: Dict[str, Any]) -> str:
     jobs = r["failedJobs"][:300]
-    jrows = [[esc(str(j["jobId"])), _t(j["startTime"]), esc(j["client"] or "—"), esc(j["policy"] or "—"), esc(j["schedule"] or "—"),
+    jrows = [[esc(str(j["jobId"])), _t(j["startTime"]), esc(j["client"] or "—"), esc(j.get("ip") or "—"), esc(j["policy"] or "—"),
+              esc(j["schedule"] or "—"),
               f"<b>{j['status']}</b>", esc(j["statusText"])] for j in jobs]
     cov = r["coverage"]
     vrows = [[esc(v["vm"]), esc(v["vcenterKey"] or "—"), esc(v["cluster"] or "—"), esc(v.get("ip") or "—"), vn(v.get("vcpu"), 0),
@@ -415,7 +416,8 @@ def _appendix(r: Dict[str, Any]) -> str:
     return f"""
   <div class="section breakable" style="page-break-before:always;">
     <div class="section-title">Phụ lục A. Job backup lỗi trong kỳ ({vn(len(r['failedJobs']), 0)} job{', hiển thị 300 job gần nhất' if len(r['failedJobs']) > 300 else ''})</div>
-    {_table(["Job ID", "Bắt đầu", "Client", "Policy", "Lịch", "Mã", "Mô tả"], jrows, cls="appendix-table", widths=["9%", "11%", "20%", "18%", "14%", "6%", "22%"])}
+    {_table(["Job ID", "Bắt đầu", "Client", "IP", "Policy", "Lịch", "Mã", "Mô tả"], jrows, cls="appendix-table",
+            widths=["8%", "10%", "17%", "11%", "16%", "12%", "6%", "20%"])}
   </div>
   <div class="section breakable">
     <div class="section-title">Phụ lục B. VM đang chạy chưa có backup ({vn(len(cov.get('unprotectedVms') or []), 0)} VM)</div>

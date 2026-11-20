@@ -306,7 +306,7 @@ def classify_os(db: Session, user: Optional[User], classified: List[Dict[str, An
         v = batch[s["i"]]
         items.append({**{k: s[k] for k in ("category", "osVersion", "osEdition", "confidence", "reason")},
                       "vcenterKey": v.get("vcenterKey"), "instanceUuid": v.get("instanceUuid"), "vm": v.get("vm"),
-                      "cluster": v.get("cluster"), "isPoweredOn": v.get("isPoweredOn"),
+                      "cluster": v.get("cluster"), "isPoweredOn": v.get("isPoweredOn"), "ip": v.get("ipAddress"),
                       "evidence": {k: (v["os"].get("evidence") or {}).get(k) for k in ("guestId", "guestFullName", "toolsGuestFullName")}})
     return {"items": items, "total": len(cands), "sent": len(batch), "cached": res.get("cached", False)}
 

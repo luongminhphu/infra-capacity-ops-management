@@ -107,10 +107,10 @@ function osUnownedHtml() {
   const opt = (v, t, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`;
   const allShown = can && c.items.length > 0 && c.items.every(v => osState.sel.has(v.ciId));
   const rows = c.items.map(v => `<tr>${can ? `<td class="dc-pick"><input type="checkbox" data-os-sel="${esc(v.ciId)}"${osState.sel.has(v.ciId) ? ' checked' : ''} aria-label="Chọn ${esc(v.vm)}"></td>` : ''}
-      <td>${uiEntityLink('vm', v.vm, v.vcenterKey, false)}${v.folderPath ? `<span class="muted-sub">${esc(v.folderPath)}</span>` : ''}</td><td>${esc(v.vcenterKey || '—')}</td><td>${esc(v.cluster || '—')}</td>
+      <td>${uiEntityLink('vm', v.vm, v.vcenterKey, false)}${v.folderPath ? `<span class="muted-sub">${esc(v.folderPath)}</span>` : ''}</td><td class="mono">${esc(v.ip || '—')}</td><td>${esc(v.vcenterKey || '—')}</td><td>${esc(v.cluster || '—')}</td>
       <td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td></tr>`).join('');
   const filters = `<div class="panel-toolbar infra-toolbar dc-filters">
-        <input type="search" id="osCovQ" placeholder="Tên VM: a, b hoặc x*" title="Nhiều tên cách nhau dấu phẩy; * thay cho đoạn bất kỳ" value="${esc(osState.covQ)}" aria-label="Tìm VM theo tên">
+        <input type="search" id="osCovQ" placeholder="Tên VM hoặc IP: a, b hoặc x*" title="Nhiều tên / IP cách nhau dấu phẩy; * thay cho đoạn bất kỳ" value="${esc(osState.covQ)}" aria-label="Tìm VM theo tên hoặc IP">
         ${uiMultiSelect('osCovVc', 'vCenter', fc.vcenters.map(x => ({ value: x.value, label: x.value || '—', count: x.count })), cf.vcenter, osState.msOpen === 'osCovVc')}
         ${uiMultiSelect('osCovCl', 'Cluster', fc.clusters.map(x => ({ value: x.value, label: x.value || '(không cluster)', count: x.count })), cf.cluster, osState.msOpen === 'osCovCl')}
         <select id="osCovPower" aria-label="Nguồn VM">${opt('', 'Bật và tắt', cf.power)}${opt('on', 'Đang bật', cf.power)}${opt('off', 'Đang tắt', cf.power)}</select>
@@ -124,8 +124,8 @@ function osUnownedHtml() {
       ${can ? '<div class="dc-bulk" id="osBulk" role="status"></div>' : ''}
       <div class="table-scroll" role="region" tabindex="0" aria-label="VM chưa có owner"><table class="data-table infra-table">
         <caption class="sr-only">VM chưa thuộc hệ thống</caption>
-        <thead><tr>${can ? `<th class="dc-pick"><input type="checkbox" id="osSelShown"${allShown ? ' checked' : ''} aria-label="Chọn mọi VM đang hiện"></th>` : ''}<th>VM · thư mục</th><th>vCenter</th><th>Cluster</th><th>Nguồn</th></tr></thead>
-        <tbody>${rows || uiEmptyRow(can ? 5 : 4, 'Mọi VM đã thuộc một hệ thống.')}</tbody></table></div>
+        <thead><tr>${can ? `<th class="dc-pick"><input type="checkbox" id="osSelShown"${allShown ? ' checked' : ''} aria-label="Chọn mọi VM đang hiện"></th>` : ''}<th>VM · thư mục</th><th>IP</th><th>vCenter</th><th>Cluster</th><th>Nguồn</th></tr></thead>
+        <tbody>${rows || uiEmptyRow(can ? 6 : 5, 'Mọi VM đã thuộc một hệ thống.')}</tbody></table></div>
       <p class="muted-sub">${c.itemsTotal > c.items.length ? `Hiện ${fmtInt(c.items.length)} / ${fmtInt(c.itemsTotal)} VM — lọc để thu hẹp hoặc “Chọn cả ${fmtInt(c.itemsTotal)} VM khớp lọc”. ` : ''}Độ phủ owner tính trên VM đang hoạt động của sổ CI.</p></section>`;
 }
 
@@ -274,11 +274,11 @@ async function osOpen(id) {
     ${can && vms.length ? `<div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" id="osMoveAll"><i data-lucide="arrow-right-left"></i>Chuyển hết VM sang hệ thống khác</button>
       <button class="btn btn-ghost btn-sm btn-danger" type="button" id="osUnassignAll">Bỏ gán hết VM</button></div>` : ''}
     <div class="table-scroll" role="region" tabindex="0" aria-label="VM của hệ thống"><table class="data-table">
-      <thead><tr><th>VM</th><th>Cluster</th><th>Nguồn gán</th>${can ? '<th></th>' : ''}</tr></thead>
+      <thead><tr><th>VM</th><th>IP</th><th>Cluster</th><th>Nguồn gán</th>${can ? '<th></th>' : ''}</tr></thead>
       <tbody>${vms.map(v => `<tr><td>${uiEntityLink('vm', v.vm, v.vcenterKey, false)}<span class="muted-sub">${esc(v.vcenterKey)}</span></td>
-        <td>${esc(v.cluster || '—')}</td><td>${uiTag(src[v.source] || v.source)}<span class="muted-sub">${esc(v.assignedBy || '')}</span></td>
+        <td class="mono">${esc(v.ip || '—')}</td><td>${esc(v.cluster || '—')}</td><td>${uiTag(src[v.source] || v.source)}<span class="muted-sub">${esc(v.assignedBy || '')}</span></td>
         ${can ? `<td><button class="btn btn-ghost btn-sm" type="button" data-os-unassign="${esc(v.ciId)}">Bỏ gán</button></td>` : ''}</tr>`).join('')
-        || uiEmptyRow(can ? 4 : 3, 'Chưa có VM — gán ở tab “VM chưa có owner” hoặc trên thẻ VM.')}</tbody></table></div>`,
+        || uiEmptyRow(can ? 5 : 4, 'Chưa có VM — gán ở tab “VM chưa có owner” hoặc trên thẻ VM.')}</tbody></table></div>`,
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
    ${can ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" id="osDel"${vms.length ? ` title="Còn ${vms.length} VM — chuyển hoặc bỏ gán hết trước"` : ''}><i data-lucide="trash-2"></i>Xoá</button>
      <button class="btn btn-secondary btn-sm" type="button" id="osClone"><i data-lucide="copy"></i>Nhân bản</button><button class="btn btn-primary btn-sm" type="button" id="osEdit"><i data-lucide="pencil"></i>Sửa</button>` : ''}`);
@@ -759,7 +759,7 @@ function rvDetailHtml(d) {
       <td><button class="btn btn-ghost btn-sm" type="button" data-rv-preview="${esc(n.id)}">Xem trước</button></td></tr>`;
   }).join('');
   const unowned = d.unowned.map(i => `<tr><td>${uiEntityLink('vm', i.vm, i.vcenterKey, false)}<span class="muted-sub">${esc(i.vcenterKey)}</span></td>
-      <td>${esc(i.systemCode ? `${i.systemCode} — ${i.systemName} (chưa có owner)` : 'Chưa thuộc hệ thống')}</td>
+      <td class="mono">${esc(i.ip || '—')}</td><td>${esc(i.systemCode ? `${i.systemCode} — ${i.systemName} (chưa có owner)` : 'Chưa thuộc hệ thống')}</td>
       <td>${i.flagged ? `${uiPill('warn', 'Nên rà')} <span class="muted-sub">${esc(i.reasons.join('; '))}</span>` : '—'}</td></tr>`).join('');
   return `<div class="sp-h">Kỳ ${esc(d.periodLabel)} — hạn ${esc(spDateSafe(d.dueAt))}</div>
     ${uiKpiStrip([
@@ -776,8 +776,8 @@ function rvDetailHtml(d) {
       <tbody>${notices || uiEmptyRow(6, 'Không có owner nào để gửi.')}</tbody></table></div>
     <div class="sp-h">VM chưa có owner (${fmtInt(d.unowned.length)})</div>
     <div class="table-scroll" role="region" tabindex="0" aria-label="VM chưa có owner"><table class="data-table">
-      <thead><tr><th>VM</th><th>Hệ thống</th><th>Tín hiệu</th></tr></thead>
-      <tbody>${unowned || uiEmptyRow(3, 'Mọi VM đều có owner.')}</tbody></table></div>`;
+      <thead><tr><th>VM</th><th>IP</th><th>Hệ thống</th><th>Tín hiệu</th></tr></thead>
+      <tbody>${unowned || uiEmptyRow(4, 'Mọi VM đều có owner.')}</tbody></table></div>`;
 }
 
 function rvBind() {
@@ -887,9 +887,9 @@ function rvResultsHtml(s) {
         <label class="field"><span>Ghi chú</span><input id="rvInfraNote" maxlength="500"></label></div>
       <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" data-rv-infra>Áp dụng cho các VM đã chọn</button></div>
       <div class="table-scroll" role="region" tabindex="0" aria-label="VM chưa có quyết định"><table class="data-table">
-        <thead><tr><th class="dc-pick"><input type="checkbox" id="rvInfraAll" aria-label="Chọn tất cả"></th><th>VM</th><th>Owner</th><th>Tín hiệu</th></tr></thead>
+        <thead><tr><th class="dc-pick"><input type="checkbox" id="rvInfraAll" aria-label="Chọn tất cả"></th><th>VM</th><th>IP</th><th>Owner</th><th>Tín hiệu</th></tr></thead>
         <tbody>${undecided.slice(0, 500).map(i => `<tr><td class="dc-pick"><input type="checkbox" data-rv-infra-sel="${esc(i.id)}" aria-label="Chọn ${esc(i.vm)}"></td>
-          <td>${esc(i.vm)}<span class="muted-sub">${esc(i.systemCode || '—')}</span></td><td class="mono">${esc(i.ownerEmail)}</td>
+          <td>${esc(i.vm)}<span class="muted-sub">${esc(i.systemCode || '—')}</span></td><td class="mono">${esc(i.ip || '—')}</td><td class="mono">${esc(i.ownerEmail)}</td>
           <td>${i.flagged ? esc(i.reasons.join('; ')) : '—'}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
 
@@ -898,9 +898,9 @@ function rvQueueHtml(q) {
   return `<div class="sp-h">Cần gán lại owner (${fmtInt(q.items.length)})</div>
     <p class="muted-sub">Owner báo chuyển owner / không phải của mình. Gán lại ở Quản lý thông tin → Hệ thống &amp; Owner, rồi bấm Đã gán lại.</p>
     <div class="table-scroll" role="region" tabindex="0" aria-label="Cần gán lại owner"><table class="data-table">
-      <thead><tr><th>VM</th><th>Kỳ</th><th>Owner hiện tại</th><th>Đề xuất</th><th></th></tr></thead>
+      <thead><tr><th>VM</th><th>IP</th><th>Kỳ</th><th>Owner hiện tại</th><th>Đề xuất</th><th></th></tr></thead>
       <tbody>${q.items.map(i => `<tr><td>${uiEntityLink('vm', i.vm, i.vcenterKey, false)}<span class="muted-sub">${esc(i.systemCode || '—')}</span></td>
-        <td>${esc(i.periodLabel)}</td><td class="mono">${esc(i.ownerEmail || '—')}</td>
+        <td class="mono">${esc(i.ip || '—')}</td><td>${esc(i.periodLabel)}</td><td class="mono">${esc(i.ownerEmail || '—')}</td>
         <td>${i.decision === 'transfer' ? `Chuyển cho <span class="mono">${esc(i.transferTo)}</span>` : 'Không phải của tôi'}${i.note ? `<span class="muted-sub">${esc(i.note)}</span>` : ''}</td>
         <td><button class="btn btn-ghost btn-sm" type="button" data-rv-resolve="${esc(i.id)}">Đã gán lại</button></td></tr>`).join('')}</tbody></table></div>`;
 }

@@ -39,6 +39,23 @@ def schedule_rules(db: Session) -> List[Dict[str, Any]]:
             for r in db.query(BackupScheduleRule).order_by(BackupScheduleRule.system).all()]
 
 
+def _client_ips(rep: Dict[str, Any], vms: list) -> None:
+    """IP of the VM behind each backup client / failed job (same matching as coverage: VM name, guest hostname, IP)."""
+    from .client import client_key
+    ips: Dict[str, str] = {}
+    for v in vms:
+        ip = v.get("ipAddress")
+        if not ip:
+            continue
+        for k in (client_key(v.get("vm")), client_key(v.get("guestHostname")), ip):
+            if k:
+                ips.setdefault(k, ip)
+    for c in rep.get("clients") or []:
+        c.setdefault("ip", ips.get(c.get("key")) or ips.get(client_key(c.get("client"))))
+    for j in rep.get("failedJobs") or []:
+        j.setdefault("ip", ips.get(client_key(j.get("client"))))
+
+
 def build_summary(db: Session, server: Optional[str], days: int, check_feature: bool = False, osc=None) -> Dict[str, Any]:
     """Full backup report for a server ("all" = every server) over `days`. check_feature: answer 404
     when the Backup module is switched off (callers outside the gated router).
@@ -52,6 +69,7 @@ def build_summary(db: Session, server: Optional[str], days: int, check_feature: 
         vms = osc.filter_vms(db, vms)
     rep = analysis.build_report(db, keys=_keys(server), days=days, th=thresholds(db), vms=vms, scope=scope_rules(db),
                                 schedules=schedule_rules(db))
+    _client_ips(rep, vms)
     if osc is not None and osc.active:
         from .client import client_key
         keys = {k for v in vms for k in (client_key(v.get("vm")), client_key(v.get("guestHostname")), v.get("ipAddress")) if k}

@@ -386,7 +386,8 @@ def test_infra_report_pdf_excel_and_scope(db, admin, editor):  # noqa: F811
     assert names == ["DS-<b>PROD</b>-01"]                                 # DEV datastore out of the cluster scope
     assert rows[4][0] == "CẢNH BÁO" and round(rows[4][12]) == 20
     snap = [[c.value for c in row] for row in wb["Snapshot VM"].iter_rows()][4:]
-    assert {x[1] for x in snap} == {"app-01", "db-01"} and next(x for x in snap if x[1] == "db-01")[8] == "Có"
+    assert {x[1] for x in snap} == {"app-01", "db-01"} and next(x for x in snap if x[1] == "db-01")[9] == "Có"
+    assert [[c.value for c in row] for row in wb["Snapshot VM"].iter_rows()][3][2] == "IP"
     assert admin.get("/api/infra/report.pdf").headers["content-type"] == "application/pdf"
     exports = {e["id"] for e in admin.get("/api/exports").json()["items"]}
     assert {"infra-pdf", "infra-xlsx", "ci-xlsx"} <= exports

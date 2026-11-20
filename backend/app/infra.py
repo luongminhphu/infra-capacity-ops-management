@@ -205,6 +205,8 @@ def snapshots(db: Session, scope: Optional[Scope] = None, now: Optional[dt.datet
                     "backupLike": all("nbu" in (i.get("name") or "").lower() or "backup" in (i.get("description") or "").lower()
                                       for i in items) if items else False})
     out.sort(key=lambda d: (LEVEL_RANK[d["level"]], -(d["ageDays"] or 0)))
+    from . import vm_ip
+    vm_ip.attach(db, out)
     return out
 
 
@@ -232,6 +234,8 @@ def alarms(db: Session, scope: Optional[Scope] = None, ui: Optional[Dict[str, tu
                     "acknowledged": r.acknowledged, "level": level, "levelText": LEVEL_TEXT[level],
                     "vsphereUrl": links.object_url(*(ui.get(r.vcenter_key) or (None, None)), r.vim_type, r.entity_moid, r.vc_uuid)})
     out.sort(key=lambda d: (LEVEL_RANK[d["level"]], d["acknowledged"], d["at"] or ""), reverse=False)
+    from . import vm_ip
+    vm_ip.attach(db, out, vm_key="entity", only=lambda a: a["entityType"] == "vm")
     return out
 
 

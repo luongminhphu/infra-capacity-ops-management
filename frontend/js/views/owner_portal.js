@@ -32,7 +32,7 @@ async function renderOwnerPortal() {
       <td>${esc([s.project, s.department].filter(Boolean).join(' · ') || '—')}</td><td>${uiTag(s.criticalityLabel)}</td>
       <td>${esc(s.envLabel)}</td><td class="num">${fmtInt(s.vmCount)}</td></tr>`).join('');
   const rows = opState.vms.map(v => `<tr><td><b>${esc(v.vm)}</b><span class="muted-sub">${esc(v.vcenterKey)} · ${esc(v.cluster || '—')}</span></td>
-      <td>${esc(v.systemCode)}</td><td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td>
+      <td class="mono">${esc(v.ip || '—')}</td><td>${esc(v.systemCode)}</td><td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td>
       <td class="num">${esc(uiNumber(v.vcpu))}</td><td class="num">${esc(uiNumber(v.ramGB))}</td></tr>`).join('');
   const reviews = (opState.reviews || []).map(r => `<li class="home-item"><div class="home-item-main">
       <a class="home-item-title" href="#/owner/review/${esc(r.id)}">Rà soát ${esc(r.periodLabel)} — ${fmtInt(r.decided)} / ${fmtInt(r.items)} VM đã xác nhận</a>
@@ -48,8 +48,8 @@ async function renderOwnerPortal() {
     <section class="table-card"><div class="panel-head"><div class="panel-title" role="heading" aria-level="2">VM (${fmtInt(opState.vms.length)})</div>
       <div class="panel-toolbar"><select id="opSystem" aria-label="Lọc theo hệ thống">${opt('', 'Mọi hệ thống của bạn')}${opState.systems.map(s => opt(s.id, `${s.code} — ${s.name}`)).join('')}</select></div></div>
       <div class="table-scroll" role="region" tabindex="0" aria-label="VM"><table class="data-table">
-        <thead><tr><th>VM</th><th>Hệ thống</th><th>Nguồn</th><th class="num">vCPU</th><th class="num">RAM (GB)</th></tr></thead>
-        <tbody>${rows || uiEmptyRow(5, 'Hệ thống chưa có VM nào được gán.')}</tbody></table></div></section>`;
+        <thead><tr><th>VM</th><th>IP</th><th>Hệ thống</th><th>Nguồn</th><th class="num">vCPU</th><th class="num">RAM (GB)</th></tr></thead>
+        <tbody>${rows || uiEmptyRow(6, 'Hệ thống chưa có VM nào được gán.')}</tbody></table></div></section>`;
   $('#opSystem').onchange = (e) => { opState.system = e.target.value; renderOwnerPortal(); };
 }
 
@@ -111,7 +111,7 @@ function orvRender() {
     const p = `orv${i.id}`;
     return `<article class="orv-card${i.flagged ? ' is-flagged' : ''}" data-orv-item="${esc(i.id)}">
       <div class="orv-head">${edit ? `<input type="checkbox" class="orv-pick" data-orv-sel="${esc(i.id)}"${orvState.sel.has(i.id) ? ' checked' : ''} aria-label="Chọn ${esc(i.vm)}">` : ''}
-        <div class="orv-title"><b>${esc(i.vm)}</b><span class="muted-sub">${esc(i.systemCode || '—')} · ${esc(i.vcenterKey)}</span></div>
+        <div class="orv-title"><b>${esc(i.vm)}</b><span class="muted-sub">IP ${esc(i.ip || '—')} · ${esc(i.systemCode || '—')} · ${esc(i.vcenterKey)}</span></div>
         ${i.decision ? uiPill('ok', label[i.decision] || i.decision) : uiPill('warn', 'Chưa xác nhận')}</div>
       <p class="orv-meta">${esc(uiNumber(s.vcpu))} vCPU · ${esc(uiNumber(s.ramGB))} GB RAM · ${esc(uiNumber(s.diskProvGB))} GB disk${s.poweredOn === false ? ' · đang tắt' : ''}</p>
       ${i.flagged ? `<p class="orv-reason">${uiTag('Nên rà')} ${esc(i.reasons.join('; '))}</p>` : ''}

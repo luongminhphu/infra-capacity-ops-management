@@ -96,15 +96,16 @@ def render_html(d: Dict[str, Any], username: str, scope_label: str = "") -> str:
                 if arrays else '<div class="small-note">Chưa khai nguồn storage (Pure / NetApp).</div>')
 
     sn_rows = [[_pill(x["level"]), f"<b>{esc(x['vm'])}</b><br><span class='small-note'>{esc(x['vcenterKey'])} · {esc(x['cluster'] or '')}</span>",
-                _vn(x["count"]), _vn(x["ageDays"]), _vn(x["sizeGB"], 1), "Có" if x["backupLike"] else "",
+                esc(x.get("ip") or "—"), _vn(x["count"]), _vn(x["ageDays"]), _vn(x["sizeGB"], 1), "Có" if x["backupLike"] else "",
                 esc("; ".join(x["reasons"]) or "—")] for x in sn[:MAX_ROWS]]
-    sn_html = _table(["Mức", "VM", "Số snapshot", "Cũ nhất (ngày)", "Dung lượng (GB)", "Của backup", "Lý do"], sn_rows, (2, 3, 4)) \
+    sn_html = _table(["Mức", "VM", "IP", "Số snapshot", "Cũ nhất (ngày)", "Dung lượng (GB)", "Của backup", "Lý do"], sn_rows, (3, 4, 5)) \
         + _more(sn, MAX_ROWS) if sn else '<div class="small-note">Không VM nào có snapshot.</div>'
 
     al_rows = [[_pill(a["level"]), esc(a["alarm"] or "—"), f"{esc(a['entity'] or '—')}<br><span class='small-note'>{esc(a['entityType'] or '')} · "
-                f"{esc(a['vcenterKey'])}</span>", esc(a["cluster"] or "—"), _date(a["at"]), "Đã xác nhận" if a["acknowledged"] else "Chưa"]
+                f"{esc(a['vcenterKey'])}</span>", esc(a.get("ip") or "—"), esc(a["cluster"] or "—"), _date(a["at"]),
+                "Đã xác nhận" if a["acknowledged"] else "Chưa"]
                for a in al[:MAX_ROWS]]
-    al_html = _table(["Mức", "Alarm", "Đối tượng", "Cluster", "Từ ngày", "Xác nhận"], al_rows) + _more(al, MAX_ROWS) \
+    al_html = _table(["Mức", "Alarm", "Đối tượng", "IP (VM)", "Cluster", "Từ ngày", "Xác nhận"], al_rows) + _more(al, MAX_ROWS) \
         if al else '<div class="small-note">Không có alarm đang kích hoạt.</div>'
 
     bad_hosts = _issues(hh)

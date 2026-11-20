@@ -324,7 +324,7 @@ function buildComplianceFindings() {
         severity: v.lastActivityDays >= P.idleDays * 2 ? 'critical' : 'warning',
         type: 'vm_idle',
         typeLabel: 'VM idle lâu',
-        entity: v.vm, cluster: v.cluster, vcenterKey: v.vcenterKey || '',
+        entity: v.vm, cluster: v.cluster, vcenterKey: v.vcenterKey || '', ip: v.ipAddress || '',
         metric: `Không hoạt động ${fmtInt(v.lastActivityDays)} ngày`,
         recommendation: 'Xác nhận với owner; cân nhắc decommission hoặc thu hồi tài nguyên nếu không còn dùng.'
       });
@@ -334,7 +334,7 @@ function buildComplianceFindings() {
         severity: v.powerOffDays >= P.idleDays * 3 ? 'critical' : 'warning',
         type: 'vm_off',
         typeLabel: 'VM tắt lâu',
-        entity: v.vm, cluster: v.cluster, vcenterKey: v.vcenterKey || '',
+        entity: v.vm, cluster: v.cluster, vcenterKey: v.vcenterKey || '', ip: v.ipAddress || '',
         metric: `Đã tắt ${fmtInt(v.powerOffDays)} ngày`,
         recommendation: 'VM tắt lâu ngày vẫn giữ reservation vCPU/RAM — cân nhắc decommission để thu hồi tài nguyên.'
       });
@@ -347,7 +347,7 @@ function buildComplianceFindings() {
         severity: 'info',
         type: 'vm_overprovision',
         typeLabel: 'VM over-provision (vCPU)',
-        entity: v.vm, cluster: v.cluster, vcenterKey: v.vcenterKey || '',
+        entity: v.vm, cluster: v.cluster, vcenterKey: v.vcenterKey || '', ip: v.ipAddress || '',
         metric: `${fmtInt(v.vcpu)} vCPU cấp phát, CPU usage chỉ ${fmtPct(v.cpuUsagePctRaw)} (ngưỡng ${fmtPct(vmOverprovisionUsageThreshold)} theo overcommit ${fmtNum(P.cpuOvercommitMax,1)}x)`,
         recommendation: 'vCPU cấp phát dư nhiều so với usage thực tế và ngưỡng overcommit CPU cấu hình; cân nhắc resize giảm vCPU.'
       });

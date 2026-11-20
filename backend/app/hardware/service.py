@@ -207,6 +207,12 @@ def listing(db: Session, today: dt.date, osc=None, status: Optional[str] = None,
             "filters": {"status": status, "model": model, "warrantyDays": warranty_days}, "items": items}
 
 
+def _vms_ip(db: Session, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from .. import vm_ip
+    vm_ip.attach(db, rows, vm_key="name")
+    return rows
+
+
 def detail(db: Session, source_key: str, device_id: int, today: dt.date, opex_detail: bool) -> Dict[str, Any]:
     if source_key not in _keys():
         raise HTTPException(404, "Không có máy chủ này.")
@@ -241,7 +247,7 @@ def detail(db: Session, source_key: str, device_id: int, today: dt.date, opex_de
     return {**(base or {}), "os": inv.os_name if inv else None, "osHostname": inv.os_hostname if inv else None,
             "macs": json.loads(inv.macs) if inv and inv.macs else [], "subsystems": subs, "disks": disks, "parts": parts,
             "firmwareRows": fw, "warranties": warr, "alerts": alerts,
-            "vms": [{k2: v[k2] for k2 in ("name", "vcenterKey", "powerOn", "system")} for v in t["vms"][:MAX_VMS]],
+            "vms": _vms_ip(db, [{k2: v[k2] for k2 in ("name", "vcenterKey", "powerOn", "system")} for v in t["vms"][:MAX_VMS]]),
             "vmsTruncated": len(t["vms"]) > MAX_VMS,
             "source": {"key": source_key, "name": st.name if st else source_key, "capturedAt": _iso(st.captured_at) if st else None,
                        "inventoryAt": _iso(st.inventory_at) if st else None, "baselineConfigured": st.baseline_configured if st else None}}

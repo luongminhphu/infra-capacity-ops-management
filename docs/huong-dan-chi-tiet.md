@@ -252,6 +252,23 @@ Báo cáo PDF / Excel giữ màu và font Inter của HSC Design System. Nhãn A
 và ngưỡng giống nhau giữa web, PDF, Excel. Dưới 1024px sidebar thu thành ngăn kéo (drawer). Xem mục
 “Cách đọc và thao tác trên giao diện” ở trên.
 
+### VM luôn kèm IP
+
+Tên VM trên VMware thường khác hostname mà system owner quản lý, nên **mọi danh sách VM đều có cột IP** (IP khách do
+VMware Tools báo, lấy theo lần đồng bộ mới nhất):
+
+| Nơi hiển thị | Danh sách VM có IP |
+|---|---|
+| Hệ thống & Owner | VM chưa có owner (ô lọc tìm được theo IP), VM của hệ thống; báo cáo VM theo hệ thống; email rà soát (thêm Cluster, IP và hostname trong máy ảo khi khác tên VM) |
+| Rà soát owner | VM chưa có owner, VM chờ team hạ tầng quyết, hàng gán lại; cổng Owner (VM của hệ thống, phiếu rà soát); PDF / Excel kết quả rà soát |
+| Sức khoẻ hạ tầng | Snapshot VM, alarm của VM; PDF / Excel Sức khoẻ hạ tầng |
+| Compliance (VM idle / tắt lâu / over-provision) | Tab Compliance, CSV, PDF Kỹ thuật (cột IP), PDF Vận hành (IP dưới tên VM) |
+| Biến động VM | Thêm mới / loại bỏ / di chuyển / đổi tên / đổi cấu hình, trên trang và trong PDF (IP của snapshot) |
+| Backup | Client cần xử lý, Client & RPO (lọc theo IP), job backup; PDF (client, job lỗi), Excel (Client & RPO). IP lấy từ VM khớp client theo tên, hostname khách hoặc IP |
+| Thẻ đối tượng | Datastore, máy chủ vật lý (Dell OME), host (có sẵn) |
+| AI | Phân loại hệ điều hành |
+| File CSV | `/api/export/csv` (VM, phát hiện) |
+
 ### Trung tâm báo cáo (Tài liệu → Báo cáo)
 
 Mọi file xuất của app ở một chỗ, chia theo nhóm:
