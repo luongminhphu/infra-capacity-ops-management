@@ -424,3 +424,5 @@
 
 /* Thiết bị Data Center → Bảo hành Dell ↔ Opex (G4b): the case filter never widens the page at 390 px */
 .dc-wcase { max-width: 100%; min-width: 0; }
+/* Vận hành → Phần cứng (G4c): filters never widen the page at 390 px */
+.hw-filter { max-width: 100%; min-width: 0; }

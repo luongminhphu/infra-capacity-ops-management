@@ -17,6 +17,15 @@ NOW = dt.datetime(2026, 11, 17, 3, 0)          # 10:00 Vietnam time
 ISO = lambda t: t.isoformat() + "Z"           # noqa: E731
 
 
+@pytest.fixture(autouse=True)
+def _frozen_now(monkeypatch):
+    """The inbox calls infra.snapshots / datastores without `now` (wall clock): pin them to NOW so ages measured
+    against the fixed test data do not change with the day the suite runs."""
+    for name in ("snapshots", "datastores"):
+        real = getattr(infra, name)
+        monkeypatch.setattr(infra, name, lambda db, scope=None, now=None, _real=real: _real(db, scope, now or NOW))
+
+
 @pytest.fixture()
 def db(app_):
     s = SessionLocal()

@@ -34,7 +34,7 @@ def _raw(tag: str, name: str, model: str, ip: str, status: int, power: int = 17)
     """A device as /api/DeviceService/Devices returns it (then parsed like a real answer)."""
     return {"Id": _device_id(tag), "Type": 1000, "Identifier": tag, "DeviceServiceTag": tag, "Model": model,
             "DeviceName": name, "PowerState": power, "Status": status, "ConnectionState": True,
-            "LastInventoryTime": "2026-01-01 02:00:00.000",
+            "LastInventoryTime": f"{dt.datetime.utcnow().date()} 02:00:00.000",
             "DeviceManagement": [{"ManagementId": 1, "NetworkAddress": ip, "ManagementType": 2,
                                   "InstrumentationName": f"idrac-{tag}"}]}
 

@@ -864,7 +864,7 @@ máy chủ Dell; máy HPE / hãng khác không có ở đây.
 - Đồng bộ cùng vòng poll chung, chỉ ở pod leader, khoá theo nguồn. Lỗi kết nối được ghi lại, số liệu lần trước vẫn giữ.
 - **Sổ CI**: mỗi máy chủ OME là một `physical_server` theo service tag. Host VMware có cùng serial nối vào đó (`runs_on`),
   thẻ máy chủ thêm model, IP iDRAC (khoá `idrac_ip`), trạng thái OME. Máy OME không khớp host nào vẫn vào sổ CI như máy
-  **bare-metal**, mang tên thiết bị trong OME.
+  **bare-metal** (CI vẫn mang service tag; tên thiết bị trong OME hiện trên thẻ và trang Phần cứng).
 - Xoá nguồn OME chỉ ngắt kết nối; dữ liệu còn lại hiện ở *Dữ liệu mồ côi* (họ *Phần cứng (Dell OME)*).
 - **DEMO**: mỗi host Dell của các vCenter demo có một PowerEdge cùng service tag, thêm 2 máy bare-metal, 1 máy hỏng bộ nguồn,
   1 máy cảnh báo quạt.
@@ -910,6 +910,38 @@ Mã Opex chỉ hiện với người có quyền xem Chi phí. **Kế hoạch n�
 - dòng gồm các máy còn chạy, bảo hành Dell hết trước cuối năm kế hoạch, chưa có Opex bảo hành phủ hết năm;
 - mức *Bắt buộc* khi có máy đã hết hạn hoặc đang chạy VM mức 1–2;
 - nhập giá dự toán; khi kế hoạch được duyệt, dòng này tạo Opex Dự kiến kèm danh sách service tag.
+
+### Phần cứng — trang máy chủ vật lý, thẻ đối tượng, báo cáo (ICO v2 G4c)
+
+**Vận hành → Phần cứng** liệt kê máy chủ Dell trong OME.
+
+- **Trạng thái tổng** của một máy = mức xấu nhất của:
+  - trạng thái OME;
+  - linh kiện lỗi (theo mức của linh kiện);
+  - ổ đĩa dự báo hỏng (VƯỢT NGƯỠNG);
+  - firmware lệch baseline (THEO DÕI).
+- **Danh sách**: trạng thái và lý do, bảo hành Dell (ngày hết, còn / quá bao nhiêu ngày), Opex bảo hành, host ảo hoá, hệ thống,
+  số VM. Máy không có host là *bare-metal*.
+- **Lọc**: trạng thái, model, *hết bảo hành Dell trong 30 / 90 / 180 / 365 ngày* (gồm máy đã hết), ô tìm kiếm, và bộ lọc
+  **Owner** chung của app. Lọc theo owner giữ lại máy đang chạy VM của hệ thống được chọn (qua sổ CI).
+- **Chi tiết một máy** (bấm dòng; địa chỉ `#/hardware?s=<nguồn>&d=<id>`):
+  - sức khoẻ từng phân hệ;
+  - ổ đĩa (đánh dấu dự báo hỏng);
+  - bộ nguồn, RAID, RAM;
+  - firmware so baseline;
+  - các gói bảo hành Dell và chênh lệch với Opex (mã đối soát);
+  - host, hệ thống, VM chạy trên máy;
+  - 20 alert phần cứng gần nhất.
+
+  Liên kết iDRAC chỉ hiện khi OME báo một địa chỉ IP hợp lệ (`https://<IP>`, mở tab mới).
+- **Thẻ Máy chủ vật lý** (Ctrl + K gõ service tag) có khối **Dell OME**: trạng thái, iDRAC, ổ dự báo hỏng, firmware lệch,
+  bảo hành Dell, chênh lệch với Opex, nút *Chi tiết phần cứng*. Máy bare-metal được tìm theo service tag; kết quả tìm
+  kiếm hiện thêm tên thiết bị trong OME.
+- **Báo cáo** (nút trên trang, theo bộ lọc đang chọn; PDF lưu được vào Kho báo cáo):
+  - PDF *Sức khoẻ phần cứng*: tổng kết, máy cần xử lý, bảo hành Dell ↔ Opex, danh sách máy;
+  - Excel 3 sheet: *Máy chủ*, *Bảo hành*, *Firmware*.
+
+  Số trên PDF / Excel lấy cùng một hàm với trang nên luôn khớp.
 
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 

@@ -203,7 +203,7 @@ function entityServerHtml(d) {
         <a class="home-item-title" href="${esc(homeLink('spend-opex', `code=${encodeURIComponent(x.code)}`))}">${esc(x.code)} — ${esc(x.title)}</a>
         <p class="home-item-detail">Serial ${esc(x.serial)} · hết hạn ${esc(spDateSafe(x.endDate))} · ${esc(x.statusLabel)}</p></div></li>`).join('')}</ul>`
         : '<p class="muted-sub">Chưa có khoản Opex nào khai serial này.</p>'}</section>`;
-  const src = { host: 'vCenter / hypervisor', dc_asset: 'Thiết bị DC', opex: 'Opex' };
+  const src = { host: 'vCenter / hypervisor', dc_asset: 'Thiết bị DC', opex: 'Opex', ome: 'Dell OME' };
   return `
     <section class="panel"><div class="panel-head"><div><div class="eyebrow">Máy chủ vật lý</div>
       <div class="panel-title" role="heading" aria-level="2">${esc(d.serial)} ${d.status === 'retired' ? uiTag('không còn thấy') : ''}</div>
@@ -211,6 +211,7 @@ function entityServerHtml(d) {
       ${enDl([['Serial / Service Tag', esc(d.serial)], ['Hãng', enVal(d.vendor)], ['Model', enVal(d.model)],
               ['Nguồn ghi nhận', esc(d.origins.map(o => src[o] || o).join(', ') || '—')]])}
     </section>
+    ${enOmeHtml(d.ome)}
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Host ảo hoá chạy trên máy (${esc(d.hosts.length)})</div>${hosts}</section>
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Thiết bị Data Center</div>${assets}</section>
     ${opex}`;
@@ -361,3 +362,21 @@ document.addEventListener('keydown', (e) => {
     if (dlg && dlg.open) dlg.close(); else openPalette();
   }
 });
+
+/* Dell OME block of the physical server card (G4c): status, iDRAC, warranty, link to Vận hành → Phần cứng. */
+function enOmeHtml(o) {
+  if (!o) return '';
+  const lv = (UI_LEVELS[o.level] || UI_LEVELS.info);
+  const w = o.warranty || {};
+  const idrac = o.idracUrl ? `<a href="${esc(o.idracUrl)}" target="_blank" rel="noopener noreferrer">${esc(o.idracIp)}</a>` : esc(o.idracIp || '—');
+  const dell = w.dellEnd ? `${esc(spDateSafe(w.dellEnd))}${w.daysLeft != null ? ` <span class="muted-sub">${w.daysLeft < 0 ? `hết ${uiNumber(-w.daysLeft)} ngày trước` : `còn ${uiNumber(w.daysLeft)} ngày`}</span>` : ''}` : 'Chưa có dữ liệu';
+  const href = `#/hardware?s=${encodeURIComponent(o.sourceKey)}&d=${encodeURIComponent(o.deviceId)}`;
+  return `<section class="panel"><div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Dell OME ${uiPill(lv[0], lv[1])}</div>
+      <p class="panel-sub">${esc([o.name, o.model, o.powerText].filter(Boolean).join(' · '))}</p></div>
+      <div class="panel-toolbar"><a class="btn btn-ghost btn-sm" href="${esc(href)}"><i data-lucide="server-cog"></i>Chi tiết phần cứng</a></div></div>
+    ${o.reasons && o.reasons.length ? `<ul class="en-links">${o.reasons.slice(0, 6).map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
+    ${enDl([['iDRAC', idrac], ['Ổ dự báo hỏng', esc(uiNumber(o.disksPredictive || 0))],
+            ['Firmware lệch baseline', o.firmware && o.firmware.baselineConfigured === false ? 'Chưa cấu hình baseline' : esc(uiNumber((o.firmware || {}).behind || 0))],
+            ['Bảo hành Dell đến', dell], ['Chênh lệch với Opex', w.case ? `${esc(w.caseLabel)} <span class="muted-sub mono">${esc(w.code)}</span>` : 'Không có'],
+            ['Hệ điều hành', esc(o.os || '—')]])}</section>`;
+}

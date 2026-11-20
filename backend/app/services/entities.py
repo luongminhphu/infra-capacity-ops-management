@@ -143,8 +143,9 @@ def _ci_hits(db: Session, term: str) -> List[Dict[str, Any]]:
         for c in sorted(servers.values(), key=lambda c: c.name)[:PER_TYPE]:
             a = cq.attrs_of(c)
             model = " ".join(x for x in (a.get("vendor"), a.get("model")) if x) or "—"
-            hits.append({"type": "server", "label": c.name, "sub": f"Máy chủ vật lý · {model}",
-                         "entity": {"type": "server", "name": c.name, "vcenterKey": ""}})
+            ome = f" · {a['omeName']}" if a.get("omeName") else ""
+            hits.append({"type": "server", "label": c.source_key, "sub": f"Máy chủ vật lý · {model}{ome}",
+                         "entity": {"type": "server", "name": c.source_key, "vcenterKey": ""}})
     for c in (db.query(Ci).filter(Ci.type == "datastore", Ci.status == "active", func.lower(Ci.name).like(_like(term.lower())))
               .order_by(Ci.name).limit(PER_TYPE)):
         a = cq.attrs_of(c)
@@ -374,9 +375,13 @@ def server_card(db: Session, user: User, serial: str) -> Dict[str, Any]:
             assets.append({"id": d.id, "deviceId": d.device_id, "category": d.category, "brand": d.brand, "model": d.model,
                            "serial": d.serial, "assetTag": d.asset_tag, "location": d.location, "env": d.env,
                            "acquiredOn": d.acquired_on.isoformat() if d.acquired_on else None})
-    return {"type": "server", "name": c.name, "serial": c.name, "status": c.status, "vendor": a.get("vendor"), "model": a.get("model"),
+    from ..hardware import service as hw
+    from ..spend.fiscal import today_vn
+    spend = _spend_ok(user, get_features(db))
+    return {"type": "server", "name": c.name, "serial": c.source_key, "status": c.status, "vendor": a.get("vendor"), "model": a.get("model"),
             "origins": a.get("origins") or [], "hosts": sorted(hosts, key=lambda h: (h["vcenterKey"], h["name"])), "dcAssets": assets,
-            "opex": _opex_for_server(db, c) if _spend_ok(user, get_features(db)) else None,
+            "opex": _opex_for_server(db, c) if spend else None,
+            "ome": hw.card_block(db, c.source_key, today_vn(), spend),
             "ci": cq.card_extras(db, user, c)}
 
 
