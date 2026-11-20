@@ -41,6 +41,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Lịch poll | `backend/app/collectors/scheduler.py` (thread pool, mỗi nguồn 1 DB session); job nền chỉ chạy ở pod leader (`leader.py`, advisory lock PostgreSQL; khoá theo nguồn giữa các pod) |
 | Sức khoẻ hạ tầng | `backend/app/vcenter/extras.py` (datastore, snapshot, alarm, sức khoẻ host — cùng phiên vCenter), `infra.py` (trạng thái + mức + dự báo đầy), `metrics.py` (chuỗi thời gian thô → giờ → ngày), `alert_rules.py` (Cài đặt → Cảnh báo) + `ops_alerts.py`, `routers/infra.py`, `frontend/js/views/infra.js` |
 | Storage Pure / NetApp | `backend/app/storage/` (`http.py` client JSON chỉ GET, `pure.py` Purity REST 2.x, `netapp.py` ONTAP REST, `collector.py`, `demo_generator.py`); ghép volume / LUN ↔ datastore (NAA, NFS) và mức mảng ở `infra.py` (`storage()`, `datastore_backing()`); nguồn khai báo trên giao diện (`sources.py` kind `pure` / `netapp`) |
+| Phần cứng Dell OME (ICO v2 G4) | `backend/app/hardware/` (`ome.py` client OME 4.x chỉ đọc + parser Devices / SubSystemHealth, quy đổi Status 1000 ok · 3000 bad · 4000 crit · khác warn; `collector.py` thay trạng thái theo nguồn, `models.py` bảng `hw_source_state` / `hw_device_state` / `hw_component_health`, `demo_generator.py` PowerEdge khớp service tag host demo); nguồn kind `ome` trong `sources.py` (`Settings.hardware()`), `scheduler._sync_ome_task`; ghép vào sổ CI ở `cmdb/builder.py::_hardware` (physical_server theo service tag, khoá `idrac_ip`, bare-metal); fixture `backend/tests/fixtures/ome_*.json` |
 | Danh sách nguồn | `backend/app/sources.py` (biến môi trường + bảng `data_sources`, `Settings.vcenters()` / `netbackups()`), `secrets_box.py` (mã hoá), `routers/sources.py` |
 | Mô hình capacity + compliance | `backend/app/capacity.py` ⇄ `frontend/js/core.js` (**phải giữ khớp số liệu**) |
 | Quy hoạch / sizing / license | `planning.py`, `sizing.py`, `sizing_advisory.py`, `licensing/` |
@@ -63,9 +64,10 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 
 ## Quy tắc bắt buộc
 
-1. **vCenter, Proxmox VE, Nutanix, NetBackup và storage (Pure / NetApp) chỉ được ĐỌC.** Không bao giờ gọi API làm thay đổi hạ tầng
+1. **vCenter, Proxmox VE, Nutanix, NetBackup, storage (Pure / NetApp) và Dell OME chỉ được ĐỌC.** Không bao giờ gọi API làm thay đổi hạ tầng
    (power, reconfigure, snapshot, xoá, POST/PUT/DELETE tới NetBackup / Pure ngoài `/login` `/logout`; ONTAP chỉ GET —
-   `storage/http.py::JsonClient` chặn sẵn).
+   `storage/http.py::JsonClient` chặn sẵn; OME chỉ GET, ngoại lệ duy nhất là phiên `POST /api/SessionService/Sessions` và
+   `DELETE /api/SessionService/Sessions('<id>')` — `hardware/ome.py::allow`, cấm acknowledge alert / job / firmware / power).
    Tài khoản dịch vụ (`infra.mon@vsphere.local`, user NBU chỉ đọc) được cấp quyền tối thiểu.
    Xem skill `vmware-collector` và `netbackup-api`.
 2. **Mọi nguồn dữ liệu có chế độ DEMO.** Thêm trường mới vào client thật thì phải thêm vào

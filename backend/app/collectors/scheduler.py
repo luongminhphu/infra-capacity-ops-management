@@ -373,15 +373,30 @@ def sync_storages(settings: Settings, configs=None) -> List[Dict[str, Any]]:
                      [{"key": c.key} for c in configs], settings.sync_concurrency, deadline_seconds(settings))
 
 
+def _sync_ome_task(cfg) -> Dict[str, Any]:
+    """One Dell OME source (hardware/collector.py), under its per-source lock."""
+    from ..hardware.collector import sync_hardware
+    with SessionLocal() as db:
+        return sync_hardware(db, cfg)
+
+
+def sync_hardware_sources(settings: Settings, configs=None) -> List[Dict[str, Any]]:
+    configs = settings.hardware() if configs is None else configs
+    return run_syncs([lambda c=c: _sync_ome_task(c) for c in configs], [{"key": c.key} for c in configs],
+                     settings.sync_concurrency, deadline_seconds(settings))
+
+
 def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
-    """All vCenters, backup servers and storage arrays concurrently (vCenters first in the queue: backup
-    coverage reads the VM inventory, storage correlation reads the datastores)."""
-    vcs, nbus, arrays = settings.vcenters(), settings.netbackups(), settings.storages()
+    """All vCenters, backup servers, storage arrays and OME instances concurrently (vCenters first in the queue:
+    backup coverage reads the VM inventory, storage correlation reads the datastores)."""
+    vcs, nbus, arrays, hws = settings.vcenters(), settings.netbackups(), settings.storages(), settings.hardware()
     peers = {v: [c.key for c in arrays if c.vendor == v and c.demo] for v in ("pure", "netapp")}
     tasks = [lambda c=c: _sync_vcenter_task(c, settings) for c in vcs] + \
             [lambda c=c: _sync_backup_task(c, settings) for c in nbus] + \
-            [lambda c=c: _sync_storage_task(c, peers[c.vendor]) for c in arrays]
-    keys = [{"vcenterKey": c.key} for c in vcs] + [{"key": c.key} for c in nbus] + [{"key": c.key} for c in arrays]
+            [lambda c=c: _sync_storage_task(c, peers[c.vendor]) for c in arrays] + \
+            [lambda c=c: _sync_ome_task(c) for c in hws]
+    keys = [{"vcenterKey": c.key} for c in vcs] + [{"key": c.key} for c in nbus] + [{"key": c.key} for c in arrays] + \
+           [{"key": c.key} for c in hws]
     return run_syncs(tasks, keys, settings.sync_concurrency, deadline_seconds(settings))
 
 

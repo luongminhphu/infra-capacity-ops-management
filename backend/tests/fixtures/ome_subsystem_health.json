@@ -1,0 +1,19 @@
+{
+  "@odata.context": "/api/$metadata#Collection(DeviceService.SubSystemHealthFaultModel)",
+  "@odata.count": 3,
+  "value": [
+    {
+      "@odata.type": "#DeviceService.SubSystemHealthFaultModel",
+      "SubSystem": "PowerSupply",
+      "RollupStatus": "4000",
+      "FaultSummaryList": [{"Status": 4000, "Count": 1}],
+      "FaultList": [
+        {"Fault": "PSU0003", "Severity": "4000", "Location": "System Board", "RecommendedAction": "Check input power.",
+         "Message": "Power supply 1 is not receiving input power.", "MessageId": "PSU0003", "SubSystem": "PowerSupply",
+         "Component": "PSU.Slot.1", "Timestamp": "2026-11-17 01:58:00.000"}
+      ]
+    },
+    {"@odata.type": "#DeviceService.SubSystemHealthModel", "SubSystem": "Fan", "RollupStatus": 1000},
+    {"@odata.type": "#DeviceService.SubSystemHealthModel", "SubSystem": "Battery", "RollupStatus": "2000"}
+  ]
+}

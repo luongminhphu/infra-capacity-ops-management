@@ -1,0 +1,46 @@
+{
+  "@odata.context": "/api/$metadata#Collection(DeviceService.Device)",
+  "@odata.count": 4,
+  "value": [
+    {
+      "@odata.type": "#DeviceService.Device",
+      "@odata.id": "/api/DeviceService/Devices(10074)",
+      "Id": 10074,
+      "Type": 1000,
+      "Identifier": "7FHKZ53",
+      "DeviceServiceTag": "7FHKZ53",
+      "ChassisServiceTag": null,
+      "Model": "PowerEdge R750",
+      "PowerState": 17,
+      "ManagedState": 3000,
+      "Status": 1000,
+      "ConnectionState": true,
+      "AssetTag": null,
+      "SystemId": 2236,
+      "DeviceName": "esx-prod-a01.corp.local",
+      "LastInventoryTime": "2026-11-17 01:00:12.508",
+      "LastStatusTime": "2026-11-17 02:10:05.112",
+      "DeviceManagement": [
+        {"ManagementId": 4001, "NetworkAddress": "10.30.10.11", "MacAddress": "b0:7b:25:aa:bb:01", "ManagementType": 2,
+         "InstrumentationName": "idrac-7FHKZ53", "DnsName": "idrac-7fhkz53.corp.local"},
+        {"ManagementId": 4002, "NetworkAddress": "fe80::b27b:25ff:feaa:bb01", "MacAddress": "b0:7b:25:aa:bb:01", "ManagementType": 2,
+         "InstrumentationName": "idrac-7FHKZ53"}
+      ]
+    },
+    {
+      "@odata.type": "#DeviceService.Device",
+      "Id": 10075,
+      "Type": 1000,
+      "Identifier": "9QWXY63",
+      "DeviceServiceTag": "9qwxy63 ",
+      "Model": "PowerEdge R740",
+      "PowerState": 18,
+      "Status": "4000",
+      "ConnectionState": true,
+      "DeviceName": "esx-prod-b01",
+      "LastInventoryTime": "2026-11-16T23:30:00Z",
+      "DeviceManagement": [{"ManagementId": 4003, "NetworkAddress": "10.30.11.11", "ManagementType": 2}]
+    }
+  ],
+  "@odata.nextLink": "/api/DeviceService/Devices?$skip=2&$top=2"
+}

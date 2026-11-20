@@ -323,6 +323,11 @@ class Settings(BaseSettings):
         from .sources import storage_configs
         return storage_configs(self)
 
+    def hardware(self) -> list:
+        """Dell OpenManage Enterprise sources (Cài đặt → Nguồn dữ liệu)."""
+        from .sources import hardware_configs
+        return hardware_configs(self)
+
     def env_vcenters(self) -> List[VCenterConfig]:
         result = []
         for i in range(1, self.vcenter_count + 1):

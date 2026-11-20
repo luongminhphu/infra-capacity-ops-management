@@ -7,12 +7,17 @@ import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from . import StorageConfig, StorageError
 
 MAX_BYTES = 32 * 1024 * 1024
 ALLOWED_POSTS = ("/login", "/logout")          # Pure session endpoints only (read-only rule)
+
+
+def default_allow(method: str, path: str) -> bool:
+    """Writes allowed by default: POST to the Pure session endpoints only."""
+    return method == "POST" and any(path.endswith(p) for p in ALLOWED_POSTS)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -39,22 +44,31 @@ def ssl_context(cfg: StorageConfig) -> ssl.SSLContext:
 class JsonClient:
     """`product` / `api_hint` only word the error messages ("mảng lưu trữ" / "Purity / ONTAP" by default)."""
 
-    def __init__(self, cfg: StorageConfig, base: str, product: str = "mảng lưu trữ", api_hint: str = "Purity / ONTAP"):
+    def __init__(self, cfg: StorageConfig, base: str, product: str = "mảng lưu trữ", api_hint: str = "Purity / ONTAP",
+                 allow: Callable[[str, str], bool] = default_allow):
+        """`allow(method, path)` decides which non-GET calls may leave (session login / logout only)."""
         self.cfg = cfg
+        self.allow = allow
         self.base = base.rstrip("/")
         self.product, self.api_hint = product, api_hint
         self.headers: Dict[str, str] = {"Accept": "application/json"}
         self.opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context(cfg)), _NoRedirect())
 
     def request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
-                headers: Optional[Dict[str, str]] = None) -> Tuple[Any, Dict[str, str]]:
-        if method != "GET" and not any(path.endswith(p) for p in ALLOWED_POSTS):
-            raise StorageError(f"Chặn lời gọi {method} {path}: ICO chỉ đọc dữ liệu {self.product}.")
+                headers: Optional[Dict[str, str]] = None, body: Optional[Dict[str, Any]] = None) -> Tuple[Any, Dict[str, str]]:
+        if method != "GET" and not self.allow(method, path.split("?")[0]):
+            raise StorageError(f"Chặn lời gọi {method} {path.split('?')[0]}: ICO chỉ đọc dữ liệu {self.product}.")
         url = path if path.startswith("https://") else self.base + path
         if params:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params, safe="=',|:<>*", quote_via=urllib.parse.quote)
-        req = urllib.request.Request(url, method=method, headers={**self.headers, **(headers or {})},
-                                     data=b"" if method == "POST" else None)
+        hdrs_out = {**self.headers, **(headers or {})}
+        data = None
+        if body is not None:                 # session login only (credentials): never logged nor echoed in errors
+            data = json.dumps(body).encode()
+            hdrs_out["Content-Type"] = "application/json"
+        elif method == "POST":
+            data = b""
+        req = urllib.request.Request(url, method=method, headers=hdrs_out, data=data)
         host = f"{self.cfg.host}:{self.cfg.port}"
         try:
             with self.opener.open(req, timeout=self.cfg.timeout) as resp:

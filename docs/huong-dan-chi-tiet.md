@@ -845,6 +845,30 @@ snapshot hay xác nhận alarm — thao tác trên vCenter.
 - Đã kiểm với FlashArray//X20R3, FlashArray//RC20 (dòng Refurbished, Purity REST 2.x giống //C) và NetApp
   AFF A300 (ONTAP 9.6+ REST). Model hiển thị lấy từ API của mảng.
 
+### Phần cứng — nguồn Dell OpenManage Enterprise (ICO v2 G4a)
+
+ICO đọc máy chủ Dell và sức khoẻ linh kiện từ **một** OpenManage Enterprise 4.x (kind `ome`). OME là nguồn duy nhất cho
+máy chủ Dell; máy HPE / hãng khác không có ở đây.
+
+- **Khai báo** ở Cài đặt → Kết nối nguồn dữ liệu → **+ Dell OME**: địa chỉ, cổng (443), tài khoản OME role **Viewer**,
+  mật khẩu (lưu mã hoá, không hiển thị lại), kiểm tra chứng chỉ + CA tuỳ chọn. **Kiểm tra kết nối** đăng nhập, đọc một trang
+  thiết bị rồi đăng xuất.
+- **Chỉ đọc**: ICO chỉ gửi GET. Ngoại lệ duy nhất là mở / đóng phiên API (`POST /api/SessionService/Sessions`,
+  `DELETE /api/SessionService/Sessions('<id>')`). Client chặn mọi POST / PUT / PATCH / DELETE khác trước khi gửi, kể cả
+  acknowledge alert, job, cập nhật firmware, bật / tắt nguồn.
+- **Đọc gì**: danh sách máy chủ (`DeviceService/Devices`, phân trang OData; bỏ qua chassis / switch): service tag, model,
+  tên, IP iDRAC, trạng thái nguồn, trạng thái, kết nối, lần kiểm kê cuối. Máy không ở trạng thái bình thường được đọc thêm
+  sức khoẻ từng phân hệ (`SubSystemHealth`: nguồn, quạt, RAM, ổ đĩa…) kèm thông điệp lỗi.
+- **Quy đổi trạng thái OME**: 1000 → AN TOÀN, 3000 → CẢNH BÁO, 4000 → VƯỢT NGƯỠNG; 2000 / 5000 / khác → THEO DÕI với lý do
+  *không có dữ liệu*.
+- Đồng bộ cùng vòng poll chung, chỉ ở pod leader, khoá theo nguồn. Lỗi kết nối được ghi lại, số liệu lần trước vẫn giữ.
+- **Sổ CI**: mỗi máy chủ OME là một `physical_server` theo service tag. Host VMware có cùng serial nối vào đó (`runs_on`),
+  thẻ máy chủ thêm model, IP iDRAC (khoá `idrac_ip`), trạng thái OME. Máy OME không khớp host nào vẫn vào sổ CI như máy
+  **bare-metal**, mang tên thiết bị trong OME.
+- Xoá nguồn OME chỉ ngắt kết nối; dữ liệu còn lại hiện ở *Dữ liệu mồ côi* (họ *Phần cứng (Dell OME)*).
+- **DEMO**: mỗi host Dell của các vCenter demo có một PowerEdge cùng service tag, thêm 2 máy bare-metal, 1 máy hỏng bộ nguồn,
+  1 máy cảnh báo quạt.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**
