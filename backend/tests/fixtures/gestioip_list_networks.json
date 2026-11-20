@@ -1,0 +1,5 @@
+{"listNetworksResult": {"error": "", "NetworkList": {"Network": [
+  {"id": "1116", "IP": "10.20.0.0", "BM": "16", "descr": "Server", "site": "DC1", "cat": "prod", "comment": "", "sync": "n", "ip_version": "v4", "rootnet": "", "customColumns": {"usage": "65536,120,65416", "vlan": "100"}},
+  {"id": "1117", "IP": "10.30.0.0", "BM": "16", "descr": "OOB", "site": "DC1", "cat": "oob", "comment": "", "rootnet": "", "customColumns": {"vlan": "30"}},
+  {"id": "1118", "IP": "10.30.10.0", "BM": "24", "descr": "OOB cluster A", "site": "DC1", "cat": "oob", "comment": "", "rootnet": "", "customColumns": {}}
+]}}}

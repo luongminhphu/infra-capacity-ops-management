@@ -21,9 +21,12 @@ from . import secrets_box
 
 logger = logging.getLogger("vco.sources")
 
-KINDS = ("vcenter", "proxmox", "nutanix", "netbackup", "pure", "netapp", "ome")
+KINDS = ("vcenter", "proxmox", "nutanix", "netbackup", "pure", "netapp", "ome", "gestioip")
 STORAGE_KINDS = ("pure", "netapp")
 HARDWARE_KINDS = ("ome",)        # Dell OpenManage Enterprise (hardware/)
+IPAM_KINDS = ("gestioip",)       # GestióIP IPAM (ipam/)
+_API_PATH_RE = re.compile(r"^/[A-Za-z0-9._/-]{1,127}$")
+_COLUMN_RE = re.compile(r"^[^\x00-\x1f<>]{1,64}$")
 # Hypervisor managers: one history family (snapshot runs keyed by the source key), so keys are unique across them.
 HYPERVISOR_KINDS = ("vcenter", "proxmox", "nutanix")
 NBU_DOMAIN_TYPES = ("unixpwd", "vx", "NT", "ldap", "msad")
@@ -64,6 +67,14 @@ def _secret(row: DataSource, field: str) -> str:
 
 
 def to_config(row: DataSource):
+    if row.kind in IPAM_KINDS:
+        from .ipam import DEFAULT_API_PATH, IpamConfig
+        o = _opts(row)
+        return IpamConfig(key=row.key, name=row.name, host=row.host, port=row.port, username=row.username or "",
+                          password=_secret(row, "password_enc"), verify_ssl=bool(row.verify_ssl), ca_pem=row.ca_pem or "",
+                          demo=bool(row.demo), timeout=int(o.get("timeout") or 60), client_name=o.get("clientName") or "DEFAULT",
+                          api_path=o.get("apiPath") or DEFAULT_API_PATH, serial_column=o.get("serialColumn") or "",
+                          mac_column=o.get("macColumn") or "", kind=row.kind)
     if row.kind in HARDWARE_KINDS:
         from .hardware import HardwareConfig
         return HardwareConfig(key=row.key, name=row.name, host=row.host, port=row.port, username=row.username or "",
@@ -140,6 +151,11 @@ def netbackup_configs(settings: Settings) -> List[NetBackupConfig]:
 def storage_configs(settings: Settings) -> list:
     """Pure FlashArray + NetApp ONTAP sources (Settings only — no environment variables)."""
     return _merged("pure", settings) + _merged("netapp", settings)
+
+
+def ipam_configs(settings: Settings) -> list:
+    """GestióIP IPAM sources (Settings only)."""
+    return _merged("gestioip", settings)
 
 
 def hardware_configs(settings: Settings) -> list:
@@ -251,6 +267,26 @@ def apply_input(row: DataSource, data: Dict[str, Any], creating: bool) -> None:
         row.options = json.dumps({"timeout": _storage_timeout(data, row)})
         if not row.demo and not (row.username and row.password_enc):
             raise SourceError("Cần user + mật khẩu của tài khoản ONTAP role readonly (ứng dụng http).")
+    elif kind == "gestioip":
+        row.api_key_enc = None
+        o = _opts(row)
+        client = str(data.get("clientName") if "clientName" in data else o.get("clientName") or "DEFAULT").strip() or "DEFAULT"
+        api_path = str(data.get("apiPath") if "apiPath" in data else o.get("apiPath") or "").strip() or "/gestioip/api/api.cgi"
+        cols = {f: str(data.get(f) if f in data else o.get(f) or "").strip() for f in ("serialColumn", "macColumn")}
+        if not _COLUMN_RE.match(client):
+            raise SourceError("Tên client GestióIP 1–64 ký tự, không có ký tự đặc biệt.")
+        if not _API_PATH_RE.match(api_path):
+            raise SourceError("Đường dẫn API dạng /gestioip/api/api.cgi (chỉ chữ, số, . _ - /).")
+        for f, label in (("serialColumn", "Cột serial"), ("macColumn", "Cột MAC")):
+            if cols[f] and not _COLUMN_RE.match(cols[f]):
+                raise SourceError(f"{label}: tên cột tuỳ chỉnh 1–64 ký tự, không có ký tự đặc biệt.")
+        try:
+            timeout = max(10, min(int(data.get("timeout") or o.get("timeout") or 60), 300))
+        except (TypeError, ValueError):
+            raise SourceError("Timeout không hợp lệ.") from None
+        row.options = json.dumps({"timeout": timeout, "clientName": client, "apiPath": api_path, **cols})
+        if not row.demo and not (row.username and row.password_enc):
+            raise SourceError("Cần user + mật khẩu của tài khoản GestióIP (chỉ cần quyền đọc client).")
     elif kind == "ome":
         row.api_key_enc = None
         try:
@@ -299,7 +335,8 @@ def public(row: DataSource) -> Dict[str, Any]:
         "caPem": row.ca_pem or "", "demo": bool(row.demo), "enabled": bool(row.enabled), "origin": "ui",
         "hasPassword": bool(row.password_enc), "hasApiKey": bool(row.api_key_enc), "secretsReadable": readable,
         "domainType": o.get("domainType"), "domainName": o.get("domainName"), "apiVersion": o.get("apiVersion"),
-        "timeout": o.get("timeout"), "updatedBy": row.updated_by,
+        "timeout": o.get("timeout"), "clientName": o.get("clientName"), "apiPath": o.get("apiPath"),
+        "serialColumn": o.get("serialColumn"), "macColumn": o.get("macColumn"), "updatedBy": row.updated_by,
         "updatedAt": row.updated_at.isoformat() + "Z" if row.updated_at else None,
         "lastTest": {"at": row.last_test_at.isoformat() + "Z", "ok": row.last_test_ok, "message": row.last_test_message}
         if row.last_test_at else None,
@@ -342,6 +379,12 @@ def row_from_env(cfg, kind: str, user: str) -> DataSource:
 def test_connection(cfg, kind: str) -> str:
     if cfg.demo:
         return "Chế độ DEMO — không kết nối máy chủ thật."
+    if kind in IPAM_KINDS:
+        from .ipam import IpamError, gestioip
+        try:
+            return gestioip.test(cfg)
+        except IpamError as exc:
+            raise SourceError(str(exc)) from exc
     if kind in HARDWARE_KINDS:
         from .hardware import HardwareError, ome
         try:

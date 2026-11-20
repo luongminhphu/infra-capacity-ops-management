@@ -1,0 +1,6 @@
+{"listHostsResult": {"error": "", "HostList": {"Host": [
+  {"id": "699", "IP": "10.20.3.4", "hostname": "app-01", "descr": "", "site": "DC1", "cat": "server", "int_admin": "n", "comment": "", "update_type": "", "alive": "up", "last_response": "01/06/2026 12:42:47", "ip_version": "v4", "customColumns": {"SN": "", "OS": "RHEL 9", "MAC": "00-50-56-AA-BB-01", "vendor": ""}},
+  {"id": "700", "IP": "10.30.10.11", "hostname": "idrac-7fhkz53", "descr": "iDRAC", "site": "DC1", "cat": "oob", "comment": "R750", "alive": "up", "last_response": "", "ip_version": "v4", "customColumns": {"SN": "7fhkz53 ", "OS": "", "MAC": "b0:7b:25:aa:bb:01"}},
+  {"id": "701", "IP": "fe80::1", "hostname": "lab-v6", "site": "", "cat": "", "alive": "never checked", "ip_version": "v6", "customColumns": {}},
+  {"id": "702", "IP": "not-an-ip", "hostname": "broken"}
+]}}}

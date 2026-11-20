@@ -328,6 +328,11 @@ class Settings(BaseSettings):
         from .sources import storage_configs
         return storage_configs(self)
 
+    def ipam(self) -> list:
+        """GestióIP IPAM sources (Cài đặt → Nguồn dữ liệu)."""
+        from .sources import ipam_configs
+        return ipam_configs(self)
+
     def hardware(self) -> list:
         """Dell OpenManage Enterprise sources (Cài đặt → Nguồn dữ liệu)."""
         from .sources import hardware_configs

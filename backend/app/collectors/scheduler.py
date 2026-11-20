@@ -380,6 +380,13 @@ def _sync_ome_task(cfg) -> Dict[str, Any]:
         return sync_hardware(db, cfg)
 
 
+def _sync_ipam_task(cfg) -> Dict[str, Any]:
+    """One IPAM source (ipam/collector.py), under its per-source lock."""
+    from ..ipam.collector import sync_ipam
+    with SessionLocal() as db:
+        return sync_ipam(db, cfg)
+
+
 def sync_hardware_sources(settings: Settings, configs=None) -> List[Dict[str, Any]]:
     configs = settings.hardware() if configs is None else configs
     return run_syncs([lambda c=c: _sync_ome_task(c) for c in configs], [{"key": c.key} for c in configs],
@@ -389,14 +396,15 @@ def sync_hardware_sources(settings: Settings, configs=None) -> List[Dict[str, An
 def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
     """All vCenters, backup servers, storage arrays and OME instances concurrently (vCenters first in the queue:
     backup coverage reads the VM inventory, storage correlation reads the datastores)."""
-    vcs, nbus, arrays, hws = settings.vcenters(), settings.netbackups(), settings.storages(), settings.hardware()
+    vcs, nbus, arrays, hws, ipams = settings.vcenters(), settings.netbackups(), settings.storages(), settings.hardware(), settings.ipam()
     peers = {v: [c.key for c in arrays if c.vendor == v and c.demo] for v in ("pure", "netapp")}
     tasks = [lambda c=c: _sync_vcenter_task(c, settings) for c in vcs] + \
             [lambda c=c: _sync_backup_task(c, settings) for c in nbus] + \
             [lambda c=c: _sync_storage_task(c, peers[c.vendor]) for c in arrays] + \
-            [lambda c=c: _sync_ome_task(c) for c in hws]
+            [lambda c=c: _sync_ome_task(c) for c in hws] + \
+            [lambda c=c: _sync_ipam_task(c) for c in ipams]
     keys = [{"vcenterKey": c.key} for c in vcs] + [{"key": c.key} for c in nbus] + [{"key": c.key} for c in arrays] + \
-           [{"key": c.key} for c in hws]
+           [{"key": c.key} for c in hws] + [{"key": c.key} for c in ipams]
     return run_syncs(tasks, keys, settings.sync_concurrency, deadline_seconds(settings))
 
 

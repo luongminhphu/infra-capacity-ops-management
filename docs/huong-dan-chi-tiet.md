@@ -845,6 +845,28 @@ snapshot hay xác nhận alarm — thao tác trên vCenter.
 - Đã kiểm với FlashArray//X20R3, FlashArray//RC20 (dòng Refurbished, Purity REST 2.x giống //C) và NetApp
   AFF A300 (ONTAP 9.6+ REST). Model hiển thị lấy từ API của mảng.
 
+### IPAM — nguồn GestióIP
+
+ICO đọc danh sách IP khai báo từ **GestióIP 3.5** (module API thương mại của GestióIP) để đối chiếu với IP thực tế mà vCenter,
+OME, storage và backup báo (Hồ sơ thiết bị / Đối soát — `docs/design/ico-correlation.md`).
+
+- **Khai báo** ở Cài đặt → Nguồn dữ liệu → **+ GestióIP**:
+  - địa chỉ, cổng, tài khoản GestióIP (chỉ cần quyền đọc client) và mật khẩu (lưu mã hoá);
+  - **Client GestióIP** (mặc định `DEFAULT`);
+  - **Đường dẫn API** (mặc định `/gestioip/api/api.cgi`);
+  - tuỳ chọn tên **cột tuỳ chỉnh chứa serial** (vd `SN`) và **chứa MAC** — để so với service tag / MAC thực tế.
+- **Kiểm tra kết nối** đọc phiên bản API và một trang host.
+- **Đọc gì** (mỗi vòng poll):
+  - mọi network (CIDR, site, category, VLAN);
+  - mọi IP (hostname, mô tả, site, category, trạng thái alive, cột tuỳ chỉnh);
+  - danh sách VLAN.
+- **Chỉ đọc**: GestióIP nhận cả lệnh ghi qua GET, nên ICO chặn theo loại yêu cầu. Chỉ các loại đọc (`version`, `listHosts`,
+  `listNetworks`, `listVlans`, `readHost`, `readNetwork`, `usedNetworkAddresses`, `readVlan`, `listClients`) được gửi. Mọi loại
+  tạo / sửa / xoá / cấp IP / discovery bị chặn trước khi gửi.
+- Trạng thái kết nối nằm ở nhóm **IPAM** trên thanh trên.
+- Xoá nguồn chỉ ngắt kết nối; dữ liệu còn lại ở *Dữ liệu mồ côi* (họ *IPAM (GestióIP)*).
+- **DEMO** sinh IP khớp VM và iDRAC demo. Có vài chênh lệch cố ý (IP chưa khai, tên khác, SN sai, IP đã thanh lý) để thử đối soát.
+
 ### Trạng thái kết nối của mọi nguồn dữ liệu
 
 Mỗi nguồn đang bật (vCenter / Proxmox VE / Nutanix, NetBackup, Pure / NetApp, Dell OME) có trạng thái theo **lần đồng bộ thật

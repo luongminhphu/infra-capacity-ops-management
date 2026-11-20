@@ -1001,7 +1001,7 @@
           <section class="panel hidden" id="sourcesPanel" data-set-tab="sources">
             <div class="panel-head">
               <div><div class="panel-title" role="heading" aria-level="2">Kết nối nguồn dữ liệu <span class="badge-admin">Admin</span></div>
-              <p class="panel-sub">Thêm vCenter, Proxmox VE, Nutanix, máy chủ backup NetBackup, storage và Dell OME ngay trên giao diện: địa chỉ, tài khoản chỉ đọc, mật khẩu / API key (lưu mã hoá, không hiển thị lại). Thay đổi có hiệu lực ở lần đồng bộ kế tiếp, không cần khởi động lại.</p></div>
+              <p class="panel-sub">Thêm vCenter, Proxmox VE, Nutanix, máy chủ backup NetBackup, storage, Dell OME và IPAM GestióIP ngay trên giao diện: địa chỉ, tài khoản chỉ đọc, mật khẩu / API key (lưu mã hoá, không hiển thị lại). Thay đổi có hiệu lực ở lần đồng bộ kế tiếp, không cần khởi động lại.</p></div>
               <div class="panel-toolbar">
                 <button class="btn btn-secondary btn-sm hidden" type="button" id="btnSrcImportEnv" title="Chép các nguồn khai báo bằng biến môi trường vào giao diện để sửa tại đây">Chuyển từ biến môi trường</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="proxmox"><i data-lucide="plus"></i>Proxmox VE</button>
@@ -1009,6 +1009,7 @@
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="pure"><i data-lucide="plus"></i>Pure FlashArray</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="netapp"><i data-lucide="plus"></i>NetApp ONTAP</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="ome"><i data-lucide="plus"></i>Dell OME</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-src-add="gestioip"><i data-lucide="plus"></i>GestióIP</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="netbackup"><i data-lucide="plus"></i>Máy chủ backup</button>
                 <button class="btn btn-primary btn-sm" type="button" data-src-add="vcenter"><i data-lucide="plus"></i>vCenter</button>
               </div>
@@ -1036,6 +1037,10 @@
                 <div class="field src-up"><label for="srcUser">Tài khoản chỉ đọc</label><input id="srcUser" autocomplete="off" placeholder="infra.mon@vsphere.local"></div>
                 <div class="field src-up"><label for="srcPassword">Mật khẩu</label><input id="srcPassword" type="password" autocomplete="new-password"></div>
                 <div class="field src-key"><label for="srcApiKey" id="srcApiKeyLabel">API key (thay cho user / mật khẩu)</label><input id="srcApiKey" type="password" autocomplete="off"></div>
+                <div class="field src-ipam"><label for="srcIpamClient">Client GestióIP</label><input id="srcIpamClient" placeholder="DEFAULT" maxlength="64"></div>
+                <div class="field src-ipam"><label for="srcIpamPath">Đường dẫn API</label><input id="srcIpamPath" placeholder="/gestioip/api/api.cgi" maxlength="128"></div>
+                <div class="field src-ipam"><label for="srcIpamSerial">Cột chứa serial</label><input id="srcIpamSerial" placeholder="vd SN (cột tuỳ chỉnh của host)" maxlength="64"></div>
+                <div class="field src-ipam"><label for="srcIpamMac">Cột chứa MAC</label><input id="srcIpamMac" placeholder="vd MAC" maxlength="64"></div>
                 <div class="field src-nbu"><label for="srcApiVersion">API version</label><input id="srcApiVersion" placeholder="8.0 (NBU 10.0) · 12.0 (NBU 10.4)"></div>
                 <div class="field src-nbu"><label for="srcDomainType">Domain type</label><select id="srcDomainType"></select></div>
                 <div class="field src-nbu"><label for="srcDomainName">Domain name</label><input id="srcDomainName" placeholder="mặc định = tên máy chủ"></div>

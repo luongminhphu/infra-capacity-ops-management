@@ -14,11 +14,13 @@ const SRC_DEFAULTS = {
   netbackup: { port: 1556, user: '', title: 'máy chủ backup (NetBackup)', label: 'Backup', keyLabel: 'API key (thay cho user / mật khẩu)' },
   pure: { port: 443, user: '', title: 'mảng Pure FlashArray', label: 'Pure FlashArray', keyLabel: 'API token (user role readonly)' },
   netapp: { port: 443, user: 'ico_ro', title: 'cụm NetApp ONTAP', label: 'NetApp ONTAP' },
+  gestioip: { port: 443, user: '', title: 'GestióIP IPAM', label: 'GestióIP', userLabel: 'Tài khoản đọc (API)',
+    userHint: 'ico_ro', hostHint: 'ipam.corp.local' },
   ome: { port: 443, user: '', title: 'Dell OpenManage Enterprise', label: 'Dell OME', userLabel: 'Tài khoản Viewer (chỉ đọc)',
     userHint: 'ico_ro', hostHint: 'ome01.corp.local' },
 };
 /* Which credential fields each kind uses: user + password, API key / token, NetBackup-only fields. */
-const SRC_FIELDS = { vcenter: ['up'], proxmox: ['up'], nutanix: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'], ome: ['up'] };
+const SRC_FIELDS = { vcenter: ['up'], proxmox: ['up'], nutanix: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'], ome: ['up'], gestioip: ['up', 'ipam'] };
 
 function srcSetStatus(msg, isErr) { uiSetStatus('#srcStatus', msg, isErr ? 'error' : ''); }
 
@@ -60,7 +62,7 @@ async function loadSources() {
     srcKeyBox(r);
     $('#btnSrcImportEnv').classList.toggle('hidden', !r.items.some(i => i.origin === 'env' && !i.replacedByUi));
     $('#srcTable tbody').innerHTML = r.items.length ? r.items.map(srcRow).join('')
-      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Proxmox VE”, “+ Nutanix”, “+ Máy chủ backup”, “+ Pure FlashArray”, “+ NetApp ONTAP” hoặc “+ Dell OME”.');
+      : uiEmptyRow(7, 'Chưa có nguồn dữ liệu — bấm “+ vCenter”, “+ Proxmox VE”, “+ Nutanix”, “+ Máy chủ backup”, “+ Pure FlashArray”, “+ NetApp ONTAP”, “+ Dell OME” hoặc “+ GestióIP”.');
   } catch (err) { srcSetStatus(err.message, true); }
   loadOrphans();
 }
@@ -143,6 +145,10 @@ function srcFormPayload() {
     demo: $('#srcDemo').checked,
   };
   if (kind === 'pure') p.apiKey = $('#srcApiKey').value;
+  if (kind === 'gestioip') {
+    Object.assign(p, { clientName: $('#srcIpamClient').value.trim() || 'DEFAULT', apiPath: $('#srcIpamPath').value.trim(),
+      serialColumn: $('#srcIpamSerial').value.trim(), macColumn: $('#srcIpamMac').value.trim() });
+  }
   if (kind === 'netbackup') {
     Object.assign(p, { apiKey: $('#srcApiKey').value, apiVersion: $('#srcApiVersion').value.trim() || '8.0',
       domainType: $('#srcDomainType').value, domainName: $('#srcDomainName').value.trim() });
@@ -164,6 +170,7 @@ function openSourceDialog(kind, item) {
   $('#srcDialogTitle').textContent = (item ? 'Sửa ' : 'Thêm ') + d.title;
   const fields = SRC_FIELDS[kind] || ['up'];
   $$('#srcDialog .src-nbu').forEach(el => el.classList.toggle('hidden', !fields.includes('nbu')));
+  $$('#srcDialog .src-ipam').forEach(el => el.classList.toggle('hidden', !fields.includes('ipam')));
   $$('#srcDialog .src-up').forEach(el => el.classList.toggle('hidden', !fields.includes('up')));
   $$('#srcDialog .src-key').forEach(el => el.classList.toggle('hidden', !fields.includes('key')));
   if (d.keyLabel) $('#srcApiKeyLabel').textContent = d.keyLabel;
@@ -186,6 +193,10 @@ function openSourceDialog(kind, item) {
   $('#srcApiVersion').value = v.apiVersion || '';
   $('#srcDomainType').value = v.domainType || 'unixpwd';
   $('#srcDomainName').value = v.domainName || '';
+  $('#srcIpamClient').value = v.clientName || '';
+  $('#srcIpamPath').value = v.apiPath || '';
+  $('#srcIpamSerial').value = v.serialColumn || '';
+  $('#srcIpamMac').value = v.macColumn || '';
   $('#srcVerify').checked = !!v.verifySsl;
   $('#srcCaPem').value = v.caPem || '';
   $('.src-ca').classList.toggle('hidden', !v.verifySsl);

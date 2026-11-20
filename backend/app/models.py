@@ -901,3 +901,5 @@ from .owners import models as _owners_models  # noqa: E402,F401
 
 # Server hardware from Dell OME (G4).
 from .hardware import models as _hardware_models  # noqa: E402,F401
+# IPAM (GestióIP) state, read-only source (docs/design/ico-correlation.md).
+from .ipam import models as _ipam_models  # noqa: E402,F401

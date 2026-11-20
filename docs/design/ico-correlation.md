@@ -1,6 +1,6 @@
 # Thiết kế: Hợp nhất dữ liệu theo Serial / Service Tag và IP — "Hồ sơ thiết bị" và "Đối soát"
 
-Trạng thái: **đề xuất, chờ chủ sản phẩm chốt mục 14**. Xây trên sổ CI (G1), Hệ thống & Owner (G2), Dell OME (G4);
+Trạng thái: **đã chốt** (mục 14, 20/11/2026); nguồn IPAM GestióIP đã có (đọc, lưu, demo) — các bước C1–C6 làm sau G5. Xây trên sổ CI (G1), Hệ thống & Owner (G2), Dell OME (G4);
 dùng chung kho sự kiện của G5 khi có. Mọi nguồn vẫn **chỉ đọc** (CLAUDE.md quy tắc 1).
 
 ## 0. Tóm tắt quyết định
@@ -13,6 +13,7 @@ dùng chung kho sự kiện của G5 khi có. Mọi nguồn vẫn **chỉ đọc
 | D4 | Thêm **bộ máy đối soát** (`xcheck`): bộ quy tắc chạy sau khi dựng chỉ mục, sinh **phát hiện có mã đối soát ổn định** (FNV-1a, như capacity / bảo hành G4b). Mỗi phát hiện có vòng đời mở → đã hết → bỏ qua có lý do. |
 | D5 | **Một màn hình chung "Hồ sơ thiết bị"** (mở từ Ctrl + K bằng serial, asset tag, IP hoặc tên), cộng trang **"Đối soát dữ liệu"** (ma trận thiết bị × nguồn) và **"Tra IP"**. |
 | D6 | Nguồn đang lỗi / dữ liệu cũ **không được đóng** phát hiện hay kết thúc gán IP của chính nguồn đó (giống `ops_alerts` khi provider lỗi). |
+| D7 | **IPAM GestióIP là nguồn "IP khai báo"**: so IP / hostname / serial / MAC khai trong GestióIP với IP mà vCenter, OME, storage, backup thực sự báo (quy tắc I08–I12). IP quản trị là IP tĩnh, không trùng dải, không VIP / NAT — một vùng mạng duy nhất đủ dùng. |
 
 ## 1. Mục tiêu và phạm vi
 
@@ -43,6 +44,7 @@ lookup ra ngoài) — ICO không chủ động dò mạng, chỉ đọc nguồn 
 | Thiết bị DC (Excel) | serial, asset tag | — | device id (tên) | `dc_asset` → `physical_server` (serial) |
 | Opex | `opex_assets.serial` | — | host_name, vCenter | `opex_item` → `physical_server` (serial), host (tên, yếu) |
 | Capex / hợp đồng | — | — | — | không ghép thiết bị |
+| **GestióIP (IPAM)** | cột tuỳ chỉnh cấu hình được (vd `SN`) | **mọi IP khai báo** + network / VLAN / site | hostname, cột MAC | đã đọc và lưu (`ipam_host`, `ipam_network`, `ipam_vlan`); ghép ở C2 |
 
 ### 2.2 Khoảng trống
 
@@ -168,7 +170,10 @@ CHECK `alias_key <> canonical_key`. Khi dựng chỉ mục: thay mọi `alias_ke
 UNIQUE (`serial_key`, `ref_type`, `ref_id`); index (`serial_key`), (`ci_id`). Dòng không còn thấy quá `CMDB_RETIRE_DAYS`
 bị xoá khỏi chỉ mục (đây là dữ liệu dẫn xuất; lịch sử nằm ở sự kiện G5 / phát hiện).
 
-### 5.3 `ip_scope` — vùng mạng (khai báo tay, admin)
+### 5.3 `ip_scope` — vùng mạng (khai báo tay, admin) — **hoãn**
+
+Chủ sản phẩm xác nhận IP quản trị là IP tĩnh, không trùng dải giữa các site, không VIP / cluster IP / NAT: mọi IP thuộc vùng
+`default`. Network của GestióIP (`ipam_network`) dùng làm nhóm hiển thị. Bảng dưới chỉ làm khi sau này có dải trùng.
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
@@ -251,7 +256,7 @@ Không khai vùng nào → mọi IP thuộc vùng `default` (vẫn chạy đúng
    | Pure | serial mảng / controller | `GET /api/2.x/hardware` (đã gọi) — trường `serial` |
    | OME | ngày giao hàng, IP quản lý khác iDRAC | `SystemShipDate` (Warranties), `DeviceManagement[]` (đã đọc) |
    | NetBackup | — | client là IP → `ip_binding` role `backup` |
-   | Nhập tay (tuỳ chọn) | danh sách IP / VIP / IPAM | Excel qua `shared/xlsx_io.py` → `ip_scope.shared_ips`, `ip_binding` source `import` |
+   | **GestióIP 3.5 API** (đã làm) | mọi IP khai báo, hostname, site, category, alive, cột tuỳ chỉnh (serial / MAC), network, VLAN | `api.cgi` GET, `output_type=json`, HTTP Basic; **chỉ** `request_type` đọc (`version`, `listHosts`, `listNetworks`, `listVlans`, `readHost`, `readNetwork`, `usedNetworkAddresses`, `readVlan`, `listClients`) — `ipam/gestioip.py`. `ip_binding` source `ipam`, role theo category |
 
    Mỗi trường mới có trong `demo_generator.py` tương ứng (quy tắc 2).
 2. **Thứ tự trong vòng poll** (pod leader): đồng bộ nguồn → `cmdb.build_all` → `correlation.index` (serial + IP) →
@@ -295,7 +300,12 @@ Mức theo 4 mức chuẩn (+ `info` cho tra cứu, không vào hộp việc). C
 | I04 | Backup client trỏ sai máy | tên client NetBackup là IP, IP đó hiện thuộc VM khác VM đang được backup trước đây | THEO DÕI | Kiểm tra policy backup theo IP | NetBackup + hypervisor |
 | I05 | VM không có IP | VM bật, Tools chạy, không báo IP nào | thông tin | Không ghép được backup / ITSM theo IP | hypervisor |
 | I06 | IP ngoài vùng khai báo | IP thuộc vùng `default` khi đã khai ≥ 1 vùng | thông tin | Bổ sung vùng / IP lạ | — |
-| I07 | Không ghép được vì mơ hồ | một khoá yếu (IP / hostname) khớp > 1 đối tượng | THEO DÕI | Khai `shared_ips` hoặc sửa tên | — |
+| I07 | Không ghép được vì mơ hồ | một khoá yếu (IP / hostname) khớp > 1 đối tượng | THEO DÕI | Sửa tên / IP trùng | — |
+| I08 | IP đang dùng nhưng chưa khai trong IPAM | IP của VM / host / iDRAC / LIF storage không có trong GestióIP | THEO DÕI | Khai IP vào GestióIP | IPAM + nguồn báo IP |
+| I09 | IPAM khai nhưng không còn ai dùng | IP trong GestióIP không nguồn nào báo > 30 ngày (và `alive` = down nếu có) | THEO DÕI | Thu hồi IP / xoá khỏi IPAM | IPAM + mọi nguồn báo IP |
+| I10 | Tên trong IPAM khác tên thực tế | hostname GestióIP (short name) ≠ tên VM / host / tên OME / hostname HĐH đang giữ IP | THEO DÕI | Sửa IPAM hoặc tên máy | IPAM + nguồn |
+| I11 | Serial / MAC khai trong IPAM sai | cột serial / MAC của GestióIP ≠ service tag / MAC thực tế của máy giữ IP | CẢNH BÁO | Sửa IPAM (dễ nhầm máy khi thay thế) | IPAM + OME / hypervisor |
+| I12 | IP nằm ngoài mọi network IPAM | IP thực tế không thuộc network nào trong GestióIP | thông tin | Khai network / IP lạ | IPAM |
 
 ### 7.3 Theo chuỗi liên kết (dùng lại sổ CI)
 
@@ -431,14 +441,14 @@ tắc 1. Riêng vSphere Tags (G2d) vẫn là ngoại lệ phiên riêng, không 
 | C5 | Trang Đối soát (ma trận + phát hiện), Tra IP, PDF / Excel | PDF đúng số với trang |
 | C6 | Nối kho sự kiện G5 (mở / đóng phát hiện, IP đổi chủ thành sự kiện; dòng thời gian trên Hồ sơ thiết bị) | Dòng thời gian một máy đủ alert + đổi IP + phát hiện |
 
-## 14. Cần chủ sản phẩm chốt
+## 14. Quyết định của chủ sản phẩm (20/11/2026)
 
-1. **Vùng mạng**: có dải IP trùng giữa các site / VRF không? Nếu có, cần danh sách CIDR theo vùng để khai `ip_scope` trước C2.
-2. **IP dùng chung**: danh sách VIP / cluster IP / NAT được phép trùng (tránh báo I01 sai).
-3. **Ngưỡng**: S02 (không thấy chạy) 30 ngày? S09 (lệch ngày) 90 ngày? Thời gian giữ lịch sử IP 13 tháng?
-4. **Ai được bỏ qua phát hiện**: admin + owner admin (đề xuất) hay thêm vai trò Chi phí cho các quy tắc liên quan Opex (S06, S07)?
-5. **Thứ tự**: làm C1–C3 trước G5 (để G5 ghi sự kiện đối soát ngay) hay sau G5 (đề xuất: **sau G5**, C6 gộp vào khi đã có kho sự kiện)?
-6. **Nguồn IPAM**: có file / hệ thống IPAM để nhập (Excel) không — dùng làm "IP khai báo" so với IP thực tế?
+1. **Vùng mạng**: không trùng dải — IP quản trị là IP tĩnh, quản lý chặt → một vùng `default`, `ip_scope` hoãn.
+2. **IP dùng chung**: không có VIP / cluster IP / NAT trùng → mọi IP trùng đều là phát hiện I01.
+3. **Ngưỡng**: đồng ý — S02 30 ngày, S09 90 ngày, I09 30 ngày, lịch sử IP 13 tháng.
+4. **Bỏ qua phát hiện**: admin + owner admin; **thêm vai trò Chi phí (từ editor)** cho các quy tắc liên quan Opex (S06, S07, S10–S13).
+5. **Thứ tự**: **sau G5**; C6 gộp vào khi đã có kho sự kiện.
+6. **IPAM**: GestióIP 3.5 (module API) — đã thêm nguồn kind `gestioip` ở Cài đặt → Nguồn dữ liệu (đọc networks / hosts / VLAN, cột serial / MAC cấu hình được, demo, trạng thái nhóm *IPAM*); quy tắc I08–I12 dùng nó ở C3.
 
 ## 15. Kiểm thử
 
