@@ -121,9 +121,9 @@ def update_system(system_id: int, request: Request, data: Dict[str, Any] = Body(
 
 @router.delete("/{system_id}")
 def delete_system(system_id: int, request: Request, user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
-    n = service.delete(db, user, service.get(db, system_id), _ip(request))
+    service.delete(db, user, service.get(db, system_id), _ip(request))      # 409 while the system still has VMs
     db.commit()
-    return {"ok": True, "unassigned": n}
+    return {"ok": True}
 
 
 @router.post("/{system_id}/members")

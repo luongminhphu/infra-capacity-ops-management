@@ -630,6 +630,12 @@ Thẻ đối tượng (Ctrl + K → chọn một kết quả) đọc từ sổ C
   Ô lọc *Email / tên owner* tìm cả backup và support.
 - **Nhân bản**: nút *Nhân bản* trên mỗi dòng hệ thống (và trong hộp chi tiết) mở form *Thêm* đã điền sẵn mọi thông tin của hệ
   thống đó (tên thêm "(bản sao)"). Sửa tên và trường cần đổi rồi bấm Thêm; VM không được chép.
+- **Xoá hệ thống** (nút *Xoá* trên mỗi dòng, trong hộp chi tiết và form Sửa): chỉ xoá được hệ thống **không còn VM**.
+  - Còn VM → ICO báo số VM và mở hệ thống. Ở đó có *Chuyển hết VM sang hệ thống khác* (chọn hệ thống đích, tự bật "chuyển")
+    và *Bỏ gán hết VM* (VM thành chưa có owner). Xử lý xong thì xoá được.
+  - Kiểm tra "không còn VM" và việc xoá chạy trong một câu lệnh: VM được gán đúng lúc đó làm yêu cầu xoá bị từ chối, không bao giờ
+    bị bỏ gán ngầm.
+  - Xoá được ghi nhật ký; mã `SYS-…` không dùng lại.
 - **Excel**: sheet *Hệ thống* thêm cột *Backup (email)*, *Tên backup*, *Support (email)*, *Tên support*, *Liên hệ support*.
   File xuất nhập lại được; file mẫu cũ có cột *Người thay thế (email)* vẫn đọc được.
 - **Tab VM chưa có owner** có bộ lọc:

@@ -73,7 +73,7 @@ def test_crud_validation_and_audit(app_, admin, vms):  # noqa: F811
     log = s.query(AuditLog).filter(AuditLog.action == "owners.system.owner_change").order_by(AuditLog.id.desc()).first()
     assert json.loads(log.detail)["changes"]["owner_email"] == ["lead.cb@corp.example", "new.lead@corp.example"]
     s.close()
-    assert admin.delete(f"/api/systems/{b['id']}").json() == {"ok": True, "unassigned": 0}
+    assert admin.delete(f"/api/systems/{b['id']}").json() == {"ok": True}
     assert admin.get(f"/api/systems/{b['id']}").status_code == 404
 
 
@@ -272,3 +272,43 @@ def test_unowned_filters_multi_values_and_select_all(app_, admin, vms):  # noqa:
     assert admin.post(f"/api/systems/{sid}/members", json={"ciIds": all_ids["ids"]}).json()["added"] == 3
     assert get(q="lot")["itemsTotal"] == 0
     assert admin.post(f"/api/systems/{sid}/members", json={"ciIds": list(range(service.MAX_SELECT + 1))}).status_code == 422
+
+
+# ---------------------------------------------------------------- delete only an empty system
+def test_delete_refused_while_the_system_has_vms(app_, admin, vms):  # noqa: F811
+    a = _sys(admin).json()
+    b = _sys(admin, name="Website", ownerEmail="web@corp.example").json()
+    ids = [vms["own-app-01"], vms["own-app-02"]]
+    admin.post(f"/api/systems/{a['id']}/members", json={"ciIds": ids})
+    r = admin.delete(f"/api/systems/{a['id']}")
+    assert r.status_code == 409 and r.json()["detail"].startswith(f"Hệ thống {a['code']} còn 2 VM")
+    s = SessionLocal()
+    assert s.query(SystemMember).filter_by(system_id=a["id"]).count() == 2 and s.get(System, a["id"]) is not None
+    s.close()
+    # move one VM away, unassign the other: then the system can go
+    assert admin.post(f"/api/systems/{b['id']}/members", json={"ciIds": [ids[0]], "move": True}).json()["moved"] == 1
+    assert admin.delete(f"/api/systems/{a['id']}").status_code == 409
+    assert admin.request("DELETE", f"/api/systems/{a['id']}/members", json={"ciIds": [ids[1]]}).json() == {"removed": 1}
+    assert admin.delete(f"/api/systems/{a['id']}").json() == {"ok": True}
+    assert admin.get(f"/api/systems/{a['id']}/members").status_code == 404
+    s = SessionLocal()
+    assert s.query(SystemMember).filter_by(ci_id=ids[0]).one().system_id == b["id"]          # the moved VM is untouched
+    assert s.query(AuditLog).filter_by(action="owners.system.delete").count() >= 1
+    s.close()
+
+
+def test_delete_is_atomic_against_a_concurrent_assignment(app_, admin, vms, monkeypatch):  # noqa: F811
+    """A VM assigned between the check and the delete: the single DELETE … WHERE NOT EXISTS refuses (409), the VM stays."""
+    a = _sys(admin).json()
+    real = service.func.count
+    s = SessionLocal()
+    sysrow = s.get(System, a["id"])
+    s.add(SystemMember(ci_id=vms["own-db-01"], system_id=a["id"], source="manual", confidence="strong"))
+    s.flush()                                        # assigned "concurrently" — the count below is forced to 0
+    monkeypatch.setattr(service, "func", type("F", (), {"count": staticmethod(lambda *x: real(*x) * 0)})())
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
+        service.delete(s, User(username="admin"), sysrow)
+    assert exc.value.status_code == 409 and "vừa được gán thêm VM" in exc.value.detail
+    s.rollback()
+    s.close()

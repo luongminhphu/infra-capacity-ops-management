@@ -81,7 +81,8 @@ function osSystemsHtml() {
         ${s.deputyEmail ? `<span class="muted-sub">Backup: ${esc(s.deputyName || s.deputyEmail)}</span>` : ''}</td>
       <td>${osSupportCell(s)}</td>
       <td>${uiTag(s.criticalityLabel)}</td><td>${esc(s.envLabel)}</td><td class="num">${fmtInt(s.vmCount)}</td>
-      ${osCan() ? `<td class="os-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-os-clone="${esc(s.id)}" title="Nhân bản ${esc(s.code)}: tạo hệ thống mới với cùng thông tin" aria-label="Nhân bản ${esc(s.code)}"><i data-lucide="copy"></i>Nhân bản</button></td>` : ''}</tr>`).join('');
+      ${osCan() ? `<td class="os-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-os-clone="${esc(s.id)}" title="Nhân bản ${esc(s.code)}: tạo hệ thống mới với cùng thông tin" aria-label="Nhân bản ${esc(s.code)}"><i data-lucide="copy"></i>Nhân bản</button>
+        <button class="btn btn-ghost btn-sm btn-danger" type="button" data-os-del="${esc(s.id)}" title="${s.vmCount ? `Còn ${esc(s.vmCount)} VM — chuyển hoặc bỏ gán hết VM trước khi xoá` : `Xoá ${esc(s.code)}`}" aria-label="Xoá ${esc(s.code)}"><i data-lucide="trash-2"></i>Xoá</button></td>` : ''}</tr>`).join('');
   return `<section class="panel">${osHead()}
       <div class="panel-toolbar infra-toolbar dc-filters">
         <input type="search" id="osQ" placeholder="Tìm mã, tên, dự án…" value="${esc(f.q)}" aria-label="Tìm hệ thống">
@@ -140,15 +141,15 @@ function osBulkBar() {
 }
 
 /* Pick a system and assign the VMs (shared with the VM card). A VM already assigned by hand elsewhere: asks before moving. */
-async function osAssignDialog(ciIds, label, onDone) {
+async function osAssignDialog(ciIds, label, onDone, opts = {}) {
   let systems;
-  try { systems = (await apiRequest('/systems?limit=500')).items; } catch (err) { uiAlert(err.message); return; }
-  if (!systems.length) { uiAlert('Chưa có hệ thống nào — tạo hệ thống trước (Quản lý thông tin → Hệ thống & Owner).'); return; }
+  try { systems = (await apiRequest('/systems?limit=500')).items.filter(x => x.id !== opts.exclude); } catch (err) { uiAlert(err.message); return; }
+  if (!systems.length) { uiAlert(opts.exclude ? 'Chưa có hệ thống khác để chuyển VM sang — tạo hệ thống mới trước.' : 'Chưa có hệ thống nào — tạo hệ thống trước (Quản lý thông tin → Hệ thống & Owner).'); return; }
   uiPanelDialog(`Gán hệ thống — ${esc(label)}`, `
     <div class="form-grid-aligned dc-form">
       <label class="field sp-span2"><span>Hệ thống</span><select id="osaSys">${systems.map(s => `<option value="${esc(s.id)}">${esc(`${s.code} — ${s.name}${s.ownerEmail ? ` (${s.ownerEmail})` : ''}`)}</option>`).join('')}</select></label>
     </div>
-    <label class="infra-check"><input type="checkbox" id="osaMove"> Chuyển sang hệ thống này nếu VM đã thuộc hệ thống khác</label>`,
+    <label class="infra-check"><input type="checkbox" id="osaMove"${opts.move ? ' checked' : ''}> Chuyển sang hệ thống này nếu VM đã thuộc hệ thống khác</label>`,
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
    <button class="btn btn-primary btn-sm" type="button" id="osaSave">Gán</button>`);
   $('#osaSave').onclick = async () => {
@@ -229,11 +230,22 @@ function osForm(s, opts = {}) {
     } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); $('#osfSave').disabled = false; }
   };
   const del = $('#osfDel');
-  if (del) del.onclick = async () => {
-    if (!await uiConfirm(`Xoá hệ thống ${s.code} — ${s.name}? ${fmtInt(s.vmCount || 0)} VM sẽ thành chưa có owner.`, { danger: true })) return;
-    try { await apiRequest(`/systems/${s.id}`, { method: 'DELETE' }); $('#spDialog').close(); await osLoad(); osRender(); }
-    catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); }
-  };
+  if (del) del.onclick = () => osDelete(s);
+}
+
+/* Delete a system: only when it has no VM. With VMs → explain and open the system, where they can be moved or unassigned. */
+async function osDelete(s) {
+  if (s.vmCount) {
+    if (await uiConfirm(`${s.code} — ${s.name} còn ${fmtInt(s.vmCount)} VM. Chỉ xoá được hệ thống không còn VM: chuyển VM sang hệ thống khác hoặc bỏ gán hết trước. Mở hệ thống để xử lý VM?`, { okLabel: 'Mở hệ thống', danger: false })) osOpen(s.id);
+    return;
+  }
+  if (!await uiConfirm(`Xoá hệ thống ${s.code} — ${s.name}? Thao tác được ghi nhật ký, mã ${s.code} không dùng lại.`, { danger: true, okLabel: 'Xoá' })) return;
+  try {
+    await apiRequest(`/systems/${s.id}`, { method: 'DELETE' });
+    if ($('#spDialog').open) $('#spDialog').close();
+    osState.facets = null; await osLoad(); osRender();
+    uiAlert(`Đã xoá hệ thống ${s.code}.`);
+  } catch (err) { uiAlert(err.message); await osLoad(); osRender(); }
 }
 
 async function osOpen(id) {
@@ -256,6 +268,8 @@ async function osOpen(id) {
       ${kv('Cập nhật', esc(`${spTimeSafe(s.updatedAt)}${s.updatedBy ? ' · ' + s.updatedBy : ''}`))}
     </dl>
     <div class="sp-h">VM của hệ thống (${fmtInt(vms.length)})</div>
+    ${can && vms.length ? `<div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" id="osMoveAll"><i data-lucide="arrow-right-left"></i>Chuyển hết VM sang hệ thống khác</button>
+      <button class="btn btn-ghost btn-sm btn-danger" type="button" id="osUnassignAll">Bỏ gán hết VM</button></div>` : ''}
     <div class="table-scroll" role="region" tabindex="0" aria-label="VM của hệ thống"><table class="data-table">
       <thead><tr><th>VM</th><th>Cluster</th><th>Nguồn gán</th>${can ? '<th></th>' : ''}</tr></thead>
       <tbody>${vms.map(v => `<tr><td>${uiEntityLink('vm', v.vm, v.vcenterKey, false)}<span class="muted-sub">${esc(v.vcenterKey)}</span></td>
@@ -263,11 +277,28 @@ async function osOpen(id) {
         ${can ? `<td><button class="btn btn-ghost btn-sm" type="button" data-os-unassign="${esc(v.ciId)}">Bỏ gán</button></td>` : ''}</tr>`).join('')
         || uiEmptyRow(can ? 4 : 3, 'Chưa có VM — gán ở tab “VM chưa có owner” hoặc trên thẻ VM.')}</tbody></table></div>`,
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
-   ${can ? '<button class="btn btn-secondary btn-sm" type="button" id="osClone"><i data-lucide="copy"></i>Nhân bản</button><button class="btn btn-primary btn-sm" type="button" id="osEdit"><i data-lucide="pencil"></i>Sửa</button>' : ''}`);
+   ${can ? `<button class="btn btn-ghost btn-sm btn-danger" type="button" id="osDel"${vms.length ? ` title="Còn ${vms.length} VM — chuyển hoặc bỏ gán hết trước"` : ''}><i data-lucide="trash-2"></i>Xoá</button>
+     <button class="btn btn-secondary btn-sm" type="button" id="osClone"><i data-lucide="copy"></i>Nhân bản</button><button class="btn btn-primary btn-sm" type="button" id="osEdit"><i data-lucide="pencil"></i>Sửa</button>` : ''}`);
   const edit = $('#osEdit');
   if (edit) edit.onclick = () => osForm(s);
   const cln = $('#osClone');
   if (cln) cln.onclick = () => osForm(s, { clone: true });
+  const delB = $('#osDel');
+  if (delB) delB.onclick = () => (vms.length
+    ? uiSetStatus($('#spDialogMsg'), `Còn ${fmtInt(vms.length)} VM — dùng “Chuyển hết VM” hoặc “Bỏ gán hết VM” trước khi xoá.`, 'error')
+    : osDelete({ ...s, vmCount: 0 }));
+  const ids = vms.map(v => v.ciId);
+  const moveAll = $('#osMoveAll');
+  if (moveAll) moveAll.onclick = () => osAssignDialog(ids, `${fmtInt(ids.length)} VM của ${s.code}`, async () => { await osLoad(); osRender(); osOpen(id); },
+    { move: true, exclude: s.id });
+  const unAll = $('#osUnassignAll');
+  if (unAll) unAll.onclick = async () => {
+    if (!await uiConfirm(`Bỏ gán ${fmtInt(ids.length)} VM khỏi ${s.code}? Các VM sẽ thành chưa có owner (tab “VM chưa có owner”).`, { danger: true })) return;
+    try {
+      await apiRequest(`/systems/${id}/members`, { method: 'DELETE', body: JSON.stringify({ ciIds: ids }) });
+      await osLoad(); osRender(); osOpen(id);
+    } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); }
+  };
   $('#spDialogBody').onclick = async (e) => {
     const b = e.target.closest('[data-os-unassign]');
     if (!b) return;
@@ -392,6 +423,8 @@ function osBind() {
       } catch (err) { uiAlert(err.message); }
       return;
     }
+    const dl = e.target.closest('[data-os-del]');
+    if (dl) { const s = osState.list.find(x => x.id === Number(dl.dataset.osDel)); if (s) osDelete(s); return; }
     const cl = e.target.closest('[data-os-clone]');
     if (cl) { const s = osState.list.find(x => x.id === Number(cl.dataset.osClone)); if (s) osForm(s, { clone: true }); return; }
     if (e.target.closest('[data-os-bulk]')) {

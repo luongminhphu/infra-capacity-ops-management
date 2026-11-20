@@ -196,11 +196,21 @@ def update_system(db: Session, user: User, s: System, data: Dict[str, Any], ip: 
 
 
 def delete(db: Session, user: User, s: System, ip: Optional[str] = None) -> int:
-    n = db.query(SystemMember).filter(SystemMember.system_id == s.id).delete(synchronize_session=False)
-    audit(db, user, "owners.system.delete", ip, id=s.id, code=s.code, name=s.name, members=n)
-    db.delete(s)
+    """Delete a system that has no VM any more. Check and delete are ONE statement (DELETE … WHERE NOT EXISTS member):
+    a VM assigned at the same moment makes the delete fail (409) instead of being unassigned silently by the cascade."""
+    from sqlalchemy import delete as sa_delete, exists
+    n = db.query(func.count(SystemMember.id)).filter(SystemMember.system_id == s.id).scalar() or 0
+    if n:
+        raise HTTPException(409, f"Hệ thống {s.code} còn {n} VM — chuyển VM sang hệ thống khác hoặc bỏ gán hết rồi mới xoá.")
+    code, name, sid = s.code, s.name, s.id
+    res = db.execute(sa_delete(System).where(System.id == sid, ~exists().where(SystemMember.system_id == sid))
+                     .execution_options(synchronize_session=False))
+    if res.rowcount != 1:
+        raise HTTPException(409, f"Hệ thống {code} vừa được gán thêm VM — tải lại rồi thử lại.")
+    db.expunge(s)
+    audit(db, user, "owners.system.delete", ip, id=sid, code=code, name=name)
     invalidate_scope_cache()
-    return n
+    return 0
 
 
 def listing(db: Session, q: str = "", owner: str = "", department: str = "", project: str = "",
