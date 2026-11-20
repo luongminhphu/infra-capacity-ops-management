@@ -4,7 +4,8 @@
    Ghi: admin hoặc người có quyền "Quản trị Hệ thống & Owner" (Cài đặt → Người dùng & quyền).
    ========================================================= */
 const osState = { sub: 'systems', list: null, total: 0, facets: null, cov: null, error: null, sel: new Set(), file: null,
-  f: { q: '', owner: '', department: '', criticality: '', env: '' }, covQ: '' };
+  f: { q: '', owner: '', department: '', criticality: '', env: '' }, covQ: '',
+  cf: { vcenter: [], cluster: [], power: '', folder: '' }, msOpen: '' };
 const OS_CRIT = { 1: 'crit', 2: 'bad', 3: 'warn', 4: 'ok' };
 
 const osCan = () => !!((osState.facets && osState.facets.canManage) || uiIsAdmin() || (currentUser && currentUser.ownerAdmin));
@@ -14,10 +15,17 @@ async function osLoad() {
     const f = osState.f, qs = new URLSearchParams({ limit: '500' });
     Object.entries(f).forEach(([k, v]) => { if (v) qs.set(k, v); });
     const [list, facets, cov] = await Promise.all([apiRequest(`/systems?${qs}`), osState.facets ? osState.facets : apiRequest('/systems/facets'),
-      apiRequest(`/systems/coverage?${new URLSearchParams({ q: osState.covQ, limit: '500' })}`)]);
+      apiRequest(`/systems/coverage?${osCovQuery()}`)]);
     osState.list = list.items; osState.facets = facets; osState.cov = cov; osState.error = null;
   } catch (err) { osState.error = err.message; }
 }
+
+function osCovQuery(extra = {}) {
+  const cf = osState.cf;
+  return new URLSearchParams({ q: osState.covQ, limit: '500', vcenter: cf.vcenter.join(','), cluster: cf.cluster.join(','),
+    power: cf.power, folder: cf.folder, ...extra });
+}
+const osCovFiltered = () => !!(osState.covQ || osState.cf.vcenter.length || osState.cf.cluster.length || osState.cf.power || osState.cf.folder);
 
 async function renderOwnersView() {
   const mount = $('#ownersMount');
@@ -69,8 +77,11 @@ function osSystemsHtml() {
   const rows = osState.list.map(s => `<tr class="infra-row" tabindex="0" data-os-id="${esc(s.id)}">
       <td><b>${esc(s.name)}</b><span class="muted-sub mono">${esc(s.code)}</span></td>
       <td>${esc(s.project || '—')}<span class="muted-sub">${esc(s.department || '')}</span></td>
-      <td>${s.ownerEmail ? (s.ownerName ? `${esc(s.ownerName)}<span class="muted-sub">${esc(s.ownerEmail)}</span>` : esc(s.ownerEmail)) : uiPill('warn', 'Chưa có owner')}</td>
-      <td>${uiTag(s.criticalityLabel)}</td><td>${esc(s.envLabel)}</td><td class="num">${fmtInt(s.vmCount)}</td></tr>`).join('');
+      <td>${s.ownerEmail ? (s.ownerName ? `${esc(s.ownerName)}<span class="muted-sub">${esc(s.ownerEmail)}</span>` : esc(s.ownerEmail)) : uiPill('warn', 'Chưa có owner')}
+        ${s.deputyEmail ? `<span class="muted-sub">Backup: ${esc(s.deputyName || s.deputyEmail)}</span>` : ''}</td>
+      <td>${osSupportCell(s)}</td>
+      <td>${uiTag(s.criticalityLabel)}</td><td>${esc(s.envLabel)}</td><td class="num">${fmtInt(s.vmCount)}</td>
+      ${osCan() ? `<td class="os-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-os-clone="${esc(s.id)}" title="Nhân bản ${esc(s.code)}: tạo hệ thống mới với cùng thông tin" aria-label="Nhân bản ${esc(s.code)}"><i data-lucide="copy"></i>Nhân bản</button></td>` : ''}</tr>`).join('');
   return `<section class="panel">${osHead()}
       <div class="panel-toolbar infra-toolbar dc-filters">
         <input type="search" id="osQ" placeholder="Tìm mã, tên, dự án…" value="${esc(f.q)}" aria-label="Tìm hệ thống">
@@ -81,37 +92,50 @@ function osSystemsHtml() {
       </div>
       <div class="table-scroll" role="region" tabindex="0" aria-label="Hệ thống"><table class="data-table infra-table">
         <caption class="sr-only">Hệ thống nghiệp vụ và owner</caption>
-        <thead><tr><th>Hệ thống</th><th>Dự án · phòng ban</th><th>Owner</th><th>Mức quan trọng</th><th>Môi trường</th><th class="num">VM</th></tr></thead>
-        <tbody>${rows || uiEmptyRow(6, osCan() ? 'Chưa có hệ thống — bấm “Thêm hệ thống” hoặc “Nhập Excel”.' : 'Chưa có hệ thống khớp bộ lọc.')}</tbody></table></div>
+        <thead><tr><th>Hệ thống</th><th>Dự án · phòng ban</th><th>Owner · backup</th><th>Support</th><th>Mức quan trọng</th><th>Môi trường</th><th class="num">VM</th>${osCan() ? '<th></th>' : ''}</tr></thead>
+        <tbody>${rows || uiEmptyRow(osCan() ? 8 : 7, osCan() ? 'Chưa có hệ thống — bấm “Thêm hệ thống” hoặc “Nhập Excel”.' : 'Chưa có hệ thống khớp bộ lọc.')}</tbody></table></div>
       <p class="muted-sub">${fmtInt(osState.list.length)} hệ thống${osState.list.length >= 500 ? ' (hiện 500 dòng đầu — lọc để thu hẹp)' : ''}. Mức quan trọng 1 = quan trọng nhất.</p>
     </section>`;
 }
 
 function osUnownedHtml() {
-  const c = osState.cov, can = osCan();
+  const c = osState.cov, can = osCan(), cf = osState.cf, fc = c.facets || { vcenters: [], clusters: [] };
+  const opt = (v, t, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`;
+  const allShown = can && c.items.length > 0 && c.items.every(v => osState.sel.has(v.ciId));
   const rows = c.items.map(v => `<tr>${can ? `<td class="dc-pick"><input type="checkbox" data-os-sel="${esc(v.ciId)}"${osState.sel.has(v.ciId) ? ' checked' : ''} aria-label="Chọn ${esc(v.vm)}"></td>` : ''}
-      <td>${uiEntityLink('vm', v.vm, v.vcenterKey, false)}</td><td>${esc(v.vcenterKey || '—')}</td><td>${esc(v.cluster || '—')}</td>
+      <td>${uiEntityLink('vm', v.vm, v.vcenterKey, false)}${v.folderPath ? `<span class="muted-sub">${esc(v.folderPath)}</span>` : ''}</td><td>${esc(v.vcenterKey || '—')}</td><td>${esc(v.cluster || '—')}</td>
       <td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td></tr>`).join('');
+  const filters = `<div class="panel-toolbar infra-toolbar dc-filters">
+        <input type="search" id="osCovQ" placeholder="Tên VM: a, b hoặc x*" title="Nhiều tên cách nhau dấu phẩy; * thay cho đoạn bất kỳ" value="${esc(osState.covQ)}" aria-label="Tìm VM theo tên">
+        ${uiMultiSelect('osCovVc', 'vCenter', fc.vcenters.map(x => ({ value: x.value, label: x.value || '—', count: x.count })), cf.vcenter, osState.msOpen === 'osCovVc')}
+        ${uiMultiSelect('osCovCl', 'Cluster', fc.clusters.map(x => ({ value: x.value, label: x.value || '(không cluster)', count: x.count })), cf.cluster, osState.msOpen === 'osCovCl')}
+        <select id="osCovPower" aria-label="Nguồn VM">${opt('', 'Bật và tắt', cf.power)}${opt('on', 'Đang bật', cf.power)}${opt('off', 'Đang tắt', cf.power)}</select>
+        <input type="search" id="osCovFolder" placeholder="Thư mục vCenter chứa…" value="${esc(cf.folder)}" aria-label="Lọc theo thư mục vCenter">
+        ${osCovFiltered() ? '<button class="btn btn-ghost btn-sm" type="button" data-os-cov-reset>Xoá lọc</button>' : ''}
+      </div>`;
   return `<section class="panel"><div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">VM chưa thuộc hệ thống (${fmtInt(c.itemsTotal)})</div>
       <p class="panel-sub">VM đang có trong sổ CI nhưng chưa gán hệ thống. Gán ở đây, trên thẻ VM, hoặc bằng file Excel (sheet VM).</p></div>
       <div class="panel-toolbar infra-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-os-reload><i data-lucide="refresh-cw"></i>Tải lại</button></div></div>
-      <div class="panel-toolbar infra-toolbar dc-filters"><input type="search" id="osCovQ" placeholder="Tìm tên VM…" value="${esc(osState.covQ)}" aria-label="Tìm VM"></div>
+      ${filters}
       ${can ? '<div class="dc-bulk" id="osBulk" role="status"></div>' : ''}
       <div class="table-scroll" role="region" tabindex="0" aria-label="VM chưa có owner"><table class="data-table infra-table">
         <caption class="sr-only">VM chưa thuộc hệ thống</caption>
-        <thead><tr>${can ? '<th class="dc-pick"></th>' : ''}<th>VM</th><th>vCenter</th><th>Cluster</th><th>Nguồn</th></tr></thead>
+        <thead><tr>${can ? `<th class="dc-pick"><input type="checkbox" id="osSelShown"${allShown ? ' checked' : ''} aria-label="Chọn mọi VM đang hiện"></th>` : ''}<th>VM · thư mục</th><th>vCenter</th><th>Cluster</th><th>Nguồn</th></tr></thead>
         <tbody>${rows || uiEmptyRow(can ? 5 : 4, 'Mọi VM đã thuộc một hệ thống.')}</tbody></table></div>
-      <p class="muted-sub">${c.itemsTotal > c.items.length ? `Hiện ${fmtInt(c.items.length)} / ${fmtInt(c.itemsTotal)} VM — tìm để thu hẹp. ` : ''}Độ phủ owner tính trên VM đang hoạt động của sổ CI.</p></section>`;
+      <p class="muted-sub">${c.itemsTotal > c.items.length ? `Hiện ${fmtInt(c.items.length)} / ${fmtInt(c.itemsTotal)} VM — lọc để thu hẹp hoặc “Chọn cả ${fmtInt(c.itemsTotal)} VM khớp lọc”. ` : ''}Độ phủ owner tính trên VM đang hoạt động của sổ CI.</p></section>`;
 }
 
 function osBulkBar() {
   const bar = $('#osBulk');
   if (!bar) return;
   const n = osState.sel.size;
+  const c = osState.cov;
+  const all = c && c.itemsTotal > 0 && n < c.itemsTotal
+    ? `<button class="btn btn-ghost btn-sm" type="button" data-os-sel-all>Chọn cả ${fmtInt(c.itemsTotal)} VM khớp lọc</button>` : '';
   bar.innerHTML = n ? `<span><b>${fmtInt(n)}</b> VM đã chọn</span>
-      <button class="btn btn-primary btn-sm" type="button" data-os-bulk>Gán vào hệ thống</button>
+      <button class="btn btn-primary btn-sm" type="button" data-os-bulk>Gán vào hệ thống</button>${all}
       <button class="btn btn-ghost btn-sm" type="button" data-os-clear>Bỏ chọn</button>`
-    : '<span class="muted-sub">Đánh dấu ô đầu dòng để gán nhiều VM vào một hệ thống.</span>';
+    : `<span class="muted-sub">Đánh dấu ô đầu dòng (hoặc ô tiêu đề để chọn mọi VM đang hiện) để gán nhiều VM vào một hệ thống.</span>${all}`;
   bar.classList.toggle('active', n > 0);
 }
 
@@ -138,38 +162,68 @@ async function osAssignDialog(ciIds, label, onDone) {
   };
 }
 
-function osForm(s) {
-  const v = s || { criticality: 3, env: 'prod' }, fc = osState.facets;
-  const inp = (id, label, val, extra = '') => `<label class="field"><span>${esc(label)}</span><input id="${id}" value="${esc(val ?? '')}" ${extra}></label>`;
+/* Support cell of the systems list: team / person + first e-mail (+n). */
+function osSupportCell(s) {
+  const em = s.supportEmails || [];
+  if (!em.length && !s.supportName) return '<span class="muted-sub">—</span>';
+  return `${esc(s.supportName || em[0])}${em.length ? `<span class="muted-sub">${esc(s.supportName ? em[0] : '')}${em.length > 1 ? ` +${em.length - 1}` : ''}</span>` : ''}`;
+}
+
+/* Add / edit / clone a system. Three groups: the system, operations (owner + backup: receive reviews and alerts),
+   support (project team called in when needed — contact only, no Owner-portal access). Clone = a new system prefilled
+   with the metadata of `s` (name "… (bản sao)", no VM). */
+function osForm(s, opts = {}) {
+  const clone = !!opts.clone;
+  const v = s ? { ...s, ...(clone ? { name: `${s.name} (bản sao)` } : {}) } : { criticality: 3, env: 'prod' }, fc = osState.facets;
+  const editing = s && !clone;
+  const inp = (id, label, val, extra = '', cls = '') => `<label class="field${cls ? ' ' + cls : ''}"><span>${esc(label)}</span><input id="${id}" value="${esc(val ?? '')}" ${extra}></label>`;
   const opt = (val, t, cur) => `<option value="${esc(val)}"${String(val) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`;
-  uiPanelDialog(s ? `Sửa hệ thống — ${esc(s.code)}` : 'Thêm hệ thống', `
-    <div class="form-grid-aligned dc-form">
-      ${inp('osfName', 'Tên hệ thống', v.name, 'maxlength="255" required')}
-      ${inp('osfProject', 'Dự án', v.project, 'maxlength="128" list="osProjects"')}
-      ${inp('osfDept', 'Phòng ban', v.department, 'maxlength="128" list="osDepts"')}
-      ${inp('osfOwner', 'Owner (email)', v.ownerEmail, 'type="email" maxlength="255" autocomplete="off" placeholder="team.lead@congty.vn"')}
-      ${inp('osfOwnerName', 'Tên owner', v.ownerName, 'maxlength="128"')}
-      ${inp('osfDeputy', 'Người thay thế (email)', v.deputyEmail, 'type="email" maxlength="255" autocomplete="off"')}
-      ${inp('osfManager', 'Quản lý trực tiếp (email)', v.managerEmail, 'type="email" maxlength="255" autocomplete="off"')}
-      <label class="field"><span>Mức độ quan trọng</span><select id="osfCrit">${fc.criticality.map(c => opt(c.value, c.label, v.criticality)).join('')}</select></label>
-      <label class="field"><span>Môi trường</span><select id="osfEnv">${fc.envs.map(e => opt(e.value, e.label, v.env)).join('')}</select></label>
-      ${inp('osfCost', 'Trung tâm chi phí', v.costCenter, 'maxlength="64"')}
-      <label class="field sp-span2"><span>Ghi chú</span><input id="osfNote" maxlength="500" value="${esc(v.note || '')}"></label>
-    </div>
+  const email = 'type="email" maxlength="255" autocomplete="off"';
+  uiPanelDialog(editing ? `Sửa hệ thống — ${esc(s.code)}` : clone ? `Nhân bản từ ${esc(s.code)}` : 'Thêm hệ thống', `
+    ${clone ? `<p class="insight-box">Đã chép thông tin của <b>${esc(s.code)} — ${esc(s.name)}</b>. Sửa tên và các trường cần đổi rồi bấm Thêm — VM không được chép.</p>` : ''}
+    <section class="os-form-group"><div class="sp-h">Thông tin hệ thống</div>
+      <div class="form-grid-aligned dc-form">
+        ${inp('osfName', 'Tên hệ thống', v.name, 'maxlength="255" required')}
+        ${inp('osfProject', 'Dự án', v.project, 'maxlength="128" list="osProjects"')}
+        ${inp('osfDept', 'Phòng ban', v.department, 'maxlength="128" list="osDepts"')}
+        <label class="field"><span>Mức độ quan trọng</span><select id="osfCrit">${fc.criticality.map(c => opt(c.value, c.label, v.criticality)).join('')}</select></label>
+        <label class="field"><span>Môi trường</span><select id="osfEnv">${fc.envs.map(e => opt(e.value, e.label, v.env)).join('')}</select></label>
+        ${inp('osfCost', 'Trung tâm chi phí', v.costCenter, 'maxlength="64"')}
+      </div></section>
+    <section class="os-form-group"><div class="sp-h">Vận hành — Owner &amp; Backup</div>
+      <p class="muted-sub">Đội vận hành: nhận email rà soát định kỳ, cảnh báo; dùng email đăng nhập Microsoft (UPN). Đổi owner được ghi nhật ký.</p>
+      <div class="form-grid-aligned dc-form">
+        ${inp('osfOwner', 'Owner (email)', v.ownerEmail, `${email} placeholder="team.lead@congty.vn"`)}
+        ${inp('osfOwnerName', 'Tên owner', v.ownerName, 'maxlength="128"')}
+        ${inp('osfManager', 'Quản lý trực tiếp (email)', v.managerEmail, email)}
+        ${inp('osfDeputy', 'Backup (email)', v.deputyEmail, email)}
+        ${inp('osfDeputyName', 'Tên backup', v.deputyName, 'maxlength="128"')}
+      </div></section>
+    <section class="os-form-group"><div class="sp-h">Hỗ trợ — đội dự án (Support)</div>
+      <p class="muted-sub">Đội dự án được gọi khi vận hành cần hỗ trợ. Chỉ để liên hệ — không nhận email rà soát, không có quyền cổng Owner.</p>
+      <div class="form-grid-aligned dc-form">
+        ${inp('osfSupportEmails', 'Email support (tối đa 5)', (v.supportEmails || []).join(', '), 'maxlength="1300" autocomplete="off" placeholder="dev.a@congty.vn, dev.b@congty.vn"', 'sp-span2')}
+        ${inp('osfSupportName', 'Nhóm / người support', v.supportName, 'maxlength="128"')}
+        ${inp('osfSupportContact', 'Liên hệ support', v.supportContact, 'maxlength="255" placeholder="Điện thoại, kênh Teams, hàng đợi ticket"', 'sp-span2')}
+      </div></section>
+    <section class="os-form-group">
+      <div class="form-grid-aligned dc-form"><label class="field sp-span2"><span>Ghi chú</span><input id="osfNote" maxlength="500" value="${esc(v.note || '')}"></label></div>
+    </section>
     <datalist id="osProjects">${fc.projects.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
-    <datalist id="osDepts">${fc.departments.map(d => `<option value="${esc(d)}">`).join('')}</datalist>
-    <p class="muted-sub dc-form-help">Owner là Team Lead đại diện nhóm dự án / phòng ban, dùng email đăng nhập Microsoft (UPN). Đổi owner được ghi nhật ký.</p>`,
-  `${s && osCan() ? '<button class="btn btn-ghost btn-sm btn-danger" type="button" id="osfDel">Xoá hệ thống</button>' : ''}
+    <datalist id="osDepts">${fc.departments.map(d => `<option value="${esc(d)}">`).join('')}</datalist>`,
+  `${editing && osCan() ? '<button class="btn btn-ghost btn-sm btn-danger" type="button" id="osfDel">Xoá hệ thống</button>' : ''}
    <span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Huỷ</button>
-   <button class="btn btn-primary btn-sm" type="button" id="osfSave">${s ? 'Lưu' : 'Thêm'}</button>`);
+   <button class="btn btn-primary btn-sm" type="button" id="osfSave">${editing ? 'Lưu' : 'Thêm'}</button>`);
+  if (clone) { const n = $('#osfName'); if (n) { n.focus(); n.select(); } }
   $('#osfSave').onclick = async () => {
     const g = (id) => $(id).value.trim();
     const body = { name: g('#osfName'), project: g('#osfProject'), department: g('#osfDept'), ownerEmail: g('#osfOwner'), ownerName: g('#osfOwnerName'),
-      deputyEmail: g('#osfDeputy'), managerEmail: g('#osfManager'), criticality: Number(g('#osfCrit')), env: g('#osfEnv'),
-      costCenter: g('#osfCost'), note: g('#osfNote') };
+      deputyEmail: g('#osfDeputy'), deputyName: g('#osfDeputyName'), managerEmail: g('#osfManager'),
+      supportEmails: g('#osfSupportEmails'), supportName: g('#osfSupportName'), supportContact: g('#osfSupportContact'),
+      criticality: Number(g('#osfCrit')), env: g('#osfEnv'), costCenter: g('#osfCost'), note: g('#osfNote') };
     $('#osfSave').disabled = true;
     try {
-      await apiRequest(s ? `/systems/${s.id}` : '/systems', { method: s ? 'PUT' : 'POST', body: JSON.stringify(body) });
+      await apiRequest(editing ? `/systems/${s.id}` : '/systems', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(body) });
       $('#spDialog').close();
       osState.facets = null; await osLoad(); osRender();
     } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); $('#osfSave').disabled = false; }
@@ -193,7 +247,9 @@ async function osOpen(id) {
   uiPanelDialog(`${esc(s.code)} — ${esc(s.name)}`, `
     <dl class="sp-dl">
       ${kv('Owner', s.ownerEmail ? `${esc(s.ownerName || '')} <span class="mono">${esc(s.ownerEmail)}</span>` : uiPill('warn', 'Chưa có owner'))}
-      ${kv('Người thay thế', esc(s.deputyEmail || '—'))}${kv('Quản lý trực tiếp', esc(s.managerEmail || '—'))}
+      ${kv('Backup', s.deputyEmail ? `${esc(s.deputyName || '')} <span class="mono">${esc(s.deputyEmail)}</span>` : '—')}${kv('Quản lý trực tiếp', esc(s.managerEmail || '—'))}
+      ${kv('Support', (s.supportEmails || []).length || s.supportName ? `${esc(s.supportName || '')}${(s.supportEmails || []).map(e => ` <span class="mono">${esc(e)}</span>`).join(',')}` : '—')}
+      ${s.supportContact ? kv('Liên hệ support', esc(s.supportContact)) : ''}
       ${kv('Dự án · phòng ban', esc([s.project, s.department].filter(Boolean).join(' · ') || '—'))}
       ${kv('Mức quan trọng · môi trường', `${uiTag(s.criticalityLabel)} ${esc(s.envLabel)}`)}
       ${s.costCenter ? kv('Trung tâm chi phí', esc(s.costCenter)) : ''}${s.note ? kv('Ghi chú', esc(s.note)) : ''}
@@ -207,9 +263,11 @@ async function osOpen(id) {
         ${can ? `<td><button class="btn btn-ghost btn-sm" type="button" data-os-unassign="${esc(v.ciId)}">Bỏ gán</button></td>` : ''}</tr>`).join('')
         || uiEmptyRow(can ? 4 : 3, 'Chưa có VM — gán ở tab “VM chưa có owner” hoặc trên thẻ VM.')}</tbody></table></div>`,
   `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
-   ${can ? '<button class="btn btn-primary btn-sm" type="button" id="osEdit"><i data-lucide="pencil"></i>Sửa</button>' : ''}`);
+   ${can ? '<button class="btn btn-secondary btn-sm" type="button" id="osClone"><i data-lucide="copy"></i>Nhân bản</button><button class="btn btn-primary btn-sm" type="button" id="osEdit"><i data-lucide="pencil"></i>Sửa</button>' : ''}`);
   const edit = $('#osEdit');
   if (edit) edit.onclick = () => osForm(s);
+  const cln = $('#osClone');
+  if (cln) cln.onclick = () => osForm(s, { clone: true });
   $('#spDialogBody').onclick = async (e) => {
     const b = e.target.closest('[data-os-unassign]');
     if (!b) return;
@@ -223,8 +281,9 @@ async function osOpen(id) {
 function osImportDialog() {
   osState.file = null;
   uiPanelDialog('Nhập Hệ thống & Owner từ Excel', `
-    <p class="muted-sub">Sheet <b>Hệ thống</b>: Mã, Tên hệ thống, Dự án, Phòng ban, Owner (email), Tên owner, Người thay thế (email),
-      Quản lý trực tiếp (email), Mức độ quan trọng (1–4), Môi trường (prod / uat / dev / dr / other). Để trống mã để tạo mới; có mã thì cập nhật.
+    <p class="muted-sub">Sheet <b>Hệ thống</b>: Mã, Tên hệ thống, Dự án, Phòng ban, Owner (email), Tên owner, Backup (email), Tên backup,
+      Quản lý trực tiếp (email), Support (email — nhiều email cách nhau dấu phẩy), Tên support, Liên hệ support, Mức độ quan trọng (1–4),
+      Môi trường (prod / uat / dev / dr / other). Để trống mã để tạo mới; có mã thì cập nhật.
       Sheet <b>VM</b>: VM, vCenter, Hệ thống (mã hoặc tên). Dùng file “Xuất Excel” làm mẫu.</p>
     ${uiDropzone('osFile', 'Chọn file .xlsx', 'Tối đa 10 MB', '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
     <div id="osPreview"></div>`,
@@ -280,10 +339,23 @@ function osBind() {
     const map = { osQ: 'q', osOwner: 'owner' };
     if (map[e.target.id]) { osState.f[map[e.target.id]] = e.target.value; reloadSoon(); }
     else if (e.target.id === 'osCovQ') { osState.covQ = e.target.value; reloadSoon(); }
+    else if (e.target.id === 'osCovFolder') { osState.cf.folder = e.target.value; reloadSoon(); }
   });
   mount.addEventListener('change', async (e) => {
     const map = { osDept: 'department', osCrit: 'criticality', osEnv: 'env' };
     if (map[e.target.id]) { osState.f[map[e.target.id]] = e.target.value; await osLoad(); osRender(); return; }
+    if (e.target.id === 'osCovPower') { osState.cf.power = e.target.value; await osLoad(); osRender(); return; }
+    const ms = e.target.closest('[data-ms]');
+    if (ms && e.target.matches('[data-ms-opt]')) {
+      const key = { osCovVc: 'vcenter', osCovCl: 'cluster' }[ms.id];
+      if (key) { osState.cf[key] = uiMultiValues(ms.id); osState.msOpen = ms.id; reloadSoon(); }
+      return;
+    }
+    if (e.target.id === 'osSelShown') {
+      osState.cov.items.forEach(v => (e.target.checked ? osState.sel.add(v.ciId) : osState.sel.delete(v.ciId)));
+      $$('[data-os-sel]').forEach(x => { x.checked = e.target.checked; });
+      osBulkBar(); return;
+    }
     if (e.target.dataset.osSel) {
       const x = Number(e.target.dataset.osSel);
       if (e.target.checked) osState.sel.add(x); else osState.sel.delete(x);
@@ -291,11 +363,37 @@ function osBind() {
     }
   });
   mount.addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-ms]')) osState.msOpen = '';          // a click outside closes the filter menu for good
     if (e.target.closest('[data-os-reload]')) { mount.innerHTML = uiLoading(); osState.facets = null; await osLoad(); osRender(); return; }
     if (e.target.closest('[data-os-add]')) { osForm(null); return; }
     if (e.target.closest('[data-os-import]')) { osImportDialog(); return; }
     if (e.target.closest('[data-os-export]')) { uiDownload(`${API_BASE}/systems/export.xlsx`, { method: 'GET' }, 'he-thong-owner.xlsx'); return; }
-    if (e.target.closest('[data-os-clear]')) { osState.sel.clear(); $$('[data-os-sel]').forEach(c => { c.checked = false; }); osBulkBar(); return; }
+    if (e.target.closest('[data-os-clear]')) {
+      osState.sel.clear(); $$('[data-os-sel]').forEach(c => { c.checked = false; });
+      const h = $('#osSelShown'); if (h) h.checked = false;
+      osBulkBar(); return;
+    }
+    const msClear = e.target.closest('[data-ms-clear]');
+    if (msClear) {
+      const ms = msClear.closest('[data-ms]'), key = { osCovVc: 'vcenter', osCovCl: 'cluster' }[ms.id];
+      if (key) { osState.cf[key] = []; osState.msOpen = ''; await osLoad(); osRender(); }
+      return;
+    }
+    if (e.target.closest('[data-os-cov-reset]')) {
+      osState.covQ = ''; osState.cf = { vcenter: [], cluster: [], power: '', folder: '' }; osState.msOpen = '';
+      await osLoad(); osRender(); return;
+    }
+    if (e.target.closest('[data-os-sel-all]')) {
+      try {
+        const r = await apiRequest(`/systems/coverage?${osCovQuery({ limit: '1', ids: 'true' })}`);
+        r.ids.forEach(x => osState.sel.add(x));
+        $$('[data-os-sel]').forEach(x => { x.checked = osState.sel.has(Number(x.dataset.osSel)); });
+        osBulkBar();
+      } catch (err) { uiAlert(err.message); }
+      return;
+    }
+    const cl = e.target.closest('[data-os-clone]');
+    if (cl) { const s = osState.list.find(x => x.id === Number(cl.dataset.osClone)); if (s) osForm(s, { clone: true }); return; }
     if (e.target.closest('[data-os-bulk]')) {
       osAssignDialog([...osState.sel], `${fmtInt(osState.sel.size)} VM`, async () => { osState.sel.clear(); await osLoad(); osRender(); });
       return;

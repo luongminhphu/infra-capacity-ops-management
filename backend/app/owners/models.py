@@ -41,6 +41,7 @@ class System(Base):
         CheckConstraint(_lower("owner_email"), name="ck_system_owner_lower"),
         CheckConstraint(_lower("deputy_email"), name="ck_system_deputy_lower"),
         CheckConstraint(_lower("manager_email"), name="ck_system_manager_lower"),
+        CheckConstraint(_lower("support_emails"), name="ck_system_support_lower"),
         Index("ix_systems_owner", "owner_email"),
         Index("ix_systems_department", "department"),
     )
@@ -53,9 +54,14 @@ class System(Base):
     department = Column(String(128))
     owner_email = Column(String(255))                                # team lead (Entra UPN); NULL = owner not decided yet
     owner_name = Column(String(128))
-    deputy_email = Column(String(255))
+    deputy_email = Column(String(255))                               # backup (người thay thế) of the owner — operations team
+    deputy_name = Column(String(128))
     manager_email = Column(String(255))                              # owner's direct manager (escalation, G3)
     cost_center = Column(String(64))
+    # Support = the project team called in when operations (owner / backup) need help; contact only, no portal access.
+    support_emails = Column(Text)                                    # CSV, at most 5, lower case
+    support_name = Column(String(128))                               # team / person
+    support_contact = Column(String(255))                            # phone, Teams channel, ticket queue …
     criticality = Column(Integer, nullable=False, default=3)        # 1 = most critical
     env = Column(String(8), nullable=False, default="prod")
     status = Column(String(8), nullable=False, default="active")
@@ -227,3 +233,9 @@ class ReviewNotice(Base):
 
 _json(ReviewItem.signals, dict, "Tín hiệu rà soát", nullable=False)
 _json(ReviewItem.reasons, list, "Lý do nên rà", nullable=False)
+
+
+# CSV kept in a Text column is checked on every ORM write (shared/stored_text.py).
+from ..shared.stored_text import csv_column as _csv  # noqa: E402
+
+_csv(System.support_emails, "Email support", item=r"[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}")

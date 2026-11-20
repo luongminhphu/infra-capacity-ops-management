@@ -115,6 +115,8 @@ function enSystemHtml(d) {
   const btn = d.canAssignSystem ? `<button class="btn btn-secondary btn-sm" type="button" data-en-assign="${esc(d.ci.id)}" data-en-vm="${esc(d.name)}">${s ? 'Đổi hệ thống' : 'Gán hệ thống'}</button>` : '';
   const body = s ? enDl([['Hệ thống', `${esc(s.name)} <span class="muted-sub mono">${esc(s.code)}</span>`],
       ['Owner', s.ownerEmail ? `${esc(s.ownerName || '')} <span class="mono">${esc(s.ownerEmail)}</span>` : uiPill('warn', 'Chưa có owner')],
+      ...(s.deputyEmail ? [['Backup', `${esc(s.deputyName || '')} <span class="mono">${esc(s.deputyEmail)}</span>`]] : []),
+      ...((s.supportEmails || []).length || s.supportName ? [['Support (đội dự án)', `${esc(s.supportName || '')}${(s.supportEmails || []).map(e => ` <span class="mono">${esc(e)}</span>`).join(',')}${s.supportContact ? `<span class="muted-sub">${esc(s.supportContact)}</span>` : ''}`]] : []),
       ['Dự án · phòng ban', esc([s.project, s.department].filter(Boolean).join(' · ') || '—')],
       ['Mức quan trọng', uiTag(s.criticalityLabel)], ['Gán bởi', esc(`${s.source === 'manual' ? 'Gán tay' : s.source}${s.assignedBy ? ' · ' + s.assignedBy : ''}`)]])
     : '<p class="muted-sub">VM chưa thuộc hệ thống nào — chưa có owner.</p>';

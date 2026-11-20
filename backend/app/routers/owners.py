@@ -41,6 +41,8 @@ def _ids(data: Dict[str, Any]) -> list:
     ids = data.get("ciIds")
     if not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
         raise HTTPException(422, "ciIds phải là danh sách số nguyên.")
+    if len(ids) > service.MAX_SELECT:
+        raise HTTPException(422, f"Tối đa {service.MAX_SELECT} VM mỗi lần.")
     return ids
 
 
@@ -70,9 +72,11 @@ def facets(user: User = Depends(get_current_user), db: Session = Depends(get_db)
 
 
 @router.get("/coverage")
-def coverage(q: str = Query("", max_length=80), vcenter: str = Query("", max_length=64), offset: int = Query(0, ge=0),
-             limit: int = Query(100, ge=1, le=500), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return service.coverage(db, q, vcenter, offset, limit)
+def coverage(q: str = Query("", max_length=400), vcenter: str = Query("", max_length=2000), offset: int = Query(0, ge=0),
+             limit: int = Query(100, ge=1, le=500), cluster: str = Query("", max_length=4000),
+             power: str = Query("", pattern="^(on|off)?$"), folder: str = Query("", max_length=255), ids: bool = Query(False),
+             user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.coverage(db, q, vcenter, offset, limit, cluster, power, folder, ids)
 
 
 @router.get("/export.xlsx")
