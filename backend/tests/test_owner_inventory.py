@@ -141,3 +141,32 @@ def test_render_escapes_values_and_unknown_braces():
     subject, text, html = mail_drafts.render(tpl, o, "2027-H1", dt.date(2027, 1, 26), "Hạ tầng", False, today=dt.date(2026, 11, 20))
     assert "<script>" not in html and "&lt;script&gt;" in html and "&lt;img src=x&gt;" in html and "A&amp;B" in html
     assert "4,5 GB {{x}}" in text and "Chào <script>x</script>" in text                  # text part is plain text
+
+
+def test_mail_and_excel_show_cluster_ip_and_guest_hostname():
+    import datetime as dt
+    from app.excel_systems import build_xlsx
+    vms = [{"vm": "1CEK-APP-TX01", "hostname": "ektx01.hsc.local", "vcenterKey": "prod", "cluster": "PROD-CL01", "ip": "10.70.1.21",
+            "host": "esx01", "powerOn": True, "vcpu": 16, "ramGB": 32, "diskGB": 112.1, "os": "RHEL 8", "datastore": "DS1",
+            "backupLabel": "Có backup", "backup": "protected"},
+           {"vm": "app-02", "hostname": "APP-02.corp.local", "vcenterKey": "prod", "cluster": "PROD-CL01", "ip": None,
+            "host": "esx01", "powerOn": False, "vcpu": 2, "ramGB": 4, "diskGB": 40, "os": None, "datastore": None,
+            "backupLabel": "—", "backup": None}]
+    o = {"email": "o@corp.example", "name": "Owner", "cc": [],
+         "systems": [{"code": "SYS-0003", "name": "P-CORE", "backupEmail": None, "backupName": None, "vms": vms}],
+         "totals": {"vms": 2, "on": 1, "off": 1, "vcpu": 18, "ramGB": 36, "diskGB": 152.1, "unprotected": 0, "failing": 0}}
+    tpl = {"subject": "x", "body": "{vm_table}"}
+    _, text, html = mail_drafts.render(tpl, o, "2026-H2", dt.date(2026, 12, 4), "Hạ tầng", True, today=dt.date(2026, 11, 20))
+    assert ">Cluster<" in html and ">IP<" in html
+    assert "PROD-CL01" in html and "10.70.1.21" in html and "Hostname: ektx01.hsc.local" in html
+    assert "Hostname: APP-02" not in html                     # same as the VMware name (case / domain): not repeated
+    assert "1CEK-APP-TX01 (hostname ektx01.hsc.local) [prod · cluster PROD-CL01 · IP 10.70.1.21]" in text
+    sysrow = {**o["systems"][0], "project": None, "department": None, "envLabel": "Production", "criticalityLabel": "1",
+              "ownerEmail": "o@corp.example", "ownerName": "Owner", "supportName": None, "supportEmails": [], "supportContact": None,
+              "managerEmail": None, "totals": o["totals"]}
+    d = {"systems": [sysrow], "unowned": None, "scope": "", "totals": {**o["totals"], "systems": 1}}
+    wb = load_workbook(io.BytesIO(build_xlsx(d)))
+    rows = [[c.value for c in r] for r in wb["VM theo hệ thống"].iter_rows()]
+    head = rows[3]
+    assert head[3:8] == ["VM", "Hostname (trong máy ảo)", "vCenter", "Cluster", "IP"]
+    assert rows[4][3:8] == ["1CEK-APP-TX01", "ektx01.hsc.local", "prod", "PROD-CL01", "10.70.1.21"]

@@ -266,9 +266,12 @@ def _vm_out(c: Ci, m: Optional[SystemMember] = None) -> Dict[str, Any]:
 
 
 def members(db: Session, system_id: int, limit: int = 2000) -> List[Dict[str, Any]]:
+    from .. import vm_ip
     rows = (db.query(SystemMember, Ci).join(Ci, Ci.id == SystemMember.ci_id).filter(SystemMember.system_id == system_id)
             .order_by(Ci.name, Ci.id).limit(limit).all())
-    return [_vm_out(c, m) for m, c in rows]
+    out = [_vm_out(c, m) for m, c in rows]
+    vm_ip.attach(db, out)
+    return out
 
 
 def _vms(db: Session, ci_ids: List[int]) -> Dict[int, Ci]:
@@ -366,7 +369,11 @@ def coverage(db: Session, q: str = "", vcenter: str = "", offset: int = 0, limit
            .filter(Ci.type == "vm", Ci.status == "active", SystemMember.id.is_(None)))
     terms = [t.strip().lower() for t in (q or "").split(",") if t.strip()][:20]
     if terms:
-        unq = unq.filter(or_(*[func.lower(Ci.name).like(_like(t).replace("*", "%")) for t in terms]))
+        from sqlalchemy import select
+        from ..cmdb.models import CiKey
+        unq = unq.filter(or_(*[or_(func.lower(Ci.name).like(_like(t).replace("*", "%")),
+                                   Ci.id.in_(select(CiKey.ci_id).where(CiKey.kind == "ip", CiKey.value_norm.like(_like(t).replace("*", "%")))))
+                               for t in terms]))
     vms = [_vm_out(c) for c in unq.order_by(Ci.name, Ci.id).all()]
     if power in ("on", "off"):
         vms = [v for v in vms if bool(v["powerOn"]) == (power == "on")]
@@ -388,10 +395,16 @@ def coverage(db: Session, q: str = "", vcenter: str = "", offset: int = 0, limit
         vms = [v for v in vms if (v["cluster"] or "") in cls]
     return {"total": total, "owned": owned, "inSystemNoOwner": no_owner, "unassigned": total - owned - no_owner,
             "ownedPct": round(owned * 100.0 / total, 1) if total else None,
-            "items": vms[offset:offset + limit], "itemsTotal": len(vms),
+            "items": _with_ip(db, vms[offset:offset + limit]), "itemsTotal": len(vms),
             "facets": {"vcenters": [{"value": k, "count": n} for k, n in sorted(facets_vc.items())],
                        "clusters": [{"value": k, "count": n} for k, n in sorted(facets_cl.items(), key=lambda x: x[0].lower())]},
             **({"ids": [v["ciId"] for v in vms[:MAX_SELECT]]} if ids else {})}
+
+
+def _with_ip(db: Session, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from .. import vm_ip
+    vm_ip.attach(db, rows)
+    return rows
 
 
 def find_vms(db: Session, pairs: Iterable[Tuple[str, str]]) -> Dict[Tuple[str, str], List[Ci]]:

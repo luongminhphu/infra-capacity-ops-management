@@ -209,12 +209,23 @@ def _fill(text: str, values: Dict[str, str], esc=lambda x: x) -> str:
     return _PH.sub(lambda m: esc(values[m.group(1)]) if m.group(1) in values else m.group(0), text)
 
 
+def guest_name(v: Dict[str, Any]) -> Optional[str]:
+    """Hostname inside the VM when it says more than the VMware name (differs beyond case / domain suffix)."""
+    h = (v.get("hostname") or "").strip()
+    if not h:
+        return None
+    short, name = h.split(".")[0].lower(), (v.get("vm") or "").strip().lower()
+    return None if h.lower() == name or short == name else h
+
+
 def _table_text(o: Dict[str, Any], backup: bool) -> str:
     lines = []
     for s in o["systems"]:
         lines.append(f"{s['code']} — {s['name']} ({len(s['vms'])} VM)")
         for v in s["vms"][:MAX_VM_ROWS]:
-            lines.append(f"  - {v['vm']} [{v['vcenterKey']}] {'bật' if v['powerOn'] else 'tắt'}, {_vn(v['vcpu'])} vCPU, "
+            gn = guest_name(v)
+            lines.append(f"  - {v['vm']}{f' (hostname {gn})' if gn else ''} [{v['vcenterKey']} · cluster {v.get('cluster') or '—'} · "
+                         f"IP {v.get('ip') or '—'}] {'bật' if v['powerOn'] else 'tắt'}, {_vn(v['vcpu'])} vCPU, "
                          f"{_vn(v['ramGB'])} GB RAM, {_vn(v['diskGB'])} GB disk" + (f", {v['backupLabel']}" if backup else ""))
         if len(s["vms"]) > MAX_VM_ROWS:
             lines.append(f"  … và {len(s['vms']) - MAX_VM_ROWS} VM khác (xem file Excel / ICO).")
@@ -224,14 +235,17 @@ def _table_text(o: Dict[str, Any], backup: bool) -> str:
 def _table_html(o: Dict[str, Any], backup: bool) -> str:
     e = html.escape
     td = "padding:5px 8px;border-bottom:1px solid #CED5DE;vertical-align:top"
-    head = ["Hệ thống", "VM", "Nguồn", "vCPU", "RAM (GB)", "Disk (GB)", "Hệ điều hành"] + (["Backup"] if backup else [])
-    num = {3, 4, 5}
+    head = ["Hệ thống", "VM", "Cluster", "IP", "Nguồn", "vCPU", "RAM (GB)", "Disk (GB)", "Hệ điều hành"] + (["Backup"] if backup else [])
+    num = {5, 6, 7}
     th = "".join(f"<th style='{td};text-align:{'right' if i in num else 'left'};background:#EEF2F7'>{e(h)}</th>" for i, h in enumerate(head))
     rows = []
     for s in o["systems"]:
         for v in s["vms"][:MAX_VM_ROWS]:
+            gn = guest_name(v)
             cells = [f"<b>{e(s['code'])}</b><br><span style='color:#465F83'>{e(s['name'])}</span>",
-                     f"<b>{e(v['vm'])}</b><br><span style='color:#465F83'>{e(v['vcenterKey'])}</span>",
+                     f"<b>{e(v['vm'])}</b>" + (f"<br><span style='color:#0B2D5C'>Hostname: {e(gn)}</span>" if gn else "")
+                     + f"<br><span style='color:#465F83'>{e(v['vcenterKey'])}</span>",
+                     e(v.get("cluster") or "—"), e(v.get("ip") or "—"),
                      "Bật" if v["powerOn"] else "Tắt", e(_vn(v["vcpu"])), e(_vn(v["ramGB"])), e(_vn(v["diskGB"])), e(v["os"] or "—")]
             if backup:
                 cells.append(e(v["backupLabel"]))

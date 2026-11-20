@@ -42,6 +42,15 @@ def _item(i: ReviewItem) -> Dict[str, Any]:
             "flagged": bool(i.flagged), "reasons": json.loads(i.reasons or "[]"), "decision": i.decision}
 
 
+def _ip(rows: list) -> list:
+    """IP next to every VM (vm_ip): the VMware name often differs from what the owner knows."""
+    from .. import vm_ip
+    from ..database import SessionLocal
+    with SessionLocal() as db:
+        vm_ip.attach(db, rows)
+    return rows
+
+
 def _notice(n: ReviewNotice) -> Dict[str, Any]:
     return {"id": n.id, "recipient": n.recipient, "kind": n.kind, "status": n.status, "subject": n.subject, "vmCount": n.vm_count,
             "attempts": n.attempts, "sentAt": n.sent_at.isoformat() + "Z" if n.sent_at else None, "error": n.error}
@@ -78,8 +87,8 @@ def reassign_queue(user: User = Depends(require_owner_admin), db: Session = Depe
     rows = (db.query(ReviewItem, ReviewCampaign.period_label).join(ReviewCampaign, ReviewCampaign.id == ReviewItem.campaign_id)
             .filter(ReviewItem.decision.in_(("transfer", "not_mine")), ReviewItem.resolved_at.is_(None))
             .order_by(ReviewCampaign.opened_at.desc(), ReviewItem.vm_name).limit(2000).all())
-    return {"items": [{**_item(i), "periodLabel": p, "transferTo": i.transfer_to, "decidedBy": i.decided_by, "note": i.note}
-                      for i, p in rows]}
+    return {"items": _ip([{**_item(i), "periodLabel": p, "transferTo": i.transfer_to, "decidedBy": i.decided_by, "note": i.note}
+                      for i, p in rows])}
 
 
 @router.get("/{cid}")
@@ -94,7 +103,7 @@ def campaign(cid: int, user: User = Depends(require_owner_admin), db: Session = 
     notices = db.query(ReviewNotice).filter(ReviewNotice.campaign_id == c.id).order_by(ReviewNotice.recipient, ReviewNotice.kind).all()
     return {**_out(c), "counts": {"items": c.item_count, "owned": owned, "unowned": c.item_count - owned, "flagged": flagged,
                                   "owners": len({n.recipient for n in notices}), "notices": by_status},
-            "unowned": [_item(i) for i in unowned], "notices": [_notice(n) for n in notices]}
+            "unowned": _ip([_item(i) for i in unowned]), "notices": [_notice(n) for n in notices]}
 
 
 @router.get("/{cid}/items")
@@ -106,7 +115,7 @@ def items(cid: int, owner: Optional[str] = Query(default=None, max_length=255), 
         q = q.filter(ReviewItem.owner_email == owner.strip().lower())
     if flagged is not None:
         q = q.filter(ReviewItem.flagged.is_(flagged))
-    return {"items": [_item(i) for i in q.order_by(ReviewItem.owner_email, ReviewItem.flagged.desc(), ReviewItem.vm_name).limit(5000)]}
+    return {"items": _ip([_item(i) for i in q.order_by(ReviewItem.owner_email, ReviewItem.flagged.desc(), ReviewItem.vm_name).limit(5000)])}
 
 
 @router.get("/{cid}/notices/{nid}")

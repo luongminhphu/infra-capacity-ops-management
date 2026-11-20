@@ -34,7 +34,7 @@ def _vm(c: Ci, by_name: dict, backup: Optional[dict]) -> Dict[str, Any]:
             "vcpu": row.get("vcpu") if row.get("vcpu") is not None else a.get("vcpu"),
             "ramGB": row.get("ramGB") if row.get("ramGB") is not None else a.get("ramGB"),
             "diskGB": row.get("diskProvGB"), "os": row.get("guestFullName") or row.get("toolsGuestFullName"),
-            "ip": row.get("ipAddress"), "datastore": row.get("datastore"), "backup": b, "backupLabel": BACKUP_LABELS.get(b, "—"),
+            "ip": row.get("ipAddress"), "hostname": row.get("guestHostname"), "datastore": row.get("datastore"), "backup": b, "backupLabel": BACKUP_LABELS.get(b, "—"),
             "status": c.status}
 
 

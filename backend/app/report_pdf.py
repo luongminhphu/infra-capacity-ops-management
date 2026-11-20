@@ -835,21 +835,21 @@ def _vm_changes_appendix_html(vm_changes: Optional[Dict[str, Any]]) -> str:
 
     def _row_add_rm(date_field: str):
         def _r(r: Dict[str, Any]) -> str:
-            return (f'<tr><td><b>{esc(r.get("vm"))}</b></td><td>{esc(r.get("vcenterLabel"))}</td><td>{esc(r.get("cluster") or "—")}</td>'
+            return (f'<tr><td><b>{esc(r.get("vm"))}</b></td><td>{esc(r.get("ipAddress") or "—")}</td><td>{esc(r.get("vcenterLabel"))}</td><td>{esc(r.get("cluster") or "—")}</td>'
                     f'<td>{esc(r.get("host") or "—")}</td><td>{_pill(r)}</td><td>{fmt_int(r.get("vcpu"))}</td><td>{fmt_num(r.get("ramGB"), 0)}</td>'
                     f'<td>{esc(_date(r.get(date_field)))}</td></tr>')
         return _r
 
     def _row_moved(r: Dict[str, Any]) -> str:
         kind = "Giữa cluster" if r.get("kind") == "cluster" else "Giữa host (vMotion)"
-        return (f'<tr><td><b>{esc(r.get("vm"))}</b></td><td>{esc(r.get("vcenterLabel"))}</td><td>{esc(kind)}</td>'
+        return (f'<tr><td><b>{esc(r.get("vm"))}</b></td><td>{esc(r.get("ipAddress") or "—")}</td><td>{esc(r.get("vcenterLabel"))}</td><td>{esc(kind)}</td>'
                 f'<td>{esc(r.get("fromCluster") or "—")} → {esc(r.get("toCluster") or "—")}</td>'
                 f'<td>{esc(r.get("fromHost") or "—")} → {esc(r.get("toHost") or "—")}</td>'
                 f'<td>{_pill(r)}</td><td>{fmt_int(r.get("vcpu"))}</td><td>{fmt_num(r.get("ramGB"), 0)}</td></tr>')
 
     def _row_renamed(r: Dict[str, Any]) -> str:
         how = "cùng instanceUuid" if r.get("matchedBy") == "uuid" else "suy luận: cùng cluster, IP, vCPU, RAM"
-        return (f'<tr><td>{esc(r.get("fromName"))}</td><td><b>{esc(r.get("toName"))}</b></td><td>{esc(r.get("vcenterLabel"))}</td>'
+        return (f'<tr><td>{esc(r.get("fromName"))}</td><td><b>{esc(r.get("toName"))}</b></td><td>{esc(r.get("ipAddress") or "—")}</td><td>{esc(r.get("vcenterLabel"))}</td>'
                 f'<td>{esc(r.get("cluster") or "—")}</td><td>{esc(r.get("host") or "—")}</td>'
                 f'<td>{fmt_int(r.get("vcpu"))}</td><td>{fmt_num(r.get("ramGB"), 0)}</td><td style="color:{COLORS["muted"]};">{esc(how)}</td></tr>')
 
@@ -859,7 +859,7 @@ def _vm_changes_appendix_html(vm_changes: Optional[Dict[str, Any]]) -> str:
         return f'<span style="color:{color};font-weight:700;">{fmt_signed(n)}</span>'
 
     def _row_resized(r: Dict[str, Any]) -> str:
-        return (f'<tr><td><b>{esc(r.get("vm"))}</b></td><td>{esc(r.get("vcenterLabel"))}</td><td>{esc(r.get("cluster") or "—")}</td>'
+        return (f'<tr><td><b>{esc(r.get("vm"))}</b></td><td>{esc(r.get("ipAddress") or "—")}</td><td>{esc(r.get("vcenterLabel"))}</td><td>{esc(r.get("cluster") or "—")}</td>'
                 f'<td>{esc(r.get("host") or "—")}</td><td>{_pill(r)}</td>'
                 f'<td>{fmt_int(r.get("vcpuBefore"))} → {fmt_int(r.get("vcpuAfter"))} ({_delta(r.get("deltaVcpu"))})</td>'
                 f'<td>{fmt_num(r.get("ramBefore"), 0)} → {fmt_num(r.get("ramAfter"), 0)} ({_delta(r.get("deltaRamGB"))})</td></tr>')
@@ -942,7 +942,7 @@ def _vm_changes_appendix_html(vm_changes: Optional[Dict[str, Any]]) -> str:
     excluded_txt = (f' Kỳ này đã loại <b>{fmt_int(excluded)}</b> trường hợp như vậy khỏi số thêm mới/loại bỏ.' if excluded else
                     ' Kỳ này không phát hiện trường hợp nào như vậy.')
 
-    header_add_rm = ("<tr><th>VM</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>Trạng thái</th><th>vCPU</th><th>RAM (GB)</th>"
+    header_add_rm = ("<tr><th>VM</th><th>IP</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>Trạng thái</th><th>vCPU</th><th>RAM (GB)</th>"
                      "<th style=\"white-space:nowrap;\">{}</th></tr>")
     sub_title_style = 'style="font-size:10.5px;border-left:none;padding-left:0;margin-top:12px;"'
     return (
@@ -964,18 +964,18 @@ def _vm_changes_appendix_html(vm_changes: Optional[Dict[str, Any]]) -> str:
         '<div class="section-title" ' + sub_title_style + '>Tổng hợp theo cluster</div>'
         f'{cluster_table}{host_table}'
         f'<div class="section-title" {sub_title_style}>A.1 VM thêm mới ({fmt_int(a["count"])} VM · {fmt_int(a["vcpu"])} vCPU · {fmt_int(a["ramGB"])} GB RAM · {fmt_int(a["poweredOn"])} đang bật)</div>'
-        f'<table class="appendix-table"><thead>{header_add_rm.format("Xuất hiện từ")}</thead><tbody>{_grouped(vm_changes.get("added", []), 8, _row_add_rm("firstSeen"))}</tbody></table>'
+        f'<table class="appendix-table"><thead>{header_add_rm.format("Xuất hiện từ")}</thead><tbody>{_grouped(vm_changes.get("added", []), 9, _row_add_rm("firstSeen"))}</tbody></table>'
         f'<div class="section-title" {sub_title_style}>A.2 VM đã loại bỏ ({fmt_int(rm["count"])} VM · {fmt_int(rm["vcpu"])} vCPU · {fmt_int(rm["ramGB"])} GB RAM)</div>'
-        f'<table class="appendix-table"><thead>{header_add_rm.format("Thấy lần cuối")}</thead><tbody>{_grouped(vm_changes.get("removed", []), 8, _row_add_rm("lastSeen"))}</tbody></table>'
+        f'<table class="appendix-table"><thead>{header_add_rm.format("Thấy lần cuối")}</thead><tbody>{_grouped(vm_changes.get("removed", []), 9, _row_add_rm("lastSeen"))}</tbody></table>'
         f'<div class="section-title" {sub_title_style}>A.3 VM di chuyển — không tính thêm mới/loại bỏ ({fmt_int(mv["count"])} VM: {fmt_int(mv.get("cluster"))} giữa cluster · {fmt_int(mv.get("host"))} giữa host · {fmt_int(mv["vcpu"])} vCPU · {fmt_int(mv["ramGB"])} GB RAM)</div>'
-        '<table class="appendix-table moved"><thead><tr><th>VM</th><th>vCenter</th><th>Loại</th><th>Cluster (từ → đến)</th><th>Host (từ → đến)</th><th>Trạng thái</th><th>vCPU</th><th>RAM (GB)</th></tr></thead>'
-        f'<tbody>{_grouped(moved_rows, 8, _row_moved)}</tbody></table>'
+        '<table class="appendix-table moved"><thead><tr><th>VM</th><th>IP</th><th>vCenter</th><th>Loại</th><th>Cluster (từ → đến)</th><th>Host (từ → đến)</th><th>Trạng thái</th><th>vCPU</th><th>RAM (GB)</th></tr></thead>'
+        f'<tbody>{_grouped(moved_rows, 9, _row_moved)}</tbody></table>'
         f'<div class="section-title" {sub_title_style}>A.4 VM đổi tên — không tính thêm mới/loại bỏ ({fmt_int(rn.get("vms"))} VM)</div>'
-        '<table class="appendix-table renamed"><thead><tr><th>Tên cũ</th><th>Tên mới</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>vCPU</th><th>RAM (GB)</th><th>Căn cứ</th></tr></thead>'
-        f'<tbody>{_grouped(renamed_rows, 8, _row_renamed)}</tbody></table>'
+        '<table class="appendix-table renamed"><thead><tr><th>Tên cũ</th><th>Tên mới</th><th>IP</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>vCPU</th><th>RAM (GB)</th><th>Căn cứ</th></tr></thead>'
+        f'<tbody>{_grouped(renamed_rows, 9, _row_renamed)}</tbody></table>'
         f'<div class="section-title" {sub_title_style}>A.5 VM đổi cấu hình vCPU/RAM ({fmt_int(rs["count"])} VM · {fmt_int(rs.get("up"))} tăng · {fmt_int(rs.get("down"))} giảm · tổng {fmt_signed(rs.get("deltaVcpu"))} vCPU · {fmt_signed(rs.get("deltaRamGB"))} GB RAM)</div>'
-        '<table class="appendix-table resized"><thead><tr><th>VM</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>Trạng thái</th><th>vCPU (đầu kỳ → nay)</th><th>RAM GB (đầu kỳ → nay)</th></tr></thead>'
-        f'<tbody>{_grouped(resized_rows, 7, _row_resized)}</tbody></table>'
+        '<table class="appendix-table resized"><thead><tr><th>VM</th><th>IP</th><th>vCenter</th><th>Cluster</th><th>Host</th><th>Trạng thái</th><th>vCPU (đầu kỳ → nay)</th><th>RAM GB (đầu kỳ → nay)</th></tr></thead>'
+        f'<tbody>{_grouped(resized_rows, 8, _row_resized)}</tbody></table>'
         '</div>')
 
 
@@ -1879,7 +1879,7 @@ def _exec_findings_html(findings: List[Dict[str, Any]], limit: int = 6) -> str:
         rows = "".join(f"""
       <tr>
         <td class="code-cell">{esc(f.get('code'))}</td>
-        <td style="white-space:nowrap;"><b>{esc(f.get('entity'))}</b></td>
+        <td style="white-space:nowrap;"><b>{esc(f.get('entity'))}</b>{f'<div class="small-note">IP {esc(f.get("ip"))}</div>' if f.get('ip') else ''}</td>
         <td style="white-space:nowrap;">{esc(' · '.join(x for x in (f.get('cluster'), f.get('vcenterKey')) if x))}</td>
         <td>{esc(f.get('typeLabel'))}</td>
         <td>{esc(f.get('metric') or '')}</td>
@@ -2212,10 +2212,11 @@ def render_technical_html(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]]
         <td>{status_pill({'text': SEVERITY_LABEL_VI.get(f.get('severity'), ''), 'cls': SEVERITY_COLOR.get(f.get('severity'), ('na','na_bg'))[0]})}</td>
         <td>{esc(f.get('typeLabel'))}</td>
         <td><b>{esc(f.get('entity'))}</b>{f'<div class="small-note" style="margin-top:1px;">{esc(f.get("vcenterKey"))}</div>' if f.get('vcenterKey') else ''}</td>
+        <td style="white-space:nowrap;">{esc(f.get('ip') or ('—' if str(f.get('type') or '').startswith('vm_') else ''))}</td>
         <td>{esc(f.get('cluster') or '—')}</td>
         <td>{esc(f.get('metric'))}</td>
         <td style="max-width:180px;">{esc(f.get('recommendation'))}</td>
-      </tr>""" for f in findings_sorted) if findings else '<tr><td colspan="7" class="small-note">Không có phát hiện nào.</td></tr>'
+      </tr>""" for f in findings_sorted) if findings else '<tr><td colspan="8" class="small-note">Không có phát hiện nào.</td></tr>'
 
     logo_html = f'<img class="cover-logo" src="{esc(logo_data_url)}"/>' if logo_data_url else ''
 
@@ -2313,7 +2314,7 @@ def render_technical_html(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]]
     <div class="section-title">Compliance Findings đầy đủ ({fmt_int(len(findings))})</div>
     <div class="small-note" style="margin-bottom:4px;">Cột "Mã" là mã đối soát ổn định theo đối tượng và loại vấn đề, trùng với mã trích dẫn trong Báo cáo Vận hành (mục Nhận định & đề xuất / Đối soát) và tab Compliance trên web. Sắp xếp theo mức độ: nghiêm trọng trước.</div>
     <table>
-      <thead><tr><th>Mã</th><th>Mức độ</th><th>Loại</th><th>Đối tượng</th><th>Cluster</th><th>Chỉ số</th><th>Khuyến nghị</th></tr></thead>
+      <thead><tr><th>Mã</th><th>Mức độ</th><th>Loại</th><th>Đối tượng</th><th>IP (VM)</th><th>Cluster</th><th>Chỉ số</th><th>Khuyến nghị</th></tr></thead>
       <tbody>{findings_html}</tbody>
     </table>
   </div>

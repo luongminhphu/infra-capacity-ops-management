@@ -55,14 +55,14 @@ def export_csv(
                               r.get("vcpuUsed"), r.get("ramUsedGB"), r.get("cpuPct"), r.get("ramPct"),
                               r.get("overall", {}).get("text")])
     elif type == "vms":
-        fields = ["cluster", "host", "vm", "powerState", "vcpu", "ramGB", "diskProvGB", "diskUsedGB", "datastore"]
+        fields = ["cluster", "host", "vm", "ipAddress", "powerState", "vcpu", "ramGB", "diskProvGB", "diskUsedGB", "datastore"]
         writer = _SafeCsvWriter(buf)
         writer.writerow(fields)
         for v in vm_rows:
             writer.writerow([v.get(f) for f in fields])
     else:
         findings = capacity.build_compliance_findings(host_rows, vm_rows, policy)
-        fields = ["severity", "type", "typeLabel", "entity", "cluster", "metric", "recommendation"]
+        fields = ["severity", "type", "typeLabel", "entity", "ip", "cluster", "metric", "recommendation"]
         writer = _SafeCsvWriter(buf)
         writer.writerow(fields)
         for f in findings:

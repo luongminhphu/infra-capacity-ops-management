@@ -5,6 +5,7 @@
 Numbers come from owners.inventory.build (the same dict as the Excel and the e-mail drafts)."""
 from typing import Any, Dict, List
 
+from .owners.mail_drafts import guest_name
 from .pdf_kit import base_css, esc, exec_visual_css, html_to_pdf_bytes, now_str, stat_tiles_html
 
 MAX_UNOWNED_ROWS = 500
@@ -32,7 +33,9 @@ def _person(email, name) -> str:
 def _vm_rows(vms: List[Dict[str, Any]], backup: bool) -> List[List[str]]:
     rows = []
     for v in vms:
-        r = [f"<b>{esc(v['vm'])}</b><br><span class='small-note'>{esc(v['vcenterKey'])}</span>",
+        gn = guest_name(v)
+        r = [f"<b>{esc(v['vm'])}</b>" + (f"<br><span class='small-note'>Hostname: {esc(gn)}</span>" if gn else "")
+             + f"<br><span class='small-note'>{esc(v['vcenterKey'])}</span>",
              f"{esc(v['cluster'] or '—')}<br><span class='small-note'>{esc(v['host'] or '')}</span>",
              "Bật" if v["powerOn"] else "Tắt", _vn(v["vcpu"]), _vn(v["ramGB"]), _vn(v["diskGB"]),
              esc(v["os"] or "—"), esc(v["ip"] or "—")]

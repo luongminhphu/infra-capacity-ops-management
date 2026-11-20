@@ -40,6 +40,8 @@ function applyFeatures(features) {
   Object.entries(groupOn).forEach(([g, on]) => {
     $$(`[data-rpt-group="${g}"]`).forEach(el => el.classList.toggle('feature-off', !on));
   });
+  // Shortcuts to pages (Mở trang, report of one record) follow the page's own module / role switch.
+  $$('#viewReports [data-nav-link]').forEach(el => el.classList.toggle('hidden', !navItemVisible(el.dataset.navLink)));
   if (!navItemVisible(currentNavId())) {
     history.replaceState(null, '', '#/home');
     applyInitialRoute();

@@ -214,7 +214,7 @@ function renderComplianceTable() {
         <span class="hm-lv lv-${CP_TONE[f.severity]}" aria-hidden="true"></span>
         <span class="hm-t">${esc(f.entity)}</span>
         <span class="hm-r"><code>${esc(f.code)}</code></span>
-        <span class="hm-m">${esc(f.typeLabel)} · ${esc(f.cluster || '—')}${f.vcenterKey ? ' · ' + esc(f.vcenterKey) : ''}</span>
+        <span class="hm-m">${esc(f.typeLabel)}${f.ip ? ' · IP ' + esc(f.ip) : ''} · ${esc(f.cluster || '—')}${f.vcenterKey ? ' · ' + esc(f.vcenterKey) : ''}</span>
         <span class="sr-only">${esc(SEVERITY_LABEL[f.severity])}</span></li>`).join('');
   }).join('');
   list.innerHTML = groups || `<li role="presentation">${uiEmpty('Không có phát hiện nào khớp bộ lọc.')}</li>`;
@@ -232,7 +232,7 @@ function cpRenderDetail(rows) {
   const entity = /^host_/.test(f.type) ? uiEntityLink('host', f.entity, f.vcenterKey) : /^vm_/.test(f.type) ? uiEntityLink('vm', f.entity, f.vcenterKey) : `<b>${esc(f.entity)}</b>`;
   box.innerHTML = `
     <div class="hm-d-top">${uiPill(CP_TONE[f.severity], SEVERITY_LABEL[f.severity])}<h3>${esc(f.typeLabel)}: ${esc(f.entity)}</h3></div>
-    <div class="hm-d-meta"><span>Mã đối soát <code>${esc(f.code)}</code></span><span>Cluster ${esc(f.cluster || '—')}</span>${f.vcenterKey ? `<span>${esc(f.vcenterKey)}</span>` : ''}</div>
+    <div class="hm-d-meta"><span>Mã đối soát <code>${esc(f.code)}</code></span>${/^vm_/.test(f.type) ? `<span class="mono">IP ${esc(f.ip || '—')}</span>` : ''}<span>Cluster ${esc(f.cluster || '—')}</span>${f.vcenterKey ? `<span>${esc(f.vcenterKey)}</span>` : ''}</div>
     <div class="hm-d-sec"><h4>Nên làm gì</h4><p>${esc(f.recommendation)}</p></div>
     <div class="hm-d-sec"><h4>Chỉ số</h4><p class="mono">${esc(f.metric)}</p></div>
     <div class="hm-d-sec"><h4>Đối tượng</h4><p>${entity}</p></div>
@@ -453,8 +453,8 @@ function exportCsv() {
 
   sections.push('');
   sections.push('=== COMPLIANCE FINDINGS ===');
-  sections.push(['Code','Severity','Type','Entity','Cluster','Metric','Recommendation'].join(','));
-  compliance.forEach(f => sections.push([f.code,f.severity,f.typeLabel,f.entity,f.cluster,f.metric,f.recommendation].map(csvEscape).join(',')));
+  sections.push(['Code','Severity','Type','Entity','IP','Cluster','Metric','Recommendation'].join(','));
+  compliance.forEach(f => sections.push([f.code,f.severity,f.typeLabel,f.entity,f.ip || '',f.cluster,f.metric,f.recommendation].map(csvEscape).join(',')));
 
   downloadBlob(`ico-capacity-export-${Date.now()}.csv`, sections.join('\n'), 'text/csv;charset=utf-8');
 }

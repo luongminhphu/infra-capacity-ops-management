@@ -211,7 +211,7 @@ def _vm_row(v: VmSnapshot) -> Dict[str, Any]:
     return {
         "vcenterKey": v.vcenter_key or "import",
         "vcenterLabel": vcenter_label(v.vcenter_key),
-        "cluster": v.cluster, "host": v.host, "vm": v.vm,
+        "cluster": v.cluster, "host": v.host, "vm": v.vm, "ipAddress": v.ip_address,
         "instanceUuid": v.instance_uuid,
         "powerState": v.power_state, "isPoweredOn": bool(v.is_powered_on),
         "vcpu": v.vcpu or 0, "ramGB": v.ram_gb or 0, "diskProvGB": v.disk_prov_gb or 0,
@@ -509,7 +509,7 @@ def get_vm_changes(db: Session, vcenter_keys: Optional[List[str]], months: int,
             c_cl, c_ho = c.cluster or "—", c.host
             row_base = {
                 "vcenterKey": vc_id, "vcenterLabel": vcenter_label(key), "vm": c.vm, "instanceUuid": c.instance_uuid,
-                "vcpu": c.vcpu or 0, "ramGB": c.ram_gb or 0, "isPoweredOn": bool(c.is_powered_on), "powerState": c.power_state,
+                "ipAddress": c.ip_address, "vcpu": c.vcpu or 0, "ramGB": c.ram_gb or 0, "isPoweredOn": bool(c.is_powered_on), "powerState": c.power_state,
             }
             if b_cl != c_cl:
                 if _in_scope(b_cl, b_ho) or _in_scope(c_cl, c_ho):

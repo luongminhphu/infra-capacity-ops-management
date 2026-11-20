@@ -221,7 +221,7 @@ function entityServerHtml(d) {
 
 function entityDatastoreHtml(d) {
   const c = d.capacity, st = d.storage;
-  const vms = d.vms.map(v => `<tr><td>${uiEntityLink('vm', v.name, v.vcenterKey, false)}</td>
+  const vms = d.vms.map(v => `<tr><td>${uiEntityLink('vm', v.name, v.vcenterKey, false)}</td><td class="mono">${esc(v.ip || '—')}</td>
       <td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td></tr>`).join('');
   return `
     <section class="panel"><div class="panel-head"><div><div class="eyebrow">Datastore · ${esc(d.vcenterKey || '—')}</div>
@@ -235,8 +235,8 @@ function entityDatastoreHtml(d) {
               ['Volume / LUN', st ? `${enCiLink(st.volumeId, st.volume)}${st.confidence === 'weak' ? ' ' + uiTag('ghép theo tên', EN_MATCH[st.matchedBy] || '') : ''}` : '—']])}
     </section>
     <section class="table-card"><div class="panel-title" role="heading" aria-level="2">VM trên datastore (${esc(d.vms.length)})</div>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>VM</th><th>Nguồn</th></tr></thead>
-      <tbody>${vms || `<tr><td colspan="2">${uiEmpty('Không có VM.')}</td></tr>`}</tbody></table></div></section>`;
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>VM</th><th>IP</th><th>Nguồn</th></tr></thead>
+      <tbody>${vms || `<tr><td colspan="3">${uiEmpty('Không có VM.')}</td></tr>`}</tbody></table></div></section>`;
 }
 
 const EN_ATTR = { vcenterKey: 'vCenter', cluster: 'Cluster', host: 'Host', platform: 'Nền tảng', vendor: 'Hãng', model: 'Model',

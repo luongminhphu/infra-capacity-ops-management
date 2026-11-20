@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 
 GROUP_LABELS = {"capacity": "Capacity", "backup": "Backup", "license": "License", "sizing": "Sizing máy chủ",
                 "spend": "Ngân sách & chi phí", "renovation": "Cải tạo văn phòng", "bom": "Chuẩn hoá BOM", "inventory": "Tài sản",
-                "owners": "Hệ thống & Owner", "hardware": "Phần cứng"}
+                "owners": "Hệ thống & Owner", "hardware": "Phần cứng",
+                "infra": "Sức khoẻ hạ tầng", "cmdb": "Sổ CI"}
 
 # role: None = any signed-in user · "spend:viewer" = spend role at least viewer
 EXPORTS: List[Dict[str, Any]] = [
@@ -47,6 +48,18 @@ EXPORTS: List[Dict[str, Any]] = [
      "method": "GET", "path": "/api/hardware/report.pdf", "rx": r"^/api/hardware/report\.pdf$", "feature": None, "role": None, "archive": True},
     {"id": "hardware-xlsx", "group": "hardware", "label": "Phần cứng — máy chủ, bảo hành, firmware (Excel)", "format": "xlsx",
      "method": "GET", "path": "/api/hardware/report.xlsx", "rx": r"^/api/hardware/report\.xlsx$", "feature": None, "role": None, "archive": False},
+    {"id": "infra-pdf", "group": "infra", "label": "Sức khoẻ hạ tầng (PDF)", "format": "pdf",
+     "method": "GET", "path": "/api/infra/report.pdf", "rx": r"^/api/infra/report\.pdf$", "feature": None, "role": None, "archive": True},
+    {"id": "infra-xlsx", "group": "infra", "label": "Sức khoẻ hạ tầng (Excel)", "format": "xlsx",
+     "method": "GET", "path": "/api/infra/report.xlsx", "rx": r"^/api/infra/report\.xlsx$", "feature": None, "role": None, "archive": False},
+    {"id": "ci-xlsx", "group": "cmdb", "label": "Sổ CI — CI, khoá chuẩn, liên kết (Excel)", "format": "xlsx",
+     "method": "GET", "path": "/api/ci/export.xlsx", "rx": r"^/api/ci/export\.xlsx$", "feature": None, "role": None, "archive": False},
+    {"id": "quote-compare-xlsx", "group": "spend", "label": "So sánh báo giá (Excel)", "format": "xlsx",
+     "method": "GET", "path": "/api/spend/quotes/{code}/comparison.xlsx", "rx": r"^/api/spend/quotes/[^/]+/comparison\.xlsx$",
+     "feature": "spend", "role": "spend:viewer", "archive": False},
+    {"id": "quote-eval-xlsx", "group": "spend", "label": "Đánh giá báo giá (Excel)", "format": "xlsx",
+     "method": "GET", "path": "/api/spend/quotes/{code}/evaluation.xlsx", "rx": r"^/api/spend/quotes/[^/]+/evaluation\.xlsx$",
+     "feature": "spend", "role": "spend:viewer", "archive": False},
     {"id": "systems-vm-pdf", "group": "owners", "label": "Danh sách VM theo hệ thống (PDF)", "format": "pdf",
      "method": "GET", "path": "/api/systems/report.pdf", "rx": r"^/api/systems/report\.pdf$", "feature": None, "role": None, "archive": True},
     {"id": "systems-vm-xlsx", "group": "owners", "label": "Danh sách VM theo hệ thống (Excel)", "format": "xlsx",

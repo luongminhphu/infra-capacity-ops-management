@@ -268,7 +268,7 @@ function renderHistoryVmChanges(mountId, changes) {
   const aiBar = `<div class="sim-actions hidden" data-ai-gate="vm_changes"><button class="btn btn-secondary btn-sm" type="button" data-ai-act="vm-changes" data-ai-mount="${esc(mountId)}">AI tóm tắt biến động</button></div>
     <div id="${esc(mountId)}AiChanges" class="ai-out" aria-live="polite"></div>`;
   const vmRow = (r, dateField, dateLabel) => `<tr>
-      <td><strong>${esc(r.vm)}</strong></td><td>${esc(r.vcenterLabel)}</td><td>${esc(r.cluster || '—')}</td>
+      <td><strong>${esc(r.vm)}</strong></td><td class="mono">${esc(r.ipAddress || '—')}</td><td>${esc(r.vcenterLabel)}</td><td>${esc(r.cluster || '—')}</td>
       <td>${esc(r.host || '—')}</td><td>${powerPill(r)}</td>
       <td>${fmtInt(r.vcpu)}</td><td>${fmtNum(r.ramGB, 0)}</td><td title="${esc(dateLabel)}">${fmtShortDate(r[dateField])}</td>
     </tr>`;
@@ -299,8 +299,8 @@ function renderHistoryVmChanges(mountId, changes) {
       </div>
     </article>`;
   const vmTable = (title, sub, rows, dateField, dateLabel, tone) => card(title, sub, rows.length, tone,
-    ['VM', 'vCenter', 'Cluster', 'Host', 'Trạng thái', 'vCPU', 'RAM (GB)', dateLabel],
-    rows.length ? groupedRows(rows, r => vmRow(r, dateField, dateLabel), 8) : '');
+    ['VM', 'IP', 'vCenter', 'Cluster', 'Host', 'Trạng thái', 'vCPU', 'RAM (GB)', dateLabel],
+    rows.length ? groupedRows(rows, r => vmRow(r, dateField, dateLabel), 9) : '');
 
   const a = changes.addedTotals, r = changes.removedTotals;
   const mv = changes.movedTotals || { count: 0, cluster: 0, host: 0, vcpu: 0, ramGB: 0 };
@@ -343,17 +343,17 @@ function renderHistoryVmChanges(mountId, changes) {
     : '';
 
   const movedRow = (m) => `<tr>
-      <td><strong>${esc(m.vm)}</strong></td><td>${esc(m.vcenterLabel)}</td><td>${m.kind === 'cluster' ? 'Giữa cluster' : 'Giữa host (vMotion)'}</td>
+      <td><strong>${esc(m.vm)}</strong></td><td class="mono">${esc(m.ipAddress || '—')}</td><td>${esc(m.vcenterLabel)}</td><td>${m.kind === 'cluster' ? 'Giữa cluster' : 'Giữa host (vMotion)'}</td>
       <td>${m.kind === 'cluster' ? `${esc(m.fromCluster)} → ${esc(m.toCluster)}` : esc(m.cluster || '—')}</td>
       <td>${esc(m.fromHost || '—')} → ${esc(m.toHost || '—')}</td><td>${powerPill(m)}</td><td>${fmtInt(m.vcpu)}</td><td>${fmtNum(m.ramGB, 0)}</td>
     </tr>`;
   const renamedRow = (x) => `<tr>
-      <td class="muted">${esc(x.fromName)}</td><td><strong>${esc(x.toName)}</strong></td><td>${esc(x.vcenterLabel)}</td><td>${esc(x.cluster || '—')}</td>
+      <td class="muted">${esc(x.fromName)}</td><td><strong>${esc(x.toName)}</strong></td><td class="mono">${esc(x.ipAddress || '—')}</td><td>${esc(x.vcenterLabel)}</td><td>${esc(x.cluster || '—')}</td>
       <td>${esc(x.host || '—')}</td><td>${fmtInt(x.vcpu)}</td><td>${fmtNum(x.ramGB, 0)}</td>
       <td class="muted">${x.matchedBy === 'uuid' ? 'cùng instanceUuid' : `cùng cluster + IP${x.ipAddress ? ` (${esc(x.ipAddress)})` : ''} + vCPU + RAM`}</td>
     </tr>`;
   const resizedRow = (x) => `<tr>
-      <td><strong>${esc(x.vm)}</strong></td><td>${esc(x.vcenterLabel)}</td><td>${esc(x.cluster || '—')}</td><td>${esc(x.host || '—')}</td><td>${powerPill(x)}</td>
+      <td><strong>${esc(x.vm)}</strong></td><td class="mono">${esc(x.ipAddress || '—')}</td><td>${esc(x.vcenterLabel)}</td><td>${esc(x.cluster || '—')}</td><td>${esc(x.host || '—')}</td><td>${powerPill(x)}</td>
       <td>${fmtInt(x.vcpuBefore)} → ${fmtInt(x.vcpuAfter)} ${signed(x.deltaVcpu)}</td>
       <td>${fmtNum(x.ramBefore, 0)} → ${fmtNum(x.ramAfter, 0)} ${signed(x.deltaRamGB)}</td>
     </tr>`;
@@ -385,12 +385,12 @@ function renderHistoryVmChanges(mountId, changes) {
     </div>
     <div class="history-vm-grid">
       ${card('VM di chuyển', `Không tính là thêm mới / loại bỏ. vMotion giữa host hoặc migrate giữa cluster (${fmtInt(mv.vcpu)} vCPU · ${fmtInt(mv.ramGB)} GB RAM); di chuyển giữa host chỉ liệt kê khi lọc theo host.`, moved.length, 'moved',
-        ['VM', 'vCenter', 'Loại', 'Cluster (từ → đến)', 'Host (từ → đến)', 'Trạng thái', 'vCPU', 'RAM (GB)'], moved.length ? groupedRows(moved, movedRow, 8) : '')}
+        ['VM', 'IP', 'vCenter', 'Loại', 'Cluster (từ → đến)', 'Host (từ → đến)', 'Trạng thái', 'vCPU', 'RAM (GB)'], moved.length ? groupedRows(moved, movedRow, 9) : '')}
       ${card('VM đổi tên', 'Không tính là thêm mới / loại bỏ. Cùng một VM nhưng tên khác giữa đầu kỳ và nay.', renamedVms.length, 'renamed',
-        ['Tên cũ', 'Tên mới', 'vCenter', 'Cluster', 'Host', 'vCPU', 'RAM (GB)', 'Căn cứ'], renamedVms.length ? groupedRows(renamedVms, renamedRow, 8) : '')}
+        ['Tên cũ', 'Tên mới', 'IP', 'vCenter', 'Cluster', 'Host', 'vCPU', 'RAM (GB)', 'Căn cứ'], renamedVms.length ? groupedRows(renamedVms, renamedRow, 9) : '')}
     </div>
     ${card('VM đổi cấu hình vCPU/RAM', `Tách riêng vì có làm thay đổi tài nguyên đã cấp: ${fmtInt(rs.up)} tăng · ${fmtInt(rs.down)} giảm · tổng ${rs.deltaVcpu > 0 ? '+' : ''}${fmtInt(rs.deltaVcpu)} vCPU · ${rs.deltaRamGB > 0 ? '+' : ''}${fmtInt(rs.deltaRamGB)} GB RAM.`, resized.length, 'resized',
-      ['VM', 'vCenter', 'Cluster', 'Host', 'Trạng thái', 'vCPU (đầu kỳ → nay)', 'RAM GB (đầu kỳ → nay)'], resized.length ? groupedRows(resized, resizedRow, 7) : '')}`;
+      ['VM', 'IP', 'vCenter', 'Cluster', 'Host', 'Trạng thái', 'vCPU (đầu kỳ → nay)', 'RAM GB (đầu kỳ → nay)'], resized.length ? groupedRows(resized, resizedRow, 8) : '')}`;
 }
 
 function bindHistoryControls(mountId, opts) {

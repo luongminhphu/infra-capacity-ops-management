@@ -205,6 +205,8 @@ def snapshots(db: Session, scope: Optional[Scope] = None, now: Optional[dt.datet
                     "backupLike": all("nbu" in (i.get("name") or "").lower() or "backup" in (i.get("description") or "").lower()
                                       for i in items) if items else False})
     out.sort(key=lambda d: (LEVEL_RANK[d["level"]], -(d["ageDays"] or 0)))
+    from . import vm_ip
+    vm_ip.attach(db, out)
     return out
 
 
@@ -232,6 +234,8 @@ def alarms(db: Session, scope: Optional[Scope] = None, ui: Optional[Dict[str, tu
                     "acknowledged": r.acknowledged, "level": level, "levelText": LEVEL_TEXT[level],
                     "vsphereUrl": links.object_url(*(ui.get(r.vcenter_key) or (None, None)), r.vim_type, r.entity_moid, r.vc_uuid)})
     out.sort(key=lambda d: (LEVEL_RANK[d["level"]], d["acknowledged"], d["at"] or ""), reverse=False)
+    from . import vm_ip
+    vm_ip.attach(db, out, vm_key="entity", only=lambda a: a["entityType"] == "vm")
     return out
 
 
@@ -417,3 +421,19 @@ def storage(db: Session, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
                      "datastores": mapped, "vmCount": sum(d["vmCount"] for d in mapped)})
     return {"arrays": out_arrays, "volumes": vols}
 
+
+
+# ---------------------------------------------------------------- report (PDF / Excel, report_infra.py / excel_infra.py)
+def report_data(db: Session, scope: Optional[Scope] = None, osc=None) -> Dict[str, Any]:
+    """One source of numbers for the "Sức khoẻ hạ tầng" PDF and Excel — the same rows as the pages
+    (Datastore, Storage, Snapshot VM, Alarm vCenter, Sức khoẻ host). The owner filter keeps the VMs of the selected
+    systems (snapshots, VM alarms) like the pages do; datastores / arrays / hosts are shared and stay."""
+    from .scope import in_vm_scope
+    sn = snapshots(db, scope)
+    al = alarms(db, scope)
+    r = osc.resolve(db) if osc is not None else None
+    if r is not None:
+        sn = [x for x in sn if in_vm_scope(r, x)]
+        al = [a for a in al if a["entityType"] == "vm" and in_vm_scope(r, {"vcenterKey": a["vcenterKey"], "vm": a["entity"]})]
+    return {"summary": summary(db, scope), "datastores": datastores(db, scope), "storage": storage(db), "snapshots": sn,
+            "alarms": al, "health": host_health(db, scope)}

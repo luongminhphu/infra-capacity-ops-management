@@ -133,7 +133,7 @@ function hwDetailHtml(d) {
   const fw = d.firmwareRows.map(x => `<tr><td class="wrap">${esc(x.component)}</td><td class="mono">${esc(x.version || '—')}</td>
       <td class="mono">${esc(x.baselineVersion || '—')}</td><td>${x.compliance ? uiPill(fwTone[x.compliance] || 'na', x.complianceText) : uiTag(x.complianceText)}</td></tr>`);
   const warr = d.warranties.map(x => `<tr><td>${esc(x.serviceLevel || '—')}</td><td>${esc(hwDate(x.start))}</td><td>${esc(hwDate(x.end))}</td></tr>`);
-  const vms = d.vms.map(v => `<tr><td>${uiEntityLink('vm', v.name, v.vcenterKey, false)}</td><td>${esc(v.system || '—')}</td>
+  const vms = d.vms.map(v => `<tr><td>${uiEntityLink('vm', v.name, v.vcenterKey, false)}</td><td class="mono">${esc(v.ip || '—')}</td><td>${esc(v.system || '—')}</td>
       <td>${v.powerOn ? uiPill('ok', 'Bật') : uiPill('na', 'Tắt')}</td></tr>`);
   const sevTone = { crit: 'crit', bad: 'bad', warn: 'warn', info: 'na' };
   const alerts = d.alerts.map(a => `<tr><td>${esc(uiDateTime(a.at, 'short'))}</td><td>${uiPill(sevTone[a.severity] || 'na', (UI_LEVELS[a.severity] || UI_LEVELS.info)[1])}</td>
@@ -162,7 +162,7 @@ function hwDetailHtml(d) {
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Host, hệ thống và VM chạy trên máy</div>
       ${dl([['Host ảo hoá', d.hosts && d.hosts.length ? d.hosts.map(h => `${uiEntityLink('host', h.name, h.vcenterKey, false)}${h.matchedBy === 'hostname' ? ' ' + uiTag('ghép theo tên') : ''}`).join(', ') : 'Không có (bare-metal)'],
             ['Hệ thống', d.systems && d.systems.length ? d.systems.map(x => `${esc(x.code)} — ${esc(x.name)} (mức ${esc(x.criticality)})`).join('<br>') : '—']])}
-      ${table('VM', ['VM', 'Hệ thống', 'Nguồn'], vms, 'Không có VM chạy trên máy này.')}
+      ${table('VM', ['VM', 'IP', 'Hệ thống', 'Nguồn'], vms, 'Không có VM chạy trên máy này.')}
       ${d.vmsTruncated ? '<p class="muted-sub">Danh sách VM đã rút gọn.</p>' : ''}</section>
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Alert phần cứng gần đây</div>
       ${table('Alert phần cứng', ['Thời điểm', 'Mức', 'Nhóm', 'Nội dung'], alerts, 'Không có alert phần cứng.')}</section>`;

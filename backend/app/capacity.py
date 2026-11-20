@@ -255,7 +255,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
             findings.append({
                 "severity": "critical" if v["lastActivityDays"] >= policy.idle_days * 2 else "warning",
                 "type": "vm_idle", "typeLabel": "VM idle lâu",
-                "entity": v.get("vm"), "cluster": v.get("cluster"), "vcenterKey": v.get("vcenterKey") or "",
+                "entity": v.get("vm"), "cluster": v.get("cluster"), "vcenterKey": v.get("vcenterKey") or "", "ip": v.get("ipAddress") or "",
                 "metric": f"Không hoạt động {int(v['lastActivityDays'])} ngày",
                 "recommendation": "Xác nhận với owner; cân nhắc decommission hoặc thu hồi tài nguyên nếu không còn dùng.",
             })
@@ -263,7 +263,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
             findings.append({
                 "severity": "critical" if v["powerOffDays"] >= policy.idle_days * 3 else "warning",
                 "type": "vm_off", "typeLabel": "VM tắt lâu",
-                "entity": v.get("vm"), "cluster": v.get("cluster"), "vcenterKey": v.get("vcenterKey") or "",
+                "entity": v.get("vm"), "cluster": v.get("cluster"), "vcenterKey": v.get("vcenterKey") or "", "ip": v.get("ipAddress") or "",
                 "metric": f"Đã tắt {int(v['powerOffDays'])} ngày",
                 "recommendation": "VM tắt lâu ngày vẫn giữ reservation vCPU/RAM — cân nhắc decommission để thu hồi tài nguyên.",
             })
@@ -271,7 +271,7 @@ def build_compliance_findings(hosts, vms, policy: Policy) -> List[Dict[str, Any]
         if _finite(cpu_usage) and cpu_usage > 0 and cpu_usage < vm_overprovision_usage_threshold and (v.get("vcpu", 0) or 0) >= 4:
             findings.append({
                 "severity": "info", "type": "vm_overprovision", "typeLabel": "VM over-provision (vCPU)",
-                "entity": v.get("vm"), "cluster": v.get("cluster"), "vcenterKey": v.get("vcenterKey") or "",
+                "entity": v.get("vm"), "cluster": v.get("cluster"), "vcenterKey": v.get("vcenterKey") or "", "ip": v.get("ipAddress") or "",
                 "metric": f"{int(v.get('vcpu', 0))} vCPU cấp phát, CPU usage chỉ {vn_num(cpu_usage, 1)}% (ngưỡng {vn_num(vm_overprovision_usage_threshold, 1)}% theo overcommit {vn_num(policy.cpu_overcommit_max, 1)}x)",
                 "recommendation": "vCPU cấp phát dư nhiều so với usage thực tế và ngưỡng overcommit CPU cấu hình; cân nhắc resize giảm vCPU.",
             })

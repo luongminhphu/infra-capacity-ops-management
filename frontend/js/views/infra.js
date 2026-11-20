@@ -170,13 +170,14 @@ function infraDatastores(rows) {
 }
 
 function infraSnapshots(rows) {
-  const list = infraFilter(rows, r => `${r.vm} ${r.cluster || ''} ${r.host || ''} ${r.items.map(i => i.name).join(' ')}`);
+  const list = infraFilter(rows, r => `${r.vm} ${r.ip || ''} ${r.cluster || ''} ${r.host || ''} ${r.items.map(i => i.name).join(' ')}`);
   if (!rows.length) return uiEmpty('Không VM nào đang có snapshot.');
   return `<div class="table-scroll" role="region" tabindex="0" aria-label="Snapshot VM"><table class="data-table infra-table">
     <caption class="sr-only">VM đang có snapshot</caption>
-    <thead><tr><th>VM</th><th>Cluster · host</th><th class="num">Số snapshot</th><th class="num">Cũ nhất (ngày)</th><th class="num">Dữ liệu (GB)</th><th>Snapshot</th><th>Trạng thái</th></tr></thead>
+    <thead><tr><th>VM</th><th>IP</th><th>Cluster · host</th><th class="num">Số snapshot</th><th class="num">Cũ nhất (ngày)</th><th class="num">Dữ liệu (GB)</th><th>Snapshot</th><th>Trạng thái</th></tr></thead>
     <tbody>${list.map(s => `<tr>
       <td>${typeof uiEntityLink === 'function' ? uiEntityLink('vm', s.vm) : esc(s.vm)}<span class="muted-sub">${esc(s.vcenterKey)}</span></td>
+      <td class="mono">${esc(s.ip || '—')}</td>
       <td>${esc(s.cluster || '—')}<span class="muted-sub">${esc(s.host || '—')}</span></td>
       <td class="num">${fmtInt(s.count)}</td>
       <td class="num">${s.ageDays === null ? '—' : fmtNum(s.ageDays, 1)}<span class="muted-sub">${uiDateTime(s.oldestAt, 'short')}</span></td>
@@ -194,13 +195,13 @@ function infraAlarms(rows) {
   if (!rows.length) return uiEmpty('Không có alarm đỏ / vàng nào đang kích hoạt.');
   return `<div class="table-scroll" role="region" tabindex="0" aria-label="Alarm vCenter"><table class="data-table infra-table">
     <caption class="sr-only">Alarm vCenter đang kích hoạt</caption>
-    <thead><tr><th>Trạng thái</th><th>Alarm</th><th>Đối tượng</th><th>Cluster</th><th>Kích hoạt lúc</th><th>Xác nhận</th></tr></thead>
+    <thead><tr><th>Trạng thái</th><th>Alarm</th><th>Đối tượng</th><th>IP (VM)</th><th>Cluster</th><th>Kích hoạt lúc</th><th>Xác nhận</th></tr></thead>
     <tbody>${list.map(a => `<tr class="infra-row" tabindex="0" data-infra-alarm="${esc(a.vcenterKey)}|${esc(a.key)}" title="Xem chi tiết alarm">
       <td>${infraPill(a)}</td><td><b>${esc(a.alarm)}</b><span class="muted-sub">${esc(a.vcenterKey)}</span></td>
       <td>${uiTag(INFRA_ENTITY[a.entityType] || a.entityType)} ${a.entityType === 'host' || a.entityType === 'vm' ? (typeof uiEntityLink === 'function' ? uiEntityLink(a.entityType, a.entity) : esc(a.entity)) : esc(a.entity)}</td>
-      <td>${esc(a.cluster || '—')}</td><td>${uiDateTime(a.at, 'short')}</td>
+      <td class="mono">${a.entityType === 'vm' ? esc(a.ip || '—') : ''}</td><td>${esc(a.cluster || '—')}</td><td>${uiDateTime(a.at, 'short')}</td>
       <td>${a.acknowledged ? uiTag('Đã xác nhận') : '<span class="muted-sub">Chưa</span>'}</td></tr>`).join('')
-      || uiEmptyRow(6, 'Không có alarm khớp bộ lọc.')}</tbody></table></div>
+      || uiEmptyRow(7, 'Không có alarm khớp bộ lọc.')}</tbody></table></div>
     <p class="muted-sub">Đỏ = VƯỢT NGƯỠNG, vàng = CẢNH BÁO. Alarm đã xác nhận trên vCenter không vào hộp việc Trang chủ. Bấm một dòng để xem alarm cùng đối tượng và cảm biến.</p>`;
 }
 

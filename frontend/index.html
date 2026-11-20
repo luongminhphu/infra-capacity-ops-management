@@ -619,6 +619,8 @@
               <div class="rpt-filter" id="rptFilter" role="tablist" aria-label="Lọc nhóm báo cáo">
                 <button type="button" class="rpt-chip active" data-rpt-group="all">Tất cả</button>
                 <button type="button" class="rpt-chip" data-rpt-group="capacity"><i data-lucide="layout-dashboard"></i>Capacity &amp; vận hành</button>
+                <button type="button" class="rpt-chip" data-rpt-group="infra"><i data-lucide="server-cog"></i>Hạ tầng &amp; phần cứng</button>
+                <button type="button" class="rpt-chip" data-rpt-group="owners"><i data-lucide="users"></i>Hệ thống &amp; Owner</button>
                 <button type="button" class="rpt-chip" data-rpt-group="planning"><i data-lucide="calendar-range"></i>Quy hoạch &amp; Sizing</button>
                 <button type="button" class="rpt-chip" data-rpt-group="license"><i data-lucide="badge-check"></i>License &amp; Inventory</button>
                 <button type="button" class="rpt-chip" data-rpt-group="backup"><i data-lucide="database-backup"></i>Backup</button>
@@ -671,6 +673,88 @@
                   <div class="report-card-body"><div class="report-card-title">Dữ liệu tổng hợp &amp; compliance</div>
                     <p class="report-card-desc">Một file CSV gồm host, VM và compliance findings (kèm mã đối soát) để xử lý tiếp bằng công cụ khác.</p></div>
                   <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="cap-csv"><i data-lucide="download"></i>CSV</button></div>
+                </article>
+              </div>
+            </section>
+
+            <!-- Hạ tầng & phần cứng -->
+            <section class="panel rpt-group" data-rpt-group="infra">
+              <div class="panel-head">
+                <div><div class="panel-title" role="heading" aria-level="2"><i data-lucide="server-cog"></i>Hạ tầng &amp; phần cứng</div>
+                  <p class="panel-sub">Datastore, storage, snapshot, alarm, sức khoẻ host, máy chủ Dell OME và sổ CI. Phạm vi: vCenter trên thanh lọc, cluster / host ở khung bên phải, bộ lọc Owner.</p></div>
+              </div>
+              <div class="report-grid">
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="hard-drive"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Sức khoẻ hạ tầng</div>
+                    <p class="report-card-desc">Datastore đầy / sắp đầy (dự báo 30 ngày), mảng lưu trữ Pure / NetApp, snapshot VM cũ, alarm vCenter, host có cảm biến bất thường — kèm việc cần làm.</p></div>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="infra-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="infra-xlsx"><i data-lucide="sheet"></i>Excel</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="infra-ds">Mở trang</button>
+                  </div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="cpu"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Phần cứng máy chủ (Dell OME)</div>
+                    <p class="report-card-desc">Trạng thái từng máy chủ, linh kiện lỗi, ổ đĩa dự báo hỏng, firmware lệch baseline, bảo hành Dell ↔ Opex. Excel thêm sheet firmware.</p></div>
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <label class="field"><span>Mức</span><select data-opt="hw.status"><option value="">Mọi mức</option><option value="crit">Vượt ngưỡng</option><option value="bad">Cảnh báo</option><option value="warn">Theo dõi</option><option value="ok">An toàn</option></select></label>
+                    <label class="field"><span>Hết bảo hành trong</span><select data-opt="hw.warranty"><option value="">Không lọc</option><option value="90">90 ngày</option><option value="180">180 ngày</option><option value="365">365 ngày</option></select></label>
+                  </details>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="hw-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="hw-xlsx"><i data-lucide="sheet"></i>Excel</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="hardware">Mở trang</button>
+                  </div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="network"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Sổ CI</div>
+                    <p class="report-card-desc">Mọi đối tượng hạ tầng đã hợp nhất (VM, host, máy chủ vật lý, datastore, storage, client backup…) với khoá chuẩn (serial, IP, NAA) và liên kết giữa chúng.</p></div>
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <label class="field"><span>Loại CI</span><select data-opt="ci.type"><option value="">Mọi loại</option><option value="vm">VM</option><option value="hypervisor_host">Host ảo hoá</option><option value="cluster">Cluster</option><option value="physical_server">Máy chủ vật lý</option><option value="datastore">Datastore</option><option value="storage_array">Mảng lưu trữ</option><option value="storage_volume">Volume / LUN</option><option value="backup_client">Client backup</option><option value="dc_asset">Thiết bị DC</option></select></label>
+                    <label class="field"><span>Trạng thái</span><select data-opt="ci.status"><option value="active">Đang dùng</option><option value="retired">Đã ngừng thấy</option><option value="all">Tất cả</option></select></label>
+                  </details>
+                  <div class="report-card-actions"><button class="btn btn-secondary btn-sm" type="button" data-report="ci-xlsx"><i data-lucide="sheet"></i>Excel</button></div>
+                </article>
+              </div>
+            </section>
+
+            <!-- Hệ thống & Owner -->
+            <section class="panel rpt-group" data-rpt-group="owners">
+              <div class="panel-head">
+                <div><div class="panel-title" role="heading" aria-level="2"><i data-lucide="users"></i>Hệ thống &amp; Owner</div>
+                  <p class="panel-sub">Sổ tài sản theo hệ thống và người chịu trách nhiệm (ISO/IEC 27001 A.5.9), kết quả các kỳ rà soát owner. Theo bộ lọc Owner trên thanh trên.</p></div>
+              </div>
+              <div class="report-grid">
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="list-tree"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Danh sách VM theo hệ thống</div>
+                    <p class="report-card-desc">Từng hệ thống: owner, backup, support, mức quan trọng, VM (cấu hình, HĐH, IP, backup) và VM chưa thuộc hệ thống nào.</p></div>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="sys-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="sys-xlsx"><i data-lucide="sheet"></i>Excel</button>
+                  </div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="file-spreadsheet"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Hệ thống &amp; Owner (nhập lại được)</div>
+                    <p class="report-card-desc">Danh sách hệ thống và gán VM theo đúng mẫu nhập: sửa trong Excel rồi nhập lại ở trang Hệ thống &amp; Owner.</p></div>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="sys-export"><i data-lucide="sheet"></i>Excel</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="systems">Mở trang</button>
+                  </div>
+                </article>
+                <article class="report-card" id="rptReviewCard">
+                  <div class="report-card-icon"><i data-lucide="clipboard-check"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Kết quả rà soát owner</div>
+                    <p class="report-card-desc">Bằng chứng một kỳ rà soát: tỷ lệ phản hồi, quyết định từng VM, tài nguyên thu hồi. Bản nháp email rà soát định kỳ: nút “Email rà soát” ở trang Hệ thống &amp; Owner.</p></div>
+                  <label class="field"><span>Kỳ rà soát</span><select id="rptReviewCampaign" data-opt="rv.campaign"><option value="">Đang tải…</option></select></label>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="rv-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="rv-xlsx"><i data-lucide="sheet"></i>Excel</button>
+                  </div>
                 </article>
               </div>
             </section>
@@ -818,6 +902,17 @@
                     <button class="btn btn-ghost btn-sm" type="button" data-nav-link="spend-overview">Lọc chi tiết</button>
                   </div>
                 </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="folder-open"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Báo cáo theo hồ sơ</div>
+                    <p class="report-card-desc">Xuất từ trang của từng hồ sơ: Kế hoạch ngân sách năm sau (Excel), Cải tạo văn phòng (PDF / Excel), So sánh &amp; đánh giá báo giá (Excel), Chuẩn hoá BOM (Excel).</p></div>
+                  <div class="report-card-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="spend-plan">Kế hoạch năm sau</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="spend-renovations">Cải tạo</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="spend-quotes">Báo giá</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="bom">BOM</button>
+                  </div>
+                </article>
               </div>
             </section>
             <p class="logo-upload-hint hidden" id="rptStatus" role="status" aria-live="polite"></p>
@@ -827,7 +922,7 @@
             <section class="side-card side-card-static">
               <h4>Kho báo cáo</h4>
               <label class="finding-filter-item"><input type="checkbox" id="rptArchive"><span>Lưu một bản mỗi PDF xuất ra vào <a href="#/docs/archive">Kho báo cáo</a></span></label>
-              <p class="side-hint">Áp dụng cho mọi PDF (Capacity, Backup, License, Sizing, Ngân sách, Cải tạo). Mỗi người giữ tối đa 100 bản, 400 ngày; báo cáo chi phí chỉ người có vai trò Chi phí xem được.</p>
+              <p class="side-hint">Áp dụng cho mọi PDF (Capacity, Sức khoẻ hạ tầng, Phần cứng, VM theo hệ thống, Rà soát owner, Backup, License, Sizing, Ngân sách, Cải tạo). Mỗi người giữ tối đa 100 bản, 400 ngày; báo cáo chi phí chỉ người có vai trò Chi phí xem được.</p>
             </section>
             <section class="side-card side-card-static" id="rptAiCard">
               <h4>Tổng kết bằng AI</h4>

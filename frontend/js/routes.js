@@ -102,7 +102,7 @@ const PAGES = [
     { id: 'report-archive', view: 'archive', icon: 'archive', label: 'Kho báo cáo', title: 'Kho báo cáo',
       desc: 'Bản PDF đã xuất và lưu lại (tick “Lưu vào kho” ở Trung tâm báo cáo): ai xuất, lúc nào, với tham số nào.', scope: [] },
     { id: 'reports', view: 'reports', icon: 'file-text', label: 'Trung tâm báo cáo', title: 'Trung tâm báo cáo',
-      desc: 'Mọi báo cáo PDF và dữ liệu Excel / CSV, nhóm theo chức năng: Capacity & vận hành, Quy hoạch & Sizing, License & Inventory, Backup.', scope: ['vcenter', 'owner'] },
+      desc: 'Mọi báo cáo PDF và dữ liệu Excel / CSV, nhóm theo chức năng: Capacity & vận hành, Hạ tầng & phần cứng, Hệ thống & Owner, Quy hoạch & Sizing, License & Inventory, Backup, Chi phí & ngân sách.', scope: ['vcenter', 'owner'] },
     { id: 'settings', view: 'settings', sub: 'criteria', icon: 'settings', label: 'Cài đặt', title: 'Cài đặt — tiêu chí & ngưỡng',
       desc: 'Tiêu chí và ngưỡng đánh giá capacity / compliance, dùng chung cho màn hình, báo cáo PDF và quy hoạch.', scope: [] },
     { id: 'set-sources', view: 'settings', sub: 'sources', icon: 'plug', label: 'Nguồn dữ liệu', title: 'Cài đặt — nguồn dữ liệu',

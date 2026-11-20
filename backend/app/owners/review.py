@@ -581,6 +581,8 @@ def summary(db: Session, c: ReviewCampaign) -> Dict[str, Any]:
         o = per_owner.setdefault(i.owner_email, {"items": 0, "decided": 0})
         o["items"] += 1
         o["decided"] += bool(i.decision)
+    from .. import vm_ip
+    vm_ip.attach(db, rows)
     return {"campaign": {"id": c.id, "periodLabel": c.period_label, "status": c.status, "dryRun": bool(c.dry_run),
                          "openedAt": c.opened_at.isoformat() + "Z", "dueAt": c.due_at.isoformat(),
                          "closedAt": c.closed_at.isoformat() + "Z" if c.closed_at else None},

@@ -56,10 +56,11 @@ def render_html(d: Dict[str, Any], username: str) -> str:
             extra = f" · {_vn(i['newVcpu']) if i['newVcpu'] else _vn(i['vcpu'])} vCPU / {_vn(i['newRamGB']) if i['newRamGB'] else _vn(i['ramGB'])} GB"
         elif i["decision"] == "transfer":
             extra = f" → {i['transferTo']}"
-        detail_rows.append([f"<b>{esc(i['vm'])}</b><br><span class='small-note'>{esc(i['vcenterKey'])}</span>", esc(i["systemCode"] or "—"),
+        detail_rows.append([f"<b>{esc(i['vm'])}</b><br><span class='small-note'>{esc(i['vcenterKey'])}</span>", esc(i.get("ip") or "—"),
+                            esc(i["systemCode"] or "—"),
                             esc(i["ownerEmail"] or "chưa có owner"), esc(i["decisionLabel"] + extra), esc(i["decidedBy"] or "—"),
                             esc("; ".join(i["reasons"]) or "—")])
-    detail = _table(["VM", "Hệ thống", "Owner", "Quyết định", "Người quyết định", "Tín hiệu lúc mở kỳ"], detail_rows)
+    detail = _table(["VM", "IP", "Hệ thống", "Owner", "Quyết định", "Người quyết định", "Tín hiệu lúc mở kỳ"], detail_rows)
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8"/><style>{base_css('Kết quả rà soát owner', generated)}{exec_visual_css()}</style></head>
 <body>
   <div class="cover-header"><div>

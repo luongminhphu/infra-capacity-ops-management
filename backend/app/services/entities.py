@@ -385,6 +385,13 @@ def server_card(db: Session, user: User, serial: str) -> Dict[str, Any]:
             "ci": cq.card_extras(db, user, c)}
 
 
+def _ds_vms(db: Session, vms) -> List[Dict[str, Any]]:
+    from .. import vm_ip
+    out = [{"name": v.name, "vcenterKey": cq.attrs_of(v).get("vcenterKey") or "", "powerOn": cq.attrs_of(v).get("powerOn")} for v in vms]
+    vm_ip.attach(db, out, vm_key="name")
+    return out
+
+
 def datastore_card(db: Session, user: User, ci_id: int) -> Dict[str, Any]:
     """Datastore by CI id: capacity (latest state), the array volume behind it, VMs on it, impact."""
     from ..cmdb.models import Ci, CiLink
@@ -414,6 +421,5 @@ def datastore_card(db: Session, user: User, ci_id: int) -> Dict[str, Any]:
                         "matchedBy": json.loads(vol[2] or "{}").get("matchedBy"),
                         "array": array.name if array else None, "arrayId": array.id if array else None,
                         "vendor": cq.attrs_of(array).get("vendor") if array else None} if vol is not None else None,
-            "vms": [{"name": v.name, "vcenterKey": cq.attrs_of(v).get("vcenterKey") or "",
-                     "powerOn": cq.attrs_of(v).get("powerOn")} for v in vms],
+            "vms": _ds_vms(db, vms),
             "ci": cq.card_extras(db, user, c)}
