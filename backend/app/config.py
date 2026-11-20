@@ -191,6 +191,11 @@ class Settings(BaseSettings):
 
     # ---- CI registry (app/cmdb/): a CI not seen for this many days becomes "retired" (never deleted) ----
     cmdb_retire_days: int = Field(default=7)
+    # ---- Dell OME (hardware/): deep inventory / firmware compliance and warranty are read less often than the round ----
+    ome_inventory_hours: int = Field(default=12)
+    ome_warranty_hours: int = Field(default=24)
+    ome_alert_backfill_days: int = Field(default=7)          # first read of AlertService: this far back
+    hw_alert_retention_months: int = Field(default=13)       # hw_alert rows older than this are purged
 
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)

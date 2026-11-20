@@ -19,7 +19,10 @@ from .models import (
     SnapshotRun, StorageAlertState, StorageArrayState, StorageVolumeState, VcAlarmState, VmOsOverride, VmSnapshot,
     VmSnapshotState,
 )
-from .hardware.models import HwComponentHealth, HwDeviceState, HwSourceState
+from .hardware.models import (
+    HwAlert, HwComponentHealth, HwDeviceInventory, HwDeviceState, HwDiskState, HwFirmwareState, HwPartState, HwSourceState,
+    HwWarranty,
+)
 
 FAMILIES = {"vcenter": "Nền tảng ảo hoá", "netbackup": "Máy chủ backup", "storage": "Storage", "hardware": "Phần cứng (Dell OME)"}
 KIND_FAMILY = {"vcenter": "vcenter", "proxmox": "vcenter", "nutanix": "vcenter", "netbackup": "netbackup",
@@ -46,7 +49,10 @@ TABLES: Dict[str, List[Tuple[str, Any, str]]] = {
         ("Mảng", StorageArrayState, "source_key"),
     ],
     "hardware": [
-        ("Sức khoẻ linh kiện", HwComponentHealth, "source_key"), ("Máy chủ", HwDeviceState, "source_key"),
+        ("Sức khoẻ linh kiện", HwComponentHealth, "source_key"), ("Ổ đĩa", HwDiskState, "source_key"),
+        ("Linh kiện", HwPartState, "source_key"), ("Firmware", HwFirmwareState, "source_key"),
+        ("Inventory máy chủ", HwDeviceInventory, "source_key"), ("Bảo hành Dell", HwWarranty, "source_key"),
+        ("Alert phần cứng", HwAlert, "source_key"), ("Máy chủ", HwDeviceState, "source_key"),
         ("Trạng thái nguồn", HwSourceState, "source_key"),
     ],
 }

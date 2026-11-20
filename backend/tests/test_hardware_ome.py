@@ -146,7 +146,7 @@ def test_store_replaces_rows_and_error_keeps_them(db, monkeypatch):
     cfg = HardwareConfig("ome-x", "OME X", "ome.local", username="u", password="p")
     data = {"devices": [ome.parse_device(r) for r in _fix("ome_devices_page1.json")["value"]],
             "health": [{**s, "deviceId": 10075} for s in ome.parse_subsystems(_fix("ome_subsystem_health.json"))]}
-    monkeypatch.setattr(collector, "read", lambda c: data)
+    monkeypatch.setattr(collector, "read", lambda c, plan=None: data)
     assert collector.sync_hardware(db, cfg) == {"key": "ome-x", "ok": True, "devices": 2, "health": 3}
     assert collector.sync_hardware(db, cfg)["ok"]                           # replaced, not duplicated
     assert db.query(HwDeviceState).filter_by(source_key="ome-x").count() == 2
@@ -154,7 +154,7 @@ def test_store_replaces_rows_and_error_keeps_them(db, monkeypatch):
     psu = db.query(HwComponentHealth).filter_by(source_key="ome-x", subsystem="PowerSupply").one()
     assert psu.status == "crit" and "PSU.Slot.1" in psu.detail
 
-    def boom(c):
+    def boom(c, plan=None):
         raise HardwareError("OME từ chối xác thực (401)")
     monkeypatch.setattr(collector, "read", boom)
     with pytest.raises(HardwareError):
@@ -214,7 +214,8 @@ def test_demo_sync_joins_every_dell_host_and_lists_bare_metal(db, admin):
     s = get_settings()
     scheduler.sync_vcenter(db, s.vcenters()[0], s)
     res = scheduler.sync_hardware_sources(s)
-    assert res == [{"key": "ome-demo", "ok": True, "devices": 12, "health": 5}]   # 10 Dell hosts + 2 bare-metal
+    assert res == [{"key": "ome-demo", "ok": True, "devices": 12, "health": 5,   # 10 Dell hosts + 2 bare-metal
+                    "inventory": 12, "warranties": 12, "alerts": 2}]
     devs = db.query(HwDeviceState).filter_by(source_key="ome-demo").all()
     assert sorted(d.status for d in devs).count("ok") == 10
     assert {d.status for d in devs} == {"ok", "bad", "crit"}

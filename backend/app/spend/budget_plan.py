@@ -13,6 +13,9 @@ A plan for fiscal year Y is built from what the module already knows, then adjus
 * extend    — the same devices kept in use instead (decision "Dùng tiếp": over budget, still good …) that
               have no HW warranty Opex to renew: one Opex line per business function; once approved it
               becomes a planned Opex listing their serials.
+* warranty  — servers still running whose Dell warranty (OME, G4b) ends before the end of Y and that no
+              warranty Opex covers: one Opex line "Gia hạn bảo hành Dell" (hardware/warranty.plan_suggestions);
+              once approved it becomes a planned Opex listing their service tags.
 * new       — a line typed in the plan (new service, new project), applied to the real
               Opex / Capex tables once the plan is approved.
 
@@ -40,8 +43,8 @@ from .settings import SpendSettings
 
 STATUS_LABELS = {"draft": "Nháp", "submitted": "Chờ duyệt", "approved": "Đã duyệt", "superseded": "Đã thay thế"}
 SOURCE_LABELS = {"renewal": "Gia hạn", "committed": "Đã ghi nhận", "capex": "Dự án Capex", "replace": "Thay thế thiết bị",
-                 "extend": "Dùng tiếp thiết bị", "new": "Mới đề xuất"}
-APPLIED_SOURCES = ("new", "replace", "extend")            # lines that become a real Opex / Capex once the plan is approved
+                 "extend": "Dùng tiếp thiết bị", "warranty": "Bảo hành Dell", "new": "Mới đề xuất"}
+APPLIED_SOURCES = ("new", "replace", "extend", "warranty")            # lines that become a real Opex / Capex once the plan is approved
 PRIORITY_LABELS = {"must": "Bắt buộc", "should": "Nên có", "could": "Tuỳ chọn"}
 PRIORITY_RANK = {"must": 0, "should": 1, "could": 2}
 CAPEX_SPENT = ("approved", "in_progress", "closed")
@@ -151,6 +154,8 @@ def suggest(db: Session, year: int, cfg: SpendSettings) -> List[Dict[str, Any]]:
                     "detail": "Nháp — chưa duyệt" if p.status == "draft" else ""})
     from .. import dc_assets
     out.extend(dc_assets.plan_suggestions(db, ys, ye))
+    from ..hardware import warranty
+    out.extend(warranty.plan_suggestions(db, ys, ye))
     return out
 
 
@@ -373,6 +378,10 @@ def apply(db: Session, plan: BudgetPlan, cfg: SpendSettings, user: User, request
                 from .. import dc_assets
                 assets = [{"serial": s, "description": "Thiết bị Data Center dùng tiếp"}
                           for s in dc_assets.extend_serials(db, l.source_id, ys, _ye)]
+            elif l.source == "warranty":
+                from ..hardware import warranty
+                assets = [{"serial": s, "description": "Máy chủ Dell hết bảo hành (OME)"}
+                          for s in warranty.plan_serials(db, ys, _ye)]
             o = service.create(db, {
                 "categoryId": l.category_id, "title": l.title, "description": "\n".join(x for x in (l.note, l.detail) if x) or None,
                 "vendorId": l.vendor_id, "assets": assets,

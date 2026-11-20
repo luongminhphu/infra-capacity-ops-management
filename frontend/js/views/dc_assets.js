@@ -3,7 +3,7 @@
    bảo hành phần cứng / license – firmware ghép theo số serial với Opex.
    Data: /api/assets/dc (list), /api/assets/dc/import/preview|commit (admin).
    ========================================================= */
-const dcState = { data: null, error: null, q: '', cat: '', age: '', level: '', onlyIssues: false, showRemoved: false, file: null, sel: new Set() };
+const dcState = { data: null, warranty: null, wCase: '', error: null, q: '', cat: '', age: '', level: '', onlyIssues: false, showRemoved: false, file: null, sel: new Set() };
 const DC_AGE = { le3: '≤ 3 năm', '3to5': '3 – 5 năm', ge5: '≥ 5 năm', unknown: 'Chưa có ngày' };
 const DC_REASONS = { budget: 'Vượt ngân sách', good: 'Thiết bị còn tốt', support: 'Hãng còn hỗ trợ', project: 'Chờ dự án / chuyển đổi khác', other: 'Lý do khác' };
 const DC_SPEND_RANK = { none: 0, viewer: 1, editor: 2, approver: 3, admin: 4 };
@@ -12,8 +12,10 @@ const dcCanDecide = () => uiIsAdmin() || (typeof currentUser !== 'undefined' && 
 const DC_COV = { active: ['ok', 'Còn hiệu lực'], planned: ['warn', 'Chưa bắt đầu'], expired: ['bad', 'Đã hết hạn'], none: ['', 'Chưa ghép'] };
 
 async function dcLoad() {
-  try { dcState.data = await apiRequest('/assets/dc'); dcState.error = null; }
-  catch (err) { dcState.error = err.message; }
+  try {
+    [dcState.data, dcState.warranty] = await Promise.all([apiRequest('/assets/dc'), apiRequest('/assets/dc/warranty-check').catch(() => null)]);
+    dcState.error = null;
+  } catch (err) { dcState.error = err.message; }
 }
 
 async function renderDcAssetsView() {
@@ -21,6 +23,7 @@ async function renderDcAssetsView() {
   if (!mount) return;
   const q = new URLSearchParams((location.hash.split('?')[1]) || '');
   if (q.get('level')) { dcState.level = q.get('level'); dcState.onlyIssues = false; }
+  if (q.get('warranty')) dcState.wCase = q.get('warranty');
   dcBind();
   if (!dcState.data) { mount.innerHTML = uiLoading(); await dcLoad(); }
   dcRender();
@@ -79,7 +82,8 @@ function dcRender() {
         <button class="btn btn-primary btn-sm" type="button" data-dc-import><i data-lucide="upload"></i>Nhập Excel</button>` : ''}
       <button class="btn btn-ghost btn-sm" type="button" data-dc-reload><i data-lucide="refresh-cw"></i>Tải lại</button></div></div>`;
   if (!d.items.length) {
-    mount.innerHTML = `<section class="panel">${head}${uiEmpty(admin ? 'Chưa có thiết bị — bấm “Nhập Excel” để nạp danh sách tài sản Data Center hoặc “Thêm thiết bị” để nhập tay.' : 'Chưa có thiết bị — quản trị viên nhập danh sách từ Excel hoặc nhập tay.')}</section>`;
+    mount.innerHTML = `<section class="panel">${head}${uiEmpty(admin ? 'Chưa có thiết bị — bấm “Nhập Excel” để nạp danh sách tài sản Data Center hoặc “Thêm thiết bị” để nhập tay.' : 'Chưa có thiết bị — quản trị viên nhập danh sách từ Excel hoặc nhập tay.')}</section>
+      ${dcWarrantyHtml(dcState.warranty)}`;
     refreshIcons();
     return;
   }
@@ -120,7 +124,8 @@ function dcRender() {
         Ngưỡng: dùng từ ${esc(Math.round(d.limitMonths / 12))} năm CẢNH BÁO (không còn bảo hành phần cứng: VƯỢT NGƯỠNG), từ ${esc(Math.round(d.warnMonths / 12))} năm THEO DÕI.
         Thiết bị đủ ${esc(Math.round(d.limitMonths / 12))} năm trong năm kế hoạch được gợi ý ở Ngân sách → Kế hoạch năm sau → “Thay thế thiết bị” (Capex).
         Bảo hành / license: Opex có số serial trùng${d.opexDetail ? '' : ' (chi tiết hợp đồng cần quyền xem Chi phí)'}.</p>
-    </section>`;
+    </section>
+    ${dcWarrantyHtml(dcState.warranty)}`;
   dcBulkBar();
   refreshIcons();
 }
@@ -358,6 +363,7 @@ function dcBind() {
     else if (id === 'dcLevel') dcState.level = e.target.value;
     else if (id === 'dcIssues') dcState.onlyIssues = e.target.checked;
     else if (id === 'dcRemoved') dcState.showRemoved = e.target.checked;
+    else if (id === 'dcWCase') dcState.wCase = e.target.value;
     else if (id === 'dcSelAll') {
       (dcState.shown || []).forEach(x => (e.target.checked ? dcState.sel.add(x) : dcState.sel.delete(x)));
       $$('[data-dc-sel]').forEach(c => { c.checked = e.target.checked; });
@@ -382,4 +388,34 @@ function dcBind() {
     const row = e.target.closest('[data-dc-id]');
     if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); dcOpen(Number(row.dataset.dcId)); }
   });
+}
+
+/* Dell warranty (OME) ↔ Opex reconciliation (G4b): one row per server with a finding, filter by case. */
+const DC_WCASE_SHORT = { no_opex: 'Chưa có Opex', opex_before_dell: 'Opex hết trước Dell', dell_expired_opex_active: 'Dell hết, Opex còn', expired_critical: 'Hết BH, VM quan trọng' };
+function dcWarrantyHtml(w) {
+  if (!w || !w.configured) return '';
+  const opt = (v, t, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(t)}</option>`;
+  const count = (c) => w.items.filter(i => i.case === c).length;
+  const list = w.items.filter(i => !dcState.wCase || i.case === dcState.wCase);
+  const opex = (o) => !o ? '<span class="muted-sub">Chưa có Opex</span>'
+    : `${o.code ? `<span class="mono">${esc(o.code)}</span>` : esc(DC_COV[o.state] ? DC_COV[o.state][1] : o.state)}<span class="muted-sub">${o.title ? esc(o.title) + ' · ' : ''}hết ${dcDate(o.end)}</span>`;
+  const rows = list.slice(0, 500).map(i => `<tr>
+      <td class="mono">${esc(i.code)}</td>
+      <td><a class="entity-link" href="${esc(uiEntityHref('server', i.serviceTag))}"><strong>${esc(i.name)}</strong></a><span class="muted-sub">${esc([i.serviceTag, i.model].filter(Boolean).join(' · '))}</span></td>
+      <td>${dcDate(i.dellEnd)}<span class="muted-sub">${esc(i.dellService || '')}</span></td>
+      <td>${opex(i.opex)}</td>
+      <td>${i.systems.length ? esc(i.systems.map(x => `${x.code} (mức ${x.criticality})`).join(', ')) + `<span class="muted-sub">${fmtInt(i.vms)} VM đang chạy</span>` : '—'}</td>
+      <td class="dc-status">${uiPill(i.level, i.caseLabel)}</td></tr>`).join('');
+  return `<section class="panel" id="dcWarranty">
+    <div class="panel-head"><div><div class="panel-title" role="heading" aria-level="2">Bảo hành Dell ↔ Opex</div>
+      <p class="panel-sub">Máy chủ Dell trong OpenManage Enterprise, ghép service tag với danh sách SN của Opex bảo hành phần cứng.
+        Cập nhật bảo hành: ${w.warrantyAt ? uiDateTime(w.warrantyAt, 'short') : 'chưa đọc'}.</p></div>
+      <div class="panel-toolbar infra-toolbar"><select id="dcWCase" class="dc-wcase" aria-label="Loại chênh lệch">${opt('', `Mọi loại (${fmtInt(w.items.length)})`, dcState.wCase)}${w.cases.map(c => opt(c.case, `${DC_WCASE_SHORT[c.case] || c.label} (${fmtInt(count(c.case))})`, dcState.wCase)).join('')}</select></div></div>
+    ${w.items.length ? `<div class="table-scroll" role="region" tabindex="0" aria-label="Đối chiếu bảo hành Dell và Opex"><table class="data-table infra-table">
+      <caption class="sr-only">Đối chiếu bảo hành Dell và Opex</caption>
+      <thead><tr><th>Mã đối soát</th><th>Máy chủ</th><th>Bảo hành Dell đến</th><th>Opex bảo hành</th><th>Hệ thống mức 1–2</th><th>Chênh lệch</th></tr></thead>
+      <tbody>${rows || uiEmptyRow(6, 'Không có máy chủ thuộc loại này.')}</tbody></table></div>
+      <p class="muted-sub">${fmtInt(list.length)} máy chủ${list.length > 500 ? ' (hiện 500 dòng đầu)' : ''}. Máy hết bảo hành chưa có Opex gia hạn được gợi ý ở Ngân sách → Kế hoạch năm sau → “Bảo hành Dell”.${w.opexDetail ? '' : ' Mã Opex cần quyền xem Chi phí.'}</p>`
+      : uiNote('Không có chênh lệch giữa bảo hành Dell và Opex.')}
+  </section>`;
 }

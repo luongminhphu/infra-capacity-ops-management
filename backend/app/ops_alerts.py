@@ -52,7 +52,8 @@ from .alert_rules import SOURCES as _RULE_SOURCES
 
 PUSH_SOURCES = tuple(_RULE_SOURCES)     # sources that can push (Cài đặt → Cảnh báo decides which do)
 _KEY_PREFIX_SOURCE = {"cap": "capacity", "bk": "backup", "bkf": "backup", "ds": "datastore", "snap": "snapshot",
-                      "alarm": "alarm", "hh": "health", "st": "storage", "as": "asset"}
+                      "alarm": "alarm", "hh": "health", "st": "storage", "as": "asset", "aw": "asset",
+                      "hw": "hardware", "hwd": "hardware", "hwf": "hardware"}
 
 
 def _source_of(s: OpsAlertState) -> str:

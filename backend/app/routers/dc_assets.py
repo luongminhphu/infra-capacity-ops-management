@@ -54,6 +54,26 @@ def list_assets(user: User = Depends(get_current_user), db: Session = Depends(ge
     return dc_assets.listing(db, today_vn(), s.asset_age_limit_months, s.asset_age_warn_months, _opex_detail(db, user))
 
 
+@router.get("/warranty-check")
+def warranty_check(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Dell warranty (OME) ↔ Opex reconciliation (hardware/warranty.py). Opex code / title only for users who may
+    see Chi phí; the others get the coverage state and end date."""
+    from sqlalchemy import func
+    from ..hardware import warranty
+    from ..hardware.models import HwSourceState
+    keys = [c.key for c in get_settings().hardware()]
+    detail = _opex_detail(db, user)
+    items = warranty.reconcile(db, today_vn()) if keys else []
+    if not detail:
+        for it in items:
+            if it["opex"]:
+                it["opex"] = {"state": it["opex"]["state"], "end": it["opex"]["end"]}
+    at = db.query(func.max(HwSourceState.warranty_at)).filter(HwSourceState.source_key.in_(keys or [""])).scalar()
+    return {"configured": bool(keys), "warrantyAt": at.isoformat() + "Z" if at else None, "opexDetail": detail,
+            "cases": [{"case": k, "code": v[0], "label": v[1], "level": v[2]} for k, v in warranty.CASES.items()],
+            "items": items}
+
+
 @router.post("/import/preview")
 async def preview(request: Request, file: UploadFile = File(...), user: User = Depends(require_admin), db: Session = Depends(get_db)):
     data = await _read(request, file)

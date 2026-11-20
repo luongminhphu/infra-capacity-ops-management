@@ -96,7 +96,7 @@ itsm_label_map     (label_norm, field)                                          
 | A | 1 | Khoá chuẩn + serial host + sổ CI + thẻ đối tượng / tác động (G1a: #108; G1b: #109; G1c: #110) | — | Host nối DC asset / Opex qua serial; datastore → array → VM → backup client |
 | A | 2 | Hệ thống & owner: gán 4 cách, lọc khắp app, phạm vi truy cập Owner (mặc định chặn) (G2a: #111; G2b: #112; G2c: #113) | 1 | Lọc mọi trang theo owner; test IDOR đạt |
 | A | 3 | Rà soát owner 6 tháng: email, xác nhận, nhắc, leo thang, đóng kỳ, thu hồi, đối chiếu kỳ sau (G3a: #114; G3b: #115) | 2 | Một kỳ demo chạy trọn, không gửi trùng |
-| B | 4 | Dell OME: sức khoẻ linh kiện, ổ dự báo hỏng, firmware, bảo hành ↔ Opex, trang Phần cứng (G4a: #116) | 1 | Máy bảo hành OME ≠ Opex được liệt kê |
+| B | 4 | Dell OME: sức khoẻ linh kiện, ổ dự báo hỏng, firmware, bảo hành ↔ Opex, trang Phần cứng (G4a: #116; G4b: đang làm) | 1 | Máy bảo hành OME ≠ Opex được liệt kê |
 | B | 5 | Kho sự kiện + vòng đời sự cố, MTTA / MTTR, flapping, timeline CI | 1, 4 | Thống kê sự cố theo tháng |
 | B | 6 | Event vCenter + nhật ký thay đổi + gom sự cố theo đồ thị CI | 5 | PSU lỗi + alarm + HA restart = 1 sự cố |
 | C | 7 | ITSM SDP: nạp lùi, đọc bảng trong body, AI dự phòng + hàng chờ duyệt, nối yêu cầu ↔ VM / hệ thống | 1, 2 | ≥ 90 % yêu cầu VM có tài nguyên đã duyệt |

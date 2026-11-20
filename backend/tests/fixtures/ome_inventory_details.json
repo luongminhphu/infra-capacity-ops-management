@@ -1,0 +1,47 @@
+{
+  "@odata.context": "/api/$metadata#Collection(DeviceService.InventoryDetail)",
+  "@odata.count": 8,
+  "value": [
+    {"InventoryType": "serverArrayDisks", "InventoryInfo": [
+      {"Id": 31, "DiskNumber": "Disk 0 in Backplane 1 of RAID Controller in Slot 1", "VendorName": "DELL(tm)", "Status": 1000,
+       "StatusString": "Normal", "ModelNumber": "MZ7KH960HAJR0D3", "SerialNumber": "S47NNA0R123456", "Revision": "HG58",
+       "Size": "893.75 GB", "BusType": "SATA", "MediaType": "SSD", "PredictiveFailureState": "Smart Alert Absent", "Slot": 0},
+      {"Id": 32, "DiskNumber": "Disk 1 in Backplane 1 of RAID Controller in Slot 1", "Status": 3000, "StatusString": "Warning",
+       "ModelNumber": "ST2400MM0129", "SerialNumber": "WBN0ABCD", "Size": "2.18 TB", "MediaType": "HDD",
+       "PredictiveFailureState": "Smart Alert Present", "Slot": 1}
+    ]},
+    {"InventoryType": "serverRaidControllers", "InventoryInfo": [
+      {"Id": 41, "Name": "PERC H755 Front", "Fqdd": "RAID.SL.3-1", "Status": 1000, "StatusTypeString": "OK",
+       "FirmwareVersion": "52.16.1-4405", "DriverVersion": "7.719.02.00"}
+    ]},
+    {"InventoryType": "serverPowerSupplies", "InventoryInfo": [
+      {"Id": 51, "Name": "PS1 Status", "Location": "PSU.Slot.1", "OutputWatts": 1400, "Model": "PWR SPLY,1400W,RDNT,LTON",
+       "SerialNumber": "CNLOD0012345", "Status": 4000, "FirmwareVersion": "00.1D.9B"},
+      {"Id": 52, "Name": "PS2 Status", "Location": "PSU.Slot.2", "OutputWatts": 1400, "Model": "PWR SPLY,1400W,RDNT,LTON",
+       "SerialNumber": "CNLOD0012346", "StatusString": "OK"}
+    ]},
+    {"InventoryType": "serverMemoryDevices", "InventoryInfo": [
+      {"Id": 61, "Name": "DIMM.Socket.A1", "Size": "32768 MB", "TypeDetails": "DDR4 DIMM", "Manufacturer": "Samsung",
+       "PartNumber": "M393A4K40EB3-CWE", "SerialNumber": "17F2A1B2", "Status": 1000, "Speed": "3200 MHz"}
+    ]},
+    {"InventoryType": "serverNetworkInterfaces", "InventoryInfo": [
+      {"NicId": "NIC.Integrated.1", "VendorName": "Broadcom Corp", "Ports": [
+        {"PortId": "NIC.Integrated.1-1", "ProductName": "BCM57414", "Partitions": [
+          {"Fqdd": "NIC.Integrated.1-1-1", "CurrentMacAddress": "B0-7B-25-AA-BB-01", "PermanentMacAddress": "B0:7B:25:AA:BB:01"}]},
+        {"PortId": "NIC.Integrated.1-2", "Partitions": [
+          {"Fqdd": "NIC.Integrated.1-2-1", "CurrentMacAddress": "b07b.25aa.bb02", "PermanentMacAddress": "00:00:00:00:00:00"}]}]}
+    ]},
+    {"InventoryType": "serverOperatingSystems", "InventoryInfo": [
+      {"Id": 71, "OsName": "VMware ESXi", "OsVersion": "8.0.2", "Hostname": "esx-prod-a01.corp.local"}
+    ]},
+    {"InventoryType": "deviceSoftware", "InventoryInfo": [
+      {"Version": "1.9.2", "InstallationDate": "2025-02-10 08:00:00.000", "Status": "Installed", "SoftwareType": "FRMW",
+       "DeviceDescription": "BIOS", "ComponentId": "159", "InstanceId": "DCIM:INSTALLED#741__BIOS.Setup.1-1"},
+      {"Version": "7.00.00.171", "SoftwareType": "FRMW", "DeviceDescription": "Integrated Dell Remote Access Controller",
+       "ComponentId": "25227"},
+      {"Version": "52.16.1-4405", "SoftwareType": "FRMW", "DeviceDescription": "PERC H755 Front"},
+      {"Version": "21.5", "SoftwareType": "APAC", "DeviceDescription": "OS Collector"}
+    ]},
+    {"InventoryType": "serverProcessors", "InventoryInfo": [{"Id": 81, "Family": "Intel Xeon", "MaxSpeed": 3500}]}
+  ]
+}

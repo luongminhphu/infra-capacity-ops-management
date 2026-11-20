@@ -89,6 +89,24 @@ def purge_snapshots(db: Session, months: int, now: Optional[dt.datetime] = None,
     return counts
 
 
+def purge_hw_alerts(db: Session, months: int, now: Optional[dt.datetime] = None, chunk: int = 5000) -> int:
+    """Delete OME hardware alerts (hw_alert) older than `months` calendar months, in chunks; 0 disables."""
+    from ..hardware.models import HwAlert
+    if months <= 0:
+        return 0
+    cutoff = months_ago(now or dt.datetime.utcnow(), months)
+    total = 0
+    while True:
+        ids = [i for (i,) in db.query(HwAlert.id).filter(HwAlert.at < cutoff).order_by(HwAlert.id).limit(chunk)]
+        if not ids:
+            break
+        total += db.execute(delete(HwAlert).where(HwAlert.id.in_(ids)).execution_options(synchronize_session=False)).rowcount or 0
+        db.commit()
+    if total:
+        logger.info("Hardware alert retention (%d months, cutoff %s): deleted %d", months, cutoff.date().isoformat(), total)
+    return total
+
+
 def _cluster_lock(db: Session) -> bool:
     """PostgreSQL session advisory lock so two pods never purge together; always true on SQLite."""
     if db.bind.dialect.name != "postgresql":
@@ -119,6 +137,8 @@ def maybe_purge(months: int, now: Optional[dt.datetime] = None) -> Optional[Dict
                 return None
             try:
                 counts = purge_snapshots(db, months, now)
+                from ..config import get_settings
+                counts["hw_alert"] = purge_hw_alerts(db, get_settings().hw_alert_retention_months, now)
             finally:
                 _cluster_unlock(db)
         if not counts.get("more"):               # finished: next pass tomorrow; otherwise next cycle

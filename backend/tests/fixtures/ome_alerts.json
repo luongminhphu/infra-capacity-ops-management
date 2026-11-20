@@ -1,0 +1,18 @@
+{
+  "@odata.count": 4,
+  "value": [
+    {"Id": 9001, "SeverityType": 16, "SeverityName": "Critical", "AlertDeviceId": 10075, "AlertDeviceName": "esx-prod-b01",
+     "AlertDeviceType": 1000, "AlertDeviceIpAddress": "10.30.11.11", "AlertDeviceIdentifier": "9QWXY63", "StatusType": 2000,
+     "StatusName": "Not Acknowledged", "CategoryId": 1, "CategoryName": "System Health", "SubCategoryId": 50,
+     "SubCategoryName": "Power Supply", "AlertMessageId": "PSU0003", "Message": "Power supply 1 is not receiving input power.",
+     "TimeStamp": "2026-11-17 01:58:00.000"},
+    {"Id": 9002, "SeverityType": 8, "SeverityName": "Warning", "AlertDeviceId": 10091, "AlertDeviceType": 1000,
+     "AlertDeviceIdentifier": "4BMDB21", "StatusName": "Not Acknowledged", "CategoryName": "System Health",
+     "SubCategoryName": "Storage", "AlertMessageId": "PDR1016", "Message": "Predictive failure reported for Physical Disk 0:1:1.",
+     "TimeStamp": "2026-11-17 02:10:00.000"},
+    {"Id": 9003, "SeverityType": 2, "SeverityName": "Info", "CategoryName": "Audit", "SubCategoryName": "Users",
+     "AlertMessageId": "USR0030", "Message": "Successfully logged in.", "TimeStamp": "2026-11-17 02:20:00.000"},
+    {"Id": 9004, "SeverityType": 16, "AlertDeviceType": 2000, "AlertDeviceIdentifier": "CHS0001", "CategoryName": "System Health",
+     "SubCategoryName": "Fan", "Message": "Chassis fan failed.", "TimeStamp": "2026-11-17 02:30:00.000"}
+  ]
+}
