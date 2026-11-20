@@ -2160,17 +2160,59 @@ request từ 2,5 đến 5 giây đều hiện là 5.000 ms.
 
 ### Công cụ MCP
 
-`app_overview`, `search_logs` (lọc theo `request_id`; `contains` so khớp đúng chữ, `%` / `_` không phải ký tự đại diện),
-`error_summary` (kèm pod và `sampleRequestId`), `endpoint_performance`, `performance_trend`, `slow_requests`, `slow_queries`.
+14 tool, đều có tiền tố `ico_`, đều chỉ đọc.
 
-`sync_history` lọc được theo:
-- nhóm nguồn: `virtualization`, `backup`, `storage`, `hardware`, `ipam`;
-- loại việc: `cmdb`, `owners`, `reviews`, `alerts`, `retention`, `metrics`, `poll`;
-- `status`, `key`, `since_minutes`.
+Mỗi tool khai đủ:
+- `title`;
+- annotation `readOnlyHint` / `destructiveHint: false` / `idempotentHint` / `openWorldHint: false`;
+- `outputSchema`, và trả `structuredContent` khớp schema (kèm bản text JSON).
 
-Trường `runId` của mỗi lần chạy dùng làm `request_id` khi gọi `search_logs`.
+Tên cũ không có `ico_` (vd `search_logs`) vẫn gọi được thêm một bản phát hành nhưng không còn trong `tools/list`.
 
-Prompt mẫu: `health_review`, `error_triage`.
+**Log và hiệu năng:**
+
+| Tool | Làm gì |
+|---|---|
+| `ico_app_overview` | Bắt đầu ở đây: phiên bản, pod, DB, số log, request 1 giờ / 24 giờ. |
+| `ico_search_logs` | Tìm log; lọc theo `request_id`; `contains` so khớp đúng chữ. |
+| `ico_error_summary` | Lỗi lặp lại, kèm pod và `sampleRequestId`. |
+| `ico_endpoint_performance` | Độ trễ, lỗi, số SQL theo endpoint. |
+| `ico_performance_trend` | Diễn biến theo thời gian, so giữa các phiên bản. |
+| `ico_slow_requests` | Request chậm nhất (theo pod). |
+| `ico_slow_queries` | SQL chậm nhất (theo pod). |
+
+**Chạy nền và nguồn dữ liệu:**
+
+| Tool | Làm gì |
+|---|---|
+| `ico_sync_history` | Từng lần chạy: lọc theo nhóm nguồn / loại việc / `status` / `key`. |
+| `ico_job_runs` | Tổng theo loại việc và nguồn: số lần, lỗi, timeout, p50 / p95 thời lượng. |
+| `ico_source_status` | Trạng thái mọi nguồn: ok / stale / error / never. |
+| `ico_data_freshness` | Tuổi dữ liệu theo nhóm nguồn, lần dựng sổ CI gần nhất, số CI theo loại, độ phủ owner. |
+
+**Module AI, cấu hình và lần vết:**
+
+| Tool | Làm gì |
+|---|---|
+| `ico_ai_usage` | Module AI: cấu hình (không có API key); chi phí tháng; theo tác vụ: gọi / cache / bị chặn / lỗi, độ trễ, token; lỗi gần đây. Người dùng hiện dạng mã băm. |
+| `ico_config_check` | Kiểm tra cờ cấu hình (PUBLIC_URL, cookie Secure, scheduler / leader, thư viện font PDF, SMTP, che host, AI, tính năng tắt). Không có giá trị bí mật. |
+| `ico_trace_request` | Mọi log và lần chạy của một mã request / job, theo thời gian. |
+
+Tham số được kiểm theo schema. Tham số lạ, sai kiểu hay ngoài khoảng cho phép trả **lỗi tool** (`isError`) kèm cách sửa,
+không lặng lẽ chỉnh giá trị. Tool không tồn tại cũng trả lỗi tool, kèm danh sách tool.
+
+`ico_search_logs`, `ico_error_summary` và `ico_sync_history` phân trang bằng `offset`, trả `hasMore` / `nextOffset`.
+
+Prompt mẫu:
+- `health_review`;
+- `error_triage`;
+- `sync_triage`: nguồn lỗi / cũ / chậm → nguyên nhân → bước xử lý;
+- `ai_module_review`: lỗi, bị chặn, độ trễ, chi phí AI;
+- `release_regression`: so trước / sau lần deploy.
+
+Bộ đánh giá MCP: `docs/design/ico-mcp-eval.xml` gồm 10 câu hỏi trên bản demo.
+- Chạy bằng `.claude/skills/mcp-builder/scripts/evaluation.py`; cần API key nên chạy tay.
+- Mục tiêu ≥ 8/10 câu đúng; chạy lại khi đổi tool, mô tả tool hoặc model.
 
 Rà soát module AI / MCP và lộ trình cải tiến: `docs/design/ico-ai-mcp-review.md`.
 
