@@ -69,8 +69,15 @@ function hwRender(mount) {
       <td>${hwOpexCell(i.warranty)}</td>
       <td>${esc(i.hosts.map(h => h.name).join(', ') || 'bare-metal')}${i.systems.length ? `<span class="muted-sub">${esc(i.systems.map(x => x.code).join(', '))}</span>` : ''}</td>
       <td class="num">${fmtInt(i.vmCount)}</td></tr>`).join('');
-  const src = d.sources.map(x => `${x.name}: ${x.lastError ? 'lỗi đồng bộ' : `đồng bộ ${uiDateTime(x.capturedAt, 'short')}`}${x.baselineConfigured === false ? ' · chưa cấu hình baseline firmware' : ''}`).join(' · ');
-  mount.innerHTML = `${d.ownerScope ? uiNote(d.ownerScope) : ''}
+  const src = d.sources.filter(x => !x.never).map(x => `${x.name}: ${x.capturedAt ? `đồng bộ ${uiDateTime(x.capturedAt, 'short')}` : 'chưa có dữ liệu'}${x.baselineConfigured === false ? ' · chưa cấu hình baseline firmware' : ''}`).join(' · ');
+  /* Sources not synced yet / failing / partly read: one box, each with its state pill, sync button for the admin. */
+  const issues = d.sources.filter(x => x.never || x.lastError || x.lastWarning).map(x => x.never
+    ? `<li>${uiPill('na', 'Chưa đồng bộ')} <b>${esc(x.name)}</b> — chưa đọc lần nào; dữ liệu có sau vòng đồng bộ kế tiếp${uiIsAdmin() ? ' hoặc khi bấm Đồng bộ ngay' : ''}.</li>`
+    : x.lastError ? `<li>${uiPill('crit', 'Lỗi kết nối')} <b>${esc(x.name)}</b> — ${esc(uiDateTime(x.lastErrorAt, 'short'))}: ${esc(x.lastError)}${x.capturedAt ? ' Đang hiện dữ liệu lần đọc được gần nhất.' : ''}</li>`
+    : `<li>${uiPill('warn', 'Đọc thiếu')} <b>${esc(x.name)}</b> — ${esc(x.lastWarning)}</li>`).join('');
+  const notes = issues ? `<div class="insight-box hw-src-box"><ul class="hw-src-issues">${issues}</ul>
+      ${uiIsAdmin() && d.sources.some(x => x.never || x.lastError) ? '<button class="btn btn-secondary btn-sm" type="button" data-hw-sync><i data-lucide="refresh-cw"></i>Đồng bộ ngay</button>' : ''}</div>` : '';
+  mount.innerHTML = `${d.ownerScope ? uiNote(d.ownerScope) : ''}${notes}
     ${uiKpiStrip([
       { label: 'Máy chủ', value: uiNumber(s.servers), sub: `${uiNumber(s.vmsOn)} VM đang chạy` },
       { label: 'Cần xử lý', value: uiNumber(s.byLevel.crit + s.byLevel.bad + s.byLevel.warn), sub: `${uiNumber(s.byLevel.crit)} vượt ngưỡng · ${uiNumber(s.byLevel.bad)} cảnh báo`,
@@ -187,6 +194,14 @@ function hwBind(mount) {
       return;
     }
     if (e.target.closest('[data-hw-back]')) { location.hash = '#/hardware'; return; }
+    const sb = e.target.closest('[data-hw-sync]');
+    if (sb && typeof syncAllSources === 'function') {
+      sb.disabled = true;
+      sb.textContent = 'Đang đồng bộ…';
+      syncAllSources().then(r => { if (r.failed) uiAlert(r.message); renderHardwareView(); })
+        .catch(err => { uiAlert(err.message); sb.disabled = false; });
+      return;
+    }
     const row = e.target.closest('[data-hw-open]');
     if (row && !e.target.closest('a')) {
       const [s, dId] = row.dataset.hwOpen.split('|');

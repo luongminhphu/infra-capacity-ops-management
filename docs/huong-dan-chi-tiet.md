@@ -845,6 +845,28 @@ snapshot hay xác nhận alarm — thao tác trên vCenter.
 - Đã kiểm với FlashArray//X20R3, FlashArray//RC20 (dòng Refurbished, Purity REST 2.x giống //C) và NetApp
   AFF A300 (ONTAP 9.6+ REST). Model hiển thị lấy từ API của mảng.
 
+### Trạng thái kết nối của mọi nguồn dữ liệu
+
+Mỗi nguồn đang bật (vCenter / Proxmox VE / Nutanix, NetBackup, Pure / NetApp, Dell OME) có trạng thái theo **lần đồng bộ thật
+gần nhất**, không chỉ theo nút *Kiểm tra kết nối*:
+
+| Trạng thái | Nghĩa |
+|---|---|
+| Kết nối tốt | Lần đồng bộ gần nhất thành công, dữ liệu còn mới |
+| Lỗi kết nối | Lần đồng bộ gần nhất lỗi — kèm thông báo lỗi (không chứa mật khẩu / token) |
+| Dữ liệu cũ | Không đồng bộ được quá 3 lần chu kỳ poll (tối thiểu 3 giờ) |
+| Chưa đồng bộ | Nguồn mới thêm, chưa đọc lần nào |
+
+- **Thanh trên**: mỗi nhóm nguồn một chip (*Ảo hoá 4/4*, *Backup 1/1*, *Storage 2/3*, *Dell OME 1/1* — số nguồn kết nối tốt /
+  tổng, chấm màu theo nguồn xấu nhất). Bấm chip để xem từng nguồn, thời điểm đồng bộ và lỗi. Trên điện thoại chỉ còn một chip tổng.
+- **Đồng bộ ngay** (admin) đọc **mọi nguồn**, không chỉ vCenter, và báo nguồn nào lỗi. Sổ CI, gán owner và cảnh báo cập nhật ở
+  vòng poll kế tiếp.
+- **Cài đặt → Nguồn dữ liệu**:
+  - cột *Trạng thái kết nối* hiện trạng thái trên, thời điểm đồng bộ, lỗi, và kết quả *Kiểm tra kết nối* bấm tay nếu có;
+  - nút đồng bộ riêng từng nguồn;
+  - nguồn vừa thêm được đọc ngay sau khi lưu, không phải chờ vòng poll.
+- Trang **Phần cứng** nói rõ nguồn OME nào chưa đồng bộ hoặc đang lỗi (kèm thông báo lỗi), thay vì chỉ hiện 0 máy.
+
 ### Phần cứng — nguồn Dell OpenManage Enterprise (ICO v2 G4a)
 
 ICO đọc máy chủ Dell và sức khoẻ linh kiện từ **một** OpenManage Enterprise 4.x (kind `ome`). OME là nguồn duy nhất cho

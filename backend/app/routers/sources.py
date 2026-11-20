@@ -11,9 +11,51 @@ from .. import secrets_box, sources
 from ..config import get_settings
 from ..database import get_db
 from ..models import AuditLog, DataSource, User
-from ..security import require_admin
+from ..security import get_current_user, require_admin
 
 router = APIRouter(prefix="/api/admin/sources", tags=["sources"])
+# Status of every source for any signed-in user (top bar) + "Đồng bộ ngay" for every source (admin).
+status_router = APIRouter(prefix="/api/sources", tags=["sources"])
+FAMILY_OF_KIND = {"vcenter": "virtualization", "proxmox": "virtualization", "nutanix": "virtualization", "netbackup": "backup",
+                  "pure": "storage", "netapp": "storage", "ome": "hardware"}
+
+
+@status_router.get("/status")
+def sources_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Connection state of every polled source from its last sync (no host, no secret)."""
+    from .. import source_status
+    items = source_status.status_all(db)
+    return {"summary": source_status.summary(items), "items": items,
+            "staleHours": round(source_status.stale_after().total_seconds() / 3600, 1)}
+
+
+def _sync_task(fam: str, cfg, settings):
+    from ..collectors import scheduler
+    if fam == "virtualization":
+        return lambda: scheduler._sync_vcenter_task(cfg, settings)
+    if fam == "backup":
+        return lambda: scheduler._sync_backup_task(cfg, settings)
+    if fam == "storage":
+        peers = [c.key for c in settings.storages() if c.vendor == cfg.vendor and c.demo]
+        return lambda: scheduler._sync_storage_task(cfg, peers or [cfg.key])
+    return lambda: scheduler._sync_ome_task(cfg)
+
+
+@status_router.post("/sync-all")
+def sync_all_sources(request: Request, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Read every source now (read-only, same as a scheduler round; each source under its own lock). The CI registry,
+    owner rules and alerts follow at the next scheduler round on the leader pod."""
+    from .. import inbox, source_status
+    from ..collectors import scheduler
+    s = get_settings()
+    results = scheduler.sync_everything(s)
+    db.add(AuditLog(username=user.username, action="sources.sync_all", client_ip=request.client.host if request.client else None,
+                    detail=json.dumps({"ok": sum(1 for r in results if r.get("ok")), "total": len(results)})))
+    db.commit()
+    inbox.invalidate()
+    items = source_status.status_all(db)
+    return {"results": [{k: v for k, v in r.items() if k in ("key", "vcenterKey", "ok", "error", "skipped", "timedOut")} for r in results],
+            "summary": source_status.summary(items), "items": items}
 
 
 def _audit(db: Session, user: User, action: str, request: Request, row: DataSource, **extra) -> None:
@@ -35,9 +77,35 @@ def list_sources(user: User = Depends(require_admin), db: Session = Depends(get_
     ui_keys = {(r.kind, r.key) for r in rows}
     env = [sources.public_env(c, "vcenter", ("vcenter", c.key) in ui_keys) for c in s.env_vcenters()] + \
           [sources.public_env(c, "netbackup", ("netbackup", c.key) in ui_keys) for c in s.env_netbackups()]
+    from .. import source_status
+    status = {(i["family"], i["key"]): i for i in source_status.status_all(db)}
+    items = [sources.public(r) for r in rows] + env
+    for it in items:
+        st = status.get((FAMILY_OF_KIND.get(it["kind"]), it["key"])) if it.get("enabled") else None
+        it["sync"] = {k: st[k] for k in ("state", "stateText", "level", "lastSyncAt", "lastOkAt", "error")} if st else None
     return {"secretsKeyConfigured": secrets_box.dedicated_key(), "secrets": secrets_box.status(db),
-            "domainTypes": list(sources.NBU_DOMAIN_TYPES),
-            "items": [sources.public(r) for r in rows] + env}
+            "domainTypes": list(sources.NBU_DOMAIN_TYPES), "items": items}
+
+
+@router.post("/{source_id}/sync")
+def sync_source(source_id: int, request: Request, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Read one UI source now (read-only), whatever its kind; the answer says whether it worked and why not."""
+    from .. import inbox, source_status
+    from ..collectors import scheduler
+    row = _row(db, source_id)
+    if not row.enabled:
+        raise HTTPException(409, "Nguồn đang tắt — bật lại rồi đồng bộ.")
+    fam = FAMILY_OF_KIND.get(row.kind)
+    s = get_settings()
+    cfg = next((c for f, _k, c in source_status.configured() if f == fam and c.key == row.key), None)
+    if cfg is None:
+        raise HTTPException(404, "Nguồn chưa được nạp — tải lại trang rồi thử lại.")
+    res = scheduler.run_syncs([_sync_task(fam, cfg, s)], [{"key": row.key}], 1, scheduler.deadline_seconds(s))[0]
+    _audit(db, user, "sources.sync", request, row, ok=bool(res.get("ok")))
+    db.commit()
+    inbox.invalidate()
+    st = next((i for i in source_status.status_all(db) if i["family"] == fam and i["key"] == row.key), None)
+    return {"ok": bool(res.get("ok")), "error": res.get("error"), "skipped": bool(res.get("skipped")), "status": st}
 
 
 @router.post("/rotate-secrets")

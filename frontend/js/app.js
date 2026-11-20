@@ -327,16 +327,82 @@ function vcenterStatusInfo(v) {
   return { cls, label, when, statusText };
 }
 
-function renderVcenterStatusChips() {
+/* Top bar: one chip per source family (Ảo hoá / Backup / Storage / Dell OME) with "ok / total" and the worst state;
+   a click lists every source with its last sync (GET /api/sources/status). */
+let sourceStatusCache = null;
+const SRC_STATE_CLS = { ok: 'ok', error: 'error', stale: 'stale', never: '' };
+
+async function refreshSourceStatus() {
+  try { sourceStatusCache = await apiRequest('/sources/status'); }
+  catch (err) { console.error('Không tải được trạng thái nguồn', err); return; }
+  renderSourceStatusChips();
+}
+
+function renderSourceStatusChips() {
   const row = $('#vcenterStatusRow');
-  if (row) {
-    row.innerHTML = vcentersCache.length
-      ? vcentersCache.map(v => {
-          const i = vcenterStatusInfo(v);
-          return `<span class="vcenter-chip ${i.cls}" title="${esc(i.label)} · ${i.statusText} · đồng bộ ${esc(i.when)}${v.lastError ? ' · ' + esc(v.lastError) : ''}"><span class="dot"></span><span class="vc-name">${esc(v.name)}</span></span>`;
-        }).join('')
-      : `<span class="vcenter-chip"><span class="dot"></span>Chưa cấu hình vCenter</span>`;
+  if (!row || !sourceStatusCache) return;
+  const s = sourceStatusCache.summary;
+  if (!s.total) { row.innerHTML = '<span class="vcenter-chip"><span class="dot"></span>Chưa có nguồn dữ liệu</span>'; return; }
+  const chip = (f) => {
+    const text = `${f.label}: ${f.ok}/${f.total} nguồn kết nối tốt`;
+    return `<button type="button" class="vcenter-chip src-chip ${SRC_STATE_CLS[f.state]}" data-src-family="${esc(f.family)}" title="${esc(text)}" aria-label="${esc(text)}">
+      <span class="dot"></span><span class="vc-name">${esc(f.label)}</span><span class="src-count">${fmtInt(f.ok)}/${fmtInt(f.total)}</span></button>`;
+  };
+  const allText = `Nguồn dữ liệu: ${s.ok}/${s.total} kết nối tốt`;
+  row.innerHTML = s.families.map(chip).join('') +
+    `<button type="button" class="vcenter-chip src-chip src-chip-all ${SRC_STATE_CLS[s.state]}" data-src-family="" title="${esc(allText)}" aria-label="${esc(allText)}">
+      <span class="dot"></span><span class="src-count">${fmtInt(s.ok)}/${fmtInt(s.total)}</span></button>`;
+  if (!row.dataset.bound) {
+    row.dataset.bound = '1';
+    row.addEventListener('click', e => { const b = e.target.closest('[data-src-family]'); if (b) openSourceStatusDialog(b.dataset.srcFamily); });
   }
+}
+
+function sourceStatusRowsHtml(items) {
+  return items.map(i => `<li class="src-status-item">
+      <div class="src-status-main"><span><b>${esc(i.name)}</b>${i.demo ? ' ' + uiTag('Demo') : ''}</span><span class="muted-sub">${esc(i.kindLabel)} · ${esc(i.key)}</span></div>
+      <div class="src-status-state">${uiPill(i.level, i.stateText)}<span class="muted-sub">${i.lastSyncAt ? `Đồng bộ ${esc(uiDateTime(i.lastSyncAt, 'short'))}` : 'Chưa đồng bộ lần nào'}${i.state === 'error' && i.lastOkAt ? ` · tốt lần cuối ${esc(uiDateTime(i.lastOkAt, 'short'))}` : ''}</span></div>
+      ${i.error ? `<p class="src-status-error">${esc(i.error)}</p>` : ''}</li>`).join('');
+}
+
+function openSourceStatusDialog(family) {
+  const d = sourceStatusCache;
+  if (!d) return;
+  const groups = d.summary.families.filter(f => !family || f.family === family);
+  const body = groups.map(f => `<div class="sp-h">${esc(f.label)} · ${fmtInt(f.ok)}/${fmtInt(f.total)} kết nối tốt</div>
+      <ul class="src-status-list">${sourceStatusRowsHtml(d.items.filter(i => i.family === f.family))}</ul>`).join('') +
+    `<p class="muted-sub">Theo lần đồng bộ gần nhất. Dữ liệu cũ: không đồng bộ được quá ${esc(String(d.staleHours).replace('.', ','))} giờ.</p>`;
+  const admin = uiIsAdmin();
+  uiPanelDialog(family ? `Nguồn ${esc((groups[0] || {}).label || '')}` : 'Trạng thái nguồn dữ liệu', body,
+    `${admin ? '<a class="btn btn-ghost btn-sm" href="#/settings/sources" data-sp-close>Cài đặt nguồn</a>' : ''}<span class="src-spacer"></span>
+     <button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
+     ${admin ? '<button class="btn btn-primary btn-sm" type="button" id="srcSyncAllDlg"><i data-lucide="refresh-cw"></i>Đồng bộ ngay</button>' : ''}`);
+  const b = $('#srcSyncAllDlg');
+  if (b) b.onclick = async () => {
+    b.disabled = true;
+    uiSetStatus($('#spDialogMsg'), 'Đang đọc mọi nguồn…');
+    try {
+      const r = await syncAllSources();
+      uiSetStatus($('#spDialogMsg'), r.message, r.failed ? 'error' : '');
+      openSourceStatusDialog(family);
+    } catch (err) { uiSetStatus($('#spDialogMsg'), err.message, 'error'); b.disabled = false; }
+  };
+}
+
+/* "Đồng bộ ngay" for every source (admin): returns a short Vietnamese summary. */
+async function syncAllSources() {
+  const r = await apiRequest('/sources/sync-all', { method: 'POST' });
+  sourceStatusCache = { ...(sourceStatusCache || {}), summary: r.summary, items: r.items };
+  renderSourceStatusChips();
+  const failed = r.results.filter(x => !x.ok);
+  const names = failed.map(x => `${x.vcenterKey || x.key}${x.error ? ` (${x.error})` : ''}`);
+  return { failed: failed.length, message: failed.length
+    ? `Đồng bộ ${r.results.length - failed.length}/${r.results.length} nguồn; lỗi: ${names.join('; ')}`
+    : `Đã đồng bộ ${r.results.length} nguồn lúc ${new Date().toLocaleString('vi-VN', { hour12: false })}.` };
+}
+
+function renderVcenterStatusChips() {
+  renderSourceStatusChips();
   const tbody = document.querySelector('#vcenterSourceTable tbody');
   if (tbody) {
     tbody.innerHTML = vcentersCache.length
@@ -360,6 +426,7 @@ async function refreshVcenterList() {
     sel.value = [...sel.options].some(o => o.value === prev) ? prev : 'all';
     currentVcenterFilter = sel.value;
     renderVcenterStatusChips();
+    refreshSourceStatus();
   } catch (err) {
     console.error('Không tải được danh sách vCenter', err);
   }
