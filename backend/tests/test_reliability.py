@@ -72,6 +72,26 @@ def test_connect_to_hung_vcenter_times_out_with_vietnamese_message():
         close()
 
 
+def test_version_discovery_timeout_is_hooked():
+    # Fails fast (instead of hanging the test above) when a pyVmomi upgrade moves the HTTP
+    # client that pyVim.connect uses for version discovery.
+    import http.client
+    from pyVim import connect as pc
+    assert vc._DISCOVERY_TIMEOUT_HOOK in ("http_client", "globals")
+    if vc._DISCOVERY_TIMEOUT_HOOK == "http_client":
+        assert isinstance(pc.http_client, vc._HttpClientWithTimeout)
+        assert pc.http_client.HTTPException is http.client.HTTPException
+    else:
+        assert pc.HTTPSConnection is vc._HTTPSConnection and pc.HTTPConnection is vc._HTTPConnection
+    assert vc._hook_discovery_timeout(pc) == vc._DISCOVERY_TIMEOUT_HOOK    # idempotent
+    vc._tls.timeout = 7
+    try:
+        assert vc._HTTPSConnection("h", port=443).timeout == 7
+        assert vc._HTTPConnection("h", port=80, timeout=3).timeout == 3      # explicit value wins
+    finally:
+        vc._tls.timeout = None
+
+
 def test_timeout_is_configurable_and_passed_to_smartconnect(monkeypatch):
     seen = []
     monkeypatch.setattr(vc, "SmartConnect", lambda **kw: seen.append(kw["httpConnectionTimeout"]) or NS())

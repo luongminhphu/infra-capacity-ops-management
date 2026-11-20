@@ -54,38 +54,67 @@ def _timeout_error(cfg: VCenterConfig, timeout: int, exc: BaseException) -> VCen
     )
 
 
-# SmartConnect first discovers the API version (GET /sdk/vimServiceVersions.xml) through
-# `pyVim.connect.http_client.HTTPSConnection(...)` WITHOUT any timeout (pyVmomi 8.0.3), so
-# httpConnectionTimeout alone does not stop a vCenter that accepts TCP and never answers.
-# pyVim.connect gets this thin stand-in for http.client: identical except that connections built
-# without a timeout use the one of the current _connect() call (thread-local, so parallel syncs
-# of different vCenters each keep their own value). Everything else is the real module.
+# SmartConnect first discovers the API version (GET /sdk/vimServiceVersions.xml, pyVim.connect's
+# private __GetElementTree) with a bare HTTP(S)Connection and NO timeout, and no pyVmomi version
+# offers a parameter for it (8.0.3 and 9.1 both): httpConnectionTimeout only reaches the SOAP stub
+# built after discovery. A vCenter that accepts TCP and never answers would block the sync thread
+# forever. So pyVim.connect gets connection factories that are identical to http.client's except
+# that a connection built without a timeout uses the one of the current _connect() call
+# (thread-local, so parallel syncs of different vCenters each keep their own value).
+# Where pyVim.connect looks the classes up depends on the pyVmomi version:
+#   - 8.0.x: `http_client.HTTPSConnection(...)` via six.moves -> replace the module reference;
+#   - 9.x:   `HTTPSConnection(...)` imported into its globals from pyVmomi.five -> replace the names.
+# Both are read at call time, so patching the attributes is enough. A layout matching neither is
+# logged (and caught by tests/test_reliability.py::test_version_discovery_timeout_is_hooked).
 _tls = threading.local()
 
 
+def _discovery_timeout() -> Optional[float]:
+    return getattr(_tls, "timeout", None) or socket.getdefaulttimeout()
+
+
+def _HTTPSConnection(*args, **kwargs):
+    kwargs.setdefault("timeout", _discovery_timeout())
+    return http.client.HTTPSConnection(*args, **kwargs)
+
+
+def _HTTPConnection(*args, **kwargs):
+    kwargs.setdefault("timeout", _discovery_timeout())
+    return http.client.HTTPConnection(*args, **kwargs)
+
+
 class _HttpClientWithTimeout(types.ModuleType):
+    """Stand-in for http.client: everything is the real module except the two factories."""
+    HTTPSConnection = staticmethod(_HTTPSConnection)
+    HTTPConnection = staticmethod(_HTTPConnection)
+
     def __getattr__(self, name):
         return getattr(http.client, name)
 
-    @staticmethod
-    def HTTPSConnection(*args, **kwargs):
-        kwargs.setdefault("timeout", getattr(_tls, "timeout", None) or socket.getdefaulttimeout())
-        return http.client.HTTPSConnection(*args, **kwargs)
 
-    @staticmethod
-    def HTTPConnection(*args, **kwargs):
-        kwargs.setdefault("timeout", getattr(_tls, "timeout", None) or socket.getdefaulttimeout())
-        return http.client.HTTPConnection(*args, **kwargs)
+def _hook_discovery_timeout(mod) -> Optional[str]:
+    """Route pyVim.connect's version-discovery connections through the factories above."""
+    if getattr(mod, "http_client", None) is http.client:                # pyVmomi 8.0.x
+        mod.http_client = _HttpClientWithTimeout("http_client")
+        return "http_client"
+    if isinstance(getattr(mod, "http_client", None), _HttpClientWithTimeout):
+        return "http_client"
+    if (getattr(mod, "HTTPSConnection", None) in (http.client.HTTPSConnection, _HTTPSConnection)
+            and getattr(mod, "HTTPConnection", None) in (http.client.HTTPConnection, _HTTPConnection)):
+        mod.HTTPSConnection = _HTTPSConnection                          # pyVmomi 9.x
+        mod.HTTPConnection = _HTTPConnection
+        return "globals"
+    logger.warning("pyVim.connect layout not recognised: vCenter version discovery has no timeout")
+    return None
 
 
-if getattr(_pyvim_connect, "http_client", None) is http.client:
-    _pyvim_connect.http_client = _HttpClientWithTimeout("http_client")
+_DISCOVERY_TIMEOUT_HOOK = _hook_discovery_timeout(_pyvim_connect)
 
 
 def _connect(cfg: VCenterConfig, timeout: Optional[int] = None):
     # httpConnectionTimeout becomes the socket timeout of the SOAP stub: it bounds the login AND
     # every later call on this connection. None (the old value) means wait forever. The version
-    # discovery before the login gets the same value through _HttpClientWithTimeout.
+    # discovery before the login gets the same value through _hook_discovery_timeout.
     timeout = timeout or timeout_for(cfg)
     _tls.timeout = timeout
     context = None
