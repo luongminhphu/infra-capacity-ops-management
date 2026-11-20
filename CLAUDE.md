@@ -48,7 +48,7 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 | Quy hoạch / sizing / license | `planning.py`, `sizing.py`, `sizing_advisory.py`, `licensing/` |
 | Báo cáo PDF | `report_pdf.py` (helper dùng chung) + `report_*.py` (vd `report_infra.py` Sức khoẻ hạ tầng từ `infra.report_data`) |
 | Excel | `excel_sizing.py`, `excel_backup.py`, `excel_infra.py`, `excel_cmdb.py` (Sổ CI, `GET /api/ci/export.xlsx`), `routers/export.py` |
-| Trung tâm báo cáo | `frontend/index.html` `#viewReports` (nhóm Capacity · Hạ tầng & phần cứng · Hệ thống & Owner · Quy hoạch & Sizing · License · Backup · Chi phí) + `js/views/reports.js` (`RPT_ACTIONS`; báo cáo mới: thêm thẻ + action + dòng `exports.py`); ẩn nhóm theo module ở `app.js::applyFeatures` |
+| Trung tâm báo cáo (quy tắc 10) | `frontend/index.html` `#viewReports` (nhóm Capacity · Hạ tầng & phần cứng · Hệ thống & Owner · Quy hoạch & Sizing · License · Backup · Chi phí) + `js/views/reports.js` (`RPT_ACTIONS`; báo cáo mới: thêm thẻ + action + dòng `exports.py` có `center`); ẩn nhóm theo module ở `app.js::applyFeatures`; kiểm bằng `tests/test_report_center.py` |
 | Sổ CI (ICO v2 G1) | `backend/app/cmdb/` (`models.py` bảng `ci` / `ci_key` / `ci_link`, `registry.py` ghi theo tập — upsert / thay khoá / thay liên kết / `retire_unseen`, `builder.py` `build_all()` dựng lại sau mỗi vòng sync ở pod leader, `query.py` đọc có lọc theo tính năng / quyền + `card_extras` cho thẻ, `impact.py` tác động down / up theo tầng), `routers/cmdb.py` (`/api/ci`, `/api/ci/{id}`, `/api/ci/{id}/impact`, `/api/ci/stats`); khoá chuẩn `shared/identity.py`; CI không thấy quá `CMDB_RETIRE_DAYS` → `retired`, không xoá |
 | Hệ thống & Owner (ICO v2 G2) | `backend/app/owners/` (`models.py` bảng `systems` / `system_members` / `owner_rules` / `owner_sequences`, `service.py` CRUD + gán VM — manual thắng tự động, một VM một hệ thống — + độ phủ owner + audit, `excel.py` nhập / xuất cùng mẫu, `rules.py` gán tự động manual > attribute > tag > rule > itsm, chạy ở leader sau bộ dựng CI, `plan()` = Chạy thử, đề xuất `owner_proposals`, `review.py` kỳ rà soát 6 tháng — `review_campaigns` / `review_items` / `review_notices` (outbox email: giành dòng trước khi gửi SMTP, UNIQUE kỳ + người nhận + loại, `dry_run`; G3b: `decide` / `advance` nhắc − 7 / − 2, leo thang, đóng + 7 / `verify` / `summary`, `REVIEW_INFRA_EMAIL`, `REVIEW_UNIT_COST_*`), `routers/reviews.py` Cài đặt → Rà soát owner (kết quả, hàng gán lại, `report_review.py` PDF, `excel_review.py`; nguồn hộp việc `review`), xác nhận của owner ở `routers/owner_portal.py` `/api/owner/reviews*` + `owner_portal.js` (`#/owner/review/<id>`), `routers/owner_rules.py` (Cài đặt → Owner: `/api/systems/rules*`, `/api/systems/proposals*`, đăng ký trước `owners`), `routers/owners.py` (`/api/systems*`; ghi cần `require_owner_admin` = admin hoặc `users.owner_admin`, bật ở Cài đặt → Người dùng & quyền), `frontend/js/views/owners.js` (Quản lý thông tin → Hệ thống & Owner; `osAssignDialog` dùng chung với thẻ VM; form 3 nhóm Owner & Backup / Support (`support_emails` CSV ≤ 5, chỉ liên hệ, không quyền cổng Owner) / thông tin; *Nhân bản* = `osForm(s, {clone})`; báo cáo *VM theo hệ thống* `owners/inventory.py` (một nguồn số) → `report_systems.py` / `excel_systems.py`, `GET /api/systems/report.pdf|xlsx`; bản nháp email rà soát ISO 27001 `owners/mail_drafts.py` (bảng `owner_mail_templates`, trường `{…}` cố định, .eml `X-Unsent: 1` / .zip, không gửi), `/api/systems/mail-template`, `/api/systems/mail-drafts*` (owner admin), `osMailDialog`; tab VM chưa có owner lọc nhiều giá trị qua `ui.js::uiMultiSelect`, `GET /api/systems/coverage?vcenter=&cluster=&power=&folder=&ids=`) |
 | Phạm vi / export / service dùng chung | `backend/app/vm_ip.py` (IP cạnh tên VM ở mọi danh sách, quy tắc 9), `backend/app/scope.py` (`Scope.from_query`, `split_csv`), `exports.py` (registry mọi file xuất + `/api/exports`; Kho báo cáo đọc từ đây), `services/entities.py`, `backup/service.py`, `licensing/inventory.py` (module khác gọi service, không import router), `excel_style.py` / `pdf_kit.py` (giao diện Excel / PDF chung) |
@@ -124,7 +124,21 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
    - Dòng lịch sử giữ `ipAddress` của snapshot.
    - Finding VM có `ip` ở cả `capacity.py` và `core.js` (không đổi mã đối soát).
    - Lọc theo tên VM nên khớp cả IP.
-10. **Test**: thêm hoặc sửa logic tính toán (`capacity`, `planning`, `sizing`, `licensing`,
+10. **Báo cáo gom về Tài liệu → Báo cáo** (quyết định của chủ sản phẩm). Tính năng mới có xuất báo cáo (PDF / Excel / CSV) thì
+   ngoài nút ở trang của tính năng, báo cáo phải có mặt ở **Trung tâm báo cáo**, trong cùng thay đổi:
+   - Khai file xuất trong `backend/app/exports.py` gồm `group`, `rx`, `feature` / `role` và `archive` (PDF thường `True`, để vào
+     Kho báo cáo). Trường `center` ghi chỗ đặt trên trang:
+     - `"<key>"`: nút `data-report`;
+     - `"spend:<fmt>"`: nút `data-spend-export`;
+     - `"record:<page>"`: báo cáo của một hồ sơ, đặt lối tắt `data-nav-link` trên thẻ “Báo cáo theo hồ sơ”.
+   - Thêm thẻ (tiêu đề, mô tả một câu, tuỳ chọn trong `<details class="rpt-opts">` nếu có, nút PDF / Excel, nút *Mở trang*) vào
+     đúng nhóm của `frontend/index.html` `#viewReports`. Nhóm mới thì thêm chip `data-rpt-group` và ẩn theo module ở
+     `app.js::applyFeatures`.
+   - Thêm action vào `RPT_ACTIONS` (`frontend/js/views/reports.js`), dùng chung hàm / endpoint với trang của tính năng để số liệu
+     giống nhau ở mọi nơi xuất. Phạm vi lấy từ thanh lọc và khung bên phải; bộ lọc Owner do `uiDownload` gắn.
+   - Cập nhật bảng nhóm ở `docs/huong-dan-chi-tiet.md` (mục *Trung tâm báo cáo*).
+   - `backend/tests/test_report_center.py` chặn file xuất chưa có chỗ trên trang và nút không có action / không khai.
+11. **Test**: thêm hoặc sửa logic tính toán (`capacity`, `planning`, `sizing`, `licensing`,
    `backup/analysis`, `spend/budget_plan`) thì phải có test trong `backend/tests/` với số liệu cụ thể. Chạy
    `python -m pytest tests -q` trước khi kết thúc.
 

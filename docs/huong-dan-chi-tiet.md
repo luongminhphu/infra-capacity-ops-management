@@ -283,6 +283,8 @@ Mọi file xuất của app ở một chỗ, chia theo nhóm:
 | Backup | Hiện trạng Backup (PDF), thống kê backup (Excel) |
 | Chi phí & ngân sách | Kế hoạch ngân sách IT (PDF + Excel); **Báo cáo theo hồ sơ**: lối tắt tới Kế hoạch năm sau, Cải tạo, Báo giá, BOM — mỗi hồ sơ xuất từ trang của nó |
 
+- **Quy tắc:** tính năng nào có báo cáo (PDF / Excel / CSV) thì báo cáo đó cũng có ở đây. Báo cáo của một hồ sơ (kế hoạch, cải tạo,
+  báo giá, BOM) được dẫn tới trang của hồ sơ qua thẻ *Báo cáo theo hồ sơ*. Test tự động chặn file xuất mới chưa gom về trang này.
 - Nhóm của module đang tắt (hoặc thiếu vai trò Chi phí) bị ẩn; nút *Mở trang* chỉ hiện khi người dùng mở được trang đó.
 - Mọi báo cáo theo **bộ lọc Owner** trên thanh trên.
 - Sức khoẻ hạ tầng theo thêm vCenter / cluster / host ở khung *Phạm vi báo cáo Capacity*.
