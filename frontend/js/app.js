@@ -573,7 +573,7 @@ function renderSourceMeta(runMeta) {
     : 'Dữ liệu: chưa rõ giờ cập nhật';
   const detail = runMeta.map(r => `${name(r)} (${when(r) ? when(r).toLocaleString('vi-VN') : 'chưa rõ giờ'})`).join(', ');
   banner.classList.add('show', 'info');
-  banner.classList.remove('error', 'warn');
+  banner.classList.remove('error', 'warn', 'ok');
   banner.innerHTML = `<details class="src-meta"><summary>${esc(summary)}</summary><span>${esc(detail)}</span></details>`;
 }
 
