@@ -39,7 +39,8 @@
   --control-h-sm:30px;--control-h-md:36px;--control-h-lg:44px;
   --motion-fast:120ms;--motion-base:160ms;--motion-slow:220ms;--ease-out:cubic-bezier(.2,0,0,1);
   --transition:var(--motion-base) var(--ease-out);
-  --content:1720px;--sidebar-w:240px;--icon-sm:14px;--icon-md:16px;--icon-lg:20px;--topbar-h:56px;
+  --content:none;--sidebar-w:240px;   /* --content: no cap — the app fills any screen (zoom 90 % on 1920 px, ultra-wide) */
+ --icon-sm:14px;--icon-md:16px;--icon-lg:20px;--topbar-h:56px;
 
   /* ── Semantic: dark (product default) ── */
   color-scheme:dark;

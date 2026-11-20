@@ -8,7 +8,15 @@ Write (admin or a user with "Quản trị Hệ thống & Owner"):
 POST /api/systems · PUT /api/systems/{id} · DELETE /api/systems/{id}
 POST /api/systems/{id}/members {ciIds, move} · DELETE /api/systems/{id}/members {ciIds}
 POST /api/systems/import/preview · /api/systems/import/commit   (.xlsx ≤ 10 MB)
+Reports (every signed-in user, owner filter = the usual systems / owners / departments / projects / criticality params):
+GET  /api/systems/report.pdf · /api/systems/report.xlsx      — Danh sách VM theo hệ thống (owners/inventory.py)
+Review e-mail drafts, ISO 27001 (owner admin; owners/mail_drafts.py — files only, nothing is sent):
+GET/PUT/DELETE /api/systems/mail-template                   — template (DELETE = back to the default)
+GET  /api/systems/mail-drafts?period=&due=                   — owners that get a draft
+GET  /api/systems/mail-drafts/preview?owner=&period=&due=    — subject / text / HTML of one draft (unsaved template: POST)
+GET  /api/systems/mail-drafts/download?owner=&period=&due=&attach=  — one .eml, or every owner as .zip without owner
 """
+import datetime as dt
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, Response, UploadFile
@@ -19,6 +27,8 @@ from ..database import get_db
 from ..models import User
 from ..owners import excel, service
 from ..pagination import paginate
+from ..owners import mail_drafts
+from ..scope import OwnerScope, owner_scope_query
 from ..security import get_current_user
 from ..shared.filetype import XLSX, FileRejected, detect_type
 
@@ -83,6 +93,118 @@ def coverage(q: str = Query("", max_length=400), vcenter: str = Query("", max_le
 def export_xlsx(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     data = excel.export(db)
     return Response(data, media_type=XLSX_MIME, headers={"Content-Disposition": 'attachment; filename="he-thong-owner.xlsx"'})
+
+
+def _stamp() -> str:
+    return dt.datetime.now().strftime("%Y%m%d")
+
+
+@router.get("/report.pdf")
+def report_pdf(osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .. import report_systems
+    from ..owners import inventory
+    data = report_systems.build_pdf(inventory.build(db, osc), user.display_name or user.username)
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="vm-theo-he-thong-{_stamp()}.pdf"'})
+
+
+@router.get("/report.xlsx")
+def report_xlsx(osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .. import excel_systems
+    from ..owners import inventory
+    data = excel_systems.build_xlsx(inventory.build(db, osc))
+    return Response(data, media_type=XLSX_MIME,
+                    headers={"Content-Disposition": f'attachment; filename="vm-theo-he-thong-{_stamp()}.xlsx"'})
+
+
+def _draft_args(period: Optional[str], due: Optional[str]):
+    try:
+        return mail_drafts.clean_period(period, due)
+    except mail_drafts.Invalid as exc:
+        raise HTTPException(400, str(exc))
+
+
+@router.get("/mail-template")
+def mail_template(user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    return mail_drafts.get_template(db)
+
+
+@router.put("/mail-template")
+def save_mail_template(data: Dict[str, Any] = Body(...), user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    try:
+        out = mail_drafts.save_template(db, user, data.get("subject"), data.get("body"))
+    except mail_drafts.Invalid as exc:
+        raise HTTPException(400, str(exc))
+    db.commit()
+    return out
+
+
+@router.delete("/mail-template")
+def reset_mail_template(user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    out = mail_drafts.reset_template(db, user)
+    db.commit()
+    return out
+
+
+@router.get("/mail-drafts")
+def mail_draft_list(period: str = Query("", max_length=16), due: str = Query("", max_length=10),
+                    osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    p, d = _draft_args(period, due)
+    res = mail_drafts.owners(db, osc)
+    return {"period": p, "due": d.isoformat(), "owners": [mail_drafts.summary(o) for o in res["owners"]], "noOwner": res["noOwner"],
+            "truncated": res["truncated"], "scope": res["scope"]}
+
+
+def _one_owner(db: Session, osc: OwnerScope, owner: str) -> Dict[str, Any]:
+    res = mail_drafts.owners(db, osc)
+    o = next((x for x in res["owners"] if x["email"] == owner.strip().lower()), None)
+    if o is None:
+        raise HTTPException(404, "Không có owner này trong phạm vi.")
+    return {**o, "_backup": res["backupMonitored"], "_scope": res["scope"]}
+
+
+def _sender(user: User) -> str:
+    return user.display_name or user.email or user.username
+
+
+@router.api_route("/mail-drafts/preview", methods=["GET", "POST"])
+def mail_draft_preview(owner: str = Query(..., max_length=255), period: str = Query("", max_length=16), due: str = Query("", max_length=10),
+                       data: Optional[Dict[str, Any]] = Body(default=None), osc: OwnerScope = Depends(owner_scope_query),
+                       user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    """GET = the saved template; POST {subject, body} = preview of an unsaved template (nothing stored)."""
+    p, d = _draft_args(period, due)
+    tpl = mail_drafts.get_template(db)
+    if data:
+        try:
+            tpl["subject"], tpl["body"] = mail_drafts._check(data.get("subject"), data.get("body"))
+        except mail_drafts.Invalid as exc:
+            raise HTTPException(400, str(exc))
+    o = _one_owner(db, osc, owner)
+    subject, text, body = mail_drafts.render(tpl, o, p, d, _sender(user), o["_backup"])
+    return {"to": o["email"], "cc": o["cc"], "subject": subject, "text": text, "html": body}
+
+
+@router.get("/mail-drafts/download")
+def mail_draft_download(owner: str = Query("", max_length=255), period: str = Query("", max_length=16), due: str = Query("", max_length=10),
+                        attach: bool = Query(True), osc: OwnerScope = Depends(owner_scope_query),
+                        user: User = Depends(require_owner_admin), db: Session = Depends(get_db)):
+    p, d = _draft_args(period, due)
+    tpl = mail_drafts.get_template(db)
+    sender = _sender(user)
+    if owner.strip():
+        o = _one_owner(db, osc, owner)
+        name, data = mail_drafts.eml(db, o, mail_drafts.render(tpl, o, p, d, sender, o["_backup"]), p, attach)
+        service.audit(db, user, "owners.mail_drafts.download", owners=1, period=p)
+        db.commit()
+        return Response(data, media_type="message/rfc822", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    res = mail_drafts.owners(db, osc)
+    if not res["owners"]:
+        raise HTTPException(404, "Không có hệ thống nào có owner trong phạm vi.")
+    files = [mail_drafts.eml(db, o, mail_drafts.render(tpl, o, p, d, sender, res["backupMonitored"]), p, attach) for o in res["owners"]]
+    service.audit(db, user, "owners.mail_drafts.download", owners=len(files), period=p)
+    db.commit()
+    return Response(mail_drafts.zip_all(files), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="email-ra-soat-{mail_drafts._slug(p)}.zip"'})
 
 
 @router.get("/vm/{ci_id}")

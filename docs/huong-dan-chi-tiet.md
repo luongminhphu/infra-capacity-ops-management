@@ -609,6 +609,47 @@ Thẻ đối tượng (Ctrl + K → chọn một kết quả) đọc từ sổ C
 - **Quyền**: mọi người dùng xem được; tạo / sửa / xoá hệ thống, gán VM, nhập Excel cần quyền **Quản trị Hệ thống & Owner**
   (Cài đặt → Người dùng & quyền, mặc định chỉ admin). Mọi thay đổi ghi nhật ký (`owners.*`; đổi owner: `owners.system.owner_change`).
 
+### Báo cáo VM theo hệ thống và email rà soát định kỳ (ISO 27001)
+
+- **Báo cáo PDF / Excel** (nút *Báo cáo PDF*, *Báo cáo Excel* trên trang Hệ thống & Owner; mọi người dùng đã đăng nhập):
+  - PDF:
+    - tổng kết: số hệ thống, VM bật / tắt, vCPU, RAM, disk; hệ thống chưa có owner; VM chưa thuộc hệ thống; VM chưa backup;
+    - 1 Tổng hợp theo hệ thống;
+    - 2 Chi tiết từng hệ thống: owner, backup, support, quản lý, bảng VM gồm cluster / host, nguồn, cấu hình, HĐH, IP, backup;
+    - 3 VM chưa thuộc hệ thống: tối đa 500 dòng trong PDF, đủ trong Excel.
+  - Excel: sheet *Tổng hợp*, *VM theo hệ thống* (một dòng một VM), *VM chưa thuộc hệ thống*.
+  - Theo bộ lọc owner của trang. Khi đang lọc, báo cáo chỉ gồm các hệ thống đó và không có phần VM chưa thuộc hệ thống.
+  - Dùng làm sổ tài sản theo ISO/IEC 27001:2022 A.5.9.
+  - Cùng một nguồn số với email: `owners/inventory.py`.
+- **Email rà soát** (nút *Email rà soát*; admin hoặc người có quyền quản trị Hệ thống & Owner):
+  - Mỗi owner một bản nháp gồm mọi hệ thống người đó làm owner. Backup của các hệ thống được CC; support không nhận.
+  - Hệ thống chưa có owner được liệt kê riêng và không có email.
+  - Nhập *Kỳ rà soát* (mặc định kỳ hiện tại, vd `2026-H2`) và *Hạn phản hồi* (mặc định sau 14 ngày).
+  - **Xem** để xem trước email (đến, CC, tiêu đề, nội dung).
+  - **.eml** tải bản nháp của một owner; **Tải tất cả (.zip)** tải bản nháp của mọi owner.
+  - File .eml có `X-Unsent: 1`: Outlook mở thành thư mới để xem lại rồi bấm Gửi. **ICO không tự gửi.**
+  - Tuỳ chọn đính kèm Excel danh sách VM của owner.
+  - Mỗi lần tải được ghi nhật ký.
+  - **Mẫu email** (mở mục *Mẫu email*) gồm tiêu đề và nội dung chứa trường tự điền:
+    - Trường người: `{owner_name}`, `{owner_email}`, `{sender}`, `{backup_names}`, `{portal_link}`.
+    - Trường thời gian: `{period}`, `{due_date}`, `{today}`.
+    - Trường hệ thống: `{system_count}`, `{system_list}`.
+    - Trường số liệu: `{vm_count}`, `{vm_on}`, `{vm_off}`, `{vcpu}`, `{ram_gb}`, `{disk_gb}`, `{unprotected}`.
+    - `{vm_table}` (bảng VM) đặt riêng một dòng.
+  - Bấm tên trường để chèn vào vị trí con trỏ.
+  - Trường sai tên bị từ chối khi lưu.
+  - *Xem trước mẫu đang sửa* xem thử mà chưa lưu.
+  - *Khôi phục mặc định* trả về mẫu gốc.
+  - Mẫu mặc định nêu căn cứ ISO/IEC 27001:2022:
+    - A.5.9 kiểm kê tài sản;
+    - A.5.11 thu hồi tài sản không dùng;
+    - A.5.18 rà quyền (owner / backup / support còn đúng người);
+    - A.8.6 dung lượng.
+
+    Owner được đề nghị chọn một trong 4 quyết định cho từng VM: còn dùng / thu hồi / giảm cấu hình / chuyển owner.
+  - Kỳ rà soát tự động (Cài đặt → Rà soát owner) vẫn gửi email riêng qua SMTP như trước. Bản nháp ở đây dùng khi muốn gửi tay
+    hoặc gửi trước kỳ.
+
 ### Hệ thống & Owner — Backup, Support, nhân bản, lọc VM chưa có owner
 
 - **Ba vai trò liên hệ** của một hệ thống (form *Thêm / Sửa hệ thống* chia 3 nhóm):

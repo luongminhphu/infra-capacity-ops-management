@@ -53,7 +53,10 @@ function osHead() {
       <p class="panel-sub">Owner là Team Lead đại diện nhóm dự án / phòng ban (email Entra). Mỗi VM thuộc tối đa một hệ thống; gán tay luôn thắng gán tự động.</p></div>
     <div class="panel-toolbar infra-toolbar">${can ? `<button class="btn btn-secondary btn-sm" type="button" data-os-add><i data-lucide="plus"></i>Thêm hệ thống</button>
       <button class="btn btn-secondary btn-sm" type="button" data-os-import><i data-lucide="upload"></i>Nhập Excel</button>` : ''}
-      <button class="btn btn-ghost btn-sm" type="button" data-os-export><i data-lucide="download"></i>Xuất Excel</button>
+      ${can ? '<button class="btn btn-secondary btn-sm" type="button" data-os-mail title="Bản nháp email rà soát tài nguyên định kỳ gửi owner (ISO 27001)"><i data-lucide="mail"></i>Email rà soát</button>' : ''}
+      <button class="btn btn-ghost btn-sm" type="button" data-os-report="pdf" title="Danh sách VM theo hệ thống — PDF"><i data-lucide="file-text"></i>Báo cáo PDF</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-os-report="xlsx" title="Danh sách VM theo hệ thống — Excel"><i data-lucide="sheet"></i>Báo cáo Excel</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-os-export title="Danh sách hệ thống và VM, nhập lại được"><i data-lucide="download"></i>Xuất Excel</button>
       <button class="btn btn-ghost btn-sm" type="button" data-os-reload><i data-lucide="refresh-cw"></i>Tải lại</button></div></div>`;
 }
 
@@ -309,6 +312,115 @@ async function osOpen(id) {
   };
 }
 
+/* ---------------------------------------------------------------- Email rà soát định kỳ (ISO 27001)
+   One template (subject + body with {fields}) → one draft per owner, downloaded as .eml (opens as a new message in
+   Outlook) or all owners as .zip. Nothing is sent from ICO. Follows the owner filter of the page (apiRequest / uiDownload). */
+const osMail = { tpl: null, list: null, owner: '' };
+
+function osMailQuery() {
+  const p = new URLSearchParams();
+  const period = ($('#osmPeriod')?.value || '').trim(), due = $('#osmDue')?.value || '';
+  if (period) p.set('period', period);
+  if (due) p.set('due', due);
+  return p;
+}
+
+async function osMailDialog() {
+  try {
+    [osMail.tpl, osMail.list] = await Promise.all([apiRequest('/systems/mail-template'), apiRequest('/systems/mail-drafts')]);
+  } catch (err) { uiAlert(err.message); return; }
+  const l = osMail.list, t = osMail.tpl;
+  osMail.owner = l.owners[0]?.email || '';
+  uiPanelDialog('Email rà soát tài nguyên định kỳ', `
+    <p class="muted-sub os-mail-intro">Bản nháp gửi từng owner theo quy trình ISO/IEC 27001 (A.5.9 kiểm kê tài sản, A.5.11 thu hồi, A.5.18 quyền truy cập,
+      A.8.6 dung lượng). ICO không tự gửi: tải file .eml, mở bằng Outlook, xem lại rồi gửi. Backup của hệ thống được CC.</p>
+    ${l.scope ? `<p class="insight-box">${esc(l.scope)}</p>` : ''}
+    <div class="form-grid-aligned dc-form">
+      <label class="field"><span>Kỳ rà soát</span><input id="osmPeriod" value="${esc(l.period)}" maxlength="16"></label>
+      <label class="field"><span>Hạn phản hồi</span><input id="osmDue" type="date" value="${esc(l.due)}"></label>
+    </div>
+    <label class="infra-check"><input type="checkbox" id="osmAttach" checked> Đính kèm Excel danh sách VM của owner</label>
+    <div class="sp-h">Owner nhận email (${fmtInt(l.owners.length)})</div>
+    ${l.owners.length ? `<div class="table-wrap"><table class="data-table os-mail-table"><thead><tr><th>Owner</th><th>Hệ thống</th><th class="num">VM</th><th>CC (backup)</th><th></th></tr></thead><tbody>
+      ${l.owners.map(o => `<tr data-osm-row="${esc(o.email)}"><td><b>${esc(o.name || o.email)}</b><br><span class="muted-sub">${esc(o.email)}</span></td>
+        <td>${o.systems.map(x => `${esc(x.code)} — ${esc(x.name)}`).join('<br>')}</td><td class="num">${fmtInt(o.vmCount)}</td>
+        <td>${o.cc.length ? o.cc.map(esc).join('<br>') : '—'}</td>
+        <td class="os-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-osm-preview="${esc(o.email)}" aria-label="Xem trước email gửi ${esc(o.email)}"><i data-lucide="eye"></i>Xem</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-osm-dl="${esc(o.email)}" aria-label="Tải bản nháp gửi ${esc(o.email)}"><i data-lucide="download"></i>.eml</button></td></tr>`).join('')}
+      </tbody></table></div>` : uiEmpty('Chưa có hệ thống nào có owner trong phạm vi.')}
+    ${l.noOwner.length ? `<p class="muted-sub">${fmtInt(l.noOwner.length)} hệ thống chưa có owner nên không có email: ${l.noOwner.slice(0, 10).map(x => esc(x.code)).join(', ')}${l.noOwner.length > 10 ? '…' : ''}.</p>` : ''}
+    <details class="os-mail-tpl"><summary>Mẫu email — ${t.custom ? `đã sửa${t.updatedBy ? ` bởi ${esc(t.updatedBy)}` : ''}` : 'mặc định'}</summary>
+      <label class="field"><span>Tiêu đề</span><input id="osmSubject" value="${esc(t.subject)}" maxlength="255"></label>
+      <label class="field"><span>Nội dung</span><textarea id="osmBody" rows="14" maxlength="20000">${esc(t.body)}</textarea></label>
+      <p class="muted-sub">Trường tự điền — bấm để chèn vào vị trí con trỏ. {vm_table} đặt riêng một dòng.</p>
+      <div class="os-mail-fields">${t.placeholders.map(p => `<button class="btn btn-ghost btn-sm" type="button" data-osm-ph="${esc(p.key)}" title="${esc(p.label)}">{${esc(p.key)}}</button>`).join('')}</div>
+      <div class="panel-toolbar"><button class="btn btn-secondary btn-sm" type="button" id="osmTry"><i data-lucide="eye"></i>Xem trước mẫu đang sửa</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="osmReset">Khôi phục mặc định</button>
+        <button class="btn btn-primary btn-sm" type="button" id="osmSave"><i data-lucide="save"></i>Lưu mẫu</button></div>
+    </details>
+    <div id="osmPreview"></div>`,
+  `<span class="src-spacer"></span><button class="btn btn-ghost btn-sm" type="button" data-sp-close>Đóng</button>
+   <button class="btn btn-primary btn-sm" type="button" id="osmAll"${l.owners.length ? '' : ' disabled'}><i data-lucide="archive"></i>Tải tất cả (.zip)</button>`);
+  const msg = $('#spDialogMsg');
+  const preview = async (email, draft) => {
+    osMail.owner = email;
+    $$('[data-osm-row]').forEach(r => r.classList.toggle('is-selected', r.dataset.osmRow === email));
+    const q = osMailQuery(); q.set('owner', email);
+    uiSetStatus(msg, 'Đang dựng bản nháp…');
+    try {
+      const p = await apiRequest(`/systems/mail-drafts/preview?${q}`, draft ? { method: 'POST', body: JSON.stringify(draft) } : {});
+      $('#osmPreview').innerHTML = `<div class="sp-h">Xem trước — ${esc(email)}${draft ? ' (mẫu chưa lưu)' : ''}</div>
+        <dl class="os-mail-head"><dt>Đến</dt><dd>${esc(p.to)}</dd><dt>CC</dt><dd>${p.cc.length ? p.cc.map(esc).join(', ') : '—'}</dd><dt>Tiêu đề</dt><dd>${esc(p.subject)}</dd></dl>
+        <iframe class="os-mail-frame" title="Nội dung email" sandbox=""></iframe>`;
+      $('#osmPreview .os-mail-frame').srcdoc = p.html;          // sandboxed: no script, no same-origin access
+      uiSetStatus(msg, '');
+    } catch (err) { uiSetStatus(msg, err.message, 'error'); }
+  };
+  const draft = () => ({ subject: $('#osmSubject').value, body: $('#osmBody').value });
+  $('#spDialogBody').onclick = (e) => {
+    const pv = e.target.closest('[data-osm-preview]');
+    if (pv) { preview(pv.dataset.osmPreview).then(() => $('#osmPreview').scrollIntoView({ block: 'nearest' })); return; }
+    const dl = e.target.closest('[data-osm-dl]');
+    if (dl) {
+      const q = osMailQuery(); q.set('owner', dl.dataset.osmDl); q.set('attach', $('#osmAttach').checked);
+      uiDownload(`${API_BASE}/systems/mail-drafts/download?${q}`, { method: 'GET' }, 'ra-soat.eml')
+        .then(n => uiSetStatus(msg, `Đã tải ${n}. Mở bằng Outlook, xem lại rồi gửi.`, 'ok'))
+        .catch(err => uiSetStatus(msg, err.message, 'error'));
+      return;
+    }
+    const ph = e.target.closest('[data-osm-ph]');
+    if (ph) {
+      const ta = $('#osmBody'), ins = `{${ph.dataset.osmPh}}`;
+      const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
+      ta.value = ta.value.slice(0, a) + ins + ta.value.slice(b);
+      ta.focus(); ta.selectionStart = ta.selectionEnd = a + ins.length;
+    }
+  };
+  $('#osmTry').onclick = () => { if (osMail.owner) preview(osMail.owner, draft()); else uiSetStatus(msg, 'Chưa có owner để xem trước.', 'error'); };
+  $('#osmSave').onclick = async () => {
+    try {
+      osMail.tpl = await apiRequest('/systems/mail-template', { method: 'PUT', body: JSON.stringify(draft()) });
+      $('#osmSubject').value = osMail.tpl.subject;
+      if (osMail.owner) await preview(osMail.owner);
+      uiSetStatus(msg, 'Đã lưu mẫu email.', 'ok');
+    } catch (err) { uiSetStatus(msg, err.message, 'error'); }
+  };
+  $('#osmReset').onclick = async () => {
+    if (!await uiConfirm('Khôi phục mẫu email mặc định? Nội dung đã sửa sẽ mất.', { danger: true })) return;
+    try { await apiRequest('/systems/mail-template', { method: 'DELETE' }); osMailDialog(); }
+    catch (err) { uiSetStatus(msg, err.message, 'error'); }
+  };
+  $('#osmAll').onclick = () => {
+    const q = osMailQuery(); q.set('attach', $('#osmAttach').checked);
+    $('#osmAll').disabled = true;
+    uiDownload(`${API_BASE}/systems/mail-drafts/download?${q}`, { method: 'GET' }, 'email-ra-soat.zip')
+      .then(n => uiSetStatus(msg, `Đã tải ${n}: ${fmtInt(l.owners.length)} bản nháp .eml.`, 'ok'))
+      .catch(err => uiSetStatus(msg, err.message, 'error'))
+      .finally(() => { $('#osmAll').disabled = false; });
+  };
+  if (osMail.owner) preview(osMail.owner);
+}
+
 function osImportDialog() {
   osState.file = null;
   uiPanelDialog('Nhập Hệ thống & Owner từ Excel', `
@@ -398,6 +510,14 @@ function osBind() {
     if (e.target.closest('[data-os-reload]')) { mount.innerHTML = uiLoading(); osState.facets = null; await osLoad(); osRender(); return; }
     if (e.target.closest('[data-os-add]')) { osForm(null); return; }
     if (e.target.closest('[data-os-import]')) { osImportDialog(); return; }
+    const rep = e.target.closest('[data-os-report]');
+    if (rep) {
+      const f = rep.dataset.osReport;
+      rep.disabled = true;
+      uiDownload(`${API_BASE}/systems/report.${f}`, { method: 'GET' }, `vm-theo-he-thong.${f}`).catch(err => uiAlert(err.message)).finally(() => { rep.disabled = false; });
+      return;
+    }
+    if (e.target.closest('[data-os-mail]')) { osMailDialog(); return; }
     if (e.target.closest('[data-os-export]')) { uiDownload(`${API_BASE}/systems/export.xlsx`, { method: 'GET' }, 'he-thong-owner.xlsx'); return; }
     if (e.target.closest('[data-os-clear]')) {
       osState.sel.clear(); $$('[data-os-sel]').forEach(c => { c.checked = false; });
