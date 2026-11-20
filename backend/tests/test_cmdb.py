@@ -276,6 +276,30 @@ def test_api_needs_login_and_opex_needs_spend_role(app_, api):
     assert c.get(f"/api/ci/{ids['opex']}").status_code == 200             # admin
 
 
+def test_ci_excel_export_keys_links_and_roles(app_, api):
+    import io
+    from openpyxl import load_workbook
+    c, ids = api
+    r = c.get("/api/ci/export.xlsx")
+    assert r.status_code == 200 and "so-ci-" in r.headers["content-disposition"]
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames == ["Tổng hợp", "CI", "Liên kết"]
+    rows = {x[2]: x for x in ([cell.value for cell in row] for row in wb["CI"].iter_rows()) if x[0] in ids.values()}
+    vm = next(x for x in rows.values() if x[0] == ids["vm"])
+    assert vm[1] == "VM" and vm[8] == "ip: 10.7.7.7" and vm[9] == "2 / 0"                 # keys, links out / in
+    links = [[cell.value for cell in row] for row in wb["Liên kết"].iter_rows()][4:]
+    assert ["VM", "api-vm", "protected_by", "Client backup", "api-vm", "Yếu (theo tên / IP)", "netbackup", "vm_name"] in [x[:8] for x in links]
+    assert any(x[:3] == ["Dòng Opex", "api-opex", "covers"] for x in links)                # admin sees Opex
+    nobody = _login(app_, "nobody1")                                                       # no spend role: no Opex row, no Opex link
+    wb2 = load_workbook(io.BytesIO(nobody.get("/api/ci/export.xlsx").content))
+    assert not any((row[1].value == "Dòng Opex") for row in wb2["CI"].iter_rows())
+    assert not any((row[0].value == "Dòng Opex") for row in wb2["Liên kết"].iter_rows())
+    only = load_workbook(io.BytesIO(c.get("/api/ci/export.xlsx?type=hypervisor_host").content))
+    assert [row[2].value for row in only["CI"].iter_rows()][4:] == ["api-esx"]
+    assert c.get("/api/ci/export.xlsx?type=bogus").status_code == 422
+    assert c.get("/api/ci/export.xlsx?status=gone").status_code == 422
+
+
 # ---------------------------------------------------------------- build time on a large demo
 def test_demo_build_under_5_seconds_for_3000_vms(db, monkeypatch):
     from app.collectors import scheduler

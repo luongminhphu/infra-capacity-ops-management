@@ -1,6 +1,7 @@
 """Sổ CI (ICO v2 G1b) — read only, every signed-in user; parts hidden by feature / role (cmdb/query.py).
 
 GET /api/ci?type=&q=&status=active|retired|all&limit=   — list / search by name or key (serial, IP, NAA…)
+GET /api/ci/export.xlsx?type=&status=                    — Sổ CI (Excel)
 GET /api/ci/stats                                        — CIs per type, hosts with a serial, weak links
 GET /api/ci/{id}                                         — one CI with its keys and links in both directions
 GET /api/ci/{id}/impact?direction=down|up&depth=        — downstream / upstream impact (cmdb/impact.py)
@@ -23,6 +24,22 @@ def list_cis(type: Optional[str] = Query(default=None, max_length=24), q: Option
              status: str = Query(default="active", max_length=8), limit: int = Query(default=50, ge=1, le=svc.MAX_LIMIT),
              user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return svc.list_cis(db, user, type, q, status, limit)
+
+
+@router.get("/export.xlsx")
+def ci_export(type: Optional[str] = Query(default=None, max_length=24), status: str = Query(default="active", pattern="^(active|retired|all)$"),
+              user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Sổ CI (Excel): CIs the caller may see, their keys and links (excel_cmdb.py)."""
+    import datetime as dt
+    from fastapi import HTTPException
+    from fastapi.responses import Response
+    from .. import excel_cmdb
+    from ..cmdb.models import CI_TYPES
+    if type and type not in CI_TYPES:
+        raise HTTPException(422, "Loại CI không hợp lệ.")
+    data = excel_cmdb.build_xlsx(db, user, type, status)
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="so-ci-{dt.datetime.now():%Y%m%d}.xlsx"'})
 
 
 @router.get("/stats")

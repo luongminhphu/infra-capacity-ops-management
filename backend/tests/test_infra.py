@@ -358,3 +358,35 @@ def test_demo_extras_carry_moid_and_vcenter_uuid():
     ex = demo_generator.collect_extras(cfg, hosts, vms)
     assert ex["vcenterUuid"] and all(a["entityMoid"] and a["vimType"] for a in ex["alarms"])
     assert {a["vimType"] for a in ex["alarms"]} == {"Datastore", "HostSystem", "VirtualMachine"}
+
+
+# ---------------------------------------------------------------- report Sức khoẻ hạ tầng (PDF / Excel)
+def test_infra_report_pdf_excel_and_scope(db, admin, editor):  # noqa: F811
+    import io
+    from openpyxl import load_workbook
+    from app import report_infra
+    for d in range(10):
+        metrics.record(db, "datastore", [("vc1:datastore-1", "usedGB", 855 + 5 * d)], NOW - dt.timedelta(days=9 - d))
+    ex = _extras()
+    ex["datastores"][0]["name"] = "DS-<b>PROD</b>-01"          # names from vCenter are escaped in the PDF
+    infra.store(db, "vc1", ex, NOW)
+    db.commit()
+    data = infra.report_data(db)
+    html = report_infra.render_html(data, "admin")
+    assert "DS-&lt;b&gt;PROD&lt;/b&gt;-01" in html and "<b>PROD</b>" not in html
+    assert "1. Datastore" in html and "5. Sức khoẻ host" in html and "Power Supply 2: Failure" in html
+    assert "1 VM có snapshot cũ / lớn" in html and "1 alarm vCenter chưa ai xác nhận" in html
+
+    r = editor.get("/api/infra/report.xlsx?clusters=PROD")              # read: any signed-in user, scope by cluster
+    assert r.status_code == 200 and "suc-khoe-ha-tang-" in r.headers["content-disposition"]
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames == ["Tổng hợp", "Datastore", "Mảng lưu trữ", "Volume", "Snapshot VM", "Alarm", "Sức khoẻ host"]
+    rows = [[c.value for c in row] for row in wb["Datastore"].iter_rows()]
+    names = [x[1] for x in rows[4:]]
+    assert names == ["DS-<b>PROD</b>-01"]                                 # DEV datastore out of the cluster scope
+    assert rows[4][0] == "CẢNH BÁO" and round(rows[4][12]) == 20
+    snap = [[c.value for c in row] for row in wb["Snapshot VM"].iter_rows()][4:]
+    assert {x[1] for x in snap} == {"app-01", "db-01"} and next(x for x in snap if x[1] == "db-01")[8] == "Có"
+    assert admin.get("/api/infra/report.pdf").headers["content-type"] == "application/pdf"
+    exports = {e["id"] for e in admin.get("/api/exports").json()["items"]}
+    assert {"infra-pdf", "infra-xlsx", "ci-xlsx"} <= exports

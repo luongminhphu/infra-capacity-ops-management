@@ -221,8 +221,8 @@ cơ sở (năm tài chính = năm đặt hàng, đơn giá tuỳ chọn), rồi 
   - Tối đa 5 vòng tra cứu mỗi câu; câu trả lời kèm link tới thẻ host / VM.
   - Mỗi câu trả lời có nút **👍 / 👎**: chỉ người hỏi bấm được, bấm lại để bỏ. Tỷ lệ hài lòng theo tác vụ hiện trong
     `ico_ai_usage`, dùng để so trước / sau khi đổi model hay prompt.
-- **Tài liệu → Kho báo cáo**: tick *Lưu vào kho* ở Trung tâm báo cáo, mỗi PDF xuất ra (Capacity, Backup, License, Sizing,
-  Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Mỗi người giữ tối đa 100 bản (bản cũ nhất của chính
+- **Tài liệu → Kho báo cáo**: tick *Lưu vào kho* ở Trung tâm báo cáo, mỗi PDF xuất ra (Capacity, Sức khoẻ hạ tầng, Phần cứng,
+  VM theo hệ thống, Rà soát owner, Backup, License, Sizing, Ngân sách, Cải tạo) được lưu một bản trong DB kèm người xuất, thời điểm, tham số. Mỗi người giữ tối đa 100 bản (bản cũ nhất của chính
   người đó bị thay), 400 ngày, 25 MB mỗi bản; cùng nội dung không lưu hai lần. Chỉ các route báo cáo trong danh sách được lưu. Báo cáo chi phí chỉ người có vai trò Chi phí xem được; người lưu hoặc admin xoá được.
 
 **Chuẩn hoá BOM (Quản lý thông tin)** — tải file Excel BOM thô, xuất một file Excel trình bày chuẩn, giống nhau cho mọi hãng:
@@ -251,6 +251,48 @@ sidebar), font Be Vietnam Pro và JetBrains Mono cho mã máy, tự host trong `
 Báo cáo PDF / Excel giữ màu và font Inter của HSC Design System. Nhãn AN TOÀN / THEO DÕI / CẢNH BÁO / VƯỢT NGƯỠNG
 và ngưỡng giống nhau giữa web, PDF, Excel. Dưới 1024px sidebar thu thành ngăn kéo (drawer). Xem mục
 “Cách đọc và thao tác trên giao diện” ở trên.
+
+### Trung tâm báo cáo (Tài liệu → Báo cáo)
+
+Mọi file xuất của app ở một chỗ, chia theo nhóm:
+
+| Nhóm | Báo cáo |
+|---|---|
+| Capacity & vận hành | Báo cáo Vận hành / Kỹ thuật (PDF), danh sách host & VM (Excel), dữ liệu tổng hợp (CSV) |
+| **Hạ tầng & phần cứng** | **Sức khoẻ hạ tầng** (PDF + Excel, mới), **Phần cứng máy chủ Dell OME** (PDF + Excel; lọc mức, hạn bảo hành), **Sổ CI** (Excel, mới; lọc loại / trạng thái) |
+| **Hệ thống & Owner** | **VM theo hệ thống** (PDF + Excel), **Hệ thống & Owner** (Excel nhập lại được), **Kết quả rà soát owner** theo kỳ (PDF + Excel; chỉ admin / quản trị Hệ thống & Owner) |
+| Quy hoạch & Sizing | Quy hoạch tài nguyên (PDF), Sizing (PDF đầy đủ / rút gọn, Excel, mẫu nhập) |
+| License & Inventory | Tổng quan license (PDF), đánh giá license, ESXi & phần cứng, HĐH guest (Excel) |
+| Backup | Hiện trạng Backup (PDF), thống kê backup (Excel) |
+| Chi phí & ngân sách | Kế hoạch ngân sách IT (PDF + Excel); **Báo cáo theo hồ sơ**: lối tắt tới Kế hoạch năm sau, Cải tạo, Báo giá, BOM — mỗi hồ sơ xuất từ trang của nó |
+
+- Nhóm của module đang tắt (hoặc thiếu vai trò Chi phí) bị ẩn; nút *Mở trang* chỉ hiện khi người dùng mở được trang đó.
+- Mọi báo cáo theo **bộ lọc Owner** trên thanh trên.
+- Sức khoẻ hạ tầng theo thêm vCenter / cluster / host ở khung *Phạm vi báo cáo Capacity*.
+- Danh mục mọi file xuất (`GET /api/exports`, `backend/app/exports.py`) có thêm `infra-pdf` / `infra-xlsx` / `ci-xlsx` và so
+  sánh / đánh giá báo giá.
+
+**Sức khoẻ hạ tầng** (`GET /api/infra/report.pdf|xlsx?vcenter=&clusters=&hosts=` + bộ lọc owner) dùng cùng số liệu với các
+trang Sức khoẻ hạ tầng.
+
+PDF gồm:
+- tổng kết việc cần làm;
+- 1 Datastore: mức, % dùng, % cấp phát, tăng GB/ngày, đầy sau bao nhiêu ngày theo xu hướng 30 ngày;
+- 2 Mảng lưu trữ: dung lượng, giảm dữ liệu, độ trễ, alert; số volume đã ghép datastore;
+- 3 Snapshot VM, đánh dấu snapshot của phần mềm backup;
+- 4 Alarm vCenter;
+- 5 Host có vấn đề.
+
+Mỗi bảng in tối đa 60 dòng. Excel có đủ mọi dòng, mỗi phần một sheet, thêm sheet Volume / LUN.
+
+Bộ lọc owner chỉ giữ snapshot và alarm của VM thuộc các hệ thống đã chọn. Datastore, mảng và host dùng chung nên giữ nguyên.
+
+**Sổ CI** (`GET /api/ci/export.xlsx?type=&status=active|retired|all`) gồm 3 sheet:
+- Tổng hợp: CI theo loại × trạng thái, liên kết mạnh / yếu;
+- CI: khoá chuẩn, số liên kết ra / vào, thuộc tính chính;
+- Liên kết: quan hệ, độ tin cậy, ghép theo tên / IP.
+
+Theo quyền như trang Sổ CI: client backup ẩn khi tắt Backup; dòng Opex chỉ hiện với vai trò Chi phí.
 
 ### Xuất báo cáo PDF (khổ A4)
 

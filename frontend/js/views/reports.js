@@ -1,7 +1,8 @@
 /* =========================================================
    Trung tâm báo cáo — every PDF / Excel / CSV export of the app,
-   grouped by function (Capacity & vận hành · Quy hoạch & Sizing ·
-   License & Inventory · Backup).
+   grouped by function (Capacity & vận hành · Hạ tầng & phần cứng ·
+   Hệ thống & Owner · Quy hoạch & Sizing · License & Inventory · Backup ·
+   Chi phí & ngân sách).
    - Each report has its own options ("Tuỳ chọn"), remembered per
      browser; scope (cluster / host) and finding types come from the
      side panel, the logo applies to every PDF.
@@ -107,6 +108,24 @@ async function rptLoadLicSnapshots() {
   } catch { sel.dataset.loaded = ''; }
 }
 
+/* Review campaigns (owner admin only: /api/reviews answers 403 to others — the card is hidden then). */
+async function rptLoadReviews() {
+  const sel = $('#rptReviewCampaign'), card = $('#rptReviewCard');
+  if (!sel || sel.dataset.loaded) return;
+  const can = !!(currentUser && (currentUser.isAdmin || currentUser.ownerAdmin));
+  card.classList.toggle('hidden', !can);
+  if (!can) return;
+  sel.dataset.loaded = '1';
+  try {
+    const items = (await apiRequest('/reviews')).items || [];
+    sel.innerHTML = items.length ? items.map(c => `<option value="${esc(c.id)}">Kỳ ${esc(c.periodLabel)} · ${c.status === 'closed' ? 'đã đóng' : 'đang mở'}${c.dryRun ? ' · chạy thử' : ''}</option>`).join('')
+      : '<option value="">Chưa có kỳ rà soát</option>';
+    const saved = rptState.opts['rv.campaign'];
+    if (saved && items.some(c => String(c.id) === String(saved))) sel.value = saved;
+    $$('#viewReports [data-report^="rv-"]').forEach(b => { b.disabled = !items.length; });
+  } catch { sel.dataset.loaded = ''; card.classList.add('hidden'); }
+}
+
 async function renderReportsView() {
   let group = 'all';
   try { group = localStorage.getItem(RPT_GROUP_PREF) || 'all'; } catch { /* ignore */ }
@@ -114,6 +133,7 @@ async function renderReportsView() {
   rptApplyOpts();
   rptPlanSync(false);
   if (typeof bkState === 'function' && !bkState().servers && typeof bkLoadServers === 'function') await bkLoadServers();
+  rptLoadReviews();
   rptRenderState();
 }
 
@@ -146,6 +166,35 @@ async function rptSizingPdf(btn, detail) {
   await exportSizingPdf(btn);
 }
 
+/* Capacity scope of the side panel (vCenter bar + cluster / host picks) as query parameters; the owner filter is added by uiDownload. */
+function rptScopeQuery() {
+  const p = new URLSearchParams();
+  const vc = rptVcenter();
+  if (vc && vc !== 'all') p.set('vcenter', vc);
+  const cl = getSelectedPdfClusters(), hs = getSelectedPdfHosts();
+  if (Array.isArray(cl) && cl.length) p.set('clusters', cl.join(','));
+  if (Array.isArray(hs) && hs.length) p.set('hosts', hs.join(','));
+  return p;
+}
+
+function rptGet(path, params, name) {
+  const q = params && params.toString();
+  return uiDownload(`${API_BASE}${path}${q ? `?${q}` : ''}`, { method: 'GET' }, name);
+}
+
+function rptHwQuery() {
+  const p = new URLSearchParams();
+  if (rptOpt('hw.status', '')) p.set('status', rptOpt('hw.status', ''));
+  if (rptOpt('hw.warranty', '')) p.set('warrantyDays', rptOpt('hw.warranty', ''));
+  return p;
+}
+
+function rptReview(fmt) {
+  const id = rptOpt('rv.campaign', '');
+  if (!id) throw new Error('Chưa có kỳ rà soát owner nào.');
+  return rptGet(`/reviews/${encodeURIComponent(id)}/report.${fmt}`, null, `ICO_Ra_soat_owner.${fmt}`);
+}
+
 async function rptLicense(run, ready) {
   await licLoad(false);
   if (!ready(licState())) throw new Error('Chưa tải được dữ liệu license / inventory (cần đồng bộ vCenter trước).');
@@ -175,6 +224,20 @@ const RPT_ACTIONS = {
   'lic-os': { label: 'Hệ điều hành guest (Excel)', run: () => rptLicense(() => licExportOs(), st => st.inv) },
   'bk-pdf': { label: 'Hiện trạng Backup (PDF)', run: () => api.bkReportPdf(rptOpt('bk.server', 'all'), Number(rptOpt('bk.days', 7)) || 7, !!rptOpt('bk.appendix', true)) },
   'bk-xlsx': { label: 'Thống kê backup (Excel)', run: () => api.bkReportXlsx(rptOpt('bk.server', 'all'), Number(rptOpt('bk.days', 7)) || 7) },
+  'infra-pdf': { label: 'Sức khoẻ hạ tầng (PDF)', run: () => rptGet('/infra/report.pdf', rptScopeQuery(), 'suc-khoe-ha-tang.pdf') },
+  'infra-xlsx': { label: 'Sức khoẻ hạ tầng (Excel)', run: () => rptGet('/infra/report.xlsx', rptScopeQuery(), 'suc-khoe-ha-tang.xlsx') },
+  'hw-pdf': { label: 'Phần cứng máy chủ (PDF)', run: () => rptGet('/hardware/report.pdf', rptHwQuery(), 'ICO_Suc_khoe_phan_cung.pdf') },
+  'hw-xlsx': { label: 'Phần cứng máy chủ (Excel)', run: () => rptGet('/hardware/report.xlsx', rptHwQuery(), 'ICO_Suc_khoe_phan_cung.xlsx') },
+  'ci-xlsx': { label: 'Sổ CI (Excel)', run: () => {
+    const p = new URLSearchParams({ status: rptOpt('ci.status', 'active') });
+    if (rptOpt('ci.type', '')) p.set('type', rptOpt('ci.type', ''));
+    return rptGet('/ci/export.xlsx', p, 'so-ci.xlsx');
+  } },
+  'sys-pdf': { label: 'VM theo hệ thống (PDF)', run: () => rptGet('/systems/report.pdf', null, 'vm-theo-he-thong.pdf') },
+  'sys-xlsx': { label: 'VM theo hệ thống (Excel)', run: () => rptGet('/systems/report.xlsx', null, 'vm-theo-he-thong.xlsx') },
+  'sys-export': { label: 'Hệ thống & Owner (Excel nhập lại được)', run: () => rptGet('/systems/export.xlsx', null, 'he-thong-owner.xlsx') },
+  'rv-pdf': { label: 'Kết quả rà soát owner (PDF)', run: () => rptReview('pdf') },
+  'rv-xlsx': { label: 'Kết quả rà soát owner (Excel)', run: () => rptReview('xlsx') },
 };
 
 async function rptRun(btn) {

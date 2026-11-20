@@ -78,6 +78,43 @@ def alarms(vcenter: Optional[str] = "all", clusters: Optional[str] = None, hosts
     return [a for a in rows if a["entityType"] == "vm" and in_vm_scope(r, {"vcenterKey": a["vcenterKey"], "vm": a["entity"]})]
 
 
+def _scope_label(db: Session, sc: Scope, osc: OwnerScope) -> str:
+    parts = []
+    if sc.vcenter:
+        parts.append(f"vCenter {sc.vcenter}")
+    if sc.clusters:
+        parts.append("cluster " + ", ".join(sc.clusters[:5]) + (f" và {len(sc.clusters) - 5} khác" if len(sc.clusters) > 5 else ""))
+    if sc.hosts:
+        parts.append(f"{len(sc.hosts)} host")
+    label = osc.describe(db) if osc.active else ""
+    return " · ".join(parts + ([label] if label else []))
+
+
+@router.get("/infra/report.pdf")
+def infra_report_pdf(vcenter: Optional[str] = "all", clusters: Optional[str] = None, hosts: Optional[str] = None,
+                     osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Sức khoẻ hạ tầng (PDF): datastore, mảng lưu trữ, snapshot VM, alarm, sức khoẻ host — the rows of the pages."""
+    import datetime as dt
+    from fastapi.responses import Response
+    from .. import report_infra
+    sc = _scope(vcenter, clusters, hosts)
+    data = report_infra.build_pdf(infra.report_data(db, sc, osc), user.display_name or user.username, _scope_label(db, sc, osc))
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="suc-khoe-ha-tang-{dt.datetime.now():%Y%m%d}.pdf"'})
+
+
+@router.get("/infra/report.xlsx")
+def infra_report_xlsx(vcenter: Optional[str] = "all", clusters: Optional[str] = None, hosts: Optional[str] = None,
+                      osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    import datetime as dt
+    from fastapi.responses import Response
+    from .. import excel_infra
+    sc = _scope(vcenter, clusters, hosts)
+    data = excel_infra.build_xlsx(infra.report_data(db, sc, osc), _scope_label(db, sc, osc))
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="suc-khoe-ha-tang-{dt.datetime.now():%Y%m%d}.xlsx"'})
+
+
 @router.get("/infra/health")
 def health(vcenter: Optional[str] = "all", clusters: Optional[str] = None, hosts: Optional[str] = None,
            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
