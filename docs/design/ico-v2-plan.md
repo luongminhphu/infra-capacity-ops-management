@@ -34,6 +34,7 @@ ICO khép được vòng nghiệp vụ **Cầu → Cung → Sử dụng → Thu 
 | D4 | Rà soát | Chu kỳ **6 tháng**; leo thang tới **quản lý trực tiếp của owner** |
 | D5 | Dell OME | **4.x, 1 instance**, ra Internet qua proxy, **lấy được bảo hành Dell**; chỉ có máy chủ Dell |
 | D6 | Thứ tự | Theo lộ trình chuẩn (mục 6) |
+| D7 | Ghi vào SDP (GĐ10c) | **Chưa chốt.** Cần chủ sản phẩm quyết định cho phép tạo / cập nhật request và cấp technician riêng cho một template |
 
 ## 4. Mô hình dữ liệu mới
 
@@ -84,9 +85,11 @@ itsm_label_map     (label_norm, field)                                          
 
 | Nguồn | Gọi | Ngoại lệ không phải GET |
 |---|---|---|
-| vCenter (bổ sung) | `summary.hardware.otherIdentifyingInfo` (ServiceTag), `summary.hardware.uuid`, VM `parent` / `resourcePool` / `customValue`, Folder `name` / `parent`, `eventManager.QueryEvents` (GĐ6) | vSphere Tags (tuỳ chọn, GĐ2d): `POST /api/session`, `DELETE /api/session` |
+| vCenter (bổ sung) | `summary.hardware.otherIdentifyingInfo` (ServiceTag), `summary.hardware.uuid`, VM `parent` / `resourcePool` / `customValue`, Folder `name` / `parent`, `eventManager.QueryEvents` (GĐ6); GĐ9: cấu hình host / cluster / VM qua PropertyCollector, `HostAdvancedOptionManager.QueryOptions` (đọc), `PerformanceManager.QueryPerf` / `QueryPerfCounterByLevel` | vSphere Tags (tuỳ chọn, GĐ2d) và VCSA appliance (GĐ9d: `/api/appliance/health/*`, `/api/appliance/recovery/backup/*` chỉ GET): `POST /api/session`, `DELETE /api/session` |
+| Chứng chỉ TLS (GĐ9b) | TLS handshake tới vCenter, ESXi, NetBackup, OME, storage, PUBLIC_URL để đọc chứng chỉ máy chủ — không gửi request HTTP | Không có |
+| NetBackup (bổ sung, GĐ9d) | `GET /netbackup/catalog/images`, storage units / disk pools (cờ WORM) | Không có (giữ `/login` `/logout` như cũ) |
 | Dell OME 4.x | `DeviceService/Devices`, `Devices(id)/SubSystemHealth`, `Devices(id)/InventoryDetails('…')`, `AlertService/Alerts`, `WarrantyService/Warranties`, `UpdateService/Baselines…/DeviceComplianceReports`, `GroupService/Groups` | `POST /api/SessionService/Sessions`, `DELETE /api/SessionService/Sessions('<id>')`. **Cấm** mọi action (`AlertService.Acknowledge`, job, firmware update, power) |
-| ServiceDesk Plus On-Prem v3 | `GET /api/v3/requests` (`input_data` list_info), `GET /api/v3/requests/{id}` | Không có. Ghi ticket (GĐ10) cần quyết định riêng |
+| ServiceDesk Plus On-Prem v3 | `GET /api/v3/requests` (`input_data` list_info), `GET /api/v3/requests/{id}` | Không có. Ghi ticket (GĐ10c) chỉ khi chốt D7: `POST /api/v3/requests`, `PUT /api/v3/requests/{id}` cho một template, tài khoản technician riêng |
 | Entra / Graph (tuỳ chọn) | Quản lý trực tiếp của owner (`/users/{id}/manager`) | — (mặc định nhập tay `manager_email`) |
 
 ## 6. Lộ trình
@@ -101,8 +104,8 @@ itsm_label_map     (label_norm, field)                                          
 | B | 6 | Event vCenter + nhật ký thay đổi + gom sự cố theo đồ thị CI (G6: #134) | 5 | PSU lỗi + alarm + HA restart = 1 sự cố |
 | C | 7 | ITSM SDP: nạp lùi, đọc bảng trong body, AI dự phòng + hàng chờ duyệt, nối yêu cầu ↔ VM / hệ thống (G7a: #135; G7b: #136; G7c: #137) | 1, 2 | ≥ 90 % yêu cầu VM có tài nguyên đã duyệt |
 | C | 8 | Tổng kết năm (xin → cấp → dùng) + mô hình kế hoạch năm sau → Kế hoạch ngân sách / Capex (G8: #138) | 3, 7 | Ra số host cần mua kèm nguồn số |
-| + | 9 | Sức khoẻ sâu: lệch cấu hình, EoGS / VMSA / chứng chỉ TLS, contention `QueryPerf`, VCSA; DR theo criticality; showback | 2, 5 | — |
-| + | 10 | Điểm sức khoẻ, báo cáo tháng, Teams, ticket SDP (ghi), bằng chứng ISO 27001 | 3, 5 | — |
+| D | 9 | Sức khoẻ sâu: lệch cấu hình (G9a), EoGS / VMSA / chứng chỉ TLS (G9b), contention `QueryPerf` (G9c), VCSA + DR theo criticality (G9d), showback (G9e) | 2, 5 | Mỗi lệch / lỗ hổng / nghẽn có mã, vào Hộp việc và sự kiện; showback khớp từng đồng |
+| D | 10 | Điểm sức khoẻ (G10a), báo cáo tháng + Teams / email (G10b), ticket SDP ghi — chờ D7 (G10c), bằng chứng ISO 27001 (G10d) | 3, 5, 9 | Gói bằng chứng 6 control mở được ngoài ICO; báo cáo tháng gửi đúng một lần |
 
 ## 7. Phạm vi truy cập Owner (bảo mật)
 
