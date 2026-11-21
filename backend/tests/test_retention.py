@@ -84,7 +84,8 @@ def test_maybe_purge_runs_once_a_day(monkeypatch):
     assert retention.maybe_purge(36, NOW) is not None
     assert retention.maybe_purge(36, NOW + dt.timedelta(hours=23)) is None
     assert retention.maybe_purge(36, NOW + dt.timedelta(hours=25)) is not None
-    assert retention.maybe_purge(0, NOW + dt.timedelta(days=5)) is None
+    off = retention.maybe_purge(0, NOW + dt.timedelta(days=5))       # snapshots kept; alerts / events keep their retention
+    assert off is not None and "snapshot_runs" not in off and {"hw_alert", "ops_event"} <= set(off)
     assert len(calls) == 2
 
 

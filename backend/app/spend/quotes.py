@@ -345,6 +345,7 @@ def check(lines: Sequence[Line], subtotal: Optional[Decimal], discount: Optional
     """Arithmetic and completeness checks of one quotation. Returns findings and computed totals.
     A line counts thành tiền × số bộ; VAT is computed line by line when the quotation prints per-line tax
     (hardware 8 %, software KCT), otherwise at the quotation rate."""
+    discount = abs(discount) if discount is not None else None      # Excel quotes print it "-5.000.000" or "5.000.000"
     f: List[Finding] = []
     items = [(i, l) for i, l in enumerate(lines) if l.line_type == "item"]
     seen: Dict[str, int] = {}

@@ -236,3 +236,20 @@ def test_old_embedded_objects_are_removed_from_written_sections():
     d.save(buf)
     out = proposal_doc.fill(buf.getvalue(), {"subject": "x"}, [], None, [])
     assert b"<w:drawing" not in __import__("zipfile").ZipFile(io.BytesIO(out)).read("word/document.xml")
+
+
+def test_status_change_after_someone_else_moved_it_is_409(app_, admin, editor, tpl):  # noqa: F811
+    """Audit: approve and reject at once both passed; a slow AI draft could replace the file after "Trình"."""
+    from fastapi import HTTPException
+    from app.database import SessionLocal
+    from app.routers.spend_proposals import _set_if_status
+    from app.spend.models import Proposal
+    p, _ = _create(editor, tpl)
+    db = SessionLocal()
+    row = db.query(Proposal).filter_by(code=p["code"]).one()
+    db.query(Proposal).filter_by(id=row.id).update({"status": "submitted"})       # another request submitted it meanwhile
+    db.commit()
+    with pytest.raises(HTTPException) as e:
+        _set_if_status(db, row, "draft", file_id=None)
+    assert e.value.status_code == 409
+    db.close()

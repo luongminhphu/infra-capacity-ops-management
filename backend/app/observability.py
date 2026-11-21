@@ -97,20 +97,40 @@ def redact(text: Optional[str]) -> str:
     return text
 
 
+def _tag(kind: str, value: str) -> str:
+    """Keyed hash (HMAC with the server secret): stable per value, not reversible by hashing all of 10.0.0.0/8."""
+    import hmac
+    from .ai_platform import _token_key
+    return f"<{kind}:" + hmac.new(_token_key(), value.lower().encode(), hashlib.sha256).hexdigest()[:8] + ">"
+
+
 def _host_tag(m: "re.Match") -> str:
     h = m.group(0)
-    if h.lower() in _PUBLIC_HOSTS:
-        return h
-    return "<host:" + hashlib.sha1(h.lower().encode()).hexdigest()[:6] + ">"
+    return h if h.lower() in _PUBLIC_HOSTS else _tag("host", h)
+
+
+def _inventory_names() -> set:
+    """Host / VM / client names known to ICO (ai_platform cache, 5 min): short names like esx-a-01 have no domain."""
+    from . import ai_platform
+    try:
+        from .database import SessionLocal
+        with SessionLocal() as db:
+            return ai_platform._known_names(db)
+    except Exception:  # noqa: BLE001 — masking must never break the tool: the patterns above still apply
+        return set()
 
 
 def mask_infra(text: Optional[str]) -> str:
     """For output to the AI: hide internal host names / IPs but keep them distinguishable."""
+    from .ai_platform import _IPV6, _WORD
     from .mcp_config import current          # lazy: settings saved in the UI, environment otherwise
     if not text or not current().mask_hosts:
         return text or ""
-    text = _IP.sub(lambda m: "<ip:" + hashlib.sha1(m.group(0).encode()).hexdigest()[:6] + ">", text)
-    return _HOST.sub(_host_tag, text)
+    text = _IP.sub(lambda m: _tag("ip", m.group(0)), text)
+    text = _IPV6.sub(lambda m: _tag("ip", m.group(0)), text)
+    text = _HOST.sub(_host_tag, text)
+    names = _inventory_names()
+    return _WORD.sub(lambda m: _tag("host", m.group(0)) if m.group(0).lower() in names else m.group(0), text) if names else text
 
 
 _NUM = re.compile(r"\b\d+(?:\.\d+)?\b")

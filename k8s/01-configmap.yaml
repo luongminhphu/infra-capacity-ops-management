@@ -31,7 +31,8 @@ data:
   ENTRA_TENANT_ID: ""                 # Directory (tenant) ID — GUID
   ENTRA_CLIENT_ID: ""                 # Application (client) ID của app registration App Proxy
   PUBLIC_URL: ""                      # URL ngoài của App Proxy, vd https://ico-<tenant>.msappproxy.net (đặt trước khi tạo passkey)
-  FORWARDED_ALLOW_IPS: "127.0.0.1"    # IP connector App Proxy / ingress được tin X-Forwarded-*
+  FORWARDED_ALLOW_IPS: "127.0.0.1"    # ĐỔI thành IP / CIDR connector App Proxy / ingress (vd "10.42.0.0/16"): để 127.0.0.1 thì mọi
+                                      # người dùng cùng một IP → chặn đăng nhập sai theo IP khoá tất cả (Cài đặt → Đăng nhập báo lỗi)
   AUTH_LOCAL_METHOD: "both"           # passkey · both · password — tài khoản cục bộ đăng nhập bằng Passkey (Face ID / Touch ID)
   ENTRA_AUTO_REDIRECT: "false"        # "true": màn đăng nhập tự chuyển sang Microsoft khi AUTH_MODE=entra
   ENTRA_REDIRECT_URI: ""              # để trống = PUBLIC_URL/api/auth/oidc/callback

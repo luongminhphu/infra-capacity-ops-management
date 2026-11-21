@@ -133,8 +133,13 @@ def auth_status(request: Request, admin: User = Depends(require_admin)):
     if s.passkey_enabled():
         check(bool(rp_id) and rp_id not in ("localhost",) or not s.public_base(), f"Passkey gắn với tên miền {rp_id or '(chưa có)'}",
               "Passkey chỉ dùng được trên đúng tên miền này — đặt PUBLIC_URL trước khi người dùng tạo passkey.")
-    check(bool(os.environ.get("FORWARDED_ALLOW_IPS")), f"FORWARDED_ALLOW_IPS = {os.environ.get('FORWARDED_ALLOW_IPS') or '(mặc định 127.0.0.1)'}",
-          "Đặt FORWARDED_ALLOW_IPS = IP máy chủ connector / ingress để log ghi đúng IP người dùng (X-Forwarded-For).")
+    fwd = (os.environ.get("FORWARDED_ALLOW_IPS") or "").strip()
+    # Behind App Proxy / an ingress every user arrives from the proxy's IP unless it is trusted: the login guard then
+    # counts everyone as one IP, so 30 wrong passwords from anyone lock out every password sign-in for 15 minutes.
+    check(bool(fwd) and (fwd not in ("127.0.0.1", "localhost") or not s.public_base()),
+          f"FORWARDED_ALLOW_IPS = {fwd or '(mặc định 127.0.0.1)'}",
+          "Đặt FORWARDED_ALLOW_IPS = IP / dải IP của connector App Proxy hoặc ingress. Khi chưa đặt, mọi người dùng mang cùng IP của "
+          "proxy: log sai IP và giới hạn đăng nhập sai theo IP chặn tất cả mọi người khi có 30 lần sai.")
     return {"authMode": s.auth_mode, "localMethod": s.auth_local_method, "entraEnabled": s.entra_enabled(), "entraAutoRedirect": s.entra_auto_redirect,
             "publicUrl": s.public_base(), "redirectUri": s.oidc_redirect_uri(), "rpId": rp_id, "origin": origin,
             "secureCookies": s.secure_cookies(), "breakglass": s.breakglass(), "request": seen, "checks": checks}

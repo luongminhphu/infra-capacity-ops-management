@@ -31,7 +31,6 @@ PURGE_EVERY = dt.timedelta(days=1)
 # next poll is not held back); the remainder goes in the next pass (SCH-06).
 TIME_BUDGET_S = 60.0
 PAUSE_S = 0.2
-PG_LOCK_KEY = 7_410_317                    # one purge across pods (rollout runs two)
 CHILD_MODELS = (VmSnapshot, HostSnapshot, ClusterAggregate, ComplianceFindingSnapshot)
 
 _last_purge: Optional[dt.datetime] = None
@@ -107,42 +106,28 @@ def purge_hw_alerts(db: Session, months: int, now: Optional[dt.datetime] = None,
     return total
 
 
-def _cluster_lock(db: Session) -> bool:
-    """PostgreSQL session advisory lock so two pods never purge together; always true on SQLite."""
-    if db.bind.dialect.name != "postgresql":
-        return True
-    from sqlalchemy import text
-    return bool(db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": PG_LOCK_KEY}).scalar())
-
-
-def _cluster_unlock(db: Session) -> None:
-    if db.bind.dialect.name == "postgresql":
-        from sqlalchemy import text
-        db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": PG_LOCK_KEY})
-        db.commit()
-
-
 def maybe_purge(months: int, now: Optional[dt.datetime] = None) -> Optional[Dict[str, int]]:
     """Run purge_snapshots at most once per PURGE_EVERY in this process; never raises."""
     global _last_purge
     from ..database import SessionLocal
     now = now or dt.datetime.utcnow()
-    if months <= 0 or not _purge_lock.acquire(blocking=False):
+    from ..leader import db_source_lock
+    if not _purge_lock.acquire(blocking=False):
         return None
     try:
         if _last_purge is not None and now - _last_purge < PURGE_EVERY:
             return None
-        with SessionLocal() as db:
-            if not _cluster_lock(db):            # another pod is purging right now
+        # Lock on its own connection: the purge commits per chunk, so a session-level lock taken on `db` would
+        # move to a pooled connection and never be released.
+        with db_source_lock("job", "retention") as mine, SessionLocal() as db:
+            if not mine:                         # another pod is purging right now
                 return None
-            try:
-                counts = purge_snapshots(db, months, now)
-                from ..config import get_settings
-                counts["hw_alert"] = purge_hw_alerts(db, get_settings().hw_alert_retention_months, now)
-                from ..events.service import purge as purge_events
-                counts["ops_event"] = purge_events(db, now)        # 13 months (G5)
-            finally:
-                _cluster_unlock(db)
+            # months = 0 keeps the snapshot history only; hardware alerts and events keep their own retention
+            counts = purge_snapshots(db, months, now) if months > 0 else {}
+            from ..config import get_settings
+            counts["hw_alert"] = purge_hw_alerts(db, get_settings().hw_alert_retention_months, now)
+            from ..events.service import purge as purge_events
+            counts["ops_event"] = purge_events(db, now)        # 13 months (G5)
         if not counts.get("more"):               # finished: next pass tomorrow; otherwise next cycle
             _last_purge = now
         return counts

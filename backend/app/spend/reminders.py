@@ -53,7 +53,10 @@ def line_for(item: OpexItem, vendor: Optional[SpendVendor], today: dt.date, base
 
 
 def run(db: Session, now: Optional[dt.datetime] = None) -> Dict[str, object]:
-    with _lock:
+    from ..leader import db_source_lock
+    with _lock, db_source_lock("job", "spend-reminders") as mine:      # one run across pods: failed rows are re-sent once
+        if not mine:
+            return {"items": 0, "sent": 0, "failed": 0, "skipped": 0, "busy": True}
         return _run(db, now or dt.datetime.utcnow())
 
 

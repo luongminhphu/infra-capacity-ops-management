@@ -127,3 +127,27 @@ def test_feedback_only_on_own_successful_answer(app_, admin, editor):  # noqa: F
     db = SessionLocal()
     assert db.get(AiRun, ids[0]).feedback is None
     db.close()
+
+
+def test_reservation_keeps_the_start_of_a_busy_stretch(app_, admin):  # noqa: F811
+    """Audit: every new call moved reserved_at forward, so a leaked hold (pod killed mid-call) never expired."""
+    from app.spend.models import SpendAiConfig
+    _enable(admin, budgetUsd=10, alertUsd=10)
+    db = SessionLocal()
+    db.query(SpendAiConfig).update({"reserved_micros": 0, "reserved_at": None})
+    db.commit()
+    ai_platform._reserve(db, "ask_ico", 100_000)
+    first = db.query(SpendAiConfig.reserved_at).scalar()
+    ai_platform._reserve(db, "ask_ico", 100_000)
+    db.expire_all()
+    assert db.query(SpendAiConfig.reserved_at).scalar() == first
+    ai_platform._release(200_000)
+    db.close()
+
+
+def test_masker_phrases_ipv6_and_people():
+    m = ai_platform.Masker(["SQL Server 01", "web(prod)", "esx-a-01"], key=b"k")
+    out = m.mask({"text": "VM SQL Server 01, web(prod) on esx-a-01 at 2001:db8::5, 10:30:00", "ownerName": "Nguyễn Văn A"})
+    assert "SQL Server 01" not in out["text"] and "web(prod)" not in out["text"] and "2001:db8::5" not in out["text"]
+    assert "10:30:00" in out["text"] and out["ownerName"].startswith("<person:")
+    assert m.unmask(out["ownerName"]) == "Nguyễn Văn A" and "SQL Server 01" in m.unmask(out["text"])

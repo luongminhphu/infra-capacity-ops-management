@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -332,6 +333,16 @@ TRANSITIONS = {"submit": ("draft", "submitted", "editor"), "approve": ("submitte
                "reject": ("submitted", "rejected", "approver"), "reopen": ("rejected", "draft", "editor")}
 
 
+def _set_if_status(db: Session, p: Proposal, expected: str, **values) -> None:
+    """Write `values` only while the proposal is still in `expected` status (one conditional UPDATE): two people approving /
+    rejecting at once, or a slow AI draft landing after "Trình", get 409 instead of the last write winning."""
+    res = db.execute(update(Proposal).where(Proposal.id == p.id, Proposal.status == expected).values(**values)
+                     .execution_options(synchronize_session=False))
+    if res.rowcount != 1:
+        raise HTTPException(409, "Tờ trình vừa được người khác thay đổi — tải lại rồi thử lại.")
+    db.expire(p)
+
+
 @router.post("/{code}/status/{command}")
 def change_status(code: str, command: str, request: Request, user: User = Depends(require_spend("editor")),
                   db: Session = Depends(get_db)):
@@ -346,8 +357,7 @@ def change_status(code: str, command: str, request: Request, user: User = Depend
         raise HTTPException(409, f"Tờ trình đang ở trạng thái “{STATUS_LABELS[p.status]}”.")
     if command == "submit" and not p.file_id:
         raise HTTPException(409, "Soạn file tờ trình trước khi trình.")
-    p.status = dst
-    p.updated_at, p.updated_by = dt.datetime.utcnow(), user.username
+    _set_if_status(db, p, src, status=dst, updated_at=dt.datetime.utcnow(), updated_by=user.username)
     service.audit(db, user, request, "spend.proposal.status", code=p.code, status=[src, dst])
     db.commit()
     return _detail(db, p)
@@ -512,10 +522,10 @@ def generate(code: str, request: Request, data: Dict[str, Any] = Body(default={}
     row, tmp, final = files.store(db, out, f"{p.code}-{_safe_name(p.subject)}.docx", user.username, allowed=(files.DOCX,))
     old = db.get(SpendFile, p.file_id) if p.file_id else None
     try:
-        p.file_id, p.ai_provider_used, p.ai_model = row.id, provider, model
-        p.generated_at, p.generated_by = dt.datetime.utcnow(), user.username
-        p.updated_at, p.updated_by = p.generated_at, user.username
-        db.flush()
+        now = dt.datetime.utcnow()
+        # still a draft? (the AI call takes seconds: someone may have submitted the old file meanwhile)
+        _set_if_status(db, p, "draft", file_id=row.id, ai_provider_used=provider, ai_model=model, generated_at=now,
+                       generated_by=user.username, updated_at=now, updated_by=user.username)
         if old is not None:
             db.delete(old)          # the previous draft file is replaced (the proposal keeps one file)
         service.audit(db, user, request, "spend.proposal.generate", code=p.code, ai=provider, model=model, sha256=row.sha256)

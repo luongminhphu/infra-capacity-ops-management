@@ -273,6 +273,8 @@ def _opex_rows(db: Session, data: bytes, cfg: SpendSettings, user: User, today: 
             if net is not None and gross is not None and gross < net:
                 row["errors"].append("Số tiền sau VAT nhỏ hơn trước VAT")
             fy = to_int(parse_number(get(r, "fiscalYear"))) if get(r, "fiscalYear") not in (None, "") else None
+            if fy is not None and not 2000 <= fy <= 2100:
+                row["errors"].append("Năm tài chính phải từ 2000 đến 2100")
             cc_raw = get(r, "costCenter")
             cc = refs.cost_center(cc_raw) if cc_raw not in (None, "") else None
             if cc_raw not in (None, "") and cc is None:
@@ -400,6 +402,8 @@ def _capex_rows(db: Session, data: bytes, cfg: SpendSettings, user: User, today:
             last_project = pname
             fy_cell = get(r, "fiscalYear")
             fy = to_int(parse_number(fy_cell)) if fy_cell not in (None, "") else (None if own else last_fy)
+            if fy is not None and not 2000 <= fy <= 2100:
+                row["errors"].append("Năm tài chính phải từ 2000 đến 2100")
             last_fy = fy
             cat = refs.category(get(r, "category"))
             if not cat:
@@ -415,7 +419,11 @@ def _capex_rows(db: Session, data: bytes, cfg: SpendSettings, user: User, today:
                 net = to_int(Decimal(gross) * 100 / (100 + (vat if vat is not None else Decimal(10))))
             if net is None:
                 row["errors"].append("Thiếu số tiền")
+            if net is not None and gross is not None and gross < net:          # same checks as the commit (preview = commit)
+                row["errors"].append("Số tiền sau VAT nhỏ hơn trước VAT")
             qty = to_int(parse_number(get(r, "quantity"))) if get(r, "quantity") not in (None, "") else 1
+            if qty is not None and qty < 1:
+                row["errors"].append("Số lượng phải từ 1 trở lên")
             years = to_int(parse_number(get(r, "coverageYears"))) if get(r, "coverageYears") not in (None, "") else 0
             if not 0 <= (years or 0) <= 10:
                 row["errors"].append("Số năm bảo hành / license từ 0 đến 10")
