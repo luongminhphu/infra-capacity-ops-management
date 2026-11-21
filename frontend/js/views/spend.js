@@ -475,10 +475,11 @@ function spAddDays(iso, n) { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDat
 function spOpenRenew(it) {
   const start = spAddDays(it.endDate, 1);
   const span = Math.round((new Date(`${it.endDate}T00:00:00Z`) - new Date(`${it.startDate}T00:00:00Z`)) / 86400000);
+  const end = it.renewEndDate || spAddDays(start, span);        // server: month / year terms stay on the calendar
   const body = `<p class="panel-sub">Khoản ${esc(it.code)} chuyển sang “Đã gia hạn” và dừng nhắc; một khoản mới được tạo cho kỳ tiếp theo (mã mới theo năm tài chính của ngày bắt đầu).</p>
     <form id="spRenewForm" class="sp-form src-grid" novalidate>
       <label class="field"><span>Ngày bắt đầu kỳ mới</span><input type="date" name="startDate" value="${esc(start)}"></label>
-      <label class="field"><span>Ngày kết thúc kỳ mới</span><input type="date" name="endDate" value="${esc(spAddDays(start, span))}"></label>
+      <label class="field"><span>Ngày kết thúc kỳ mới</span><input type="date" name="endDate" value="${esc(end)}"></label>
       <label class="field"><span>Số tiền trước VAT (đ)</span><input type="number" name="amountNet" min="0" step="1" value="${esc(it.amountNet)}"></label>
       <label class="field"><span>VAT (%)</span><input type="number" name="vatPct" min="0" max="100" step="0.01" value="${esc(it.vatPct)}"></label>
       <label class="field"><span>Mã hợp đồng mới</span><input name="contractRef" maxlength="64" value="${esc(it.contractRef || '')}"></label>

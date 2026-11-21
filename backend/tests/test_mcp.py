@@ -219,3 +219,33 @@ def test_settings_admin_only(clean_config, monkeypatch):
     monkeypatch.setattr(get_settings(), "admin_users", "someone-else")
     assert clean_config.put("/api/admin/mcp/config", json={"enabled": True}).status_code == 403
     assert clean_config.delete("/api/admin/mcp/config").status_code == 403
+
+
+def test_mask_infra_is_keyed_and_knows_short_names(monkeypatch):
+    """Audit: IPs were tagged with plain SHA-1 (reversible by hashing 10.0.0.0/8) and short host names stayed visible."""
+    import hashlib
+    monkeypatch.setattr(obs, "_inventory_names", lambda: {"esx-a-01"})
+    out = obs.mask_infra("connect to esx-a-01 (10.1.2.3) failed")
+    assert "esx-a-01" not in out and "10.1.2.3" not in out
+    assert hashlib.sha1(b"10.1.2.3").hexdigest()[:6] not in out
+
+
+def test_entra_token_of_someone_not_signed_in_for_weeks_is_refused(client):
+    """Audit: an Entra admin who left kept MCP access until the token expired (admin flag only refreshed at sign-in)."""
+    from app.database import SessionLocal
+    from app.models import ApiToken, User
+    created = _token(client)
+    db = SessionLocal()
+    u = db.get(User, db.get(ApiToken, created["id"]).user_id)
+    src, last, adm = u.auth_source, u.last_login_at, u.is_admin
+    u.auth_source, u.is_admin, u.last_login_at = "entra", True, dt.datetime.utcnow() - dt.timedelta(days=1)
+    db.commit()
+    try:
+        assert _rpc(client, created["token"], "ping").status_code == 200          # signed in recently: works
+        u.last_login_at = dt.datetime.utcnow() - dt.timedelta(days=30)
+        db.commit()
+        assert _rpc(client, created["token"], "ping").status_code == 401
+    finally:
+        u.auth_source, u.last_login_at, u.is_admin = src, last, adm
+        db.commit()
+        db.close()

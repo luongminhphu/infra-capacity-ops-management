@@ -116,3 +116,18 @@ def test_template_roundtrip_and_bad_files(app_, admin):
     r = _post(ed, "/api/spend/import/preview?kind=opex", no_header)
     assert r.status_code == 422 and "tiêu đề" in r.json()["detail"]
     assert ed.get("/api/spend/import/template.xlsx?kind=other").status_code == 422
+
+
+def test_preview_flags_what_the_commit_would_refuse(app_, admin):  # noqa: F811
+    """Audit: Capex gross < net, quantity < 1 and fiscal year 26 passed the preview, then the commit rejected the file."""
+    ed = _login(app_, "editor1")
+    data = _xlsx([
+        ["Tên dự án", "Năm tài chính", "Loại chi phí", "Hạng mục", "SL", "Thành tiền", "VAT", "Thành tiền sau VAT"],
+        ["Gross nhỏ", Y, "Khác", "A", 1, 100, 10, 90],
+        ["Số lượng âm", Y, "Khác", "B", -2, 100, 10, None],
+        ["Năm sai", 26, "Khác", "C", 1, 100, 10, None],
+    ], title_rows=0)
+    pv = _post(ed, "/api/spend/import/preview?kind=capex", data).json()
+    errs = {p["name"]: " ".join(e for r in p["rows"] for e in r["errors"]) + " ".join(p.get("errors") or []) for p in pv["projects"]}
+    assert "nhỏ hơn trước VAT" in errs["Gross nhỏ"] and "Số lượng" in errs["Số lượng âm"] and "2000" in errs["Năm sai"]
+    assert pv["summary"]["create"] == 0

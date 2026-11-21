@@ -193,6 +193,9 @@ def test_admin_user_rules_and_app_proxy_status(app_, admin, _settings):
     st = admin.get("/api/admin/auth-status").json()
     assert st["rpId"] == "ico-contoso.msappproxy.net" and st["origin"] == "https://ico-contoso.msappproxy.net"
     assert st["secureCookies"] is True and st["publicUrl"] == "https://ico-contoso.msappproxy.net"
+    # Audit: FORWARDED_ALLOW_IPS left at 127.0.0.1 behind App Proxy → every user shares the proxy IP for the login guard
+    fwd = next(c for c in st["checks"] if c["text"].startswith("FORWARDED_ALLOW_IPS"))
+    assert fwd["ok"] is False and "30 lần sai" in fwd["fix"]
     assert _settings.oidc_redirect_uri() == "https://ico-contoso.msappproxy.net/api/auth/oidc/callback"
     inv = admin.post(f"/api/admin/users/{row['id']}/passkey-invite").json()["inviteUrl"]
     assert inv.startswith("https://ico-contoso.msappproxy.net/#passkey_invite=")

@@ -149,6 +149,8 @@ def check(db: Session, task: str, user: Optional[User]):
 
 # ---------------------------------------------------------------- masking
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_IPV6 = re.compile(r"(?<![\w:])(?:[0-9A-Fa-f]{0,4}:){3,7}[0-9A-Fa-f]{1,4}(?![\w:])")      # ≥ 3 colons: not a time 10:30:00
+PERSON_KEYS = {"ownerName", "deputyName", "backupName", "supportName", "supportContact", "managerName"}
 _EMAIL = re.compile(r"[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{2,}")
 _names_cache: Dict[str, Any] = {"at": 0.0, "names": None}
@@ -174,6 +176,9 @@ class Masker:
         self._key = key if key is not None else _token_key()
         self._hmac = lambda v: hmac.new(self._key, v.encode(), hashlib.sha256).hexdigest()
         self.names = {n.lower() for n in names if n and len(n) >= 3}
+        # Names a word match cannot see ("SQL Server 01", "web(prod)"): exact substrings, longest first.
+        phrases = sorted((n for n in self.names if _WORD.fullmatch(n) is None), key=len, reverse=True)
+        self._phrases = re.compile("|".join(re.escape(p) for p in phrases), re.I) if phrases else None
         self.back: Dict[str, str] = {}
         self._fwd: Dict[str, str] = {}
 
@@ -194,6 +199,9 @@ class Masker:
     def _mask_str(self, s: str) -> str:
         s = _EMAIL.sub(lambda m: self._token("email", m.group(0)), s)        # owners / support contacts: personal data
         s = _IPV4.sub(lambda m: self._token("ip", m.group(0)), s)
+        s = _IPV6.sub(lambda m: self._token("ip", m.group(0)), s)
+        if self._phrases is not None:
+            s = self._phrases.sub(lambda m: self._token("host", m.group(0)), s)
 
         def word(m: "re.Match") -> str:
             w = m.group(0)
@@ -211,13 +219,14 @@ class Masker:
             return self._mask_str(obj)
         if isinstance(obj, list):
             return [self.mask(x) for x in obj]
-        if isinstance(obj, dict):
-            return {k: self.mask(v) for k, v in obj.items()}
+        if isinstance(obj, dict):        # people's names (owner, deputy, support) are personal data like their e-mails
+            return {k: self._token("person", v) if k in PERSON_KEYS and isinstance(v, str) and v.strip() else self.mask(v)
+                    for k, v in obj.items()}
         return obj
 
     def unmask(self, obj: Any) -> Any:
         if isinstance(obj, str):
-            return re.sub(r"<(?:host|ip|email):[0-9a-f]{12,64}>", lambda m: self.back.get(m.group(0), m.group(0)), obj)
+            return re.sub(r"<(?:host|ip|email|person):[0-9a-f]{12,64}>", lambda m: self.back.get(m.group(0), m.group(0)), obj)
         if isinstance(obj, list):
             return [self.unmask(x) for x in obj]
         if isinstance(obj, dict):
@@ -301,7 +310,10 @@ def _reserve(db: Session, task: str, micros: int) -> None:
     held = case((SpendAiConfig.reserved_at < now - RESERVE_STALE, 0), else_=func.coalesce(SpendAiConfig.reserved_micros, 0))
     with SessionLocal() as own:                          # own transaction: never commits / rolls back the caller's work
         res = own.execute(update(SpendAiConfig).where(SpendAiConfig.id == 1, held + micros + spent <= budget)
-                          .values(reserved_micros=held + micros, reserved_at=now).execution_options(synchronize_session=False))
+                          # keep the start of a busy stretch: a leak (pod killed mid-call) then expires RESERVE_STALE after it,
+                          # instead of every new call pushing its expiry forward all day
+                          .values(reserved_micros=held + micros, reserved_at=case((held > 0, SpendAiConfig.reserved_at), else_=now))
+                          .execution_options(synchronize_session=False))
         own.commit()
     if res.rowcount != 1:
         raise AiBlocked(f"Hạn mức AI tháng này không đủ cho lượt gọi “{TASKS[task][0]}” "

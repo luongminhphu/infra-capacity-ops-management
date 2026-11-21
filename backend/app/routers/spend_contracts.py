@@ -267,12 +267,19 @@ def finalize(code: str, request: Request, data: Dict[str, Any] = Body(default={}
     if not db.query(ContractVersion.id).filter_by(contract_id=c.id, version_no=no).first():
         raise HTTPException(400, f"Không có version v{no}.")
     cfg = spend_settings.load(db)
-    before = c.status
+    before, seen_versions = c.status, c.current_version_no
     now = dt.datetime.utcnow()
-    c.status, c.final_version_no, c.finalized_at, c.finalized_by = "final", no, now, user.username
-    c.purge_due_at = now + dt.timedelta(days=cfg.purge_days)
-    c.purge_cancelled_at = c.purge_cancelled_by = None
-    _touch(c, user)
+    # One conditional UPDATE: a version uploaded (or a finalize / status change) since this request read the contract
+    # → 409, instead of fixing an older version and purging the newer upload.
+    res = db.execute(update(Contract).where(Contract.id == c.id, Contract.status == before,
+                                            Contract.current_version_no == seen_versions)
+                     .values(status="final", final_version_no=no, finalized_at=now, finalized_by=user.username,
+                             purge_due_at=now + dt.timedelta(days=cfg.purge_days), purge_cancelled_at=None,
+                             purge_cancelled_by=None, updated_at=now, updated_by=user.username)
+                     .execution_options(synchronize_session=False))
+    if res.rowcount != 1:
+        raise HTTPException(409, "Hợp đồng vừa được người khác thay đổi (version mới / trạng thái) — tải lại rồi thử lại.")
+    db.expire(c)
     service.audit(db, user, request, "spend.contract.finalize", code=c.code, status=[before, "final"], finalVersion=no,
                   purgeDueAt=c.purge_due_at)
     db.commit()

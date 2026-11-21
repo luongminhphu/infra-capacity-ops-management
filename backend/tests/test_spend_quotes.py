@@ -332,3 +332,10 @@ def test_excel_title_with_formula_text_stays_text(editor):
         for ref in ("A1", "A2"):
             c = ws[ref]
             assert not (isinstance(c.value, str) and c.value.startswith("=") and c.data_type == "f"), (ws.title, ref)
+
+
+def test_negative_discount_is_subtracted():
+    """Audit: a discount printed "-5.000.000" was added (base 105 M) and raised a false TOTAL error."""
+    lines = [qm.Line("item", "Máy chủ", qty=D(1), unit_price=D(100_000_000), amount=D(100_000_000))]
+    f, comp = qm.check(lines, subtotal=D(100_000_000), discount=D(-5_000_000), vat=D(9_500_000), total=D(104_500_000), vat_pct=D(10))
+    assert comp["afterDiscount"] == D(95_000_000) and "TOTAL" not in {x.code for x in f}

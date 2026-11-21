@@ -1,4 +1,5 @@
 """Chi phí & Hợp đồng — Opex API: roles, codes, validation, commands, attachments, settings."""
+import datetime as dt
 import io
 import json
 import zipfile
@@ -318,3 +319,16 @@ def test_concurrent_transition_is_refused_not_lost(editor):
     finally:
         s1.close()
         s2.close()
+
+
+@pytest.mark.parametrize("start,end,expected", [
+    ("2028-01-01", "2028-12-31", "2029-12-31"),          # a leap-year term: was 01/01/2030 (366 days copied)
+    ("2027-03-01", "2028-02-29", "2029-02-28"),
+    ("2026-01-01", "2026-03-31", "2026-06-30"),          # a quarter stays a quarter
+    ("2026-01-10", "2026-02-19", "2026-04-01"),          # not whole months: same length in days
+])
+def test_renewal_end_stays_on_the_calendar(start, end, expected):
+    from types import SimpleNamespace as NS
+    from app.spend.service import renewal_end
+    item = NS(start_date=dt.date.fromisoformat(start), end_date=dt.date.fromisoformat(end))
+    assert renewal_end(item).isoformat() == expected

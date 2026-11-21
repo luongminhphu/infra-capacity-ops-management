@@ -248,3 +248,22 @@ def test_inbox_assign_refuses_people_who_cannot_see_the_item(app_, admin, editor
     finally:
         mp.undo()
         ib.invalidate()
+
+
+def test_ops_alerts_skip_while_another_pod_sends(app_, monkeypatch):  # noqa: F811
+    """Audit: "Chạy ngay" on another pod during the leader's round sent the same alerts twice."""
+    import contextlib
+    from app import leader, ops_alerts
+    from app.database import SessionLocal
+
+    @contextlib.contextmanager
+    def busy(kind, key):
+        yield False
+    monkeypatch.setattr(leader, "db_source_lock", busy)
+    posts = []
+    db = SessionLocal()
+    try:
+        r = ops_alerts.check_and_notify(db, post=lambda u, p: posts.append(p))
+    finally:
+        db.close()
+    assert r == {"new": 0, "resolved": 0, "sent": 0, "failed": 0} and posts == []

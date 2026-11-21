@@ -540,6 +540,9 @@ def _tool_error(id_: Any, message: str) -> Dict[str, Any]:
     return {"jsonrpc": "2.0", "id": id_, "result": {"content": [{"type": "text", "text": message}], "isError": True}}
 
 
+ENTRA_TOKEN_MAX_IDLE = dt.timedelta(days=14)
+
+
 def _authenticate(request: Request, db: Session) -> Optional[tuple]:
     auth = request.headers.get("authorization") or ""
     if not auth.lower().startswith("bearer "):
@@ -554,6 +557,10 @@ def _authenticate(request: Request, db: Session) -> Optional[tuple]:
     user = db.get(User, tok.user_id)
     if not user or not is_admin(user) or (user.access_scope or "full") != "full" or \
             ((user.auth_source or "local") == "local" and not local_login_allowed(user)):
+        return None
+    # Entra rights (admin role, account enabled) are only re-read at sign-in: a token of someone who has not signed in
+    # for ENTRA_TOKEN_MAX_IDLE may belong to a disabled account or a removed ICO.Admin role → refuse it.
+    if user.auth_source == "entra" and (not user.last_login_at or now - user.last_login_at > ENTRA_TOKEN_MAX_IDLE):
         return None
     if not tok.last_used_at or (now - tok.last_used_at).total_seconds() > 60:
         tok.last_used_at = now

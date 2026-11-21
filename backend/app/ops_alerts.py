@@ -85,7 +85,10 @@ def check_and_notify(db: Session, post=None, computed=None) -> Dict[str, int]:
     """Serialised (BEQ-03): the scheduler round and "Chạy ngay" never send the same alert twice —
     the second caller waits, then sees what the first one recorded. computed: (items, errors) of inbox._compute already
     run this round (the leader shares it with the event store)."""
-    with _run_lock:
+    from .leader import db_source_lock
+    with _run_lock, db_source_lock("job", "ops-alerts") as mine:      # _run_lock: this pod; the DB lock: every pod
+        if not mine:                    # the leader's round (or another pod's "Chạy ngay") is sending right now
+            return {"new": 0, "resolved": 0, "sent": 0, "failed": 0}
         return _check_and_notify(db, post, computed)
 
 

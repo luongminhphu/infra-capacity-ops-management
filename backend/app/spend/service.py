@@ -128,6 +128,14 @@ class Lookups:
         self.cost_centers = {c.id: c for c in db.query(SpendCostCenter).all()}
 
 
+def renewal_end(item: OpexItem, start: Optional[dt.date] = None) -> dt.date:
+    """End of the next term: month / year terms stay on the calendar (01/01–31/12 → 31/12 next year, also across a leap
+    year; 29/02 by fiscal.term_end); other terms keep their length in days — budget_plan._next_term."""
+    from .budget_plan import _next_term
+    start = start or item.end_date + dt.timedelta(days=1)
+    return _next_term(item.start_date, item.end_date, start - dt.timedelta(days=1))[1]
+
+
 def serialize(item: OpexItem, lk: Lookups, today: dt.date, cfg: SpendSettings, codes_by_id: Dict[int, str] = None,
               successor: Optional[str] = None) -> Dict[str, Any]:
     cat, ven, cc = lk.categories.get(item.category_id), lk.vendors.get(item.vendor_id), lk.cost_centers.get(item.cost_center_id)
@@ -138,6 +146,7 @@ def serialize(item: OpexItem, lk: Lookups, today: dt.date, cfg: SpendSettings, c
         "vendorId": item.vendor_id, "vendorName": ven.name if ven else None,
         "contractRef": item.contract_ref, "poRef": item.po_ref,
         "startDate": item.start_date.isoformat(), "endDate": item.end_date.isoformat(),
+        "renewEndDate": renewal_end(item).isoformat() if item.status == "active" else None,     # prefill of the renew form
         "billingCycle": item.billing_cycle, "billingCycleLabel": CYCLE_LABELS.get(item.billing_cycle),
         "amountNet": item.amount_net, "vatPct": float(item.vat_pct), "amountGross": item.amount_gross,
         "costCenterId": item.cost_center_id, "costCenterName": f"{cc.code} — {cc.name}" if cc else None,
@@ -330,10 +339,7 @@ def renew(db: Session, item: OpexItem, data: Dict[str, Any], cfg: SpendSettings,
     if db.query(OpexItem.id).filter(OpexItem.renewed_from_id == item.id).first():
         raise HTTPException(409, "Khoản này đã được gia hạn.")
     start = _date(data["startDate"], "Ngày bắt đầu") if data.get("startDate") else item.end_date + dt.timedelta(days=1)
-    if data.get("endDate"):
-        end = _date(data["endDate"], "Ngày kết thúc")
-    else:
-        end = start + (item.end_date - item.start_date)
+    end = _date(data["endDate"], "Ngày kết thúc") if data.get("endDate") else renewal_end(item, start)
     base = {
         "categoryId": item.category_id, "title": item.title, "description": item.description, "vendorId": item.vendor_id,
         "contractRef": item.contract_ref, "poRef": item.po_ref, "billingCycle": item.billing_cycle,
