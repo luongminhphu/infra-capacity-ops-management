@@ -4,7 +4,7 @@ Dùng cùng `docs/design/ico-v2-plan.md`. Mỗi prompt = **một PR**. Chạy tu
 Dán **Phần chung** ở đầu mọi prompt (hoặc nói "áp dụng Phần chung trong docs/design/ico-v2-prompts.md").
 
 Mức chi tiết: Đợt A (GĐ1–3) viết đầy đủ. Đợt B, C viết đủ để làm, sẽ tinh chỉnh khi tới lượt (phụ thuộc code thực tế của
-các PR trước). GĐ9–10 ở dạng khung.
+các PR trước). Đợt D (GĐ9–10) viết chi tiết ngày 21/11/2026, sau G8; G10c chờ quyết định cho phép GHI vào SDP.
 
 ---
 
@@ -417,13 +417,173 @@ Nghiệm thu: số trong PDF khớp trang; dòng Capex tạo một lần, cập 
 
 ---
 
-# Phần tiếp theo (khung, viết chi tiết khi tới lượt)
+# ĐỢT D — Sức khoẻ sâu (GĐ9) và đầu ra (GĐ10)
 
-- **G9 — Sức khoẻ sâu:** baseline cấu hình ESXi (SSH / ESXi Shell, lockdown, NTP, syslog, admission control, DRS, build lệch trong
-  cluster), VM (Tools, HW version, ISO gắn); vòng đời ESXi / vCenter (bảng EoGS nhập tay) + bảng VMSA → build đã vá (admin import);
-  chứng chỉ TLS (vCenter, ESXi, NBU, OME, App Proxy); contention qua PerformanceManager.QueryPerf (cpu.ready, co-stop, mem.vmmemctl,
-  mem.swapped, disk latency) vào metrics.py; health và lịch backup VCSA; RPO theo criticality, catalog NBU, sổ diễn tập khôi phục,
-  immutable; đơn giá nội bộ + showback theo hệ thống / phòng ban.
-- **G10 — Đầu ra:** điểm sức khoẻ theo cluster / hệ thống; báo cáo vận hành tháng tự gửi; kênh Teams + email cho cảnh báo;
-  ticket ServiceDesk Plus từ sự cố và việc dọn dẹp (cần quyết định cho phép GHI vào SDP); bộ bằng chứng ISO 27001 (A.5.30, A.8.6,
-  A.8.8, A.8.9, A.8.13, A.8.32) xuất từ dữ liệu G3, G5, G6, G9.
+Viết chi tiết ngày 21/11/2026, dựa trên code sau G8 (#138). Mỗi mục = một PR, làm tuần tự. Ngoại lệ chỉ đọc mới đã ghi ở
+ico-v2-plan.md mục 5; PR nào dùng ngoại lệ thì thêm vào quy tắc 1 của CLAUDE.md trong cùng PR.
+
+## G9a — Baseline cấu hình ESXi / cluster / VM (lệch cấu hình)
+
+```text
+Mục tiêu: phát hiện host / cluster / VM lệch chuẩn cấu hình, mỗi lệch là một phát hiện có mã ổn định và vào Hộp việc + sự kiện G5.
+Skill vmware-collector.
+
+1. Thu thập (vcenter/extras.py, cùng phiên kiểm kê, PropertyCollector theo lô — không gọi từng host):
+   - host: config.service.service (TSM-SSH, TSM = ESXi Shell: running + policy), config.lockdownMode,
+     config.dateTimeInfo.ntpConfig.server + dịch vụ ntpd running, summary.config.product.build / version;
+     syslog: configManager.advancedOption → QueryOptions("Syslog.global.logHost") (đọc) — một lời gọi mỗi host, chạy trong thread
+     pool đã có, có timeout; lỗi một host không làm hỏng cả vòng.
+   - cluster: configurationEx.dasConfig (enabled, admissionControlEnabled, admissionControlPolicy), drsConfig (enabled,
+     defaultVmBehavior).
+   - VM: guest.toolsVersionStatus2 / toolsRunningStatus, config.version (vmx-NN), CD-ROM có backing ISO và connectable.connected.
+   - Proxmox / Nutanix: bỏ qua mục không áp dụng (không báo lệch giả).
+2. Bảng cfg_baseline (admin sửa ở Cài đặt → Baseline cấu hình): mỗi quy tắc {key, mức, bật/tắt, giá trị mong đợi}. Mặc định:
+   SSH tắt (CẢNH BÁO), ESXi Shell tắt (CẢNH BÁO), lockdown ≠ disabled (THEO DÕI), NTP ≥ 1 server + ntpd chạy (CẢNH BÁO),
+   syslog có logHost (THEO DÕI), HA bật + admission control bật (CẢNH BÁO), DRS bật fullyAutomated (THEO DÕI),
+   build ESXi đồng nhất trong cluster (THEO DÕI), Tools không "guestToolsCurrent" (THEO DÕI), HW version < mức tối thiểu cấu hình
+   (THEO DÕI), ISO đang gắn (THEO DÕI). Cho phép ngoại lệ theo host / cluster / VM có hạn và lý do (bảng cfg_exception).
+3. Kết quả: bảng cfg_finding_state (thay theo vCenter mỗi vòng, như host_health_states), mã đối soát CFG-XXXXX = FNV-1a như
+   capacity (type|vcenterKey|scope|rule). Nguồn Hộp việc mới "config" + alert_rules nguồn "config" → sự kiện G5 gắn CI
+   (host / cluster / VM qua cmdb vc_key).
+4. UI: Sức khoẻ hạ tầng → tab "Cấu hình" (theo quy tắc → host / VM lệch, lọc cluster, xuất Excel); khối "Cấu hình" trên thẻ host / VM.
+   PDF / Excel theo quy tắc 10 (exports.py + Trung tâm báo cáo nhóm "Hạ tầng & phần cứng").
+5. Demo: demo_generator tạo vài host SSH bật, 1 cluster lệch build, VM ISO gắn / Tools cũ — có định (seed).
+Test: mỗi quy tắc đạt / lệch / ngoại lệ còn hạn / ngoại lệ hết hạn; build lệch trong cluster; Proxmox không báo lệch VMware.
+Nghiệm thu: demo hiện đúng số lệch theo quy tắc; tắt quy tắc → biến mất khỏi Hộp việc ở vòng sau; không có lời gọi ghi tới vCenter.
+```
+
+## G9b — Vòng đời (EoGS), VMSA và chứng chỉ TLS
+
+```text
+Mục tiêu: biết host / vCenter nào hết hỗ trợ, thiếu bản vá bảo mật, chứng chỉ sắp hết hạn.
+
+1. Bảng lifecycle_eogs (admin nhập tay / Excel qua shared/xlsx_io.py): sản phẩm (esxi / vcenter / nbu / ome…), phiên bản chính,
+   ngày End of General Support, End of Technical Guidance. Mức: quá hạn → VƯỢT NGƯỠNG, ≤ 180 ngày → CẢNH BÁO, ≤ 365 → THEO DÕI.
+2. Bảng vmsa_advisory (admin import Excel / CSV): mã VMSA, CVSS cao nhất, sản phẩm, phiên bản, build đã vá. So build hiện tại
+   (host summary.config.product.build, vCenter about.build) → danh sách VMSA còn mở theo host / vCenter. Không gọi Internet.
+3. Chứng chỉ TLS: đọc chứng chỉ máy chủ bằng TLS handshake (ssl + cryptography đã có trong requirements), KHÔNG gửi request HTTP:
+   vCenter, từng ESXi (443), NetBackup primary (1556), OME, URL App Proxy (PUBLIC_URL), storage. Lưu notAfter, issuer, subject,
+   SAN, tự ký hay không. Mức theo số ngày còn lại (cấu hình, mặc định 30 / 60 / 90). Chạy ở leader, mỗi ngày 1 lần, timeout ngắn.
+4. UI: Sức khoẻ hạ tầng → tab "Vòng đời & bảo mật" (3 khối: EoGS, VMSA mở, chứng chỉ). Hộp việc nguồn "lifecycle"; sự kiện G5.
+   Kế hoạch năm sau (spend/budget_plan): gợi ý dòng "Nâng cấp ESXi / vCenter hết hỗ trợ trong năm" (nguồn mới, như "warranty").
+5. Demo: chứng chỉ giả lập (không mở socket ở chế độ DEMO), vài host build cũ trúng VMSA mẫu.
+Test: so build ↔ VMSA (build bằng / cao hơn / thấp hơn); mức EoGS theo ngày; chứng chỉ hết hạn / tự ký / lỗi kết nối = "không đọc được".
+Nghiệm thu: import bảng VMSA mẫu → host build thấp hiện đúng mã VMSA; chứng chỉ < 30 ngày vào Hộp việc.
+```
+
+## G9c — Contention qua PerformanceManager.QueryPerf
+
+```text
+Mục tiêu: thấy nghẽn thật (không chỉ overcommit cấp phát): cpu.ready, co-stop, balloon, swap, độ trễ disk.
+
+1. vcenter/perf.py: PerformanceManager.QueryPerf (đọc) theo lô 50 – 100 entity / lời gọi, intervalId 20 s (realtime) lấy trung bình
+   15 phút gần nhất cho host + VM bật; counter tra một lần mỗi phiên (QueryPerfCounterByLevel / perfCounter, cache theo vCenter):
+   cpu.ready.summation → % ready = ready_ms / (interval_s × 1000 × số vCPU) × 100; cpu.costop.summation (cùng cách);
+   mem.vmmemctl.average (balloon MB); mem.swapped.average; disk.maxTotalLatency.latest (ms).
+   Giới hạn thời gian / số entity mỗi vòng (cấu hình), VM xếp theo vCPU giảm dần nếu phải cắt.
+2. Ghi vào metrics.py (kind "host" / "vm", entity = vc_key) → rollup giờ / ngày sẵn có.
+3. Ngưỡng (Cài đặt → Cảnh báo, nguồn mới "contention"): ready ≥ 5 % THEO DÕI, ≥ 10 % CẢNH BÁO; co-stop ≥ 3 %; balloon / swap > 0
+   kéo dài ≥ 3 lần poll; latency ≥ 20 / 50 ms. Phát hiện cluster: ≥ 20 % VM vượt ngưỡng → cluster CẢNH BÁO.
+4. UI: tab "Contention" ở Capacity (top VM / host, biểu đồ 7 / 30 ngày theo rollup); khối trên thẻ VM / host; Hộp việc + sự kiện G5.
+   capacity.py / core.js KHÔNG đổi (contention là chỉ số riêng, không trộn vào % ngưỡng overcommit).
+5. Demo: demo_generator.collect_perf sinh chuỗi ổn định có vài VM ready cao.
+Test: công thức % ready / co-stop với số cụ thể (vd 20 s, 4 vCPU, ready 1.600 ms → 2 %); cắt theo giới hạn entity; rollup.
+Nghiệm thu: một vòng poll demo ghi ≤ giới hạn điểm; trang hiện top 10 VM ready.
+```
+
+## G9d — VCSA và DR: lịch backup VCSA, RPO theo criticality, catalog NBU, diễn tập khôi phục, immutable
+
+```text
+Mục tiêu: chứng minh khôi phục được, không chỉ "có job backup".
+
+1. VCSA (vSphere Automation REST, ngoại lệ mục 5: POST /api/session, DELETE /api/session; còn lại GET):
+   /api/appliance/health/{system,storage,database,swap,load,mem} và /api/appliance/recovery/backup/schedules +
+   /api/appliance/recovery/backup/job/details (lần backup gần nhất, kết quả). Mức: không có lịch / lần gần nhất lỗi / > 7 ngày.
+2. RPO theo criticality: Cài đặt → Backup thêm bảng RPO theo mức quan trọng hệ thống (1: 24 h, 2: 24 h, 3: 48 h, 4: 168 h, sửa được).
+   backup/analysis dùng RPO nhỏ nhất của (quy tắc hiện có, mức hệ thống của VM qua owners) — giữ hành vi cũ khi VM chưa có hệ thống.
+3. Catalog NBU (GET /netbackup/catalog/images, lọc theo client + thời gian, phân trang): bản backup có thể khôi phục gần nhất theo
+   client, hạn giữ (expiration), copy thứ 2 (duplication). Immutable / WORM: GET storage-units / disk-pools → cờ WORM; báo VM mức 1–2
+   không có bản nằm trên storage immutable.
+4. Sổ diễn tập khôi phục (bảng restore_drill: hệ thống, VM, ngày, người, bản backup dùng, RTO đo được, kết quả, file biên bản qua
+   upload an toàn): nhập tay; quy tắc "hệ thống mức 1–2 phải diễn tập ≤ 12 tháng" vào Hộp việc.
+5. UI: Backup → tab "Khôi phục & DR" (RPO theo hệ thống, immutable, diễn tập); thẻ hệ thống thêm khối DR. Báo cáo DR (PDF / Excel,
+   quy tắc 10) — dùng lại cho bằng chứng A.8.13 ở G10d.
+Test: RPO theo criticality (VM mức 1 vượt 24 h → vi phạm, VM chưa có hệ thống → ngưỡng cũ); catalog chọn bản gần nhất còn hạn;
+diễn tập quá 12 tháng; VCSA job lỗi.
+Nghiệm thu: demo có 1 hệ thống mức 1 thiếu bản immutable và 1 hệ thống quá hạn diễn tập, đều vào Hộp việc.
+```
+
+## G9e — Đơn giá nội bộ + showback theo hệ thống / phòng ban
+
+```text
+Mục tiêu: mỗi hệ thống / phòng ban thấy chi phí hạ tầng mình đang dùng (showback, không phải chargeback).
+
+1. Bảng đơn giá nội bộ theo năm tài chính (Cài đặt → Chi phí, vai trò spend admin): đ / vCPU / tháng, đ / GB RAM, đ / GB disk theo
+   tầng (datastore → storage array), backup đ / GB front-end, license Windows / SQL theo VM. Tiền VND số nguyên (shared/money.py);
+   gợi ý đơn giá = tổng Opex + khấu hao Capex của nhóm hạ tầng / dung lượng (hiển thị cách tính, người duyệt nhập số cuối).
+   Thay review_unit_cost_* (G3b) bằng bảng này, giữ biến cũ làm mặc định khi bảng trống.
+2. showback.py (hàm thuần, test số liệu): VM → chi phí tháng = tài nguyên cấp × đơn giá (VM tắt: chỉ disk); gộp theo hệ thống
+   (owners), phòng ban, cluster; VM chưa có hệ thống → dòng "Chưa có owner".
+3. UI: Hệ thống & Owner → tab "Chi phí (showback)"; khối chi phí trên thẻ hệ thống; cổng Owner thấy chi phí hệ thống của mình
+   (get_owner_user). PDF / Excel theo hệ thống và phòng ban (quy tắc 10, nhóm "Hệ thống & Owner").
+Test: bộ VM cố định → chi phí từng hệ thống / phòng ban khớp từng đồng; VM tắt; đơn giá theo năm tài chính.
+Nghiệm thu: tổng showback = tổng tài nguyên × đơn giá (không mất VM); owner chỉ thấy hệ thống của mình (test IDOR).
+```
+
+## G10a — Điểm sức khoẻ theo cluster / hệ thống
+
+```text
+1. health_score.py (hàm thuần): điểm 0 – 100 theo cluster và theo hệ thống, trừ điểm theo trọng số cấu hình cho:
+   capacity (trang Capacity hiện có), contention (G9c), lệch cấu hình (G9a), vòng đời / VMSA / chứng chỉ (G9b), backup / RPO / DR (G9d), phần cứng
+   (G4), sự cố mở + MTTR tháng (G5). Mỗi thành phần ghi rõ điểm trừ và lý do; điểm → 4 mức (≥ 85 AN TOÀN, ≥ 70 THEO DÕI,
+   ≥ 50 CẢNH BÁO, còn lại VƯỢT NGƯỠNG). Lưu điểm ngày vào metrics.py (kind "score") để có xu hướng.
+2. UI: Trang chủ Điều hành thêm bảng điểm cluster / hệ thống (xu hướng 90 ngày); thẻ cluster / hệ thống có phân rã điểm.
+Test: bộ dữ liệu cố định → đúng điểm từng thành phần; thiếu nguồn (module tắt) → bỏ thành phần đó, chia lại trọng số, ghi rõ.
+Nghiệm thu: mọi điểm có phân rã truy được về dữ liệu gốc.
+```
+
+## G10b — Báo cáo vận hành tháng tự gửi + kênh Teams / email cho cảnh báo
+
+```text
+1. Báo cáo tháng (PDF, quy tắc 10): điểm sức khoẻ, sự cố + MTTA / MTTR, thay đổi, capacity, backup / DR, phần cứng, vòng đời,
+   nhu cầu (G8) — dùng lại hàm của từng module (không tính lại). Gửi tự động ngày làm việc đầu tháng (giờ VN) tới danh sách nhận
+   (Cài đặt → Báo cáo tháng) qua shared/mailer.py; outbox như review_notices (UNIQUE tháng + người nhận, giành dòng trước khi gửi,
+   dry_run, gửi tối đa một lần); bản PDF vào Kho báo cáo.
+2. Kênh cảnh báo: shared/webhook.py thêm Microsoft Teams (Incoming Webhook / Workflows URL — kiểm host được phép, không theo redirect,
+   escape nội dung, URL lưu qua secrets_box) bên cạnh Discord; email cho cảnh báo (mỗi kênh chọn mức tối thiểu, giờ im lặng như
+   Discord). alert_rules cho chọn kênh theo nguồn. Không đổi hành vi Discord hiện có.
+Test: báo cáo tháng gửi đúng một lần khi hai pod cùng chạy / chạy lại; Teams payload escape; giờ im lặng.
+Nghiệm thu: dry_run tạo đúng danh sách thư; bật thật → mỗi người nhận một thư / tháng.
+```
+
+## G10c — Ticket ServiceDesk Plus từ sự cố và việc dọn dẹp (CẦN QUYẾT ĐỊNH GHI SDP)
+
+```text
+Điều kiện: chỉ làm khi chủ sản phẩm chốt quyết định D7 "cho phép GHI vào SDP" (ico-v2-plan.md mục 3) và cấp tài khoản technician
+riêng chỉ có quyền tạo / cập nhật request trong một template. Chưa chốt → PR này dừng ở thiết kế.
+
+1. Ngoại lệ ghi duy nhất (thêm vào mục 5 + quy tắc 1): POST /api/v3/requests (tạo) và PUT /api/v3/requests/{id} (thêm ghi chú /
+   đóng) cho đúng template cấu hình; mọi phương thức / đường dẫn khác vẫn bị JsonClient chặn (allow theo method + path).
+2. Tạo ticket thủ công (nút trên sự cố G5 / mục Hộp việc dọn dẹp G3), không tự động ở bản đầu; idempotent: bảng itsm_outbound
+   (UNIQUE nguồn + khoá đối tượng), ghi ID ticket SDP, liên kết ngược trên sự cố / thẻ CI; tạo lại = mở ticket cũ.
+3. Nội dung: tiêu đề, mức, CI, timeline rút gọn, link ICO; không gửi mật khẩu / IP nội bộ ngoài trường cần thiết (theo Masker).
+Test: chặn mọi method ngoài allow-list; tạo hai lần → một ticket; lỗi SDP → không ghi nửa chừng.
+Nghiệm thu: DEMO tạo ticket giả lập; không có lời gọi ghi khi tính năng tắt.
+```
+
+## G10d — Bộ bằng chứng ISO 27001
+
+```text
+1. Xuất một gói (.zip: PDF tổng hợp + Excel từng phần + manifest có hash SHA-256) cho một kỳ (quý / năm), mỗi control một mục, dùng
+   lại báo cáo sẵn có, không tính lại:
+   - A.5.30 (ICT readiness for business continuity): DR / diễn tập / RPO theo criticality (G9d);
+   - A.8.6 (capacity management): capacity + contention + kế hoạch năm (Capacity, G9c, G8);
+   - A.8.8 (technical vulnerabilities): VMSA mở, vòng đời, chứng chỉ (G9b);
+   - A.8.9 (configuration management): baseline + lệch + ngoại lệ có duyệt (G9a);
+   - A.8.13 (information backup): độ phủ backup, catalog, immutable (G9d, backup);
+   - A.8.32 (change management): nhật ký thay đổi vCenter + yêu cầu SDP ghép VM (G6, G7c);
+   kèm rà soát owner (G3) cho A.5.9 / A.5.18 nếu bật.
+2. Trung tâm báo cáo: nhóm "Tuân thủ"; chỉ admin; bản xuất vào Kho báo cáo kèm hash.
+Test: gói có đủ mục, manifest hash khớp nội dung; kỳ không có dữ liệu → ghi "không có dữ liệu", không bỏ mục.
+Nghiệm thu: một kỳ demo xuất đủ 6 control, mở được trên máy không có ICO.
+```
