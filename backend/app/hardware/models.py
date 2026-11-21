@@ -9,13 +9,10 @@ from sqlalchemy import (
 )
 
 from ..models import Base, utcnow
+from ..shared.schema import in_check as _in
 
 LEVELS = ("ok", "warn", "bad", "crit")
 POWER_STATES = ("on", "off", "powering_on", "powering_off", "unknown")
-
-
-def _in(col: str, values) -> str:
-    return f"{col} IN ({', '.join(repr(v) for v in values)})"
 
 
 class HwSourceState(Base):

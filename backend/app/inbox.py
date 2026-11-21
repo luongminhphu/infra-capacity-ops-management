@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from .cmdb.models import vc_key
 from .shared.text import vn_g
 
 logger = logging.getLogger(__name__)
@@ -307,7 +308,7 @@ def datastore_items(db: Session) -> List[Dict[str, Any]]:
                         "; ".join(d["reasons"]) + f". Cluster: {', '.join(d['clusters']) or '—'}.",
                         page="infra-ds", query=f"ds={quote(d['vcenterKey'] + '|' + d['key'])}",
                         page_label="Xem datastore này", alert_key=_key("ds", d["vcenterKey"], d["key"]),
-                        ci={"type": "datastore", "key": f"{d['vcenterKey']}:{d['key']}"},
+                        ci={"type": "datastore", "key": vc_key(d["vcenterKey"], d["key"])},
                         facts=_facts(_fact("vCenter", d["vcenterKey"]), _fact("Cluster", ", ".join(d["clusters"])),
                                      _fact("Đã dùng", _pct(d["usedPct"])),
                                      _fact("Đầy sau", f"~{d['daysToFull']:.0f} ngày" if d.get("daysToFull") is not None else None),
@@ -385,7 +386,7 @@ def health_items(db: Session) -> List[Dict[str, Any]]:
                         f"Host {h['host']}: phần cứng {infra.LEVEL_TEXT[h['level']].lower()}",
                         "; ".join(h["reasons"][:4]) or "Trạng thái tổng của host không xanh.",
                         page="infra-health", query=f"host={quote(h['host'])}", page_label="Xem sức khoẻ host này",
-                        alert_key=_key("hh", h["vcenterKey"], h["host"]), ci={"type": "hypervisor_host", "key": f"{h['vcenterKey']}:{h['host']}"},
+                        alert_key=_key("hh", h["vcenterKey"], h["host"]), ci={"type": "hypervisor_host", "key": vc_key(h["vcenterKey"], h["host"])},
                         facts=_facts(_fact("vCenter", h["vcenterKey"]), _fact("Cluster", h.get("cluster")),
                                      _fact("Kết nối", h.get("connection")), _fact("Trạng thái tổng", h.get("overallStatus"))),
                         events=([_event("crit", f"Host {h['connection']} với vCenter")] if h["connection"] != "connected" else [])

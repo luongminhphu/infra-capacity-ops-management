@@ -5,14 +5,11 @@ round compares against it; ops_incident groups the open events of one CI."""
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from ..models import Base, utcnow
+from ..shared.schema import in_check as _in
 
 LEVELS = ("warn", "bad", "crit")
 TRANSITIONS = ("open", "worse", "better", "clear")
 STATUSES = ("open", "acked", "resolved")
-
-
-def _in(col: str, values) -> str:
-    return f"{col} IN ({', '.join(repr(v) for v in values)})"
 
 
 class OpsIncident(Base):
@@ -38,6 +35,7 @@ class OpsIncident(Base):
     event_count = Column(Integer, nullable=False, default=0)
     flapping = Column(Boolean, nullable=False, default=False)
     flap_alerted = Column(Boolean, nullable=False, default=False)
+    flap_sent_channels = Column(Text)                        # CSV of Discord channel ids told about the flapping
     ticket_ref = Column(String(64))
     note = Column(Text)
 
@@ -73,3 +71,8 @@ class OpsEventOpen(Base):
     title = Column(String(500), nullable=False)
     opened_at = Column(DateTime, nullable=False, default=utcnow)
     last_seen = Column(DateTime, nullable=False, default=utcnow)
+
+
+from ..shared.stored_text import csv_column as _csv  # noqa: E402
+
+_csv(OpsIncident.flap_sent_channels, "Kênh Discord đã báo chập chờn", item=r"\d+")

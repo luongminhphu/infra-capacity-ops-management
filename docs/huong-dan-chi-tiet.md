@@ -1179,8 +1179,9 @@ Menu **Vận hành → Sự cố** (`#/incidents`, chi tiết `#/incidents?id=<s
   - Mọi sự kiện đã hết → sự cố tự đóng (*tự động*).
   - Người dùng có thể **Nhận xử lý**, **Giao cho…**, **Đóng sự cố** (kèm ghi chú); mỗi thao tác ghi `audit_log`.
   - Đóng tay khi còn sự kiện mở: sự kiện mới trên đối tượng đó mở sự cố mới.
-- **Chập chờn**: một sự kiện mở ≥ 4 lần trong 6 giờ → sự cố đánh dấu *chập chờn*, báo **một lần** lên các kênh Discord nhận cảnh báo
-  vận hành.
+- **Chập chờn**: một sự kiện mở ≥ 4 lần trong 6 giờ → sự cố đánh dấu *chập chờn*, báo **một lần cho mỗi kênh** Discord nhận cảnh báo
+  vận hành (kênh lỗi được gửi lại ở vòng sau, kênh đã nhận không bị gửi trùng). Sự cố đã đóng quá 6 giờ không được báo nữa.
+- **Hộp việc**: mục có sự kiện đang mở thêm nút *Sự cố #N* mở thẳng sự cố đó; nội dung và cách hiện của Hộp việc không đổi.
 - **Thống kê 6 tháng** (theo tháng giờ Việt Nam, theo nguồn, theo hệ thống của VM): số sự cố, số vượt ngưỡng, chưa đóng,
   **MTTA** (mở → nhận) và **MTTR** (mở → đóng); 10 đối tượng nhiều sự cố nhất.
 - **Bộ lọc**: trạng thái, mức, nguồn, thời gian mở; bộ lọc Owner giữ sự cố của VM thuộc hệ thống đã chọn và của host / datastore /

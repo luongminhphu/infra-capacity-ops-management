@@ -79,6 +79,9 @@ def get_inbox(show: str = Query(default="open", pattern="^(open|all|done)$"), fr
     features = get_features(db)
     acks = {a.item_key: a for a in db.query(InboxAck).filter(InboxAck.username == user.username)}
     assigned = _assignments(db, [it["key"] for it in items])
+    from ..events.models import OpsEventOpen
+    incident_of = {(src, key): iid for src, key, iid in db.query(OpsEventOpen.source, OpsEventOpen.event_key,
+                                                                 OpsEventOpen.incident_id).filter(OpsEventOpen.incident_id.isnot(None))}
     out, counts = [], {k: 0 for k in inbox.LEVELS}
     for it in items:
         if not inbox.visible(it, user, features):
@@ -89,7 +92,10 @@ def get_inbox(show: str = Query(default="open", pattern="^(open|all|done)$"), fr
             continue
         if not hidden:
             counts[it["level"]] += 1
-        out.append({**{k: v for k, v in it.items() if k not in ("role", "feature", "push")}, "due": _iso(it["due"]),
+        iid = incident_of.get((it["source"], it["alertKey"]))
+        links = it["links"] + ([{"label": f"Sự cố #{iid}", "page": "incidents", "query": f"id={iid}"}] if iid else [])
+        out.append({**{k: v for k, v in it.items() if k not in ("role", "feature", "push", "ci")}, "links": links,
+                    "due": _iso(it["due"]),
                     "levelLabel": inbox.LEVEL_LABELS[it["level"]], "sourceLabel": inbox.SOURCE_LABELS[it["source"]],
                     "ack": {"state": a.state, "until": _iso(a.until)} if a else None,
                     "assignee": assigned.get(it["key"])})
