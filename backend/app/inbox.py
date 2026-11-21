@@ -27,7 +27,8 @@ LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
 SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
                  "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "asset": "Thiết bị Data Center", "license": "License", "spend": "Chi phí & hợp đồng",
-                 "system": "Hệ thống", "review": "Rà soát owner", "hardware": "Phần cứng máy chủ", "config": "Lệch cấu hình"}
+                 "system": "Hệ thống", "review": "Rà soát owner", "hardware": "Phần cứng máy chủ", "config": "Lệch cấu hình",
+                 "lifecycle": "Vòng đời & bảo mật"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
 PUSH_LEVEL_PCT = 90.0
@@ -424,6 +425,45 @@ def config_items(db: Session) -> List[Dict[str, Any]]:
     return out
 
 
+def lifecycle_items(db: Session) -> List[Dict[str, Any]]:
+    """G9b: versions past / near End of General Support (grouped per product line), open VMSAs (one per advisory), TLS certificates
+    expiring (one per endpoint). Unreadable certificates and versions without an EoGS row stay on the page only."""
+    from .lifecycle import service as lifecycle
+    rep = lifecycle.report(db)
+    out = []
+    lines: Dict[tuple, List[Dict[str, Any]]] = {}
+    for r in rep["lifecycle"]:
+        if r["level"] in ("crit", "bad", "warn"):
+            lines.setdefault((r["product"], r["line"], r["level"]), []).append(r)
+    for (product, line, lv), rows in lines.items():
+        r0 = rows[0]
+        when = "đã hết hỗ trợ" if r0["daysLeft"] < 0 else f"hết hỗ trợ sau {r0['daysLeft']} ngày"
+        out.append(item("lifecycle", lv, _key("lc", "eogs", product, line, lv), f"{len(rows)} {r0['productLabel']} {line} {when} ({'/'.join(reversed(r0['eogs'].split('-')))})",
+                        ", ".join(x["name"] for x in rows[:10]) + (" …" if len(rows) > 10 else ""), page="infra-lifecycle",
+                        page_label="Xem vòng đời", alert_key=_key("lc", "eogs", product, line),
+                        events=[_event(lv, x["name"], f"{x['productLabel']} {x['version']} build {x['build']}", entity={"type": "host", "name": x["name"], "vc": x["vcenterKey"]} if product == "esxi" else None)
+                                for x in rows]))
+    adv: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rep["vmsa"]:
+        adv.setdefault(r["vmsa"], []).append(r)
+    for vmsa, rows in adv.items():
+        r0 = max(rows, key=lambda x: x["cvss"])
+        out.append(item("lifecycle", r0["level"], _key("lc", "vmsa", vmsa, r0["level"]), f"{vmsa} (CVSS {r0['cvss']:g}) chưa vá trên {len(rows)} đối tượng",
+                        f"{r0.get('title') or ''} · " + ", ".join(f"{x['name']} (build {x['build']} < {x['fixedBuild']})" for x in rows[:8]),
+                        page="infra-lifecycle", query=f"q={quote(vmsa)}", page_label="Xem VMSA", alert_key=_key("lc", "vmsa", vmsa),
+                        events=[_event(x["level"], x["name"], f"{x['productLabel']} {x['version']} build {x['build']}, cần ≥ {x['fixedBuild']}") for x in rows]))
+    for c in rep["certs"]:
+        if c["level"] not in ("crit", "bad", "warn"):
+            continue
+        when = "đã hết hạn" if c["daysLeft"] < 0 else f"hết hạn sau {c['daysLeft']} ngày"
+        out.append(item("lifecycle", c["level"], _key("lc", "tls", c["target"], c["level"]), f"Chứng chỉ {c['kindLabel']} {c['name']} {when}",
+                        f"{c['host']}:{c['port']} · {c.get('issuer') or ''}{' · tự ký' if c.get('selfSigned') else ''}",
+                        page="infra-lifecycle", query=f"q={quote(c['host'])}", page_label="Xem chứng chỉ", alert_key=_key("lc", "tls", c["target"]),
+                        ci={"type": "hypervisor_host", "key": vc_key(c["vcenterKey"], c["host"])} if c["kind"] == "esxi" else None,
+                        facts=_facts(_fact("Hết hạn", c["notAfter"], "datetime"), _fact("Subject", c.get("subject")), _fact("Issuer", c.get("issuer")))))
+    return out
+
+
 def storage_items(db: Session) -> List[Dict[str, Any]]:
     from . import infra
     out = []
@@ -606,6 +646,7 @@ PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False), ("asset", asset_items, True),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
     ("review", review_items, True), ("hardware", hardware_items, False), ("config", config_items, False),
+    ("lifecycle", lifecycle_items, False),
 ]
 
 _cache: Dict[str, Any] = {"at": 0.0, "items": None, "errors": []}

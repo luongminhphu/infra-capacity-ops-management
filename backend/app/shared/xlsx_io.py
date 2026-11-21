@@ -11,6 +11,25 @@ MAX_TOTAL = 60 * 1024 * 1024       # whole package once unzipped
 MAX_ENTRIES = 2000
 
 
+async def read_upload(request, file, max_bytes: int = 10 * 1024 * 1024) -> bytes:
+    """Bytes of an uploaded .xlsx (FastAPI Request + UploadFile): size cap before and while reading, content checked as xlsx.
+    Raises HTTPException 413 / 415 with a Vietnamese message."""
+    from fastapi import HTTPException
+    from .filetype import XLSX, FileRejected, detect_type
+    mb = max_bytes // (1024 * 1024)
+    cl = request.headers.get("content-length")
+    if cl and cl.isdigit() and int(cl) > max_bytes + 64 * 1024:
+        raise HTTPException(413, f"File quá lớn (tối đa {mb} MB).")
+    data = await file.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise HTTPException(413, f"File quá lớn (tối đa {mb} MB).")
+    try:
+        detect_type(data, allowed=(XLSX,))
+    except FileRejected as exc:
+        raise HTTPException(exc.status, f"{exc} File .xls cũ: mở bằng Excel rồi lưu lại dạng .xlsx.") from None
+    return data
+
+
 class XlsxError(ValueError):
     """The file cannot be read; the message is safe to show."""
 

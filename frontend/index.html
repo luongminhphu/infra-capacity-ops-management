@@ -145,6 +145,7 @@
       <section id="viewChanges" class="view-section hidden"><div id="changesMount"></div></section>
       <section id="viewItsm" class="view-section hidden"><div id="itsmMount"></div></section>
       <section id="viewConfigAudit" class="view-section hidden"><div id="configMount"></div></section>
+      <section id="viewLifecycle" class="view-section hidden"><div id="lifecycleMount"></div></section>
       <section id="viewOwners" class="view-section hidden"><div id="ownersMount"></div></section>
       <section id="viewArchive" class="view-section hidden"><div id="archiveMount"></div></section>
       <section id="viewBom" class="view-section hidden"><div id="bomMount"></div></section>
@@ -705,6 +706,16 @@
                     <button class="btn btn-secondary btn-sm" type="button" data-report="cfg-pdf"><i data-lucide="file-text"></i>PDF</button>
                     <button class="btn btn-secondary btn-sm" type="button" data-report="cfg-xlsx"><i data-lucide="sheet"></i>Excel</button>
                     <button class="btn btn-ghost btn-sm" type="button" data-nav-link="infra-config">Mở trang</button>
+                  </div>
+                </article>
+                <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="shield-alert"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Vòng đời &amp; bảo mật</div>
+                    <p class="report-card-desc">ESXi / vCenter hết hỗ trợ, VMSA chưa vá theo build và chứng chỉ TLS sắp hết hạn của mọi nguồn.</p></div>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="lc-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="lc-xlsx"><i data-lucide="sheet"></i>Excel</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="infra-lifecycle">Mở trang</button>
                   </div>
                 </article>
                 <article class="report-card">
@@ -1330,6 +1341,7 @@
 <script src="js/views/incidents.js?v=__ASSET_V__"></script>
 <script src="js/views/itsm.js?v=__ASSET_V__"></script>
 <script src="js/views/config_audit.js?v=__ASSET_V__"></script>
+<script src="js/views/lifecycle.js?v=__ASSET_V__"></script>
 <script src="js/views/owners.js?v=__ASSET_V__"></script>
 <script src="js/owner_scope.js?v=__ASSET_V__"></script>
 <script src="js/views/owner_portal.js?v=__ASSET_V__"></script>

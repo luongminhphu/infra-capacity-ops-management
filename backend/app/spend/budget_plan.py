@@ -18,6 +18,8 @@ A plan for fiscal year Y is built from what the module already knows, then adjus
               once approved it becomes a planned Opex listing their service tags.
 * capacity  — "Mở rộng hạ tầng ảo hoá <năm>": the hosts to add and their price as last sent from Nhu cầu hạ tầng → Kế hoạch năm sau
               (itsm/annual.py, frozen in itsm_year_plan.pushed; sourceId = the year). Once applied it becomes a draft Capex.
+* lifecycle — "Nâng cấp ESXi / vCenter hết hỗ trợ <năm>": hosts / vCenters whose End of General Support falls before the end of
+              the year (lifecycle/service.plan_suggestions, sourceId = the year); amount typed in the plan, becomes a draft Capex.
 * new       — a line typed in the plan (new service, new project), applied to the real
               Opex / Capex tables once the plan is approved.
 
@@ -45,8 +47,9 @@ from .settings import SpendSettings
 
 STATUS_LABELS = {"draft": "Nháp", "submitted": "Chờ duyệt", "approved": "Đã duyệt", "superseded": "Đã thay thế"}
 SOURCE_LABELS = {"renewal": "Gia hạn", "committed": "Đã ghi nhận", "capex": "Dự án Capex", "replace": "Thay thế thiết bị",
-                 "extend": "Dùng tiếp thiết bị", "warranty": "Bảo hành Dell", "capacity": "Mở rộng ảo hoá", "new": "Mới đề xuất"}
-APPLIED_SOURCES = ("new", "replace", "extend", "warranty", "capacity")            # lines that become a real Opex / Capex once the plan is approved
+                 "extend": "Dùng tiếp thiết bị", "warranty": "Bảo hành Dell", "capacity": "Mở rộng ảo hoá",
+                 "lifecycle": "Hết hỗ trợ ESXi / vCenter", "new": "Mới đề xuất"}
+APPLIED_SOURCES = ("new", "replace", "extend", "warranty", "capacity", "lifecycle")            # lines that become a real Opex / Capex once the plan is approved
 PRIORITY_LABELS = {"must": "Bắt buộc", "should": "Nên có", "could": "Tuỳ chọn"}
 PRIORITY_RANK = {"must": 0, "should": 1, "could": 2}
 CAPEX_SPENT = ("approved", "in_progress", "closed")
@@ -160,6 +163,8 @@ def suggest(db: Session, year: int, cfg: SpendSettings) -> List[Dict[str, Any]]:
     out.extend(warranty.plan_suggestions(db, ys, ye))
     from ..itsm import annual
     out.extend(annual.plan_suggestions(db, year, ys))
+    from ..lifecycle import service as lifecycle
+    out.extend(lifecycle.plan_suggestions(db, year, ys, ye))
     return out
 
 

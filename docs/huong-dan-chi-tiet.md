@@ -276,7 +276,7 @@ Mọi file xuất của app ở một chỗ, chia theo nhóm:
 | Nhóm | Báo cáo |
 |---|---|
 | Capacity & vận hành | Báo cáo Vận hành / Kỹ thuật (PDF), danh sách host & VM (Excel), dữ liệu tổng hợp (CSV) |
-| **Hạ tầng & phần cứng** | **Sức khoẻ hạ tầng** (PDF + Excel, mới), **Baseline cấu hình** (PDF + Excel), **Phần cứng máy chủ Dell OME** (PDF + Excel; lọc mức, hạn bảo hành), **Sổ CI** (Excel, mới; lọc loại / trạng thái) |
+| **Hạ tầng & phần cứng** | **Sức khoẻ hạ tầng** (PDF + Excel, mới), **Baseline cấu hình** (PDF + Excel), **Vòng đời & bảo mật** (PDF + Excel), **Phần cứng máy chủ Dell OME** (PDF + Excel; lọc mức, hạn bảo hành), **Sổ CI** (Excel, mới; lọc loại / trạng thái) |
 | **Hệ thống & Owner** | **VM theo hệ thống** (PDF + Excel), **Hệ thống & Owner** (Excel nhập lại được), **Kết quả rà soát owner** theo kỳ (PDF + Excel; chỉ admin / quản trị Hệ thống & Owner) |
 | Quy hoạch & Sizing | Quy hoạch tài nguyên (PDF), Nhu cầu năm & kế hoạch năm sau (PDF, Excel), Sizing (PDF đầy đủ / rút gọn, Excel, mẫu nhập) |
 | License & Inventory | Tổng quan license (PDF), đánh giá license, ESXi & phần cứng, HĐH guest (Excel) |
@@ -1373,6 +1373,32 @@ kiểu VMware. Mục không đọc được (tài khoản thiếu quyền, host 
 
 API: `GET /api/baseline`, `PUT /api/baseline/rules/{rule}`, `POST /api/baseline/exceptions`, `DELETE /api/baseline/exceptions/{id}`
 (ghi: admin), `GET /api/baseline/report.pdf|xlsx`.
+
+### Vòng đời & bảo mật (ICO v2 G9b)
+
+Menu **Vận hành → Sức khoẻ hạ tầng → Vòng đời & bảo mật** (`#/health/lifecycle`). ICO không tải gì từ Internet: hai bảng tham chiếu do admin nhập.
+
+**Bảng EoGS** (hết hỗ trợ chung): mỗi dòng là sản phẩm (ESXi / vCenter) + dòng phiên bản (`8.0`, `7.0`, hoặc chi tiết hơn `8.0.3` — dòng
+dài nhất khớp thắng) + ngày EoGS, EoTG. Thêm tay trên trang hoặc nhập .xlsx theo *File mẫu* (thay cả bảng).
+- Mức: đã qua EoGS → VƯỢT NGƯỠNG; còn ≤ 180 ngày → CẢNH BÁO; ≤ 365 ngày → THEO DÕI.
+- Phiên bản không có dòng nào trong bảng hiện *chưa có trong bảng* (không cảnh báo).
+- Kế hoạch ngân sách: host / vCenter hết hỗ trợ trước cuối năm tài chính sinh một dòng Capex “Nâng cấp ESXi / vCenter hết hỗ trợ <năm>”
+  (nguồn *Hết hỗ trợ ESXi / vCenter*, nhập giá trong kế hoạch).
+
+**Bảng VMSA**: mã, CVSS, sản phẩm, dòng phiên bản, build đã vá. Đối tượng **chưa vá** khi cùng dòng phiên bản và build hiện tại < build đã vá
+(bằng là đã vá). Mức theo CVSS: ≥ 9 VƯỢT NGƯỠNG, ≥ 7 CẢNH BÁO, còn lại THEO DÕI. Build ESXi lấy từ kiểm kê; build vCenter từ `about` của
+vCenter (cùng phiên đồng bộ, chỉ đọc).
+
+**Chứng chỉ TLS**: vCenter, từng host ESXi (443), NetBackup (1556), Dell OME, storage, GestióIP, ServiceDesk Plus và `PUBLIC_URL` của ICO.
+- Đọc bằng TLS handshake, không gửi request nào; mỗi ngày một lần ở pod leader (admin bấm *Đọc lại chứng chỉ* để đọc ngay).
+- Mức: hết hạn hoặc ≤ 30 ngày → VƯỢT NGƯỠNG, ≤ 60 → CẢNH BÁO, ≤ 90 → THEO DÕI. Không đọc được (chặn mạng, cổng đóng) chỉ hiện trên
+  trang, không cảnh báo. Nguồn DEMO dùng chứng chỉ giả.
+
+Hộp việc nguồn *Vòng đời & bảo mật* (EoGS gom theo dòng phiên bản, VMSA theo mã, chứng chỉ theo máy chủ) → sự kiện / sự cố; Discord bật
+mặc định từ mức VƯỢT NGƯỠNG (Cài đặt → Cảnh báo). Chế độ DEMO tự nạp bảng EoGS / VMSA mẫu (ghi “mẫu demo”) khi hai bảng còn trống.
+
+API: `GET /api/lifecycle`, `POST /api/lifecycle/scan`, `POST /api/lifecycle/import/{eogs|vmsa}`, `POST /api/lifecycle/eogs`,
+`DELETE /api/lifecycle/{eogs|vmsa}/{id}` (ghi: admin), `GET /api/lifecycle/template/{eogs|vmsa}.xlsx`, `GET /api/lifecycle/report.pdf|xlsx`.
 
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
