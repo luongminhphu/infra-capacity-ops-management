@@ -4,10 +4,10 @@ filter (G2c) keeps the servers running a VM of the selected systems; Opex codes 
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..downloads import attachment
 from ..features import get_features
 from ..hardware import service
 from ..models import User
@@ -48,8 +48,7 @@ def report_pdf(status: Optional[str] = Query(default=None, pattern=LEVEL_RX), mo
                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from ..report_hardware import build_pdf
     data = _listing(db, user, osc, status, model, warrantyDays)
-    return Response(build_pdf(data, user.display_name or user.username), media_type="application/pdf",
-                    headers={"Content-Disposition": 'attachment; filename="ICO_Suc_khoe_phan_cung.pdf"'})
+    return attachment(build_pdf(data, user.display_name or user.username), "ICO_Suc_khoe_phan_cung.pdf")
 
 
 @router.get("/report.xlsx")
@@ -59,5 +58,4 @@ def report_xlsx(status: Optional[str] = Query(default=None, pattern=LEVEL_RX), m
     from ..excel_hardware import build_xlsx
     data = _listing(db, user, osc, status, model, warrantyDays)
     data["firmwareRows"] = service.firmware_rows(db, [(i["sourceKey"], i["deviceId"]) for i in data["items"]])
-    return Response(build_xlsx(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": 'attachment; filename="ICO_Suc_khoe_phan_cung.xlsx"'})
+    return attachment(build_xlsx(data), "ICO_Suc_khoe_phan_cung.xlsx")

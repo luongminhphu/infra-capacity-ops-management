@@ -1,4 +1,4 @@
-/* ICO web styles — part 6/8: Reduced motion, app shell v2 (MASTER §6), Trang chủ verdict / inbox list → detail.
+/* ICO web styles — part 6/7: Reduced motion, app shell v2 (MASTER §6), Trang chủ verdict / inbox list → detail.
    Files load in this order from index.html (cascade order matters; see MASTER.md). */
 /* ── Reduced motion (WCAG 2.3.3) ───────────────────────────────────── */
 @media (prefers-reduced-motion: reduce){

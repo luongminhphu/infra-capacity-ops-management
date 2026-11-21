@@ -155,9 +155,10 @@ def clean_period(period: Optional[str], due: Optional[str], today: Optional[dt.d
     return p, d
 
 
-def owners(db: Session, osc=None) -> Dict[str, Any]:
-    """Systems of the scope grouped by owner e-mail: {"owners": [{email, name, cc, systems, vms, totals}], "noOwner": [...]}."""
-    inv = inventory.build(db, osc, include_unowned=False)
+def owners(db: Session, osc=None, owner: Optional[str] = None) -> Dict[str, Any]:
+    """Systems of the scope grouped by owner e-mail: {"owners": [{email, name, cc, systems, vms, totals}], "noOwner": [...]}.
+    owner: only that owner's group (preview / one draft)."""
+    inv = inventory.build(db, osc, include_unowned=False, owner=owner)
     groups: Dict[str, Dict[str, Any]] = {}
     no_owner = []
     for s in inv["systems"]:
@@ -289,14 +290,18 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:40] or "owner"
 
 
-def eml(db: Session, o: Dict[str, Any], mail: Tuple[str, str, str], period: str, attach: bool, scope: str = "") -> Tuple[str, bytes]:
-    subject, text, body = mail
-    msg = EmailMessage()
+def smtp_from(db: Session):
+    """SMTP settings for the From header (read once per download), or None: the mail client fills From."""
     try:
         from ..spend.notify import smtp_settings
-        smtp = smtp_settings(db, from_name="ICO – Rà soát owner")
-    except Exception:                       # SMTP not readable → the mail client fills From
-        smtp = None
+        return smtp_settings(db, from_name="ICO – Rà soát owner")
+    except Exception:                       # SMTP not readable
+        return None
+
+
+def eml(o: Dict[str, Any], mail: Tuple[str, str, str], period: str, attach: bool, smtp=None) -> Tuple[str, bytes]:
+    subject, text, body = mail
+    msg = EmailMessage()
     if smtp and smtp.from_addr:
         msg["From"] = formataddr((mailer.header(smtp.from_name), mailer.header(smtp.from_addr)))
     msg["To"] = mailer.header(o["email"])

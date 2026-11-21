@@ -1,10 +1,9 @@
 """Excel "Kết quả rà soát owner" — same numbers as owners.review.summary / report_review.py (evidence, ISO 27001)."""
-import io
 from typing import Any, Dict
 
 from openpyxl import Workbook
 
-from .excel_style import _sheet_title, _widths, _write_rows
+from .excel_style import _sheet_title, _widths, _write_rows, to_bytes
 
 
 def build_xlsx(d: Dict[str, Any]) -> bytes:
@@ -37,6 +36,4 @@ def build_xlsx(d: Dict[str, Any]) -> bytes:
     _widths(wv, {"A": 34, "B": 15, "C": 10, "D": 11, "E": 24, "F": 30, "G": 8, "H": 34, "I": 22, "J": 12, "K": 10, "L": 12,
                  "M": 28, "N": 30, "O": 26, "P": 22, "Q": 22})
     wv.freeze_panes = wv.cell(row=r3 + 1, column=2)
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return to_bytes(wb)

@@ -12,6 +12,7 @@ Pagination: limit (1–9999) + page (from 0). An API error comes back as a non-e
 The JSON shape is GestióIP's XML turned into JSON (a list of one element may arrive as an object), so the parsers accept both.
 """
 import base64
+import functools
 import ipaddress
 import logging
 from typing import Any, Dict, List, Optional
@@ -126,6 +127,11 @@ def parse_vlan(v: Any) -> Optional[Dict[str, Any]]:
     return {"number": number, "name": _txt(name, 128), "descr": _txt(descr)}
 
 
+@functools.lru_cache(maxsize=8192)
+def _net(cidr: str):
+    return ipaddress.ip_network(cidr)        # parsed once per CIDR, not once per (host × network)
+
+
 def network_of(ip: str, nets: List[Dict[str, Any]]) -> Optional[str]:
     """Most specific network (longest prefix) holding `ip`."""
     try:
@@ -134,7 +140,7 @@ def network_of(ip: str, nets: List[Dict[str, Any]]) -> Optional[str]:
         return None
     best = None
     for n in nets:
-        net = ipaddress.ip_network(n["cidr"])
+        net = _net(n["cidr"])
         if a.version == net.version and a in net and (best is None or net.prefixlen > best.prefixlen):
             best = net
     return str(best) if best else None

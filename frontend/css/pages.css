@@ -1,4 +1,4 @@
-/* ICO web styles — part 4/8: Page styles: What-if, Executive, history, Sizing, planning, License, report centre, settings, login, responsive.
+/* ICO web styles — part 4/7: Page styles: What-if, Executive, history, Sizing, planning, License, report centre, settings, login, responsive.
    Files load in this order from index.html (cascade order matters; see MASTER.md). */
 /* ── What-if ────────────────────────────────────────────────────────── */
 .layout-2col{display:grid;grid-template-columns:280px minmax(0,1fr);gap:var(--space-4);align-items:flex-start;}

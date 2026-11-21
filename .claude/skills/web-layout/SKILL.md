@@ -18,14 +18,14 @@ Quy tắc gốc (có **Nguồn**) nằm ở [`design-system/ico/MASTER.md`](../.
 | L3 | “Tuỳ chọn”, ví dụ, đơn vị tiền → `placeholder`; giải thích ngắn → `title` của nhãn; giải thích **cần thiết** → dòng trợ giúp `.field-help` / `panel-sub` (title không hiện trên điện thoại) | VD `Đơn giá / host` + placeholder `VND`; `Tăng trưởng %/quý` + placeholder `thấp,cơ sở,cao` |
 | L4 | Chữ tuỳ chọn của `<select>` vừa ô (≤ ~28 ký tự trong cột 240 px) | Rút gọn chữ hiển thị, **giữ nguyên `value`** gửi backend; tên đầy đủ đặt `title` của option. VD bỏ tiền tố hãng “VMware …” vì đã chọn nền tảng |
 | L5 | Tiêu đề panel / thẻ ≤ 1 dòng: tên ngắn, câu giải thích xuống `panel-sub` | “VM đổi tên” + mô tả “Không tính là thêm mới / loại bỏ…” |
-| L6 | Không cắt chữ thiết yếu (tiêu đề, nút, tên đối tượng, lỗi) bằng “…” — cho xuống dòng | `.muted-sub` mặc định 1 dòng; **dạng đoạn (`<p>` / `<div>`) tự xuống dòng** (patches.css) |
+| L6 | Không cắt chữ thiết yếu (tiêu đề, nút, tên đối tượng, lỗi) bằng “…” — cho xuống dòng | `.muted-sub` mặc định 1 dòng; **dạng đoạn (`<p>` / `<div>`) tự xuống dòng** (marks.css) |
 | L7 | **Không cuộn ngang trang ở 390 px** | Track lưới luôn `minmax(0,1fr)` (không `1fr` trần), con của grid / flex `min-width:0`, bảng rộng nằm trong `.table-scroll`, giá trị kỹ thuật dài `overflow-wrap:anywhere` |
 | L8 | Trên điện thoại (< 640 px): ô tên / ghi chú chiếm cả dòng, ô số 2 cột | VD `.sz-profile-grid`, `.pay-def-row` |
 | L9 | Dải KPI dùng `uiKpiStrip`; ô tối thiểu 200 px, giá trị có thể xuống dòng ở dấu cách khi ô < 230 px | Không tự đặt `minmax(<200px…)` cho `.kpi-strip` |
 | L10 | **Không dùng ô chọn file gốc** (nút “Choose File” tiếng Anh) | `uiDropzone(id, title, sub, accept)` (ui.js) — giữ `id`, handler `change` cũ chạy nguyên; hoặc nút `.btn` bọc `<input type="file" hidden>` |
 | L11 | Nút: một dòng, động từ + tân ngữ ngắn (“Upload v3”, “Xem trước”) | Nhãn dài → `title` hoặc rút gọn |
 | L12 | Một hành động / trường giữ **một tên** ở mọi nơi (trang Quy hoạch và Tuỳ chọn báo cáo dùng cùng nhãn) | Sửa nhãn ở một chỗ thì `grep` chỗ còn lại (`index.html` + `js/views`) |
-| L13 | **Bảng có ô nhập** (phiếu đánh giá, checklist, kế hoạch): cột số có độ rộng cố định, ô nhập lấp đầy cột, số căn phải **cùng một mép** với tiêu đề và dòng tổng | Lớp dùng chung `.tbl-inputs` (patches.css): `<colgroup>` với `col.c-num` / `col.c-act`, biến `--tbl-first` / `--tbl-col` / `--tbl-n`; ô có input là `td.num.in`, ô số chỉ đọc / tổng là `td.num` (tự cùng mép). Tiền trong ô nhập hiện kiểu vi-VN (`412.000.000`), chỉ định dạng lại khi giá trị toàn chữ số. Dòng tổng mỗi cột một giá trị, thiếu số liệu ghi “—”. Mẫu: `.qt-eval`, `.rn-table`. `ui_audit.js` báo cột lệch mép > 3 px |
+| L13 | **Bảng có ô nhập** (phiếu đánh giá, checklist, kế hoạch): cột số có độ rộng cố định, ô nhập lấp đầy cột, số căn phải **cùng một mép** với tiêu đề và dòng tổng | Lớp dùng chung `.tbl-inputs` (marks.css): `<colgroup>` với `col.c-num` / `col.c-act`, biến `--tbl-first` / `--tbl-col` / `--tbl-n`; ô có input là `td.num.in`, ô số chỉ đọc / tổng là `td.num` (tự cùng mép). Tiền trong ô nhập hiện kiểu vi-VN (`412.000.000`), chỉ định dạng lại khi giá trị toàn chữ số. Dòng tổng mỗi cột một giá trị, thiếu số liệu ghi “—”. Mẫu: `.qt-eval`, `.rn-table`. `ui_audit.js` báo cột lệch mép > 3 px |
 
 ## 2. Mẫu code
 
@@ -44,7 +44,7 @@ Quy tắc gốc (có **Nguồn**) nằm ở [`design-system/ico/MASTER.md`](../.
 `<option value="${esc(full)}" title="${esc(full)}">${esc(short(full))}</option>`
 ```
 
-CSS mới cho bố cục thêm vào **cuối `frontend/css/patches.css`**, có comment nói lỗi gì ở trang nào / khổ nào; chỉ dùng token
+CSS mới cho bố cục thêm vào **cuối `frontend/css/modules.css`** (hoặc cuối `marks.css` nếu phải đè luật của `shell.css` / `marks.css`; không tạo file vá riêng), có comment nói lỗi gì ở trang nào / khổ nào; chỉ dùng token
 (`--space-*`, `--control-h-sm|md|lg`, `--fs-*`), không px màu / cỡ chữ rời.
 
 ## 3. Kiểm trước khi giao

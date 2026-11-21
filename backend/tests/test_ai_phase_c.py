@@ -49,7 +49,7 @@ def test_budget_is_reserved_in_the_database(app_, admin):  # noqa: F811
     assert _cfg(db).reserved_micros == 600_000
     with pytest.raises(ai_platform.AiBlocked):                     # another pod: 0,60 + 0,60 > 1 USD
         ai_platform._reserve(db, "ask_ico", 600_000)
-    ai_platform._release(db, 600_000)
+    ai_platform._release(600_000)
     db.expire_all()
     assert _cfg(db).reserved_micros == 0
     ai_platform._reserve(db, "ask_ico", 900_000)
@@ -61,7 +61,7 @@ def test_budget_is_reserved_in_the_database(app_, admin):  # noqa: F811
     ai_platform._reserve(db, "ask_ico", 900_000)                   # replaces the stale hold instead of adding to it
     db.expire_all()
     assert _cfg(db).reserved_micros == 900_000
-    ai_platform._release(db, 5_000_000)                            # never below zero
+    ai_platform._release(5_000_000)                            # never below zero
     db.expire_all()
     assert _cfg(db).reserved_micros == 0
     db.close()

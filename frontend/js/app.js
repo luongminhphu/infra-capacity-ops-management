@@ -392,7 +392,6 @@ function openSourceStatusDialog(family) {
   };
 }
 
-/* "Đồng bộ ngay" for every source (admin): returns a short Vietnamese summary. */
 /* "Đồng bộ ngay": started in the background (202 + runId), then followed every 2 s until its job runs are written —
    a long sync no longer holds one HTTP request open past the App Proxy timeout. */
 async function syncAllSources() {

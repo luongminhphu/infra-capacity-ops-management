@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..cmdb.models import Ci
 from ..database import get_db
+from .. import vm_ip
 from ..owners import service
 from ..owners.access import OwnerPrincipal, get_owner_user
 from ..owners.models import System, SystemMember
@@ -59,7 +60,6 @@ def my_vms(system: Optional[int] = Query(default=None, ge=1), p: OwnerPrincipal 
         items.append({"ciId": c.id, "vm": c.name, "vcenterKey": a.get("vcenterKey") or "", "cluster": a.get("cluster"),
                       "powerOn": a.get("powerOn"), "vcpu": a.get("vcpu"), "ramGB": a.get("ramGB"),
                       "systemId": sid, "systemCode": code, "systemName": name})
-    from .. import vm_ip
     vm_ip.attach(db, items)
     return {"items": items, "total": len(items), "truncated": len(rows) > MAX_VMS}
 
@@ -88,13 +88,14 @@ def _campaign_or_404(db: Session, p: OwnerPrincipal, cid: int):
 def my_reviews(p: OwnerPrincipal = Depends(get_owner_user), db: Session = Depends(get_db)):
     from ..owners import review
     from ..owners.models import ReviewCampaign
+    from sqlalchemy import func
     out = []
     for c in db.query(ReviewCampaign).order_by(ReviewCampaign.opened_at.desc()).limit(20):
-        q = review.visible_items(db, p, c.id)
-        n = q.count()
+        n, decided = (review.visible_items(db, p, c.id).order_by(None)       # items + decided in one query
+                      .with_entities(func.count(review.ReviewItem.id), func.count(review.ReviewItem.decision)).one())
         if n:
             out.append({"id": c.id, "periodLabel": c.period_label, "status": c.status, "dueAt": c.due_at.isoformat(),
-                        "items": n, "decided": q.filter(review.ReviewItem.decision.isnot(None)).count()})
+                        "items": n, "decided": decided})
     return {"items": out}
 
 
@@ -105,13 +106,7 @@ def my_review(cid: int, p: OwnerPrincipal = Depends(get_owner_user), db: Session
     rows = review.visible_items(db, p, c.id).order_by(review.ReviewItem.flagged.desc(), review.ReviewItem.vm_name).limit(MAX_VMS).all()
     return {"id": c.id, "periodLabel": c.period_label, "status": c.status, "dueAt": c.due_at.isoformat(),
             "editable": c.status == "open", "decisions": [{"value": k, "label": v} for k, v in review.DECISION_LABELS.items()],
-            "items": _with_ip(db, [_item_out(i) for i in rows])}
-
-
-def _with_ip(db: Session, rows: list) -> list:
-    from .. import vm_ip
-    vm_ip.attach(db, rows)
-    return rows
+            "items": vm_ip.attach(db, [_item_out(i) for i in rows])}
 
 
 @router.put("/reviews/{cid}/items")

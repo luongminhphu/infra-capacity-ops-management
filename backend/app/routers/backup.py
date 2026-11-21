@@ -121,7 +121,7 @@ def jobs(response: Response, server: Optional[str] = Query(default="all"), days:
         total += 1
     set_page_headers(response, total, offset, len(rows))
     from .. import vm_ip                                   # IP of the VM behind each client (by client name / FQDN)
-    vm_ip.attach(db, rows, vm_key="clientName", vc_key="__none__")
+    vm_ip.attach(db, rows, vm_key="clientName", vc_key=None)
     return _jsonable({"total": total, "rows": rows})
 
 

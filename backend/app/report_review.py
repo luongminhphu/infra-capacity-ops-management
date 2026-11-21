@@ -2,22 +2,9 @@
 
   Tổng kết (tỷ lệ phản hồi, tài nguyên thu hồi) → 1 Quyết định theo loại → 2 Phản hồi theo owner → 3 Chi tiết VM
 Numbers come from owners.review.summary (the same dict as the web page and the Excel)."""
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from .pdf_kit import base_css, esc, exec_visual_css, html_to_pdf_bytes, now_str, stat_tiles_html
-
-
-def _vn(v: Any, d: int = 0) -> str:
-    if v is None:
-        return "—"
-    s = f"{float(v):,.{d}f}"
-    return s.replace(",", "\0").replace(".", ",").replace("\0", ".")
-
-
-def _table(head: List[str], rows: List[List[str]], num: tuple = ()) -> str:
-    th = "".join(f'<th class="{"num" if i in num else ""}">{esc(h)}</th>' for i, h in enumerate(head))
-    tr = "".join("<tr>" + "".join(f'<td class="{"num" if i in num else ""}">{c}</td>' for i, c in enumerate(r)) + "</tr>" for r in rows)
-    return f'<table class="data-table"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>'
+from .pdf_kit import base_css, data_table as _table, esc, exec_visual_css, html_to_pdf_bytes, now_str, stat_tiles_html, vn as _vn
 
 
 def render_html(d: Dict[str, Any], username: str) -> str:

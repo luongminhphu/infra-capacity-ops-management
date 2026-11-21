@@ -1,4 +1,4 @@
-/* ICO web styles — part 3/8: Surfaces, charts, tables, tabs, checkbox lists, details, logo upload, insight boxes.
+/* ICO web styles — part 3/7: Surfaces, charts, tables, tabs, checkbox lists, details, logo upload, insight boxes.
    Files load in this order from index.html (cascade order matters; see MASTER.md). */
 /* ── Surfaces ───────────────────────────────────────────────────────── */
 .card,.panel,.table-card,.sim-card,.side-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);}

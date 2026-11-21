@@ -2,36 +2,13 @@
 
   Tổng kết → 1 Datastore → 2 Mảng lưu trữ → 3 Snapshot VM → 4 Alarm vCenter → 5 Sức khoẻ host
 Numbers come from infra.report_data (same rows as the Sức khoẻ hạ tầng pages and the Excel)."""
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from .pdf_kit import base_css, esc, exec_visual_css, html_to_pdf_bytes, now_str, stat_tiles_html, status_pill
+from .pdf_kit import (base_css, data_table as _table, esc, exec_visual_css, html_to_pdf_bytes, level_pill as _pill, now_str,
+                      short_date as _date, stat_tiles_html, vn as _vn)
+from .shared.levels import LEVEL_TEXT, worst as _worst
 
 MAX_ROWS = 60                     # per section; the Excel has every row
-PILL = {"crit": "crit", "bad": "bad", "warn": "warn", "ok": "ok"}
-WORD = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "ok": "AN TOÀN"}
-RANK = {"crit": 0, "bad": 1, "warn": 2, "ok": 3}
-
-
-def _vn(v: Any, d: int = 0) -> str:
-    if v is None:
-        return "—"
-    s = f"{float(v):,.{d}f}"
-    return s.replace(",", "\0").replace(".", ",").replace("\0", ".")
-
-
-def _date(iso: Any) -> str:
-    s = str(iso or "")
-    return f"{s[8:10]}/{s[5:7]}/{s[:4]}" if len(s) >= 10 else "—"
-
-
-def _table(head: List[str], rows: List[List[str]], num: tuple = ()) -> str:
-    th = "".join(f'<th class="{"num" if i in num else ""}">{esc(h)}</th>' for i, h in enumerate(head))
-    tr = "".join("<tr>" + "".join(f'<td class="{"num" if i in num else ""}">{c}</td>' for i, c in enumerate(r)) + "</tr>" for r in rows)
-    return f'<table class="data-table"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>'
-
-
-def _pill(level: str) -> str:
-    return status_pill({"text": WORD.get(level, "NA"), "cls": PILL.get(level, "na")})
 
 
 def _more(rows: list, shown: int) -> str:
@@ -46,7 +23,7 @@ def render_html(d: Dict[str, Any], username: str, scope_label: str = "") -> str:
     generated = now_str()
     ds, arrays, vols, sn, al, hh = d["datastores"], d["storage"]["arrays"], d["storage"]["volumes"], d["snapshots"], d["alarms"], d["health"]
     levels = [x["level"] for x in ds + arrays + sn + al + hh]
-    worst = min(levels, key=lambda lv: RANK.get(lv, 3)) if levels else "ok"
+    worst = _worst(*levels) if levels else "ok"
     soonest = min((x["daysToFull"] for x in ds if x.get("daysToFull") is not None), default=None)
     ds_bad = [x for x in ds if x["level"] in ("crit", "bad")]
     red = sum(1 for a in al if a["status"] == "red")
@@ -122,8 +99,8 @@ def render_html(d: Dict[str, Any], username: str, scope_label: str = "") -> str:
     <div class="cover-title" style="margin-bottom:6px;">Sức khoẻ hạ tầng</div>
     <div class="meta-row">{scope}<span>Lập bởi: <b>{esc(username)}</b></span><span>Lúc: <b>{esc(generated)}</b></span></div>
   </div></div>
-  <div class="exec-brief {PILL.get(worst, 'ok')}">
-    <div class="exec-brief-head"><span class="status-pill {PILL.get(worst, 'ok')}">{esc(WORD.get(worst, ''))}</span><span class="exec-brief-title">Tổng kết — vấn đề &amp; việc cần làm</span></div>
+  <div class="exec-brief {worst}">
+    <div class="exec-brief-head"><span class="status-pill {worst}">{esc(LEVEL_TEXT.get(worst, ''))}</span><span class="exec-brief-title">Tổng kết — vấn đề &amp; việc cần làm</span></div>
     <div class="exec-brief-headline">{esc(headline)}</div>
     <ol class="rec-sum">{lst}</ol>
     <div class="stat-row" style="margin-bottom:0;">{tiles}</div>
