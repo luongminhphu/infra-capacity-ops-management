@@ -1400,6 +1400,33 @@ mặc định từ mức VƯỢT NGƯỠNG (Cài đặt → Cảnh báo). Chế 
 API: `GET /api/lifecycle`, `POST /api/lifecycle/scan`, `POST /api/lifecycle/import/{eogs|vmsa}`, `POST /api/lifecycle/eogs`,
 `DELETE /api/lifecycle/{eogs|vmsa}/{id}` (ghi: admin), `GET /api/lifecycle/template/{eogs|vmsa}.xlsx`, `GET /api/lifecycle/report.pdf|xlsx`.
 
+### Nghẽn tài nguyên (ICO v2 G9c)
+
+Menu **Vận hành → Capacity & Compliance → Nghẽn tài nguyên** (`#/capacity/contention`). Khác % ngưỡng overcommit ở tab Capacity
+(tài nguyên **cấp phát**): trang này đo VM / host có **thật sự phải chờ** tài nguyên không.
+
+- Mỗi lần đồng bộ vCenter, ICO đọc `PerformanceManager.QueryPerf` (chỉ đọc) mức realtime 20 giây, lấy trung bình 15 phút gần nhất, theo lô
+  50 đối tượng / lời gọi. VM đang bật, vCPU lớn trước, tối đa `PERF_MAX_VMS` (mặc định 2.000) và `PERF_BUDGET_SECONDS` (90 giây) mỗi vCenter;
+  phần bị cắt được đếm, không âm thầm bỏ.
+- Chỉ số VM: **CPU ready %** = ms ready trong mẫu 20 s / (20.000 × số vCPU) × 100 (vd 1.600 ms trên 4 vCPU = 2 %), **co-stop %** (cùng công
+  thức), **balloon** và **swap** (MB), **độ trễ disk** (ms, `disk.maxTotalLatency`). Host: độ trễ disk, balloon.
+
+| Chỉ số | THEO DÕI | CẢNH BÁO |
+|---|---|---|
+| CPU ready | ≥ 5 % | ≥ 10 % |
+| Co-stop | ≥ 3 % | ≥ 6 % |
+| Độ trễ disk | ≥ 20 ms | ≥ 50 ms |
+| Balloon | > 0 trong ≥ 3 lần đồng bộ liên tiếp | — |
+| Swap | — | > 0 trong ≥ 3 lần đồng bộ liên tiếp |
+| Cluster | — | ≥ 20 % số VM đã đo ở mức THEO DÕI trở lên |
+
+- Lịch sử lưu trong `metrics` (CPU ready, co-stop, độ trễ mỗi VM; độ trễ, balloon mỗi host), tự gộp theo giờ / ngày: bấm một dòng để xem
+  xu hướng 7 / 30 ngày.
+- Hộp việc nguồn *Nghẽn tài nguyên*: mỗi cluster cảnh báo một mục (VM nghẽn là sự kiện bên trong), cộng VM / host mức CẢNH BÁO ngoài các
+  cluster đó. Gửi Discord tắt mặc định (Cài đặt → Cảnh báo). Thẻ VM / host có khối *Nghẽn tài nguyên*.
+
+API: `GET /api/contention`, `GET /api/contention/history?kind=vm|host&name=&vc=&days=`.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**

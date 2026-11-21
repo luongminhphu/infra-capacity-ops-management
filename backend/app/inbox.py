@@ -28,7 +28,7 @@ LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO
 SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
                  "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "asset": "Thiết bị Data Center", "license": "License", "spend": "Chi phí & hợp đồng",
                  "system": "Hệ thống", "review": "Rà soát owner", "hardware": "Phần cứng máy chủ", "config": "Lệch cấu hình",
-                 "lifecycle": "Vòng đời & bảo mật"}
+                 "lifecycle": "Vòng đời & bảo mật", "contention": "Nghẽn tài nguyên"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
 PUSH_LEVEL_PCT = 90.0
@@ -464,6 +464,38 @@ def lifecycle_items(db: Session) -> List[Dict[str, Any]]:
     return out
 
 
+def contention_items(db: Session) -> List[Dict[str, Any]]:
+    """G9c: clusters where ≥ 20 % of the VMs are contended (one item each, the VMs as events), then each VM / host at CẢNH BÁO
+    that is not already inside a cluster item."""
+    from .contention import service as contention
+    rep = contention.report(db)
+    out, covered = [], set()
+    for c in rep["clusters"]:
+        if c["level"] == "ok":
+            continue
+        rows = [v for v in rep["vms"] if v["vcenterKey"] == c["vcenterKey"] and (v.get("cluster") or "") == c["cluster"] and v["level"] != "ok"]
+        covered |= {(v["vcenterKey"], v["name"]) for v in rows}
+        out.append(item("contention", c["level"], _key("ct", "cl", c["vcenterKey"], c["cluster"], c["level"]),
+                        f"Cluster {c['cluster']}: {c['hot']}/{c['vms']} VM bị nghẽn ({_num(c['sharePct'])} %)",
+                        f"CPU ready trung bình {_num(c['readyAvg'], 2)} %. VM nghẽn: " + ", ".join(v["name"] for v in rows[:8]) + (" …" if len(rows) > 8 else ""),
+                        page="cap-contention", query=f"q={quote(c['cluster'])}", page_label="Xem nghẽn tài nguyên",
+                        alert_key=_key("ct", "cl", c["vcenterKey"], c["cluster"]), ci={"type": "cluster", "key": vc_key(c["vcenterKey"], c["cluster"])},
+                        events=[_event(v["level"], f"{v['name']}{' (' + v['ip'] + ')' if v.get('ip') else ''}", "; ".join(v["reasons"]),
+                                       entity={"type": "vm", "name": v["name"], "vc": v["vcenterKey"]}) for v in rows]))
+    for r in rep["vms"] + rep["hosts"]:
+        if r["level"] != "bad" or (r["vcenterKey"], r["name"]) in covered:
+            continue
+        what = "VM" if r["kind"] == "vm" else "Host"
+        out.append(item("contention", "bad", _key("ct", r["kind"], r["vcenterKey"], r["name"]), f"{what} {r['name']}: nghẽn tài nguyên",
+                        "; ".join(r["reasons"]), page="cap-contention", query=f"q={quote(r['name'])}", page_label="Xem nghẽn tài nguyên",
+                        alert_key=_key("ct", r["kind"], r["vcenterKey"], r["name"]),
+                        ci={"type": "vm", "name": r["name"], "vc": r["vcenterKey"]} if r["kind"] == "vm"
+                        else {"type": "hypervisor_host", "key": vc_key(r["vcenterKey"], r["name"])},
+                        facts=_facts(_fact("IP", r.get("ip")), _fact("Cluster", r.get("cluster")), _fact("vCenter", r["vcenterKey"])),
+                        links=_entity_link(r["kind"], r["name"], r["vcenterKey"])))
+    return out
+
+
 def storage_items(db: Session) -> List[Dict[str, Any]]:
     from . import infra
     out = []
@@ -646,7 +678,7 @@ PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False), ("asset", asset_items, True),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
     ("review", review_items, True), ("hardware", hardware_items, False), ("config", config_items, False),
-    ("lifecycle", lifecycle_items, False),
+    ("lifecycle", lifecycle_items, False), ("contention", contention_items, False),
 ]
 
 _cache: Dict[str, Any] = {"at": 0.0, "items": None, "errors": []}

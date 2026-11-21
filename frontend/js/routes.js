@@ -37,6 +37,8 @@ const PAGES = [
       desc: 'Cảm biến phần cứng host (nguồn, quạt, nhiệt độ, bộ nhớ) và trạng thái kết nối.', scope: ['vcenter'] },
     { id: 'infra-config', view: 'configaudit', icon: 'list-checks', label: 'Cấu hình', title: 'Sức khoẻ hạ tầng — lệch cấu hình',
       desc: 'Baseline ESXi / cluster / VM: SSH, ESXi Shell, lockdown, NTP, syslog, HA / DRS, build trong cluster, VMware Tools, phiên bản phần cứng VM, ISO gắn.', scope: [] },
+    { id: 'cap-contention', view: 'contention', icon: 'gauge-circle', label: 'Nghẽn tài nguyên', title: 'Capacity — nghẽn tài nguyên',
+      desc: 'CPU ready, co-stop, balloon, swap và độ trễ disk của VM / host (QueryPerf, 15 phút gần nhất mỗi lần đồng bộ); cluster có nhiều VM nghẽn.', scope: [] },
     { id: 'infra-lifecycle', view: 'lifecycle', icon: 'shield-alert', label: 'Vòng đời & bảo mật', title: 'Sức khoẻ hạ tầng — vòng đời & bảo mật',
       desc: 'ESXi / vCenter hết hỗ trợ (EoGS), bản tin bảo mật VMSA chưa vá theo build, chứng chỉ TLS của mọi nguồn sắp hết hạn.', scope: [] },
     { id: 'hardware', view: 'hardware', icon: 'server-cog', label: 'Máy chủ vật lý', title: 'Phần cứng — máy chủ vật lý',
@@ -151,7 +153,7 @@ const MENU = [
   ] },
   { label: 'Vận hành', entries: [
     { key: 'capacity', label: 'Capacity & Compliance', icon: 'gauge', tabs: [
-      ['dashboard', '', 'Capacity'], ['compliance', 'compliance', 'Compliance'], ['history', 'trends', 'Xu hướng & biến động']] },
+      ['dashboard', '', 'Capacity'], ['compliance', 'compliance', 'Compliance'], ['history', 'trends', 'Xu hướng & biến động'], ['cap-contention', 'contention', 'Nghẽn tài nguyên']] },
     { key: 'backup', label: 'Backup', icon: 'database-backup', tabs: [
       ['bk-overview', '', 'Tổng quan'], ['bk-clients', 'clients', 'Client & RPO'], ['bk-jobs', 'jobs', 'Job'],
       ['bk-schedule', 'schedule', 'Lịch & tuân thủ'], ['bk-coverage', 'coverage', 'Độ phủ VM'], ['bk-size', 'size', 'Dung lượng'], ['bk-storage', 'storage', 'Storage & policy']] },
@@ -237,6 +239,7 @@ const VIEWS = {
   hardware: { section: '#viewHardware', render: () => callIf('renderHardwareView') },
   configaudit: { section: '#viewConfigAudit', render: () => callIf('renderConfigAuditView') },
   lifecycle: { section: '#viewLifecycle', render: () => callIf('renderLifecycleView') },
+  contention: { section: '#viewContention', render: () => callIf('renderContentionView') },
   incidents: { section: '#viewIncidents', render: () => callIf('renderIncidentsView') },
   changes: { section: '#viewChanges', render: () => callIf('renderChangesView') },
   itsm: { section: '#viewItsm', render: () => callIf('renderItsmView'),

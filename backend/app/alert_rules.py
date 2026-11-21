@@ -29,6 +29,7 @@ SOURCES: Dict[str, Tuple[str, bool, str]] = {
     "hardware": ("Phần cứng máy chủ (Dell OME)", True, "bad"),
     "config": ("Lệch cấu hình (baseline)", False, "bad"),
     "lifecycle": ("Vòng đời, VMSA, chứng chỉ TLS", True, "crit"),
+    "contention": ("Nghẽn tài nguyên (CPU ready, swap, độ trễ)", False, "bad"),
 }
 VN_OFFSET = dt.timedelta(hours=7)                   # Asia/Ho_Chi_Minh, no DST
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")

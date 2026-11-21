@@ -230,6 +230,8 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
         baseline.store(db, cfg.key, extras, now)    # configuration facts (G9a), evaluated on read
         from ..lifecycle import service as lifecycle
         lifecycle.store_product(db, cfg.key, extras, now)   # vCenter version / build (G9b)
+        from ..contention import service as contention
+        contention.store(db, cfg.key, extras, now)  # CPU ready / co-stop / balloon / swap / latency (G9c) + metrics history
         if cfg.demo:
             lifecycle.seed_demo(db)                 # sample EoGS / VMSA tables, only while both are empty
         changes.store(db, cfg.key, extras.get("events"), extras.get("eventsUntil"))     # change log (G6), deduplicated

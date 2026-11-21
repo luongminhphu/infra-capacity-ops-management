@@ -459,6 +459,17 @@ def collect_inventory_full(cfg: VCenterConfig, events_since: Optional[dt.datetim
         except Exception:  # noqa: BLE001 — the baseline is optional: None keeps the previous facts (G9a)
             logger.warning("Could not read configuration facts for %s", cfg.key, exc_info=True)
             extra["config"] = None
+        try:
+            from . import perf
+            from ..config import get_settings
+            st = get_settings()
+            hosts_o, _c, vms_o, _ds = fetched
+            extra["perf"] = perf.read(content, hosts_o, vms_o, host_names(hosts_o, _c), st.perf_max_vms, st.perf_budget_seconds)
+        except (socket.timeout, TimeoutError, ConnectionError, OSError):
+            raise
+        except Exception:  # noqa: BLE001 — contention counters are optional (G9c): None keeps the previous state
+            logger.warning("Could not read performance counters for %s", cfg.key, exc_info=True)
+            extra["perf"] = None
         about = getattr(content, "about", None)
         extra["product"] = {"version": getattr(about, "version", None), "build": getattr(about, "build", None),
                             "fullName": getattr(about, "fullName", None)} if about is not None else None   # lifecycle (G9b)

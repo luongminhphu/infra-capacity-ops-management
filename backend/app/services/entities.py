@@ -18,6 +18,7 @@ from .. import capacity, data_access
 from ..config import get_settings
 from ..features import get_features, is_on
 from ..baseline import service as baseline
+from ..contention import service as contention
 from ..cmdb import query as cq
 from ..models import User
 from ..shared.identity import norm_serial
@@ -271,6 +272,7 @@ def host_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str
         "server": _server_ref(db, h.get("serial")),
         "ci": cq.card_extras(db, user, cq.find(db, "hypervisor_host", f"{h.get('vcenterKey') or ''}:{h['host']}")),
         "cfgFindings": baseline.for_entity(db, "host", h["host"], h.get("vcenterKey") or ""),
+        "contention": contention.for_entity(db, "host", h["host"], h.get("vcenterKey") or ""),
     }
     return out
 
@@ -322,6 +324,7 @@ def vm_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str, 
     out["system"] = owners.system_of_vm(db, ci.id) if ci is not None else None
     out["canAssignSystem"] = ci is not None and owners.can_manage(user)
     out["cfgFindings"] = baseline.for_entity(db, "vm", v["vm"], v.get("vcenterKey") or "")
+    out["contention"] = contention.for_entity(db, "vm", v["vm"], v.get("vcenterKey") or "")
     if ci is not None and get_settings().itsm():
         from ..itsm.link import vm_requests
         out["itsm"] = vm_requests(db, ci.id, out["config"])

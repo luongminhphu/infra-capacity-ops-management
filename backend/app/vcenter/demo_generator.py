@@ -284,7 +284,26 @@ def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows:
         a["vimType"] = vim_type.get(a["entityType"])
     return {"datastores": datastores, "snapshots": snapshots, "alarms": alarms, "health": health,
             "vcenterUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cfg.key}/vcenter")), "config": collect_config(host_rows, vm_rows),
-            "product": {"version": "7.0.3", "build": "21477706", "fullName": "VMware vCenter Server 7.0.3 build-21477706"}}
+            "product": {"version": "7.0.3", "build": "21477706", "fullName": "VMware vCenter Server 7.0.3 build-21477706"},
+            "perf": collect_perf(cfg, host_rows, vm_rows)}
+
+
+def collect_perf(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Contention counters (vcenter/perf.py shape): most VMs quiet, a few with CPU ready / co-stop, balloon, swap or disk latency.
+    Stable per VM, with a small wave so the charts move from one sync to the next."""
+    import math
+    wave = 0.5 + 0.5 * math.sin(time.time() / 3600.0)
+    vms = []
+    for i, v in enumerate(v for v in vm_rows if v.get("isPoweredOn")):
+        hot = i % 17 == 4
+        vms.append({"vm": v["vm"], "cluster": v["cluster"], "host": v.get("host"), "vcpu": v.get("vcpu"),
+                    "readyPct": round(13.5 if i % 41 == 9 else (7.5 + 6 * wave) if hot else 0.4 + (i % 5) * 0.35, 2),
+                    "costopPct": round(4.2 + 2 * wave, 2) if hot and (v.get("vcpu") or 0) >= 8 else round(0.1 * (i % 3), 2),
+                    "balloonMB": 512.0 if i % 23 == 7 else 0.0, "swappedMB": 128.0 if i % 31 == 11 else 0.0,
+                    "latencyMs": round(28 + 30 * wave, 1) if i % 29 == 13 else round(2 + (i % 7) * 0.8, 1)})
+    hosts = [{"host": h["host"], "cluster": h["cluster"], "balloonMB": 0.0, "latencyMs": round(3 + (i % 4) * 1.5, 1)}
+             for i, h in enumerate(host_rows)]
+    return {"vms": vms, "hosts": hosts, "cut": 0}
 
 
 def collect_config(host_rows: List[Dict[str, Any]], vm_rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
