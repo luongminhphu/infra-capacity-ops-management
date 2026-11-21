@@ -88,8 +88,9 @@ def test_flapping_after_four_opens_in_six_hours_alerts_once(db, monkeypatch):
     from types import SimpleNamespace as NS
     monkeypatch.setattr(ops_alerts, "_channels", lambda _db: [NS(id=1, webhook_enc=secrets_box.encrypt("https://discord.com/api/webhooks/1/abc"))])
     sent = []
-    assert ev.notify_flapping(db, post=lambda url, payload: sent.append(payload)) == 1
-    assert ev.notify_flapping(db, post=lambda url, payload: sent.append(payload)) == 0
+    at = T0 + dt.timedelta(hours=4)
+    assert ev.notify_flapping(db, post=lambda url, payload: sent.append(payload), now=at) == 1
+    assert ev.notify_flapping(db, post=lambda url, payload: sent.append(payload), now=at) == 0
     assert len(sent) == 1 and "chập chờn" in sent[0]["content"]
 
 
@@ -166,3 +167,56 @@ def test_inbox_cap_only_limits_what_people_see(monkeypatch):
         db.close()
         inbox.invalidate()
     assert len(full) == 75 and len(shown) == inbox.MAX_PER_SOURCE
+
+
+def test_flapping_alert_per_channel_and_not_for_old_incidents(db, monkeypatch):
+    """Review G5: one channel failing marked the alert sent for all; an old flapping incident was announced when a first
+    channel was added later."""
+    from types import SimpleNamespace as NS
+    from app import ops_alerts, secrets_box
+    from app.shared.webhook import WebhookError
+    for i in range(4):
+        _round(db, "bad", minutes=60 * i)
+        _round(db, "ok", minutes=60 * i + 30)
+    hook = lambda n: secrets_box.encrypt(f"https://discord.com/api/webhooks/{n}/abc")      # noqa: E731
+    monkeypatch.setattr(ops_alerts, "_channels", lambda _db: [NS(id=1, webhook_enc=hook(1)), NS(id=2, webhook_enc=hook(2))])
+    posts, failed_once = [], []
+
+    def flaky(url, payload):
+        if "/2/" in url and not failed_once:
+            failed_once.append(1)
+            raise WebhookError("HTTP 429")
+        posts.append(url)
+    at = T0 + dt.timedelta(hours=4)
+    assert ev.notify_flapping(db, post=flaky, now=at) == 0            # channel 2 failed: not done yet
+    assert ev.notify_flapping(db, post=flaky, now=at) == 1            # now channel 2 only
+    assert [p.split("/")[-2] for p in posts] == ["1", "2"]
+    inc = db.query(OpsIncident).filter(OpsIncident.flapping.is_(True)).one()
+    inc.flap_alerted, inc.flap_sent_channels = False, None
+    db.commit()
+    assert ev.notify_flapping(db, post=flaky, now=T0 + dt.timedelta(days=2)) == 0 and len(posts) == 2
+
+
+def test_stats_window_is_in_vietnam_months(db):
+    """Review G5: at 20:00 UTC on 30/11 it is already December in Vietnam — a 1-month window must not hold November."""
+    db.add(OpsIncident(group_key="x", source="health", title="X", status="open", peak_level="bad",
+                       opened_at=dt.datetime(2026, 11, 15), event_count=1))
+    db.commit()
+    s = ev.stats(db, months=1, now=dt.datetime(2026, 11, 30, 20, 0))
+    assert s["total"] == 0 and s["byMonth"] == []
+
+
+def test_inbox_item_links_its_open_incident(db, admin, monkeypatch):  # noqa: F811
+    from app import inbox
+    cid = _ci(db)
+    item = inbox.item("health", "bad", "hh|g5vc|esx-g5|bad", "Host esx-g5", alert_key="hh|g5vc|esx-g5",
+                      ci={"type": "hypervisor_host", "key": "g5vc:esx-g5"})
+    ev.run(db, [item], [])
+    iid = db.query(OpsIncident).one().id
+    monkeypatch.setattr(inbox, "PROVIDERS", [("health", lambda _db: [dict(item)], False)])
+    inbox.invalidate()
+    try:
+        got = next(i for i in admin.get("/api/inbox?fresh=true").json()["items"] if i["alertKey"] == "hh|g5vc|esx-g5")
+    finally:
+        inbox.invalidate()
+    assert {"label": f"Sự cố #{iid}", "page": "incidents", "query": f"id={iid}"} in got["links"] and "ci" not in got

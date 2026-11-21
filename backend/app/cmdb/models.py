@@ -9,6 +9,7 @@ Timestamps are naive UTC like the rest of the app.
 from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from ..database import Base
+from ..shared.schema import in_check as _in
 from ..models import utcnow
 
 CI_TYPES = ("vm", "hypervisor_host", "cluster", "physical_server", "datastore", "storage_array", "storage_volume",
@@ -19,10 +20,6 @@ KEY_KINDS = ("serial", "hw_uuid", "instance_uuid", "fqdn", "short_name", "ip", "
              "opex_code", "idrac_ip")
 RELATIONS = ("hosted_on", "member_of", "runs_on", "records", "covers", "stored_on", "backed_by", "on", "protected_by")
 CONFIDENCES = ("strong", "weak")
-
-
-def _in(col: str, values) -> str:
-    return f"{col} IN ({', '.join(repr(v) for v in values)})"
 
 
 class Ci(Base):
@@ -92,3 +89,8 @@ from ..shared.stored_text import json_column as _json  # noqa: E402
 
 _json(Ci.attrs, dict, "Thuộc tính CI", nullable=False)
 _json(CiLink.attrs, dict, "Thuộc tính liên kết CI", nullable=False)
+
+
+def vc_key(vcenter_key, name) -> str:
+    """source_key of a vCenter-scoped CI (host, cluster, datastore): one format for the builder and every lookup."""
+    return f"{vcenter_key or ''}:{name}"

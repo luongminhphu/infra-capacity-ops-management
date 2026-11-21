@@ -31,6 +31,7 @@ from ..config import get_settings
 from ..models import utcnow
 from ..shared.identity import nbu_client_key, norm_fqdn, norm_ip, norm_mac, norm_naa, norm_serial, short_name
 from . import registry
+from .models import vc_key
 from .registry import Identity
 
 logger = logging.getLogger("vco.cmdb")
@@ -126,7 +127,7 @@ def _datastores(db: Session, g: Graph, vcs: Dict[str, str]) -> Dict[Tuple[str, s
         vol_ci[(v.source_key, v.container or "", v.name)] = ident
     by_name: Dict[Tuple[str, str], List[Identity]] = defaultdict(list)
     for r in db.query(DatastoreState).filter(DatastoreState.vcenter_key.in_(list(vcs) or [""])):
-        ident = g.ci("datastore", "vcenter", f"{r.vcenter_key}:{r.ds_key}", r.name,
+        ident = g.ci("datastore", "vcenter", vc_key(r.vcenter_key, r.ds_key), r.name,
                      {"vcenterKey": r.vcenter_key, "dsType": r.ds_type})
         b = json.loads(r.backing) if r.backing else {}
         naas = [n for n in (b.get("naa") or []) if n]
@@ -148,7 +149,7 @@ def _inventory(db: Session, g: Graph, vcs: Dict[str, str], ds_by_name: Dict[Tupl
     for h in hosts:
         vc = h.get("vcenterKey") or ""
         platform = vcs.get(vc, "vmware")
-        ident = g.ci("hypervisor_host", "vcenter", f"{vc}:{h['host']}", h["host"],
+        ident = g.ci("hypervisor_host", "vcenter", vc_key(vc, h["host"]), h["host"],
                      {"vcenterKey": vc, "cluster": h.get("cluster"), "platform": platform, "vendor": h.get("vendor"),
                       "model": h.get("model")})
         _name_keys(g, ident, h["host"])
@@ -156,7 +157,7 @@ def _inventory(db: Session, g: Graph, vcs: Dict[str, str], ds_by_name: Dict[Tupl
         g.key(ident, "hw_uuid", str(h.get("hwUuid") or "").strip().lower()[:64])
         host_ci[(vc, h["host"])] = ident
         if h.get("cluster"):
-            cl = g.ci("cluster", "vcenter", f"{vc}:{h['cluster']}", h["cluster"], {"vcenterKey": vc, "platform": platform})
+            cl = g.ci("cluster", "vcenter", vc_key(vc, h["cluster"]), h["cluster"], {"vcenterKey": vc, "platform": platform})
             g.link(ident, cl, "member_of", "vcenter", "strong")
         phys = _physical(g, h.get("serial"), "host", h.get("vendor"), h.get("model"))
         if phys:

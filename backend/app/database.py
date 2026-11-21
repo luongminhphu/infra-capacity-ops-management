@@ -70,6 +70,7 @@ def ensure_schema() -> None:
                             ("vat_pct", "NUMERIC(5, 2)"), ("vat_amount", "NUMERIC(18, 2)"), ("sets", "NUMERIC(10, 3)")],
         "datastore_states": [("backing", "TEXT")],
         "app_logs": [("request_id", "VARCHAR(64)"), ("pod", "VARCHAR(64)")],
+        "ops_incident": [("flap_sent_channels", "TEXT")],
         "ai_runs": [("cost_usd_micros", "BIGINT"), ("request_id", "VARCHAR(64)"), ("prompt_version", "VARCHAR(32)"), ("feedback", "VARCHAR(4)")],
         "vc_alarm_states": [("entity_moid", "VARCHAR(64)"), ("vim_type", "VARCHAR(32)"), ("vc_uuid", "VARCHAR(64)")],
         "systems": [("deputy_name", "VARCHAR(128)"), ("support_emails", "TEXT"), ("support_name", "VARCHAR(128)"),

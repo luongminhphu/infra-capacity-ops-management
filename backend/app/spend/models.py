@@ -11,6 +11,7 @@ from sqlalchemy import (
 )
 
 from ..database import Base
+from ..shared.schema import in_check as _in
 from ..models import utcnow
 
 CATEGORY_GROUPS = ("hw_warranty", "license", "dc_maintenance", "outsourced", "other")
@@ -24,10 +25,6 @@ FILE_MIMES = (
 )
 CHANNEL_KINDS = ("email", "discord")
 REMINDER_STATUSES = ("pending", "sent", "failed", "skipped", "unknown")
-
-
-def _in(col: str, values) -> str:
-    return f"{col} IN ({', '.join(repr(v) for v in values)})"
 
 
 class _Audited:

@@ -7,6 +7,7 @@ a VM (CI) in at most one system (UNIQUE ci_id), assignment source in a fixed set
 from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from ..database import Base
+from ..shared.schema import in_check as _in
 from ..models import utcnow
 
 ENVS = ("prod", "uat", "dev", "dr", "other")
@@ -14,10 +15,6 @@ STATUSES = ("active", "retired")
 SOURCES = ("manual", "attribute", "tag", "rule", "itsm")      # manual always wins over the automatic ones
 CONFIDENCES = ("strong", "weak")
 RULE_KINDS = ("folder", "resource_pool", "attribute", "tag", "name_regex", "cluster")
-
-
-def _in(col: str, values) -> str:
-    return f"{col} IN ({', '.join(repr(v) for v in values)})"
 
 
 def _lower(col: str) -> str:

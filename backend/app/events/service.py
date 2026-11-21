@@ -29,6 +29,7 @@ SOURCES = ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "st
 SOURCE_FEATURE = {"backup": "backup"}
 FLAP_OPENS = 4
 FLAP_HOURS = 6
+FLAP_PER_MESSAGE = 10                 # 10 × ≤ 190 characters: one Discord message
 RETENTION_MONTHS = 13
 CI_TYPES = ("vm", "hypervisor_host", "cluster", "datastore", "storage_array", "physical_server", "backup_client")
 Current = Dict[str, Tuple[str, Optional[int], str, str]]      # event_key → (level, ci_id, title, detail)
@@ -155,30 +156,44 @@ def _incident_for(db, incidents, by_id, src, key, ci_id, level, title, now) -> O
     return inc
 
 
-def notify_flapping(db: Session, post=None) -> int:
-    """Tell the operations Discord channels once per flapping incident (flap_alerted is set only after a delivery)."""
+def notify_flapping(db: Session, post=None, now: Optional[dt.datetime] = None) -> int:
+    """Tell each operations Discord channel once per flapping incident that is open or closed within FLAP_HOURS (a flapping
+    incident often auto-resolves between rounds; an old one is not announced when a first channel is added). Delivery is tracked per channel
+    (flap_sent_channels), so a channel that failed gets it next round and the others are not told twice; flap_alerted is
+    set when every channel has it. At most FLAP_PER_MESSAGE incidents per round (the rest follow next round)."""
     from .. import ops_alerts, secrets_box
     from ..shared.webhook import WebhookError, post_json, validate_discord_url
     from ..spend.notify import discord_escape
-    pending = db.query(OpsIncident).filter(OpsIncident.flapping.is_(True), OpsIncident.flap_alerted.is_(False)).all()
+    from sqlalchemy import or_
+    recent = (now or dt.datetime.utcnow()) - dt.timedelta(hours=FLAP_HOURS)
+    pending = (db.query(OpsIncident).filter(OpsIncident.flapping.is_(True), OpsIncident.flap_alerted.is_(False),
+                                            or_(OpsIncident.status != "resolved", OpsIncident.resolved_at >= recent))
+               .order_by(OpsIncident.id).limit(FLAP_PER_MESSAGE).all())
     channels = ops_alerts._channels(db) if pending else []
     if not pending or not channels:
         return 0
-    text = "**ICO — sự cố chập chờn**\n" + "\n".join(
-        f"• Sự cố #{i.id}: {discord_escape(i.title)} — mở / hết ≥ {FLAP_OPENS} lần trong {FLAP_HOURS} giờ" for i in pending[:20])
-    ok = False
+    sent = {i.id: set(filter(None, (i.flap_sent_channels or "").split(","))) for i in pending}
     for ch in channels:
+        cid = str(ch.id)
+        todo = [i for i in pending if cid not in sent[i.id]]
+        if not todo:
+            continue
+        text = "**ICO — sự cố chập chờn**\n" + "\n".join(
+            f"• Sự cố #{i.id}: {discord_escape(i.title[:150])} — mở / hết ≥ {FLAP_OPENS} lần trong {FLAP_HOURS} giờ" for i in todo)
         try:
             (post or post_json)(validate_discord_url(secrets_box.decrypt(ch.webhook_enc)),
                                 {"content": text[:1900], "allowed_mentions": {"parse": []}, "username": "ICO cảnh báo"})
-            ok = True
         except (WebhookError, secrets_box.SecretUnreadable, ValueError) as exc:
             logger.warning("Flapping alert to channel %s failed: %s", ch.id, exc)
-    if ok:
-        for i in pending:
-            i.flap_alerted = True
-        db.commit()
-    return len(pending) if ok else 0
+            continue
+        for i in todo:
+            sent[i.id].add(cid)
+    every = {str(ch.id) for ch in channels}
+    for i in pending:
+        i.flap_sent_channels = ",".join(sorted(sent[i.id])) or None
+        i.flap_alerted = every <= sent[i.id]
+    db.commit()
+    return sum(1 for i in pending if i.flap_alerted)
 
 
 def run(db: Session, items: List[Dict[str, Any]], errors: Iterable[str], post=None) -> Dict[str, int]:
@@ -325,7 +340,8 @@ def stats(db: Session, months: int = 6, osc=None, now: Optional[dt.datetime] = N
     from ..collectors.retention import months_ago
     from ..owners.models import System, SystemMember
     now = now or dt.datetime.utcnow()
-    since = months_ago(now, months - 1).replace(day=1, hour=0, minute=0, second=0, microsecond=0) - dt.timedelta(hours=7)
+    vn_now = now + dt.timedelta(hours=7)                     # the window is Vietnam months, like _vn_month
+    since = months_ago(vn_now, months - 1).replace(day=1, hour=0, minute=0, second=0, microsecond=0) - dt.timedelta(hours=7)
     q = db.query(OpsIncident).filter(OpsIncident.opened_at >= since)
     hidden = _hidden_sources(db)
     if hidden:
