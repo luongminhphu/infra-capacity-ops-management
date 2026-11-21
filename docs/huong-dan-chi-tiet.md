@@ -278,7 +278,7 @@ Mọi file xuất của app ở một chỗ, chia theo nhóm:
 | Capacity & vận hành | Báo cáo Vận hành / Kỹ thuật (PDF), danh sách host & VM (Excel), dữ liệu tổng hợp (CSV) |
 | **Hạ tầng & phần cứng** | **Sức khoẻ hạ tầng** (PDF + Excel, mới), **Phần cứng máy chủ Dell OME** (PDF + Excel; lọc mức, hạn bảo hành), **Sổ CI** (Excel, mới; lọc loại / trạng thái) |
 | **Hệ thống & Owner** | **VM theo hệ thống** (PDF + Excel), **Hệ thống & Owner** (Excel nhập lại được), **Kết quả rà soát owner** theo kỳ (PDF + Excel; chỉ admin / quản trị Hệ thống & Owner) |
-| Quy hoạch & Sizing | Quy hoạch tài nguyên (PDF), Sizing (PDF đầy đủ / rút gọn, Excel, mẫu nhập) |
+| Quy hoạch & Sizing | Quy hoạch tài nguyên (PDF), Nhu cầu năm & kế hoạch năm sau (PDF, Excel), Sizing (PDF đầy đủ / rút gọn, Excel, mẫu nhập) |
 | License & Inventory | Tổng quan license (PDF), đánh giá license, ESXi & phần cứng, HĐH guest (Excel) |
 | Backup | Hiện trạng Backup (PDF), thống kê backup (Excel) |
 | Chi phí & ngân sách | Kế hoạch ngân sách IT (PDF + Excel); **Báo cáo theo hồ sơ**: lối tắt tới Kế hoạch năm sau, Cải tạo, Báo giá, BOM — mỗi hồ sơ xuất từ trang của nó |
@@ -1312,6 +1312,37 @@ cạnh tài nguyên hiện tại. Link dùng `ITSM_BASE_URL` (vd `https://sdp.co
 (nguồn DEMO không có link). Trang chi tiết yêu cầu hiện dự án, hệ thống và các VM đã ghép (kèm IP).
 
 API: `GET /api/itsm/projects`, `POST /api/itsm/projects` `{project, systemId}` (admin).
+
+### Tổng kết năm + kế hoạch năm sau (ICO v2 G8)
+
+Menu **Quản lý thông tin → Nhu cầu hạ tầng**, tab **Tổng kết năm** và **Kế hoạch năm sau** (chọn năm tổng kết; kế hoạch là năm kế tiếp).
+Trang, PDF, Excel và dòng ngân sách dùng cùng một bộ số (`itsm/annual.build`, phép tính ở `planning.py`).
+
+**Tổng kết năm** (năm dương lịch giờ Việt Nam, chỉ yêu cầu *Đọc tự động* / *Đã duyệt*)
+- Số yêu cầu, VM mới, vCPU / RAM / Disk xin theo quý, dự án, phòng ban, môi trường. Nâng cấp tính phần thay đổi To-be − As-is.
+- Thời gian xử lý trung vị = ngày hoàn tất − ngày tạo, trên các yêu cầu đã hoàn tất.
+- **Xin → cấp → dùng thật**: VM tạo theo yêu cầu (khớp chắc, G7c). *Cấp* = cấu hình lúc VM xuất hiện; *dùng* = cấu hình × % sử dụng
+  trung bình 7 ngày kể từ ngày 90 và ngày 180. Tỷ lệ dùng / xin theo phòng ban tính ở mốc dài nhất đã đo; **hệ số** = tỷ lệ, tối đa 100 %.
+
+**Kế hoạch năm sau** — nhu cầu ròng theo cluster:
+
+| Thành phần | Nguồn |
+|---|---|
+| Hiện tại | vCPU / RAM của VM đang bật (lần đồng bộ mới nhất) |
+| + Tăng tự nhiên | Lịch sử 12 tháng (đầu → cuối), **trừ** phần VM tạo theo yêu cầu trong cùng khoảng (đã tính ở nhu cầu đã biết, tránh đếm đôi), quy ra 1 năm, không âm |
+| + Nhu cầu đã biết | Yêu cầu VM mới 12 tháng qua chưa có VM khớp chắc (bỏ yêu cầu huỷ / từ chối) + dự án năm sau nhập tay; nhân hệ số dùng thật / xin của phòng ban (không có thì hệ số chung) nếu bật. Dòng không ghi cluster vào *Cluster mặc định* (mặc định: cluster lớn nhất) |
+| − Thu hồi đã cam kết | Rà soát owner (G3): *Thu hồi* chưa xác minh trên VM còn chạy, *Giảm cấu hình* còn cao hơn đề xuất; chỉ VM đang bật |
+
+Số host thêm theo **host chuẩn** (socket × core, RAM — như trang Sizing): nhỏ nhất sao cho CPU và RAM ≤ *mục tiêu %* ngưỡng overcommit
+và vẫn ≤ 100 % khi mất host lớn nhất (N+1). Ngân sách = số host × đơn giá (chưa VAT). Giả định và danh sách dự án do admin lưu.
+
+**Đưa vào Kế hoạch ngân sách** (vai trò Biên tập của Chi phí): lưu kết quả hiện tại và tạo / cập nhật **một** dòng Capex
+“Mở rộng hạ tầng ảo hoá <năm>” (nguồn *Mở rộng ảo hoá*) trong kế hoạch nháp của năm đó, phần diễn giải ghi đủ nguồn số. Bấm lại thì
+cập nhật đúng dòng đó. Năm chưa có kế hoạch nháp: kết quả được giữ và dòng xuất hiện khi tạo kế hoạch. Kế hoạch được duyệt và áp dụng
+thì dòng thành dự án Capex nháp.
+
+API: `GET /api/itsm/annual?year=`, `PUT /api/itsm/annual/{năm kế hoạch}/inputs` (admin), `POST /api/itsm/annual/{năm kế hoạch}/budget`
+(Chi phí — Biên tập), `GET /api/itsm/annual/report.pdf|xlsx?year=`.
 
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 

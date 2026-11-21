@@ -789,6 +789,22 @@
                   </div>
                 </article>
                 <article class="report-card">
+                  <div class="report-card-icon"><i data-lucide="inbox"></i></div>
+                  <div class="report-card-body"><div class="report-card-title">Nhu cầu năm &amp; kế hoạch năm sau</div>
+                    <p class="report-card-desc">Yêu cầu ServiceDesk của năm, xin → cấp → dùng thật, và số host cần thêm năm sau kèm nguồn số.</p></div>
+                  <details class="rpt-opts"><summary><i data-lucide="sliders-horizontal"></i>Tuỳ chọn</summary>
+                    <div class="rpt-opt-grid">
+                      <label class="field"><span>Năm tổng kết</span><input type="number" min="2020" max="2100" data-opt="annual.year" placeholder="năm nay"/></label>
+                    </div>
+                    <p class="rpt-opt-note">Dự án năm sau, hệ số và host chuẩn lấy theo trang Kế hoạch năm sau.</p>
+                  </details>
+                  <div class="report-card-actions">
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="annual-pdf"><i data-lucide="file-text"></i>PDF</button>
+                    <button class="btn btn-secondary btn-sm" type="button" data-report="annual-xlsx"><i data-lucide="sheet"></i>Excel</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-nav-link="itsm-plan">Mở trang</button>
+                  </div>
+                </article>
+                <article class="report-card">
                   <div class="report-card-icon"><i data-lucide="calculator"></i></div>
                   <div class="report-card-body"><div class="report-card-title">Đề xuất cấu hình máy chủ (Sizing)</div>
                     <p class="report-card-desc">Báo cáo tư vấn đầy đủ hoặc rút gọn và Excel dạng dashboard từ lần sizing gần nhất.</p>

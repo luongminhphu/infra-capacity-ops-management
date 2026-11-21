@@ -80,7 +80,7 @@ def _vm_index(db: Session):
     return vms, by_name, keys
 
 
-def _appeared(db: Session, vms: Dict[int, Tuple[str, str]], ci_ids: List[int]) -> Dict[int, dt.datetime]:
+def appeared(db: Session, vms: Dict[int, Tuple[str, str]], ci_ids: List[int]) -> Dict[int, dt.datetime]:
     """When each VM appeared: its vm_created event (change log G6), else its first inventory snapshot."""
     from ..events.models import ChangeLog
     from ..models import VmSnapshot
@@ -124,7 +124,7 @@ def link_vms(db: Session, request_ids: Optional[List[int]] = None, now: Optional
     for i in range(0, len(ids), 500):
         for ln in db.query(ItsmRequestLine).filter(ItsmRequestLine.request_id.in_(ids[i:i + 500]), ItsmRequestLine.vm_name.isnot(None)):
             found += [(reqs[ln.request_id], ln.line_no, c, how, full) for c, how, full in _candidates(ln.vm_name, by_name, keys)]
-    seen = _appeared(db, vms, sorted({f[2] for f in found if f[4] and f[0].kind == "new_vm"}))
+    seen = appeared(db, vms, sorted({f[2] for f in found if f[4] and f[0].kind == "new_vm"}))
     rows = {}
     for r, line_no, cid, how, strong in found:
         if strong and r.kind == "new_vm":       # a new VM must have appeared while the request was being fulfilled

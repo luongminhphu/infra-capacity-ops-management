@@ -6,17 +6,21 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..downloads import attachment
+from ..features import require_feature
 from ..itsm import link, process
 from ..itsm.models import BEFORE_FIELDS, KIND_LABELS, REQUEST_KINDS, STORED_FIELDS, ItsmLabelMap, ItsmProjectMap, ItsmRequest, ItsmRequestCi, ItsmRequestLine
 from ..itsm.parse import DEFAULT_LABELS, parse_html
 from ..models import AuditLog, User
 from ..security import get_current_user, require_admin
+from ..spend.roles import require_spend
 from ..shared.text import norm_text
 from ..timeutil import to_iso_utc as _iso
 
@@ -224,3 +228,74 @@ def delete_label(lid: int, user: User = Depends(require_admin), db: Session = De
 def request_stats(months: int = Query(default=12, ge=1, le=24), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """VM provisioning / reconfiguration / decommission over the last `months` months (default one year)."""
     return {**process.stats(db, months), "kinds": [{"key": k, "label": v} for k, v in KIND_LABELS.items()]}
+
+
+# ---------------------------------------------------------------- G8: annual review + next year's plan
+def _year(year: Optional[int]) -> int:
+    from ..spend.fiscal import today_vn
+    cur = today_vn().year
+    y = year or cur
+    if not cur - 5 <= y <= cur:
+        raise HTTPException(400, f"Năm tổng kết từ {cur - 5} đến {cur}.")
+    return y
+
+
+@router.get("/annual")
+def annual_view(year: Optional[int] = Query(default=None), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Tổng kết năm `year` + kế hoạch năm `year` + 1 (itsm/annual.py — same numbers as the PDF / Excel)."""
+    from ..itsm import annual
+    return jsonable_encoder(annual.build(db, _year(year)))
+
+
+@router.put("/annual/{plan_year}/inputs")
+def annual_inputs(plan_year: int, data: Dict[str, Any] = Body(...), user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Projects typed for next year + parameters (factor on / off, standard host, unit price, target %)."""
+    from ..itsm import annual
+    year = _year(plan_year - 1)
+    try:
+        params, projects = annual.clean_inputs(data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    annual.save_inputs(db, year + 1, params, projects, user.username)
+    db.add(AuditLog(username=user.username, action="itsm.plan.inputs", detail=json.dumps({"year": year + 1, "projects": len(projects)})))
+    db.commit()
+    return jsonable_encoder(annual.build(db, year))
+
+
+@router.post("/annual/{plan_year}/budget", dependencies=[Depends(require_feature("spend"))])
+def annual_to_budget(plan_year: int, request: Request, user: User = Depends(require_spend("editor")), db: Session = Depends(get_db)):
+    """“Đưa vào Kế hoạch ngân sách”: freeze the plan and create / update the Capex line “Mở rộng hạ tầng ảo hoá <năm>” of the
+    draft budget plan of that fiscal year (one line per year: source "capacity", sourceId = year). Without a draft plan the result
+    is kept and the line appears when the plan is created."""
+    from ..itsm import annual
+    from ..spend import budget_plan as bp, service as spend_service, settings as spend_settings
+    from ..spend.models import BudgetPlan
+    d = annual.build(db, _year(plan_year - 1))
+    snap = annual.push(db, d, user.username)
+    db.flush()
+    plan = (db.query(BudgetPlan).filter(BudgetPlan.fiscal_year == d["planYear"], BudgetPlan.status == "draft")
+            .order_by(BudgetPlan.version.desc()).first())
+    stats = bp.refresh(db, plan, spend_settings.load(db), user, only="capacity") if plan else None
+    spend_service.audit(db, user, request, "spend.plan.capacity", year=d["planYear"], nodes=snap["nodes"], amount=snap["amount"],
+                        plan=bp.plan_label(plan) if plan else None, lines=stats)
+    db.commit()
+    return {"snapshot": snap, "plan": {"id": plan.id, "label": bp.plan_label(plan)} if plan else None, "lines": stats}
+
+
+def _annual_report(year: Optional[int], db: Session):
+    from ..itsm import annual
+    return annual.build(db, _year(year))
+
+
+@router.get("/annual/report.pdf")
+def annual_pdf(year: Optional[int] = Query(default=None), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..report_annual import build_pdf
+    d = _annual_report(year, db)
+    return attachment(build_pdf(d, user.display_name or user.username), f"ICO_Nhu_cau_ha_tang_{d['year']}_ke_hoach_{d['planYear']}.pdf")
+
+
+@router.get("/annual/report.xlsx")
+def annual_xlsx(year: Optional[int] = Query(default=None), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..excel_annual import build_xlsx
+    d = _annual_report(year, db)
+    return attachment(build_xlsx(d), f"ICO_Nhu_cau_ha_tang_{d['year']}_ke_hoach_{d['planYear']}.xlsx")

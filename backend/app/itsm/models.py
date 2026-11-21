@@ -136,7 +136,28 @@ class ItsmProjectMap(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
 
+class ItsmYearPlan(Base):
+    """Inputs of next year's infrastructure plan (ICO v2 G8): projects typed for the year + parameters, and the result last
+    sent to the budget plan (frozen: the "capacity" Capex line of spend/budget_plan.py is built from it)."""
+    __tablename__ = "itsm_year_plan"
+    __table_args__ = (UniqueConstraint("year", name="uq_itsm_year_plan"),
+                      CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_itsm_year_plan_year"))
+
+    id = Column(Integer, primary_key=True)
+    year = Column(Integer, nullable=False)                          # the year planned (next year)
+    projects = Column(Text, nullable=False, default="[]")           # JSON [{name, department, cluster, vms, vcpu, ramGB, diskGB}]
+    params = Column(Text, nullable=False, default="{}")             # JSON {useFactor, sockets, coresPerSocket, ramGB, unitPrice, targetPct, defaultCluster}
+    pushed = Column(Text)                                           # JSON {nodes, amount, title, detail, …} sent to the budget plan
+    pushed_at = Column(DateTime)
+    pushed_by = Column(String(255))
+    updated_by = Column(String(255))
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 from ..shared.stored_text import json_column as _json  # noqa: E402
 
 _json(ItsmRequest.udf, dict, "Trường bổ sung của yêu cầu SDP")
 _json(ItsmRequestLine.raw, dict, "Ô gốc của dòng yêu cầu")
+_json(ItsmYearPlan.projects, list, "Dự án năm sau", nullable=False)
+_json(ItsmYearPlan.params, dict, "Tham số kế hoạch năm sau", nullable=False)
+_json(ItsmYearPlan.pushed, dict, "Kết quả đã đưa vào kế hoạch ngân sách")

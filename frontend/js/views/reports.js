@@ -195,6 +195,12 @@ function rptReview(fmt) {
   return rptGet(`/reviews/${encodeURIComponent(id)}/report.${fmt}`, null, `ICO_Ra_soat_owner.${fmt}`);
 }
 
+/* Nhu cầu hạ tầng (G8): same endpoint as the Tổng kết năm / Kế hoạch năm sau tabs; the year from the card option. */
+function rptAnnual(fmt) {
+  const y = rptOpt('annual.year', '');
+  return rptGet(`/itsm/annual/report.${fmt}`, y ? new URLSearchParams({ year: y }) : null, `ICO_Nhu_cau_ha_tang.${fmt}`);
+}
+
 async function rptLicense(run, ready) {
   await licLoad(false);
   if (!ready(licState())) throw new Error('Chưa tải được dữ liệu license / inventory (cần đồng bộ vCenter trước).');
@@ -236,6 +242,8 @@ const RPT_ACTIONS = {
   'sys-pdf': { label: 'VM theo hệ thống (PDF)', run: () => rptGet('/systems/report.pdf', null, 'vm-theo-he-thong.pdf') },
   'sys-xlsx': { label: 'VM theo hệ thống (Excel)', run: () => rptGet('/systems/report.xlsx', null, 'vm-theo-he-thong.xlsx') },
   'sys-export': { label: 'Hệ thống & Owner (Excel nhập lại được)', run: () => rptGet('/systems/export.xlsx', null, 'he-thong-owner.xlsx') },
+  'annual-pdf': { label: 'Tổng kết nhu cầu năm & kế hoạch năm sau (PDF)', run: () => rptAnnual('pdf') },
+  'annual-xlsx': { label: 'Tổng kết nhu cầu năm & kế hoạch năm sau (Excel)', run: () => rptAnnual('xlsx') },
   'rv-pdf': { label: 'Kết quả rà soát owner (PDF)', run: () => rptReview('pdf') },
   'rv-xlsx': { label: 'Kết quả rà soát owner (Excel)', run: () => rptReview('xlsx') },
 };

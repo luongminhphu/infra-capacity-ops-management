@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 GROUP_LABELS = {"capacity": "Capacity", "backup": "Backup", "license": "License", "sizing": "Sizing máy chủ",
                 "spend": "Ngân sách & chi phí", "renovation": "Cải tạo văn phòng", "bom": "Chuẩn hoá BOM", "inventory": "Tài sản",
                 "owners": "Hệ thống & Owner", "hardware": "Phần cứng",
-                "infra": "Sức khoẻ hạ tầng", "cmdb": "Sổ CI"}
+                "infra": "Sức khoẻ hạ tầng", "cmdb": "Sổ CI", "demand": "Nhu cầu hạ tầng"}
 
 # role: None = any signed-in user · "spend:viewer" = spend role at least viewer
 # center: where the export sits in Tài liệu → Báo cáo (Trung tâm báo cáo) — CLAUDE.md rule 10:
@@ -50,6 +50,10 @@ EXPORTS: List[Dict[str, Any]] = [
      "feature": "spend", "role": "spend:viewer", "archive": False, "center": ["record:spend-renovations"]},
     {"id": "systems-xlsx", "group": "owners", "label": "Hệ thống & Owner (Excel, nhập lại được)", "format": "xlsx",
      "method": "GET", "path": "/api/systems/export.xlsx", "rx": r"^/api/systems/export\.xlsx$", "feature": None, "role": None, "archive": False, "center": ["sys-export"]},
+    {"id": "annual-pdf", "group": "demand", "label": "Tổng kết nhu cầu năm & kế hoạch năm sau (PDF)", "format": "pdf",
+     "method": "GET", "path": "/api/itsm/annual/report.pdf", "rx": r"^/api/itsm/annual/report\.pdf$", "feature": None, "role": None, "archive": True, "center": ["annual-pdf"]},
+    {"id": "annual-xlsx", "group": "demand", "label": "Tổng kết nhu cầu năm & kế hoạch năm sau (Excel)", "format": "xlsx",
+     "method": "GET", "path": "/api/itsm/annual/report.xlsx", "rx": r"^/api/itsm/annual/report\.xlsx$", "feature": None, "role": None, "archive": False, "center": ["annual-xlsx"]},
     {"id": "hardware-pdf", "group": "hardware", "label": "Sức khoẻ phần cứng (PDF)", "format": "pdf",
      "method": "GET", "path": "/api/hardware/report.pdf", "rx": r"^/api/hardware/report\.pdf$", "feature": None, "role": None, "archive": True, "center": ["hw-pdf"]},
     {"id": "hardware-xlsx", "group": "hardware", "label": "Phần cứng — máy chủ, bảo hành, firmware (Excel)", "format": "xlsx",

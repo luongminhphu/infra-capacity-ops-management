@@ -7,7 +7,7 @@
 
 const bpState = { list: null, planId: null, plan: null, error: null, bound: false, group: 'all' };
 const BP_STATUS = { draft: ['na', 'Nháp'], submitted: ['warn', 'Chờ duyệt'], approved: ['ok', 'Đã duyệt'], superseded: ['na', 'Đã thay thế'] };
-const BP_SOURCE = { renewal: 'Gia hạn', committed: 'Đã ghi nhận', capex: 'Dự án Capex', replace: 'Thay thế thiết bị', extend: 'Dùng tiếp thiết bị', warranty: 'Bảo hành Dell', new: 'Mới đề xuất' };
+const BP_SOURCE = { renewal: 'Gia hạn', committed: 'Đã ghi nhận', capex: 'Dự án Capex', replace: 'Thay thế thiết bị', extend: 'Dùng tiếp thiết bị', warranty: 'Bảo hành Dell', capacity: 'Mở rộng ảo hoá', new: 'Mới đề xuất' };
 const BP_DEVICE = (l) => l.source === 'replace' || l.source === 'extend' || l.source === 'warranty';   /* priced in the plan */
 const BP_DC_DEVICE = (l) => l.source === 'replace' || l.source === 'extend';                          /* DC asset decision */
 const BP_PRIORITY = { must: 'Bắt buộc', should: 'Nên có', could: 'Tuỳ chọn' };
