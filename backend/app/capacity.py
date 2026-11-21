@@ -372,10 +372,13 @@ def evaluate_ha_headroom(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]],
         if len(c_hosts) < 2:
             out.append({"cluster": name, "eligible": False, "hosts": len(c_hosts)})
             continue
-        largest = max(c_hosts, key=lambda h: (h.get("cores", 0) or 0) * ht_factor + (h.get("ramGB", 0) or 0) * 1e-6)
-        remaining = [h for h in c_hosts if h is not largest]
-        remaining_logical = sum((h.get("cores", 0) or 0) for h in remaining) * ht_factor
-        remaining_ram = sum((h.get("ramGB", 0) or 0) for h in remaining)
+        # Each resource against the loss that hurts it most: the host with most cores for CPU, most RAM for RAM
+        # (a big-core / small-RAM host is not the worst case for RAM) — same rule as planning._nodes_needed.
+        cores = lambda h: h.get("cores", 0) or 0          # noqa: E731
+        ram = lambda h: h.get("ramGB", 0) or 0            # noqa: E731
+        big_cpu, big_ram = max(c_hosts, key=cores), max(c_hosts, key=ram)
+        remaining_logical = (sum(cores(h) for h in c_hosts) - cores(big_cpu)) * ht_factor
+        remaining_ram = sum(ram(h) for h in c_hosts) - ram(big_ram)
         model_now = build_capacity_model(c_hosts, c_vms, policy)
         used_vcpu, used_ram = model_now["usedVcpu"], model_now["usedRamGB"]
         cpu_oc_after = (used_vcpu / remaining_logical) if remaining_logical > 0 else float("inf")
@@ -384,7 +387,8 @@ def evaluate_ha_headroom(hosts: List[Dict[str, Any]], vms: List[Dict[str, Any]],
         ram_pct_after = (ram_oc_after / policy.ram_overcommit_max * 100) if policy.ram_overcommit_max > 0 else float("nan")
         out.append({
             "cluster": name, "eligible": True, "hosts": len(c_hosts),
-            "largestHost": largest.get("host"),
+            "largestHost": (big_cpu if not _finite(ram_pct_after) or (_finite(cpu_pct_after) and cpu_pct_after >= ram_pct_after)
+                            else big_ram).get("host"),          # the loss that binds
             "cpuPctAfter": cpu_pct_after, "ramPctAfter": ram_pct_after,
             "survives": _finite(cpu_pct_after) and _finite(ram_pct_after) and cpu_pct_after <= 100 and ram_pct_after <= 100,
         })

@@ -49,7 +49,9 @@ bật (mặc định tắt vì SAN dùng chung + thick provisioning cho số li�
   kịch bản "Xu hướng" từ dữ liệu thực.
 - `_nodes_needed`: số node thêm nhỏ nhất `k` sao cho **cả CPU và RAM** đều thoả
   (1) `demand / ((cap + k·node) × ocMax) ≤ target%` và
-  (2) **N+1**: mất host lớn nhất (node mới có thể là host lớn nhất) vẫn `≤ 100%`.
+  (2) **N+1**: mất host lớn nhất (node mới có thể là host lớn nhất) vẫn `≤ 100%` — CPU tính khi mất host nhiều core nhất,
+      RAM tính khi mất host nhiều RAM nhất (hai host có thể khác nhau). Cùng quy tắc ở `capacity.evaluate_ha_headroom`,
+      `planning._nodes_needed`, `whatif.js`, `sizing.js`.
   Cluster < 2 host không bao giờ đạt N+1. Phương án nâng RAM tính theo bội số
   `RAM_STEP_GB = 64`.
 

@@ -33,10 +33,11 @@ class ImportPayload(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
-    cpu_overcommit_max: Optional[float] = None
-    ram_overcommit_max: Optional[float] = None
-    ht_factor: Optional[float] = None
-    idle_days: Optional[int] = None
+    # Same floors as core.js::rebuildFromRaw (rule 3); 0 / NaN / inf would crash planning or split web and PDF.
+    cpu_overcommit_max: Optional[float] = Field(default=None, ge=0.1, le=100, allow_inf_nan=False)
+    ram_overcommit_max: Optional[float] = Field(default=None, ge=0.1, le=100, allow_inf_nan=False)
+    ht_factor: Optional[float] = Field(default=None, ge=1, le=4, allow_inf_nan=False)
+    idle_days: Optional[int] = Field(default=None, ge=1, le=3650)
     include_storage: Optional[bool] = None
 
 

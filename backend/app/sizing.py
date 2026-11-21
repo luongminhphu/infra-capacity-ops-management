@@ -156,6 +156,10 @@ def size_profile(profile: HostProfile, demand: Dict[str, Any], params: SizingPar
     n_cpu = _ceil_pos(demand["vcpuPlanned"] / vcpu_cap_host) if vcpu_cap_host > 0 else 0
     n_ram = _ceil_pos(demand["ramPlannedGB"] / vram_cap_host) if vram_cap_host > 0 else 0
     n_base = max(n_cpu, n_ram, 1 if demand["vmCount"] else 0)
+    # Reserve eats the whole host (e.g. 2 cores, 2 reserved): no number of hosts carries the demand → not a candidate
+    # (0 hosts = left out of the ranking), instead of counting that resource as 0 hosts.
+    if (demand["vcpuPlanned"] > 0 and vcpu_cap_host <= 0) or (demand["ramPlannedGB"] > 0 and vram_cap_host <= 0):
+        n_base = 0
     redundancy = max(0, int(params.redundancy))
     n_total = max(n_base + redundancy, int(params.min_hosts)) if n_base else 0
     n_computed = n_total

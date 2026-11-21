@@ -405,10 +405,11 @@ function sizingAbsorptionRows(demand) {
     // N+1 after absorbing: drop the largest host.
     let n1 = null;
     if (hosts.length > 1) {
-      const biggest = hosts.reduce((a, h) => (h.ramGB > a.ramGB ? h : a), hosts[0]);
-      const rest = hosts.filter(h => h !== biggest);
-      const m = buildCapacityModel(rest, vms.concat([synthetic]));
-      n1 = { cpuPct: m.cpuPct, ramPct: m.ramPct, ok: m.cpuPct <= 100 && m.ramPct <= 100 };
+      // CPU against losing the host with most cores, RAM against the one with most RAM (capacity.evaluate_ha_headroom)
+      const without = (pick) => buildCapacityModel(hosts.filter(h => h !== hosts.reduce((a, x) => (pick(x) > pick(a) ? x : a), hosts[0])),
+        vms.concat([synthetic]));
+      const cpuPct = without(h => h.cores).cpuPct, ramPct = without(h => h.ramGB).ramPct;
+      n1 = { cpuPct, ramPct, ok: cpuPct <= 100 && ramPct <= 100 };
     }
     const worst = Math.max(after.cpuPct || 0, after.ramPct || 0);
     const cls = worst > 100 ? 'crit' : worst > 80 ? 'warn' : 'ok';

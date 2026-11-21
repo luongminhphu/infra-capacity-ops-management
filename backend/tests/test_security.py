@@ -413,3 +413,9 @@ def test_entitlement_price_written_as_integer_too(client):
         db.commit()
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("body", [{"ram_overcommit_max": 0}, {"cpu_overcommit_max": -1}, {"ht_factor": 0.5}, {"idle_days": 0}])
+def test_capacity_settings_out_of_range_are_rejected(client, body):
+    """Audit: ram_overcommit_max=0 crashed planning (division by zero) and split web (core.js floors) from the PDF."""
+    assert client.put("/api/settings", json=body).status_code == 422

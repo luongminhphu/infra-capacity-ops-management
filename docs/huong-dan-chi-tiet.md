@@ -357,7 +357,7 @@ cluster), `lead` (tháng mua sắm + triển khai, mặc định 3), `target` (%
 
 - Logic (`backend/app/planning.py`): dự phóng vCPU/RAM **đã cấp phát** cho VM đang bật theo lãi
   kép quý; với mỗi cluster × kịch bản × tháng, tìm số node nhỏ nhất sao cho mức dùng ≤ `target`
-  % ngưỡng **và** vẫn ≤ 100% khi mất 1 host lớn nhất (N+1). Nếu có lịch sử snapshot ≥ 30 ngày,
+  % ngưỡng **và** vẫn ≤ 100% khi mất 1 host lớn nhất (N+1: CPU so với host nhiều core nhất, RAM so với host nhiều RAM nhất). Nếu có lịch sử snapshot ≥ 30 ngày,
   thêm kịch bản "Xu hướng N tháng" từ tăng trưởng thực tế (toàn phạm vi và từng cluster).
   Khi chỉ RAM là ràng buộc, báo cáo nêu thêm phương án B nâng RAM (bội số 64 GB/host).
 - Bố cục (`backend/app/report_planning.py`): cùng mở đầu với hai báo cáo kia — hộp **Tổng kết đề
