@@ -39,3 +39,15 @@ def incident_action(iid: int, request: Request, action: str = Path(pattern="^(ac
     text = lambda k: str(data[k]) if isinstance(data.get(k), (str, int)) else None      # noqa: E731
     return service.act(db, user, iid, action, assignee=text("assignee"), note=text("note"),
                        ip=request.client.host if request.client else None)
+
+
+changes_router = APIRouter(prefix="/api/changes", tags=["changes"])
+
+
+@changes_router.get("")
+def change_log(kind: Optional[str] = Query(default=None, max_length=32), user_name: Optional[str] = Query(default=None, alias="user", max_length=255),
+               q: Optional[str] = Query(default=None, max_length=255), days: int = Query(default=7, ge=1, le=400),
+               osc: OwnerScope = Depends(owner_scope_query), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Nhật ký thay đổi (G6): vCenter events (who, what, when) + snapshot changes no event explains."""
+    from ..events import changes
+    return changes.listing(db, kind, user_name, days, q, osc)

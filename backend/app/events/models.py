@@ -73,6 +73,41 @@ class OpsEventOpen(Base):
     last_seen = Column(DateTime, nullable=False, default=utcnow)
 
 
-from ..shared.stored_text import csv_column as _csv  # noqa: E402
+
+CHANGE_KINDS = ("vm_created", "vm_removed", "vm_reconfigured", "vm_migrated", "vm_powered_on", "vm_powered_off",
+                "host_connection_lost", "host_maintenance_enter", "host_maintenance_exit", "ha_vm_restarted",
+                "ha_host_failed", "alarm_status")
+
+
+class ChangeLog(Base):
+    """Who changed what, when (G6): vCenter events read with eventManager.QueryEvents (read-only), one row per event."""
+    __tablename__ = "change_log"
+    __table_args__ = (UniqueConstraint("vcenter_key", "vc_event_id", name="uq_change_log_event"),
+                      CheckConstraint(_in("kind", CHANGE_KINDS), name="ck_change_log_kind"),
+                      Index("ix_change_log_ci_at", "ci_id", "at"))
+
+    id = Column(Integer, primary_key=True)
+    at = Column(DateTime, nullable=False, index=True)
+    vcenter_key = Column(String(64), nullable=False)
+    vc_event_id = Column(Integer, nullable=False)                # vCenter event key (unique per vCenter)
+    ci_id = Column(Integer)                                       # no FK: history outlives a retired CI
+    kind = Column(String(32), nullable=False, index=True)
+    user_name = Column(String(255), index=True)
+    object_type = Column(String(16))                              # vm / host / cluster / datastore
+    object_name = Column(String(255))
+    message = Column(String(1000))
+    detail = Column(Text)                                         # JSON: event type, from / to, alarm…
+    handled = Column(Boolean, nullable=False, default=False)      # incident kinds: already turned into an ops_event
+
+
+class ChangeCursor(Base):
+    """End of the last event window read from each vCenter (the next read starts there)."""
+    __tablename__ = "change_cursor"
+
+    vcenter_key = Column(String(64), primary_key=True)
+    until = Column(DateTime, nullable=False)
+
+from ..shared.stored_text import csv_column as _csv, json_column as _json  # noqa: E402
 
 _csv(OpsIncident.flap_sent_channels, "Kênh Discord đã báo chập chờn", item=r"\d+")
+_json(ChangeLog.detail, dict, "Chi tiết event vCenter")

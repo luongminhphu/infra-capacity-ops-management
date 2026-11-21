@@ -86,12 +86,14 @@ function incDetailHtml(i) {
       <button class="btn btn-ghost btn-sm" type="button" data-inc-back>Danh sách sự cố</button></div>
       ${act}
       <dl class="sp-dl">${[['Mức cao nhất', uiLevelPill(i.level)], ['Trạng thái', uiPill(...(INC_STATUS[i.status] || ['na', i.status]))],
-        ['Đối tượng', incCi(i.ci)], ['Nguồn', esc(i.sourceLabel)], ['Mở lúc', esc(uiDateTime(i.openedAt, 'short'))],
+        ['Đối tượng', incCi(i.ci)], ...(i.root ? [['Gốc sự cố', incCi(i.root)]] : []), ['Nguồn', esc(i.sourceLabel)], ['Mở lúc', esc(uiDateTime(i.openedAt, 'short'))],
         ['Nhận', i.ackedAt ? `${esc(uiDateTime(i.ackedAt, 'short'))} · ${esc(i.ackedBy || '')}` : '—'], ['Người xử lý', esc(i.assignee || '—')],
         ['Đóng', i.resolvedAt ? `${esc(uiDateTime(i.resolvedAt, 'short'))} · ${esc(i.resolvedBy === 'system' ? 'tự động (mọi sự kiện đã hết)' : i.resolvedBy || '')}` : '—'],
         ['Chập chờn', i.flapping ? uiPill('warn', 'Có') : 'Không'], ['Ghi chú', esc(i.note || '—')]]
         .map(([k, v]) => `<div class="sp-dl-item"><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl></section>
-    <section class="panel" data-inc-id="${i.id}"><div class="panel-title" role="heading" aria-level="2">Diễn biến</div>${incEventsHtml(i.events)}</section>`;
+    <section class="panel" data-inc-id="${i.id}"><div class="panel-title" role="heading" aria-level="2">Diễn biến</div>${incEventsHtml(i.events)}</section>
+    <section class="panel"><div class="panel-title" role="heading" aria-level="2">Thay đổi trong 24 giờ trước sự cố</div>
+      <p class="panel-sub">Event vCenter trên các đối tượng của sự cố — ai đổi gì ngay trước khi lỗi.</p>${chgListHtml(i.changesBefore || [])}</section>`;
 }
 
 function incBind(mount) {
@@ -127,5 +129,59 @@ function incBind(mount) {
   mount.addEventListener('keydown', (e) => {
     const row = e.target.closest('[data-inc-open]');
     if (row && e.key === 'Enter') row.click();
+  });
+}
+
+/* =========================================================
+   Vận hành → Nhật ký thay đổi (ICO v2 G6): vCenter events (ai · gì · khi nào) + snapshot changes no event explains.
+   Data: /api/changes?kind=&user=&q=&days= (owner filter added by apiRequest), /api/ci/<id>/changes.
+   ========================================================= */
+const chgState = { kind: '', user: '', q: '', days: '7' };
+
+/* One change row: object (+ IP for VMs, rule 9), what, who, when. Shared by the page, the entity card and the incident page. */
+function chgRowHtml(c) {
+  const obj = c.ci ? `<a href="#/entity?type=ci&id=${encodeURIComponent(c.ci.id)}">${esc(c.object || c.ci.name)}</a>` : esc(c.object || '—');
+  return `<tr><td>${c.at ? esc(uiDateTime(c.at, 'short')) : uiTag('snapshot')}</td><td>${uiTag(c.kindLabel)}</td>
+    <td>${obj}${c.vcenterKey ? `<span class="muted-sub">${esc(c.vcenterKey)}</span>` : ''}</td><td class="mono">${esc(c.ip || '—')}</td>
+    <td>${esc(c.user || (c.source === 'snapshot' ? 'không rõ (so sánh snapshot)' : 'hệ thống'))}</td>
+    <td>${esc(c.message || '')}</td></tr>`;
+}
+
+function chgListHtml(items) {
+  if (!items.length) return uiEmpty('Chưa có thay đổi.');
+  return `<div class="table-scroll"><table class="data-table"><thead><tr><th>Lúc</th><th>Thay đổi</th><th>Đối tượng</th><th>IP</th>
+    <th>Người thực hiện</th><th>Chi tiết</th></tr></thead><tbody>${items.map(chgRowHtml).join('')}</tbody></table></div>`;
+}
+
+async function renderChangesView() {
+  const mount = $('#changesMount');
+  if (!mount) return;
+  chgBind(mount);
+  mount.innerHTML = uiLoading();
+  try {
+    const d = await apiRequest(`/changes?${new URLSearchParams(Object.entries(chgState).filter(([, v]) => v))}`);
+    const opt = (v, t, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(t)}</option>`;
+    mount.innerHTML = `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Nhật ký thay đổi</div>
+      <p class="panel-sub">Đọc từ event vCenter (chỉ đọc). Người thực hiện là tài khoản vCenter; DRS / HA ghi là hệ thống.</p>
+      <div class="form-grid-aligned">
+        <label class="field"><span>Thay đổi</span><select data-chg-filter="kind">${opt('', 'Mọi loại', chgState.kind)}${d.kinds.map(k => opt(k.key, k.label, chgState.kind)).join('')}</select></label>
+        <label class="field"><span>Người thực hiện</span><select data-chg-filter="user">${opt('', 'Mọi người', chgState.user)}${d.users.map(u => opt(u, u, chgState.user)).join('')}</select></label>
+        <label class="field"><span>Thời gian</span><select data-chg-filter="days">${[['1', '24 giờ qua'], ['7', '7 ngày qua'], ['30', '30 ngày qua'], ['90', '90 ngày qua']].map(([v, t]) => opt(v, t, chgState.days)).join('')}</select></label>
+        <label class="field"><span>Tìm đối tượng</span><input type="search" data-chg-filter="q" value="${esc(chgState.q)}" maxlength="80"></label>
+      </div>
+      ${chgListHtml(d.items)}${d.truncated ? '<p class="muted-sub">Chỉ hiện 1.000 thay đổi mới nhất — thu hẹp bộ lọc.</p>' : ''}</section>
+    ${d.snapshot.length ? `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Chỉ thấy qua so sánh snapshot</div>
+      <p class="panel-sub">VM thêm / bớt / đổi cấu hình giữa hai lần đồng bộ mà không có event tương ứng (event đã quá hạn lưu của vCenter hoặc chưa đọc).</p>
+      ${chgListHtml(d.snapshot)}</section>` : ''}`;
+    refreshIcons();
+  } catch (err) { mount.innerHTML = uiError(err.message); }
+}
+
+function chgBind(mount) {
+  if (mount.dataset.bound) return;
+  mount.dataset.bound = '1';
+  mount.addEventListener('change', (e) => {
+    const f = e.target.closest('[data-chg-filter]');
+    if (f) { chgState[f.dataset.chgFilter] = f.value.trim(); renderChangesView(); }
   });
 }

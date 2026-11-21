@@ -284,3 +284,47 @@ def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows:
         a["vimType"] = vim_type.get(a["entityType"])
     return {"datastores": datastores, "snapshots": snapshots, "alarms": alarms, "health": health,
             "vcenterUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cfg.key}/vcenter"))}
+
+
+DEMO_USERS = ("administrator@vsphere.local", "CORP\\nguyen.van.a", "CORP\\tran.thi.b", "svc-veeam@vsphere.local")
+
+
+def collect_events(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows: List[Dict[str, Any]], since, until) -> List[Dict[str, Any]]:
+    """vCenter events in (since, until], same shape as vcenter/events.parse: per 10-minute bucket a seeded handful of power /
+    reconfigure / migrate / maintenance events, and once a day an HA story (host failed → its VMs restarted elsewhere) to show
+    incident grouping. Stable per bucket (same ids on every read), so overlapping windows never double-count."""
+    import datetime as _dt
+    if not vm_rows or not host_rows:
+        return []
+    since = max(since, until - _dt.timedelta(hours=24))
+    step = 600
+    out: List[Dict[str, Any]] = []
+    for b in range(int(since.replace(tzinfo=_dt.timezone.utc).timestamp()) // step + 1,
+                   int(until.replace(tzinfo=_dt.timezone.utc).timestamp()) // step + 1):
+        rnd = _seeded_random(f"{cfg.key}/ev/{b}")
+        t0 = _dt.datetime.fromtimestamp(b * step, _dt.timezone.utc).replace(tzinfo=None)
+
+        def ev(n, kind, etype, otype, oname, user=None, msg="", **detail):
+            out.append({"id": b * 10 + n, "at": t0 + _dt.timedelta(seconds=37 * n), "kind": kind, "eventType": etype, "userName": user,
+                        "objectType": otype, "objectName": oname, "message": msg, "detail": {"eventType": etype, **detail}})
+        if b % 144 == 41:                                           # once a day: one HA failover
+            h = rnd.choice(host_rows)
+            moved = [v for v in vm_rows if v.get("host") == h["host"]][:2]
+            ev(0, "ha_host_failed", "DasHostFailedEvent", "host", h["host"], msg=f"vSphere HA phát hiện host {h['host']} lỗi")
+            for n, v in enumerate(moved, 1):
+                ev(n, "ha_vm_restarted", "VmRestartedOnAlternateHostEvent", "vm", v["vm"],
+                   msg=f"vSphere HA đã khởi động lại {v['vm']} trên host khác", host=h["host"])
+            continue
+        for n in range(rnd.choice((0, 0, 1, 1, 2))):
+            v, user = rnd.choice(vm_rows), rnd.choice(DEMO_USERS)
+            kind = rnd.choice(("vm_powered_off", "vm_powered_on", "vm_reconfigured", "vm_migrated", "vm_migrated"))
+            if kind == "vm_reconfigured":
+                ev(n, kind, "VmReconfiguredEvent", "vm", v["vm"], user, f"Reconfigured {v['vm']}: numCPU {v['vcpu']} → {v['vcpu'] + 2}")
+            elif kind == "vm_migrated":
+                to = rnd.choice([h for h in host_rows if h["cluster"] == v["cluster"]] or host_rows)["host"]
+                ev(n, kind, "DrsVmMigratedEvent", "vm", v["vm"], None, f"DRS di chuyển {v['vm']} sang {to}",
+                   fromHost=v.get("host"), toHost=to)
+            else:
+                ev(n, kind, "VmPoweredOffEvent" if kind == "vm_powered_off" else "VmPoweredOnEvent", "vm", v["vm"], user,
+                   f"{v['vm']} {'đã tắt' if kind == 'vm_powered_off' else 'đã bật'}")
+    return [x for x in out if since < x["at"] <= until]

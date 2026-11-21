@@ -63,3 +63,11 @@ def ci_timeline(ci_id: int, user: User = Depends(get_current_user), db: Session 
     from ..events import service as events
     svc.get_ci(db, user, ci_id)
     return {"items": events.ci_timeline(db, ci_id)}
+
+
+@router.get("/{ci_id}/changes")
+def ci_changes(ci_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Change log of this CI, newest first (G6); 404 like the card when the CI is hidden for the caller."""
+    from ..events import changes
+    svc.get_ci(db, user, ci_id)
+    return {"items": changes.for_ci(db, ci_id)}

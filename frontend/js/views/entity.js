@@ -44,10 +44,11 @@ async function renderEntityView() {
   mount.innerHTML = body + enCiHtml(d.ci);
   refreshIcons();
   const ciId = d.ci && d.ci.id;
-  if (ciId && typeof incEventsHtml === 'function') {         // event timeline of this CI (G5)
-    apiRequest(`/ci/${encodeURIComponent(ciId)}/timeline`).then(t => {
+  if (ciId && typeof incEventsHtml === 'function') {         // event timeline (G5) + change log (G6) of this CI
+    Promise.all([apiRequest(`/ci/${encodeURIComponent(ciId)}/timeline`), apiRequest(`/ci/${encodeURIComponent(ciId)}/changes`)]).then(([t, c]) => {
       mount.insertAdjacentHTML('beforeend', `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Timeline sự kiện</div>
-        ${incEventsHtml(t.items)}</section>`);
+        ${incEventsHtml(t.items)}</section>
+        <section class="panel"><div class="panel-title" role="heading" aria-level="2">Thay đổi gần đây</div>${chgListHtml(c.items)}</section>`);
       refreshIcons();
     }).catch(() => {});
   }

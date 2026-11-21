@@ -168,6 +168,7 @@ app.include_router(bom_router.router)
 app.include_router(dc_assets_router.router)
 app.include_router(cmdb_router.router)
 app.include_router(incidents_router.router)
+app.include_router(incidents_router.changes_router)
 app.include_router(hardware_router.router)
 app.include_router(owner_rules_router.router)      # before owners: /api/systems/rules is not /{id}
 app.include_router(owners_router.router)
