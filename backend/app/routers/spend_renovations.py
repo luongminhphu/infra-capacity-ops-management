@@ -6,7 +6,6 @@ import json
 import re
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote as urlquote
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -633,8 +632,8 @@ def _slug(p: RenovationProject) -> str:
 
 
 def _download(content: bytes, name: str, media: str) -> Response:
-    return Response(content, media_type=media, headers={
-        "Content-Disposition": f"attachment; filename=\"{name}\"; filename*=UTF-8''{urlquote(name)}", "Cache-Control": "private, no-store"})
+    from ..downloads import attachment
+    return attachment(content, name, media)
 
 
 def _export_data(db: Session, p: RenovationProject) -> Dict[str, Any]:

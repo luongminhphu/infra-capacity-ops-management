@@ -48,7 +48,6 @@ const api = {
 
   listVcenters: () => apiRequest('/vcenters'),
   syncVcenter: (key) => apiRequest(`/vcenters/${encodeURIComponent(key)}/sync`, { method: 'POST' }),
-  syncAll: () => apiRequest('/vcenters/sync-all', { method: 'POST' }),
 
   getLatestData: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

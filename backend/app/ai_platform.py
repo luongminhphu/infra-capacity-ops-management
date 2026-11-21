@@ -25,7 +25,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .models import AiCache, AiRun, User
-from .shared.money import micros_to_usd, usd_to_micros  # noqa: F401  (micros_to_usd used in messages)
+from .shared.money import micros_to_usd, usd_to_micros
 
 logger = logging.getLogger("vco.ai")
 
@@ -308,7 +308,8 @@ def _reserve(db: Session, task: str, micros: int) -> None:
                         f"({micros_to_usd(spent):.2f} / {micros_to_usd(budget):.0f} USD, kể cả lượt đang chạy) — thử lại sau.".replace(".", ",", 1))
 
 
-def _release(db: Session, micros: int) -> None:
+def _release(micros: int) -> None:
+    """Give back a reservation, in its own session (the caller's may be rolled back)."""
     from sqlalchemy import case, update
     from .spend.models import SpendAiConfig
     from .database import SessionLocal
@@ -348,7 +349,6 @@ def record(db: Session, task: str, user: Optional[User], status: str, h: Optiona
     _last.run_id = run.id
 
 
-_record = record      # old private name
 
 
 def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], facts: Any = None,
@@ -369,7 +369,7 @@ def run(db: Session, user: Optional[User], task: str, call: Callable[[], Any], f
     try:
         return _run_reserved(db, user, task, call, h, cache, started, AiError)
     finally:
-        _release(db, micros)
+        _release(micros)
 
 
 def _run_reserved(db, user, task, call, h, cache, started, AiError):

@@ -12,12 +12,12 @@ from sqlalchemy.orm import Session
 
 from . import ai_platform
 from .features import is_on
+from .inbox import SOURCE_LABELS
 from .models import User
 
 MAX_QUESTION = 500
 MAX_LIST = 40
-SOURCES = ["capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "hardware", "asset", "license", "spend",
-           "system", "review"]     # = inbox.SOURCE_LABELS (test_ask_ico checks they stay equal)
+SOURCES = list(SOURCE_LABELS)       # the inbox sources: one list for the Hỏi ICO tool enum and the home page
 
 SYSTEM = """Bạn là "ICO", trợ lý tra cứu của hệ thống Infra Capacity Ops (hạ tầng VMware, backup NetBackup, license,
 chi phí & hợp đồng IT). Trả lời câu hỏi tiếng Việt của người dùng bằng cách gọi các CÔNG CỤ CHỈ ĐỌC được cung cấp.

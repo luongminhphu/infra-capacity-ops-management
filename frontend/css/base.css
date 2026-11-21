@@ -1,4 +1,4 @@
-/* ICO web styles — part 2/8: Base elements, app shell (sidebar / main), buttons, fields, validation banner.
+/* ICO web styles — part 2/7: Base elements, app shell (sidebar / main), buttons, fields, validation banner.
    Files load in this order from index.html (cascade order matters; see MASTER.md). */
 /* ── Base ───────────────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0;}

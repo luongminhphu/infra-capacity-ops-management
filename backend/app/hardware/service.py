@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ..infra import LEVEL_TEXT, worst
+from ..shared.levels import LEVEL_RANK, LEVEL_TEXT, worst
+from .. import vm_ip
 from .models import (
     HwAlert, HwComponentHealth, HwDeviceInventory, HwDeviceState, HwDiskState, HwFirmwareState, HwPartState, HwSourceState,
     HwWarranty,
@@ -24,7 +25,6 @@ from .models import (
 POWER_TEXT = {"on": "Đang bật", "off": "Đang tắt", "powering_on": "Đang bật lên", "powering_off": "Đang tắt", "unknown": "Không rõ"}
 PART_KIND = {"raid": "RAID controller", "psu": "Bộ nguồn", "memory": "RAM"}
 COMPLIANCE_TEXT = {"ok": "Đúng baseline", "upgrade": "Cũ hơn baseline", "downgrade": "Mới hơn baseline", "unknown": "Không rõ"}
-LEVEL_RANK = {"crit": 0, "bad": 1, "warn": 2, "ok": 3}
 MAX_VMS = 300
 
 
@@ -120,23 +120,26 @@ def _warranty(db: Session, devs: List[HwDeviceState], today: dt.date, opex_detai
 
 
 def listing(db: Session, today: dt.date, osc=None, status: Optional[str] = None, model: Optional[str] = None,
-            warranty_days: Optional[int] = None, opex_detail: bool = False) -> Dict[str, Any]:
+            warranty_days: Optional[int] = None, opex_detail: bool = False, only: Optional[tuple] = None) -> Dict[str, Any]:
+    """only=(source_key, device_id): that one server (detail page) — the same rules, without reading the fleet."""
     keys = _keys()
-    devs = db.query(HwDeviceState).filter(HwDeviceState.source_key.in_(keys or [""])) \
-        .order_by(HwDeviceState.name, HwDeviceState.device_id).all()
-    ids = [(d.source_key, d.device_id) for d in devs]
+
+    def scoped(q, M):
+        q = q.filter(M.source_key.in_(keys or [""]))
+        return q.filter(M.source_key == only[0], M.device_id == only[1]) if only else q
+    devs = scoped(db.query(HwDeviceState), HwDeviceState).order_by(HwDeviceState.name, HwDeviceState.device_id).all()
     issues: Dict[tuple, List[tuple]] = defaultdict(list)            # (source, device) → [(level, text)]
-    for h in db.query(HwComponentHealth).filter(HwComponentHealth.source_key.in_(keys or [""]), HwComponentHealth.status != "ok"):
+    for h in scoped(db.query(HwComponentHealth), HwComponentHealth).filter(HwComponentHealth.status != "ok"):
         issues[(h.source_key, h.device_id)].append((h.status, f"{h.subsystem}: {h.detail or LEVEL_TEXT[h.status].lower()}"))
-    for p in db.query(HwPartState).filter(HwPartState.source_key.in_(keys or [""]), HwPartState.status.in_(("bad", "crit"))):
+    for p in scoped(db.query(HwPartState), HwPartState).filter(HwPartState.status.in_(("bad", "crit"))):
         issues[(p.source_key, p.device_id)].append((p.status, f"{PART_KIND.get(p.kind, p.kind)} {p.name} lỗi"))
     predictive: Dict[tuple, int] = defaultdict(int)
-    for x in db.query(HwDiskState).filter(HwDiskState.source_key.in_(keys or [""]), HwDiskState.predictive_failure.is_(True)):
+    for x in scoped(db.query(HwDiskState), HwDiskState).filter(HwDiskState.predictive_failure.is_(True)):
         predictive[(x.source_key, x.device_id)] += 1
     fw_total: Dict[tuple, int] = defaultdict(int)
     fw_behind: Dict[tuple, int] = defaultdict(int)
-    for f in db.query(HwFirmwareState.source_key, HwFirmwareState.device_id, HwFirmwareState.compliance).filter(
-            HwFirmwareState.source_key.in_(keys or [""]), HwFirmwareState.compliance.isnot(None)):
+    for f in scoped(db.query(HwFirmwareState.source_key, HwFirmwareState.device_id, HwFirmwareState.compliance),
+                    HwFirmwareState).filter(HwFirmwareState.compliance.isnot(None)):
         fw_total[(f[0], f[1])] += 1
         if f[2] in ("upgrade", "downgrade"):
             fw_behind[(f[0], f[1])] += 1
@@ -207,20 +210,13 @@ def listing(db: Session, today: dt.date, osc=None, status: Optional[str] = None,
             "filters": {"status": status, "model": model, "warrantyDays": warranty_days}, "items": items}
 
 
-def _vms_ip(db: Session, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    from .. import vm_ip
-    vm_ip.attach(db, rows, vm_key="name")
-    return rows
-
-
 def detail(db: Session, source_key: str, device_id: int, today: dt.date, opex_detail: bool) -> Dict[str, Any]:
     if source_key not in _keys():
         raise HTTPException(404, "Không có máy chủ này.")
     d = db.query(HwDeviceState).filter_by(source_key=source_key, device_id=device_id).first()
     if d is None:
         raise HTTPException(404, "Không có máy chủ này.")
-    base = next((i for i in listing(db, today, opex_detail=opex_detail)["items"]
-                 if i["sourceKey"] == source_key and i["deviceId"] == device_id), None)
+    base = next(iter(listing(db, today, opex_detail=opex_detail, only=(source_key, device_id))["items"]), None)
     k = {"source_key": source_key, "device_id": device_id}
     inv = db.query(HwDeviceInventory).filter_by(**k).first()
     t = topology(db, [d.service_tag] if d.service_tag else []).get(d.service_tag or "") or {"vms": []}
@@ -247,7 +243,8 @@ def detail(db: Session, source_key: str, device_id: int, today: dt.date, opex_de
     return {**(base or {}), "os": inv.os_name if inv else None, "osHostname": inv.os_hostname if inv else None,
             "macs": json.loads(inv.macs) if inv and inv.macs else [], "subsystems": subs, "disks": disks, "parts": parts,
             "firmwareRows": fw, "warranties": warr, "alerts": alerts,
-            "vms": _vms_ip(db, [{k2: v[k2] for k2 in ("name", "vcenterKey", "powerOn", "system")} for v in t["vms"][:MAX_VMS]]),
+            "vms": vm_ip.attach(db, [{k2: v[k2] for k2 in ("name", "vcenterKey", "powerOn", "system")} for v in t["vms"][:MAX_VMS]],
+                               vm_key="name"),
             "vmsTruncated": len(t["vms"]) > MAX_VMS,
             "source": {"key": source_key, "name": st.name if st else source_key, "capturedAt": _iso(st.captured_at) if st else None,
                        "inventoryAt": _iso(st.inventory_at) if st else None, "baselineConfigured": st.baseline_configured if st else None}}

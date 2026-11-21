@@ -55,11 +55,14 @@ def system_out(s: System) -> Dict[str, Any]:
             "supportContact": s.support_contact, "costCenter": s.cost_center}
 
 
-def build(db: Session, osc=None, include_unowned: bool = True) -> Dict[str, Any]:
+def build(db: Session, osc=None, include_unowned: bool = True, owner: Optional[str] = None) -> Dict[str, Any]:
+    """owner (e-mail, lower case): only the systems of that owner — one e-mail draft, no rebuild of every system."""
     by_name, _ = review._vm_rows(db)
     backup = review._backup_states(db)
     active = bool(osc is not None and osc.active)
     systems = service.scope_systems(db, osc if active else None).order_by(System.code).all()
+    if owner:
+        systems = [s for s in systems if (s.owner_email or "").lower() == owner]
     sids = [s.id for s in systems]
     members: Dict[int, List[Ci]] = {i: [] for i in sids}
     for i in range(0, len(sids), 500):

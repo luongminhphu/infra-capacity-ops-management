@@ -6,22 +6,9 @@ Numbers come from owners.inventory.build (the same dict as the Excel and the e-m
 from typing import Any, Dict, List
 
 from .owners.mail_drafts import guest_name
-from .pdf_kit import base_css, esc, exec_visual_css, html_to_pdf_bytes, now_str, stat_tiles_html
+from .pdf_kit import base_css, data_table as _table, esc, exec_visual_css, html_to_pdf_bytes, now_str, stat_tiles_html, vn as _vn
 
 MAX_UNOWNED_ROWS = 500
-
-
-def _vn(v: Any, d: int = 0) -> str:
-    if v is None:
-        return "—"
-    s = f"{float(v):,.{d}f}"
-    return s.replace(",", "\0").replace(".", ",").replace("\0", ".")
-
-
-def _table(head: List[str], rows: List[List[str]], num: tuple = ()) -> str:
-    th = "".join(f'<th class="{"num" if i in num else ""}">{esc(h)}</th>' for i, h in enumerate(head))
-    tr = "".join("<tr>" + "".join(f'<td class="{"num" if i in num else ""}">{c}</td>' for i, c in enumerate(r)) + "</tr>" for r in rows)
-    return f'<table class="data-table"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>'
 
 
 def _person(email, name) -> str:

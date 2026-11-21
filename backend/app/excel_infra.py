@@ -1,12 +1,12 @@
 """Excel "Sức khoẻ hạ tầng" — every row of infra.report_data (same numbers as report_infra.py and the pages)."""
-import io
 from typing import Any, Dict
 
 from openpyxl import Workbook
 
-from .excel_style import _sheet_title, _widths, _write_rows
+from .excel_style import _sheet_title, _widths, _write_rows, to_bytes
 
-WORD = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "ok": "AN TOÀN"}
+from .shared.levels import LEVEL_TEXT
+WORD = LEVEL_TEXT
 
 
 def build_xlsx(d: Dict[str, Any], scope_label: str = "") -> bytes:
@@ -74,6 +74,4 @@ def build_xlsx(d: Dict[str, Any], scope_label: str = "") -> bytes:
                 [[WORD[h["level"]], h["host"], h["vcenterKey"], h["cluster"], h["connection"], "Có" if h["maintenance"] else None,
                   "; ".join(h["reasons"])] for h in hh])
     _widths(w, {"A": 14, "B": 30, "C": 10, "D": 18, "E": 14, "F": 8, "G": 50})
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return to_bytes(wb)

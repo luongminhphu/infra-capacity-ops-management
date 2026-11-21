@@ -3,33 +3,11 @@ behind the baseline, Dell warranty vs Opex. Numbers come from hardware.service.l
 Vận hành → Phần cứng and the Excel), so the three always agree.
 
   Tổng kết → 1 Máy chủ cần xử lý → 2 Bảo hành Dell ↔ Opex → 3 Danh sách máy chủ"""
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from .pdf_kit import base_css, esc, exec_visual_css, html_to_pdf_bytes, now_str, stat_tiles_html, status_pill
-
-LEVEL_TEXT = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "ok": "AN TOÀN"}
-
-
-def _vn(v: Any) -> str:
-    if v is None:
-        return "—"
-    return f"{int(v):,}".replace(",", ".")
-
-
-def _date(iso: Any) -> str:
-    s = str(iso or "")
-    return f"{s[8:10]}/{s[5:7]}/{s[:4]}" if len(s) >= 10 else "—"
-
-
-def _table(head: List[str], rows: List[List[str]], num: tuple = ()) -> str:
-    th = "".join(f'<th class="{"num" if i in num else ""}">{esc(h)}</th>' for i, h in enumerate(head))
-    tr = "".join("<tr>" + "".join(f'<td class="{"num" if i in num else ""}">{c}</td>' for i, c in enumerate(r)) + "</tr>" for r in rows)
-    return f'<table class="data-table"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>'
-
-
-def _pill(level: str) -> str:
-    return status_pill({"text": LEVEL_TEXT.get(level, "NA"), "cls": level if level in LEVEL_TEXT else "na"})
-
+from .pdf_kit import (base_css, data_table as _table, esc, exec_visual_css, html_to_pdf_bytes, level_pill as _pill, now_str,
+                      short_date as _date, stat_tiles_html, vn as _vn)
+from .shared.levels import LEVEL_TEXT
 
 def _server(i: Dict[str, Any]) -> str:
     return (f"<b>{esc(i['name'])}</b><br><span class='small-note'>{esc(i['serviceTag'] or '—')} · {esc(i['model'] or '—')}</span>")

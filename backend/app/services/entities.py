@@ -388,8 +388,7 @@ def server_card(db: Session, user: User, serial: str) -> Dict[str, Any]:
 def _ds_vms(db: Session, vms) -> List[Dict[str, Any]]:
     from .. import vm_ip
     out = [{"name": v.name, "vcenterKey": cq.attrs_of(v).get("vcenterKey") or "", "powerOn": cq.attrs_of(v).get("powerOn")} for v in vms]
-    vm_ip.attach(db, out, vm_key="name")
-    return out
+    return vm_ip.attach(db, out, vm_key="name")
 
 
 def datastore_card(db: Session, user: User, ci_id: int) -> Dict[str, Any]:

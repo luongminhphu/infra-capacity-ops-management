@@ -116,6 +116,14 @@ def _r(v: Optional[float], d: int = 1):
 # ---------------------------------------------------------------------------
 # Generic helpers
 # ---------------------------------------------------------------------------
+def to_bytes(wb) -> bytes:
+    """The .xlsx file of a workbook, in memory."""
+    import io
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def _widths(ws, widths: Dict[str, float]) -> None:
     for col, w in widths.items():
         ws.column_dimensions[col].width = w

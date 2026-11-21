@@ -8,11 +8,9 @@ import json
 import re
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote as urlquote
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -906,8 +904,8 @@ def reopen_request(code: str, request: Request, user: User = Depends(require_spe
 
 # ================================================================ exports
 def _download(content: bytes, name: str) -> Response:
-    return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
-        "Content-Disposition": f"attachment; filename=\"{name}\"; filename*=UTF-8''{urlquote(name)}", "Cache-Control": "private, no-store"})
+    from ..downloads import attachment
+    return attachment(content, name)
 
 
 @router.get("/quotes/{code}/comparison.xlsx")

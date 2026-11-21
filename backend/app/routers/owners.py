@@ -16,7 +16,6 @@ GET  /api/systems/mail-drafts?period=&due=                   — owners that get
 GET  /api/systems/mail-drafts/preview?owner=&period=&due=    — subject / text / HTML of one draft (unsaved template: POST)
 GET  /api/systems/mail-drafts/download?owner=&period=&due=&attach=  — one .eml, or every owner as .zip without owner
 """
-import datetime as dt
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, Response, UploadFile
@@ -24,6 +23,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..downloads import attachment, stamp
 from ..models import User
 from ..owners import excel, service
 from ..pagination import paginate
@@ -34,7 +34,6 @@ from ..shared.filetype import XLSX, FileRejected, detect_type
 
 router = APIRouter(prefix="/api/systems", tags=["owners"])
 MAX_BYTES = 10 * 1024 * 1024
-XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def require_owner_admin(user: User = Depends(get_current_user)) -> User:
@@ -92,11 +91,7 @@ def coverage(q: str = Query("", max_length=400), vcenter: str = Query("", max_le
 @router.get("/export.xlsx")
 def export_xlsx(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     data = excel.export(db)
-    return Response(data, media_type=XLSX_MIME, headers={"Content-Disposition": 'attachment; filename="he-thong-owner.xlsx"'})
-
-
-def _stamp() -> str:
-    return dt.datetime.now().strftime("%Y%m%d")
+    return attachment(data, "he-thong-owner.xlsx")
 
 
 @router.get("/report.pdf")
@@ -104,8 +99,7 @@ def report_pdf(osc: OwnerScope = Depends(owner_scope_query), user: User = Depend
     from .. import report_systems
     from ..owners import inventory
     data = report_systems.build_pdf(inventory.build(db, osc), user.display_name or user.username)
-    return Response(data, media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="vm-theo-he-thong-{_stamp()}.pdf"'})
+    return attachment(data, f"vm-theo-he-thong-{stamp()}.pdf")
 
 
 @router.get("/report.xlsx")
@@ -113,8 +107,7 @@ def report_xlsx(osc: OwnerScope = Depends(owner_scope_query), user: User = Depen
     from .. import excel_systems
     from ..owners import inventory
     data = excel_systems.build_xlsx(inventory.build(db, osc))
-    return Response(data, media_type=XLSX_MIME,
-                    headers={"Content-Disposition": f'attachment; filename="vm-theo-he-thong-{_stamp()}.xlsx"'})
+    return attachment(data, f"vm-theo-he-thong-{stamp()}.xlsx")
 
 
 def _draft_args(period: Optional[str], due: Optional[str]):
@@ -156,8 +149,9 @@ def mail_draft_list(period: str = Query("", max_length=16), due: str = Query("",
 
 
 def _one_owner(db: Session, osc: OwnerScope, owner: str) -> Dict[str, Any]:
-    res = mail_drafts.owners(db, osc)
-    o = next((x for x in res["owners"] if x["email"] == owner.strip().lower()), None)
+    email = owner.strip().lower()
+    res = mail_drafts.owners(db, osc, owner=email)
+    o = next((x for x in res["owners"] if x["email"] == email), None)
     if o is None:
         raise HTTPException(404, "Không có owner này trong phạm vi.")
     return {**o, "_backup": res["backupMonitored"], "_scope": res["scope"]}
@@ -191,20 +185,20 @@ def mail_draft_download(owner: str = Query("", max_length=255), period: str = Qu
     p, d = _draft_args(period, due)
     tpl = mail_drafts.get_template(db)
     sender = _sender(user)
+    smtp = mail_drafts.smtp_from(db)
     if owner.strip():
         o = _one_owner(db, osc, owner)
-        name, data = mail_drafts.eml(db, o, mail_drafts.render(tpl, o, p, d, sender, o["_backup"]), p, attach)
+        name, data = mail_drafts.eml(o, mail_drafts.render(tpl, o, p, d, sender, o["_backup"]), p, attach, smtp)
         service.audit(db, user, "owners.mail_drafts.download", owners=1, period=p)
         db.commit()
-        return Response(data, media_type="message/rfc822", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+        return attachment(data, name)
     res = mail_drafts.owners(db, osc)
     if not res["owners"]:
         raise HTTPException(404, "Không có hệ thống nào có owner trong phạm vi.")
-    files = [mail_drafts.eml(db, o, mail_drafts.render(tpl, o, p, d, sender, res["backupMonitored"]), p, attach) for o in res["owners"]]
+    files = [mail_drafts.eml(o, mail_drafts.render(tpl, o, p, d, sender, res["backupMonitored"]), p, attach, smtp) for o in res["owners"]]
     service.audit(db, user, "owners.mail_drafts.download", owners=len(files), period=p)
     db.commit()
-    return Response(mail_drafts.zip_all(files), media_type="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="email-ra-soat-{mail_drafts._slug(p)}.zip"'})
+    return attachment(mail_drafts.zip_all(files), f"email-ra-soat-{mail_drafts._slug(p)}.zip")
 
 
 @router.get("/vm/{ci_id}")

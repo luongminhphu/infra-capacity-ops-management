@@ -1,20 +1,20 @@
 """Excel "Sổ CI": every configuration item the caller may see (cmdb/query.hidden_types) with its keys and link counts.
 
 Sheets: Tổng hợp (CI per type × status, links strong / weak) · CI (one row per CI) · Liên kết (one row per link, capped).
-Bulk reads: CIs, keys and links in three queries (no per-CI query)."""
-import io
+Bulk reads: CIs, keys and links in three queries (no per-CI query), keys and links filtered in SQL by the same type /
+status / visibility conditions as the CIs. Times in Vietnam local time like every other report."""
 import json
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from openpyxl import Workbook
-from sqlalchemy import func
 from sqlalchemy.orm import Session, aliased
 
 from .cmdb.models import CI_TYPES, Ci, CiKey, CiLink
 from .cmdb.query import hidden_types
-from .excel_style import _sheet_title, _widths, _write_rows
+from .excel_style import _sheet_title, _widths, _write_rows, to_bytes
 from .models import User
+from .timeutil import to_vn_str
 
 MAX_CIS = 100_000
 MAX_LINKS = 100_000
@@ -26,20 +26,26 @@ ATTR_KEYS = ("vcenterKey", "cluster", "host", "vendor", "model", "serviceTag", "
 
 
 def _iso(t) -> Optional[str]:
-    return t.strftime("%Y-%m-%d %H:%M") if t else None
+    return to_vn_str(t, "%Y-%m-%d %H:%M") if t else None
+
+
+def _conds(M, hidden, type_: Optional[str], status: str) -> list:
+    out = [M.type.notin_(hidden)] if hidden else []
+    if type_:
+        out.append(M.type == type_)
+    if status != "all":
+        out.append(M.status == status)
+    return out
 
 
 def build_xlsx(db: Session, user: User, type_: Optional[str] = None, status: str = "active") -> bytes:
     hidden = hidden_types(db, user)
-    q = db.query(Ci).filter(Ci.type.notin_(hidden) if hidden else Ci.id.isnot(None))
-    if type_:
-        q = q.filter(Ci.type == type_)
-    if status != "all":
-        q = q.filter(Ci.status == status)
-    cis: List[Ci] = q.order_by(Ci.type, Ci.name, Ci.id).limit(MAX_CIS).all()
+    cis: List[Ci] = (db.query(Ci).filter(*_conds(Ci, hidden, type_, status))
+                     .order_by(Ci.type, Ci.name, Ci.id).limit(MAX_CIS).all())
     ids = {c.id for c in cis}
     keys: Dict[int, List[str]] = defaultdict(list)
-    for cid, kind, val in db.query(CiKey.ci_id, CiKey.kind, CiKey.value_norm).order_by(CiKey.ci_id, CiKey.kind):
+    for cid, kind, val in (db.query(CiKey.ci_id, CiKey.kind, CiKey.value_norm).join(Ci, Ci.id == CiKey.ci_id)
+                           .filter(*_conds(Ci, hidden, type_, status)).order_by(CiKey.ci_id, CiKey.kind)):
         if cid in ids:
             keys[cid].append(f"{kind}: {val}")
     out_n: Dict[int, int] = defaultdict(int)
@@ -51,6 +57,7 @@ def build_xlsx(db: Session, user: User, type_: Optional[str] = None, status: str
     link_rows = []
     weak = strong = 0
     for l, a, b in (db.query(CiLink, src, dst).join(src, src.id == CiLink.from_ci).join(dst, dst.id == CiLink.to_ci)
+                    .filter(*_conds(src, hidden, type_, status), *_conds(dst, hidden, type_, status))
                     .order_by(CiLink.id).limit(MAX_LINKS)):
         if a.id not in ids or b.id not in ids:
             continue
@@ -92,6 +99,4 @@ def build_xlsx(db: Session, user: User, type_: Optional[str] = None, status: str
                        "Thấy lần cuối"], link_rows)
     _widths(w, {"A": 16, "B": 32, "C": 14, "D": 16, "E": 32, "F": 18, "G": 12, "H": 12, "I": 16})
     w.freeze_panes = w.cell(row=r + 1, column=1)
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return to_bytes(wb)

@@ -1,11 +1,10 @@
 """Excel "Danh sách VM theo hệ thống" — same numbers as owners.inventory.build / report_systems.py.
 Also attached to the owner review e-mail drafts (filtered to the systems of that owner)."""
-import io
 from typing import Any, Dict, List
 
 from openpyxl import Workbook
 
-from .excel_style import _sheet_title, _widths, _write_rows
+from .excel_style import _sheet_title, _widths, _write_rows, to_bytes
 
 VM_HEAD = ["VM", "Hostname (trong máy ảo)", "vCenter", "Cluster", "IP", "Host", "Nguồn", "vCPU", "RAM (GB)", "Disk (GB)",
            "Hệ điều hành", "Datastore", "Backup"]
@@ -49,6 +48,4 @@ def build_xlsx(d: Dict[str, Any], title: str = "Danh sách VM theo hệ thống"
         _write_rows(wu, r3, VM_HEAD, [_vm(v) for v in d["unowned"]], {9: "#,##0.0", 10: "#,##0.0"})
         _widths(wu, {"A": 32, "B": 26, "C": 10, "D": 16, "E": 15, "F": 18, "G": 7, "H": 6, "I": 9, "J": 10, "K": 30, "L": 20, "M": 13})
         wu.freeze_panes = wu.cell(row=r3 + 1, column=2)
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return to_bytes(wb)

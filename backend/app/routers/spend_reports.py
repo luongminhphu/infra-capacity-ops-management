@@ -6,7 +6,6 @@ filters. Filters come as a JSON body (POST) or as ?filters=<json> (GET, for plai
 import datetime as dt
 import json
 from typing import Any, Dict, Optional
-from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -56,9 +55,8 @@ def _logo(db: Session) -> Optional[str]:
 
 
 def _download(content: bytes, media: str, name: str) -> Response:
-    return Response(content, media_type=media, headers={
-        "Content-Disposition": f"attachment; filename=\"{name}\"; filename*=UTF-8''{quote(name)}",
-        "Cache-Control": "private, no-store"})
+    from ..downloads import attachment
+    return attachment(content, name, media)
 
 
 @router.post("/budget")

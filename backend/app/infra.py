@@ -17,13 +17,9 @@ from .models import (DatastoreState, HostHealthState, StorageAlertState, Storage
                      VmSnapshotState)
 from .scope import Scope
 
-LEVEL_RANK = {"crit": 0, "bad": 1, "warn": 2, "ok": 3}
-LEVEL_TEXT = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "ok": "AN TOÀN"}
+from .shared.levels import LEVEL_RANK, LEVEL_TEXT, worst  # noqa: F401  (re-exported: hardware, reports)
+
 FORECAST_DAYS = 30
-
-
-def worst(*levels: str) -> str:
-    return min(levels, key=lambda lv: LEVEL_RANK.get(lv, 9))
 
 
 def _parse(ts: Optional[str]) -> Optional[dt.datetime]:
@@ -206,8 +202,7 @@ def snapshots(db: Session, scope: Optional[Scope] = None, now: Optional[dt.datet
                                       for i in items) if items else False})
     out.sort(key=lambda d: (LEVEL_RANK[d["level"]], -(d["ageDays"] or 0)))
     from . import vm_ip
-    vm_ip.attach(db, out)
-    return out
+    return vm_ip.attach(db, out)
 
 
 # ---------------------------------------------------------------- alarms & host health
@@ -235,8 +230,7 @@ def alarms(db: Session, scope: Optional[Scope] = None, ui: Optional[Dict[str, tu
                     "vsphereUrl": links.object_url(*(ui.get(r.vcenter_key) or (None, None)), r.vim_type, r.entity_moid, r.vc_uuid)})
     out.sort(key=lambda d: (LEVEL_RANK[d["level"]], d["acknowledged"], d["at"] or ""), reverse=False)
     from . import vm_ip
-    vm_ip.attach(db, out, vm_key="entity", only=lambda a: a["entityType"] == "vm")
-    return out
+    return vm_ip.attach(db, out, vm_key="entity", only=lambda a: a["entityType"] == "vm")
 
 
 def host_health(db: Session, scope: Optional[Scope] = None) -> List[Dict[str, Any]]:
@@ -261,9 +255,12 @@ def host_health(db: Session, scope: Optional[Scope] = None) -> List[Dict[str, An
 
 
 def summary(db: Session, scope: Optional[Scope] = None) -> Dict[str, Any]:
-    ds, sn, al, hh = datastores(db, scope), snapshots(db, scope), alarms(db, scope), host_health(db, scope)
-    st = storage(db)
+    return summary_from(datastores(db, scope), snapshots(db, scope), alarms(db, scope), host_health(db, scope), storage(db))
 
+
+def summary_from(ds: List[Dict[str, Any]], sn: List[Dict[str, Any]], al: List[Dict[str, Any]], hh: List[Dict[str, Any]],
+                 st: Dict[str, Any]) -> Dict[str, Any]:
+    """Counts of the five lists (computed once by the caller)."""
     def count(rows, lv):
         return sum(1 for r in rows if r["level"] == lv)
     soonest = min((d["daysToFull"] for d in ds if d["daysToFull"] is not None), default=None)
@@ -429,11 +426,10 @@ def report_data(db: Session, scope: Optional[Scope] = None, osc=None) -> Dict[st
     (Datastore, Storage, Snapshot VM, Alarm vCenter, Sức khoẻ host). The owner filter keeps the VMs of the selected
     systems (snapshots, VM alarms) like the pages do; datastores / arrays / hosts are shared and stay."""
     from .scope import in_vm_scope
-    sn = snapshots(db, scope)
-    al = alarms(db, scope)
+    ds, sn, al, hh, st = datastores(db, scope), snapshots(db, scope), alarms(db, scope), host_health(db, scope), storage(db)
+    out = {"summary": summary_from(ds, sn, al, hh, st), "datastores": ds, "storage": st, "snapshots": sn, "alarms": al, "health": hh}
     r = osc.resolve(db) if osc is not None else None
-    if r is not None:
-        sn = [x for x in sn if in_vm_scope(r, x)]
-        al = [a for a in al if a["entityType"] == "vm" and in_vm_scope(r, {"vcenterKey": a["vcenterKey"], "vm": a["entity"]})]
-    return {"summary": summary(db, scope), "datastores": datastores(db, scope), "storage": storage(db), "snapshots": sn,
-            "alarms": al, "health": host_health(db, scope)}
+    if r is not None:                       # the summary stays on the whole scope, like the page header
+        out["snapshots"] = [x for x in sn if in_vm_scope(r, x)]
+        out["alarms"] = [a for a in al if a["entityType"] == "vm" and in_vm_scope(r, {"vcenterKey": a["vcenterKey"], "vm": a["entity"]})]
+    return out

@@ -195,7 +195,7 @@ def update_system(db: Session, user: User, s: System, data: Dict[str, Any], ip: 
     return s
 
 
-def delete(db: Session, user: User, s: System, ip: Optional[str] = None) -> int:
+def delete(db: Session, user: User, s: System, ip: Optional[str] = None) -> None:
     """Delete a system that has no VM any more. Check and delete are ONE statement (DELETE … WHERE NOT EXISTS member):
     a VM assigned at the same moment makes the delete fail (409) instead of being unassigned silently by the cascade."""
     from sqlalchemy import delete as sa_delete, exists
@@ -210,7 +210,6 @@ def delete(db: Session, user: User, s: System, ip: Optional[str] = None) -> int:
     db.expunge(s)
     audit(db, user, "owners.system.delete", ip, id=sid, code=code, name=name)
     invalidate_scope_cache()
-    return 0
 
 
 def listing(db: Session, q: str = "", owner: str = "", department: str = "", project: str = "",
@@ -270,8 +269,7 @@ def members(db: Session, system_id: int, limit: int = 2000) -> List[Dict[str, An
     rows = (db.query(SystemMember, Ci).join(Ci, Ci.id == SystemMember.ci_id).filter(SystemMember.system_id == system_id)
             .order_by(Ci.name, Ci.id).limit(limit).all())
     out = [_vm_out(c, m) for m, c in rows]
-    vm_ip.attach(db, out)
-    return out
+    return vm_ip.attach(db, out)
 
 
 def _vms(db: Session, ci_ids: List[int]) -> Dict[int, Ci]:
@@ -403,8 +401,7 @@ def coverage(db: Session, q: str = "", vcenter: str = "", offset: int = 0, limit
 
 def _with_ip(db: Session, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     from .. import vm_ip
-    vm_ip.attach(db, rows)
-    return rows
+    return vm_ip.attach(db, rows)
 
 
 def find_vms(db: Session, pairs: Iterable[Tuple[str, str]]) -> Dict[Tuple[str, str], List[Ci]]:

@@ -1,12 +1,11 @@
 """Excel "Phần cứng" — servers, Dell warranty vs Opex, firmware; same numbers as hardware.service.listing (web page and PDF)."""
-import io
 from typing import Any, Dict
 
 from openpyxl import Workbook
 
-from .excel_style import _sheet_title, _widths, _write_rows
+from .excel_style import _sheet_title, _widths, _write_rows, to_bytes
 
-LEVEL_TEXT = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "ok": "AN TOÀN"}
+from .shared.levels import LEVEL_TEXT
 
 
 def build_xlsx(d: Dict[str, Any]) -> bytes:
@@ -38,6 +37,4 @@ def build_xlsx(d: Dict[str, Any]) -> bytes:
                 [[f["server"], f["serviceTag"], f["component"], f["version"], f["baselineVersion"], f["complianceText"]]
                  for f in d.get("firmwareRows") or []])
     _widths(wf, {"A": 26, "B": 12, "C": 40, "D": 16, "E": 16, "F": 18})
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return to_bytes(wb)

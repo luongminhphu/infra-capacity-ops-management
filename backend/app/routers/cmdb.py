@@ -30,16 +30,14 @@ def list_cis(type: Optional[str] = Query(default=None, max_length=24), q: Option
 def ci_export(type: Optional[str] = Query(default=None, max_length=24), status: str = Query(default="active", pattern="^(active|retired|all)$"),
               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Sổ CI (Excel): CIs the caller may see, their keys and links (excel_cmdb.py)."""
-    import datetime as dt
     from fastapi import HTTPException
-    from fastapi.responses import Response
     from .. import excel_cmdb
+    from ..downloads import attachment, stamp
     from ..cmdb.models import CI_TYPES
     if type and type not in CI_TYPES:
         raise HTTPException(422, "Loại CI không hợp lệ.")
     data = excel_cmdb.build_xlsx(db, user, type, status)
-    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": f'attachment; filename="so-ci-{dt.datetime.now():%Y%m%d}.xlsx"'})
+    return attachment(data, f"so-ci-{stamp()}.xlsx")
 
 
 @router.get("/stats")
