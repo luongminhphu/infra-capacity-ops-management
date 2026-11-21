@@ -228,6 +228,10 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
         infra.store(db, cfg.key, extras, now)      # latest state + datastore usage history (metric_points)
         from ..baseline import service as baseline
         baseline.store(db, cfg.key, extras, now)    # configuration facts (G9a), evaluated on read
+        from ..lifecycle import service as lifecycle
+        lifecycle.store_product(db, cfg.key, extras, now)   # vCenter version / build (G9b)
+        if cfg.demo:
+            lifecycle.seed_demo(db)                 # sample EoGS / VMSA tables, only while both are empty
         changes.store(db, cfg.key, extras.get("events"), extras.get("eventsUntil"))     # change log (G6), deduplicated
 
         run.status = "ok"
@@ -572,6 +576,11 @@ async def scheduler_loop(app_settings: Settings):
                                             app_settings.snapshot_retention_months, none_is="skipped")
             from .. import metrics
             rolled = await asyncio.to_thread(jobruns.timed, "metrics", metrics.maybe_rollup, none_is="skipped")
+            from ..lifecycle import tls
+            try:       # TLS certificates of every source, once a day (G9b); recorded in job_runs, never stops the round
+                await asyncio.to_thread(jobruns.timed, "tls", tls.maybe_scan, none_is="skipped")
+            except Exception:  # noqa: BLE001
+                logger.exception("TLS certificate scan failed")
             line = round_summary(results, time.monotonic() - started, alerts, purge)
             if rolled:
                 line += " " + " ".join(f"metrics_{k}={v}" for k, v in sorted(rolled.items()))

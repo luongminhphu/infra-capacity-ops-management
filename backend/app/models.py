@@ -943,3 +943,4 @@ from .events import models as _events_models  # noqa: E402,F401
 # ServiceDesk Plus requests (G7a).
 from .itsm import models as _itsm_models  # noqa: E402,F401
 from .baseline import models as _baseline_models  # noqa: E402,F401
+from .lifecycle import models as _lifecycle_models  # noqa: E402,F401

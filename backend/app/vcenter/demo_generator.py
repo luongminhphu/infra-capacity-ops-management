@@ -283,7 +283,8 @@ def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows:
         a["entityMoid"] = f"{a['entityType']}-{1001 + i}"
         a["vimType"] = vim_type.get(a["entityType"])
     return {"datastores": datastores, "snapshots": snapshots, "alarms": alarms, "health": health,
-            "vcenterUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cfg.key}/vcenter")), "config": collect_config(host_rows, vm_rows)}
+            "vcenterUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cfg.key}/vcenter")), "config": collect_config(host_rows, vm_rows),
+            "product": {"version": "7.0.3", "build": "21477706", "fullName": "VMware vCenter Server 7.0.3 build-21477706"}}
 
 
 def collect_config(host_rows: List[Dict[str, Any]], vm_rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:

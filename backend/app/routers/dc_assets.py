@@ -22,25 +22,11 @@ from ..database import get_db
 from ..features import get_features
 from ..models import AuditLog, DcAsset, User
 from ..security import get_current_user, require_admin
-from ..shared.filetype import XLSX, FileRejected, detect_type
+from ..shared.xlsx_io import read_upload
 from ..spend.fiscal import today_vn
 
 router = APIRouter(prefix="/api/assets/dc", tags=["dc-assets"])
 MAX_BYTES = 10 * 1024 * 1024
-
-
-async def _read(request: Request, file: UploadFile) -> bytes:
-    cl = request.headers.get("content-length")
-    if cl and cl.isdigit() and int(cl) > MAX_BYTES + 64 * 1024:
-        raise HTTPException(413, "File quá lớn (tối đa 10 MB).")
-    data = await file.read(MAX_BYTES + 1)
-    if len(data) > MAX_BYTES:
-        raise HTTPException(413, "File quá lớn (tối đa 10 MB).")
-    try:
-        detect_type(data, allowed=(XLSX,))
-    except FileRejected as exc:
-        raise HTTPException(exc.status, f"{exc} File .xls cũ: mở bằng Excel rồi lưu lại dạng .xlsx.")
-    return data
 
 
 def _opex_detail(db: Session, user: User) -> bool:
@@ -76,7 +62,7 @@ def warranty_check(user: User = Depends(get_current_user), db: Session = Depends
 
 @router.post("/import/preview")
 async def preview(request: Request, file: UploadFile = File(...), user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    data = await _read(request, file)
+    data = await read_upload(request, file, MAX_BYTES)
 
     def _run():
         parsed = dc_assets.parse(data)
@@ -90,7 +76,7 @@ async def preview(request: Request, file: UploadFile = File(...), user: User = D
 @router.post("/import/commit")
 async def commit(request: Request, markMissing: bool = False, file: UploadFile = File(...),
                  user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    data = await _read(request, file)
+    data = await read_upload(request, file, MAX_BYTES)
     name = (file.filename or "")[:120]
 
     def _run():

@@ -25,7 +25,7 @@ from .models import LEVELS, OpsEvent, OpsEventOpen, OpsIncident
 
 logger = logging.getLogger(__name__)
 
-SOURCES = ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "hardware", "config")
+SOURCES = ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "hardware", "config", "lifecycle")
 SOURCE_FEATURE = {"backup": "backup"}
 # "vcenter" = one-off vCenter events from the change log (G6); not an inbox source
 SOURCE_NAMES = {**SOURCE_LABELS, "vcenter": "Event vCenter"}

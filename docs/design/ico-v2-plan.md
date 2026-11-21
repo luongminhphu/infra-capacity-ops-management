@@ -104,7 +104,7 @@ itsm_label_map     (label_norm, field)                                          
 | B | 6 | Event vCenter + nhật ký thay đổi + gom sự cố theo đồ thị CI (G6: #134) | 5 | PSU lỗi + alarm + HA restart = 1 sự cố |
 | C | 7 | ITSM SDP: nạp lùi, đọc bảng trong body, AI dự phòng + hàng chờ duyệt, nối yêu cầu ↔ VM / hệ thống (G7a: #135; G7b: #136; G7c: #137) | 1, 2 | ≥ 90 % yêu cầu VM có tài nguyên đã duyệt |
 | C | 8 | Tổng kết năm (xin → cấp → dùng) + mô hình kế hoạch năm sau → Kế hoạch ngân sách / Capex (G8: #138) | 3, 7 | Ra số host cần mua kèm nguồn số |
-| D | 9 | Sức khoẻ sâu: lệch cấu hình (G9a: #140), EoGS / VMSA / chứng chỉ TLS (G9b), contention `QueryPerf` (G9c), VCSA + DR theo criticality (G9d), showback (G9e) | 2, 5 | Mỗi lệch / lỗ hổng / nghẽn có mã, vào Hộp việc và sự kiện; showback khớp từng đồng |
+| D | 9 | Sức khoẻ sâu: lệch cấu hình (G9a: #140), EoGS / VMSA / chứng chỉ TLS (G9b: #141), contention `QueryPerf` (G9c), VCSA + DR theo criticality (G9d), showback (G9e) | 2, 5 | Mỗi lệch / lỗ hổng / nghẽn có mã, vào Hộp việc và sự kiện; showback khớp từng đồng |
 | D | 10 | Điểm sức khoẻ (G10a), báo cáo tháng + Teams / email (G10b), ticket SDP ghi — chờ D7 (G10c), bằng chứng ISO 27001 (G10d) | 3, 5, 9 | Gói bằng chứng 6 control mở được ngoài ICO; báo cáo tháng gửi đúng một lần |
 
 ## 7. Phạm vi truy cập Owner (bảo mật)

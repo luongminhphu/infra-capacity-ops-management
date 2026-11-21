@@ -7,8 +7,8 @@
 
 const bpState = { list: null, planId: null, plan: null, error: null, bound: false, group: 'all' };
 const BP_STATUS = { draft: ['na', 'Nháp'], submitted: ['warn', 'Chờ duyệt'], approved: ['ok', 'Đã duyệt'], superseded: ['na', 'Đã thay thế'] };
-const BP_SOURCE = { renewal: 'Gia hạn', committed: 'Đã ghi nhận', capex: 'Dự án Capex', replace: 'Thay thế thiết bị', extend: 'Dùng tiếp thiết bị', warranty: 'Bảo hành Dell', capacity: 'Mở rộng ảo hoá', new: 'Mới đề xuất' };
-const BP_DEVICE = (l) => l.source === 'replace' || l.source === 'extend' || l.source === 'warranty';   /* priced in the plan */
+const BP_SOURCE = { renewal: 'Gia hạn', committed: 'Đã ghi nhận', capex: 'Dự án Capex', replace: 'Thay thế thiết bị', extend: 'Dùng tiếp thiết bị', warranty: 'Bảo hành Dell', capacity: 'Mở rộng ảo hoá', lifecycle: 'Hết hỗ trợ ESXi / vCenter', new: 'Mới đề xuất' };
+const BP_DEVICE = (l) => l.source === 'replace' || l.source === 'extend' || l.source === 'warranty' || l.source === 'lifecycle';   /* priced in the plan */
 const BP_DC_DEVICE = (l) => l.source === 'replace' || l.source === 'extend';                          /* DC asset decision */
 const BP_PRIORITY = { must: 'Bắt buộc', should: 'Nên có', could: 'Tuỳ chọn' };
 
@@ -174,6 +174,8 @@ function bpLineForm(l) {
     ? `<div class="insight-box">Thiết bị dùng tiếp, không thay (Tài sản → Thiết bị Data Center), chưa có Opex bảo hành để gia hạn. Nhập “Giá dự toán” gia hạn bảo hành; khi kế hoạch được duyệt, dòng này tạo Opex Dự kiến kèm danh sách SN.${l.detail ? `<br>${esc(l.detail)}` : ''}</div>`
     : l.source === 'warranty'
     ? `<div class="insight-box">Máy chủ Dell còn chạy, bảo hành Dell (OME) hết trước cuối năm và chưa có Opex gia hạn. Nhập “Giá dự toán”; khi kế hoạch được duyệt, dòng này tạo Opex Dự kiến kèm danh sách service tag.${l.detail ? `<br>${esc(l.detail)}` : ''}</div>`
+    : l.source === 'lifecycle'
+    ? `<div class="insight-box">Host ESXi / vCenter hết hỗ trợ chung (EoGS) trước cuối năm (Sức khoẻ hạ tầng → Vòng đời &amp; bảo mật). Nhập “Giá dự toán” nâng cấp; khi kế hoạch được duyệt, dòng này tạo dự án Capex nháp.${l.detail ? `<br>${esc(l.detail)}` : ''}</div>`
     : l.source === 'replace'
     ? `<div class="insight-box">Thay thế thiết bị dùng từ 5 năm (Tài sản → Thiết bị Data Center). Nhập “Giá dự toán”; khi kế hoạch được duyệt, dòng này tạo dự án Capex nháp.${l.detail ? `<br>${esc(l.detail)}` : ''}</div>`
     : `<div class="insight-box">${esc(BP_SOURCE[l.source])} ${esc(l.sourceCode || '')}: hiện tại ${spMoney(l.baseNet)} trước VAT${l.terms > 1 ? ` (${esc(l.terms)} kỳ)` : ''}. Để trống “Số tiền kế hoạch” để tính theo % tăng.</div>`;
