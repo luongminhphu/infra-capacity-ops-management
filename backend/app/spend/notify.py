@@ -114,10 +114,17 @@ def _post_json(url: str, payload: dict) -> None:
     post_json(url, payload, USER_AGENT)
 
 
+class PartialDelivery(NotifyError):
+    """Part of a digest went out before a later part failed: retrying would send that part again."""
+
+
 def send_discord(url: str, lines: Sequence[ReminderLine], test: bool = False) -> None:
     url = validate_discord_url(url)
-    for content in discord_messages(lines, test):
-        _post_json(url, {"content": content, "allowed_mentions": {"parse": []}, "username": "ICO nhắc hạn"})
+    for i, content in enumerate(discord_messages(lines, test)):
+        try:
+            _post_json(url, {"content": content, "allowed_mentions": {"parse": []}, "username": "ICO nhắc hạn"})
+        except NotifyError as exc:
+            raise (PartialDelivery(f"Đã gửi {i} phần, phần {i + 1} lỗi: {exc}") if i else exc) from None
 
 
 def smtp_settings_from(cfg: SpendSmtpConfig, from_name: str = "ICO – Chi phí IT") -> mailer.SmtpSettings:
@@ -152,15 +159,23 @@ def send_email(cfg: Optional[SpendSmtpConfig], channel: SpendNotifyChannel, line
     if cfg is None:
         raise NotifyError("Chưa cấu hình máy chủ SMTP (Cài đặt → Chi phí & nhắc hạn).")
     recipients = parse_recipients(channel.recipients)
-    if recipients:
-        smtp_send(cfg, recipients, *email_content(lines, test))
+    sends = [(recipients, lines)] if recipients else []
     if channel.include_owner and not test:
         by_owner = {}
         for ln in lines:
             if ln.owner_email and ln.owner_email not in recipients:
                 by_owner.setdefault(ln.owner_email, []).append(ln)
-        for addr, own in by_owner.items():
-            smtp_send(cfg, [addr], *email_content(own))
+        sends += [([addr], own) for addr, own in by_owner.items()]
+    delivered, errors = 0, []
+    for to, part in sends:               # one bad address must not stop (or later repeat) the others
+        try:
+            smtp_send(cfg, to, *email_content(part, test))
+            delivered += 1
+        except NotifyError as exc:
+            errors.append(f"{', '.join(to)}: {exc}")
+    if errors:
+        msg = "; ".join(errors)
+        raise PartialDelivery(msg) if delivered else NotifyError(msg)
 
 
 def send(channel: SpendNotifyChannel, smtp_cfg: Optional[SpendSmtpConfig], lines: Sequence[ReminderLine],

@@ -177,3 +177,70 @@ def test_discord_split_respects_limit():
     chunks = discord_messages(lines)
     assert len(chunks) > 1 and all(len(c) <= 2000 for c in chunks)
     assert sum(c.count("OPX\\-2026") for c in chunks) == 40
+
+
+def test_email_partial_delivery_is_not_repeated(monkeypatch):
+    """Audit: owner b@ rejected → the whole digest was marked failed and it@ / a@ got it again on every retry."""
+    from types import SimpleNamespace as NS
+    got = []
+
+    def smtp(cfg, to, subject, text, html):
+        got.append(to[0])
+        if to[0] == "b@corp.example":
+            raise NotifyError("550 mailbox unavailable")
+    monkeypatch.setattr(notify, "smtp_send", smtp)
+    line = lambda o: ReminderLine(code="OPX-1", title="t", vendor="v", end_date="01/01/2027", days_left=30, amount="1 đ",  # noqa: E731
+                                  owner=o, owner_email=o, link=None)
+    ch = NS(recipients="it@corp.example", include_owner=True)
+    with pytest.raises(notify.PartialDelivery):
+        notify.send_email(NS(), ch, [line("a@corp.example"), line("b@corp.example")])
+    assert got == ["it@corp.example", "a@corp.example", "b@corp.example"]
+    got.clear()
+    with pytest.raises(NotifyError) as e:                    # nothing went out → a plain failure, retried
+        notify.send_email(NS(), NS(recipients="b@corp.example", include_owner=False), [line("o")])
+    assert not isinstance(e.value, notify.PartialDelivery)
+
+
+def test_partial_delivery_counts_as_sent(admin, editor, sent, monkeypatch):
+    admin.post("/api/spend/admin/channels", json={"kind": "discord", "name": "Discord", "webhookUrl": WEBHOOK})
+    calls = []
+
+    def half(url, lines, test=False):
+        calls.append(1)
+        raise notify.PartialDelivery("Đã gửi 1 phần, phần 2 lỗi: HTTP 429")
+    monkeypatch.setitem(notify.SENDERS, "discord", half)
+    _expiring(editor, 10)
+    for i in range(3):
+        _run(NOW + dt.timedelta(minutes=15 * i))
+    assert len(calls) == 1 and (30, "sent", 1) in _log()
+
+
+def test_discord_part_failure_is_not_resent(app_):  # noqa: F811
+    from app import alert_rules, ops_alerts, secrets_box
+    from app.models import OpsAlertState
+    from app.spend.models import SpendNotifyChannel
+    db = SessionLocal()
+    db.query(OpsAlertState).delete()
+    db.query(SpendNotifyChannel).delete()
+    db.add(SpendNotifyChannel(kind="discord", name="ops", enabled=True, ops_alerts=True, created_by="t",
+                              webhook_enc=secrets_box.encrypt("https://discord.com/api/webhooks/123456789012345678/abcDEF_-1")))
+    db.commit()
+    alert_rules  # noqa: B018 — default rules: capacity items with push=True are sent
+    items = [{"key": f"cap|c{i}", "alertKey": f"cap|c{i}", "source": "capacity", "level": "bad", "push": True,
+              "title": f"Cluster C{i:02d} " + "x" * 300} for i in range(20)]
+    posts = []
+
+    def flaky(url, payload):
+        if len(posts) == 1:                                  # part 2 fails once (Discord 429)
+            posts.append(None)
+            raise NotifyError("HTTP 429")
+        posts.append(payload["content"])
+    import re
+    ops_alerts.check_and_notify(db, post=flaky, computed=(items, []))
+    ops_alerts.check_and_notify(db, post=flaky, computed=(items, []))
+    names = [n for p in posts if p for n in re.findall(r"Cluster C\d\d", p)]
+    assert len(posts) > 3 and sorted(names) == [f"Cluster C{i:02d}" for i in range(20)]     # each alert posted exactly once
+    db.query(OpsAlertState).delete()
+    db.query(SpendNotifyChannel).delete()
+    db.commit()
+    db.close()

@@ -25,22 +25,27 @@ def _channels(db: Session):
                                                SpendNotifyChannel.ops_alerts.is_(True)).all()
 
 
-def messages(new: List[Dict[str, Any]], resolved: List[OpsAlertState], limit: int = 1900) -> List[str]:
-    """Discord messages (≤ 2000 characters each); a long list is split, nothing is dropped."""
+def chunks(new: List[Dict[str, Any]], resolved: List[OpsAlertState], limit: int = 1900):
+    """Discord messages (≤ 2000 characters each) with the alerts each one carries: [(text, new_items, resolved_states)].
+    A long list is split, nothing is dropped; the caller marks each part delivered as soon as it is posted."""
     from .spend.notify import discord_escape
     head = "**ICO — cảnh báo vận hành**"
     src = lambda it: inbox.SOURCE_LABELS.get(it.get("source"), "")  # noqa: E731
-    lines = [f"• [{inbox.LEVEL_LABELS[it['level']]}] {src(it) + ': ' if src(it) else ''}{discord_escape(it['title'])}"
-             for it in new] + \
-            [f"• Đã hết: {discord_escape(r.title)}" for r in resolved]
-    out, cur = [], head
-    for ln in lines:
+    lines = [(f"• [{inbox.LEVEL_LABELS[it['level']]}] {src(it) + ': ' if src(it) else ''}{discord_escape(it['title'])}", it, None)
+             for it in new] + [(f"• Đã hết: {discord_escape(r.title)}", None, r) for r in resolved]
+    out, cur, n_items, r_items = [], head, [], []
+    for ln, it, r in lines:
         if len(cur) + 1 + len(ln) > limit:
-            out.append(cur)
-            cur = head + " (tiếp)"
+            out.append((cur, n_items, r_items))
+            cur, n_items, r_items = head + " (tiếp)", [], []
         cur += "\n" + ln[:limit - 40]
-    out.append(cur)
+        (n_items.append(it) if it is not None else r_items.append(r))
+    out.append((cur, n_items, r_items))
     return out
+
+
+def messages(new: List[Dict[str, Any]], resolved: List[OpsAlertState], limit: int = 1900) -> List[str]:
+    return [text for text, _, _ in chunks(new, resolved, limit)]
 
 
 def _today():
@@ -149,13 +154,20 @@ def _check_and_notify(db: Session, post=None, computed=None) -> Dict[str, int]:
             continue
         try:
             url = validate_discord_url(secrets_box.decrypt(ch.webhook_enc))
-            for text in messages(to_new, to_resolve):
+            for text, part_new, part_resolved in chunks(to_new, to_resolve):
                 post(url, {"content": text, "allowed_mentions": {"parse": []}, "username": "ICO cảnh báo"})
+                for it in part_new:      # delivered now: a later part failing must not send this one again
+                    s = states[_akey(it)]
+                    _set_sent(s, _sent(s) | {cid})
+                    s.last_sent_at = now
+                for s in part_resolved:
+                    _set_sent(s, _sent(s) - {cid})
         except (NotifyError, secrets_box.SecretUnreadable, ValueError) as exc:
             failed += 1
             logger.warning("Ops alert to channel %s failed: %s", ch.id, exc)
             for it in to_new:
-                states[_akey(it)].last_error = str(exc)[:500]
+                if cid not in _sent(states[_akey(it)]):
+                    states[_akey(it)].last_error = str(exc)[:500]
             continue
         except Exception as exc:  # noqa: BLE001 — a bug must not skip the commit of the other channels' state
             failed += 1
@@ -164,12 +176,6 @@ def _check_and_notify(db: Session, post=None, computed=None) -> Dict[str, int]:
                 states[_akey(it)].last_error = f"{type(exc).__name__}"[:500]
             continue
         sent += 1
-        for it in to_new:
-            s = states[_akey(it)]
-            _set_sent(s, _sent(s) | {cid})
-            s.last_sent_at = now
-        for s in to_resolve:
-            _set_sent(s, _sent(s) - {cid})
     db.commit()
     inbox.invalidate()
     return {"new": len(pending), "resolved": len(resolved), "sent": sent, "failed": failed}

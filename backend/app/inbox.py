@@ -166,7 +166,7 @@ def backup_items(db: Session) -> List[Dict[str, Any]]:
                       f"Job {j.get('jobId')} · {j.get('client') or '—'} · status {j.get('status')}",
                       f"{(j.get('statusText') or '').rstrip('.')}. Policy {j.get('policy') or '—'}{(', ' + j['schedule']) if j.get('schedule') else ''}.".strip(),
                       j.get("startTime"), page="bk-jobs", query=f"q={quote(str(j.get('jobId')))}")
-    for f in (rep.get("findings") or [])[:MAX_PER_SOURCE]:
+    for f in rep.get("findings") or []:
         level = sev.get(f.get("severity"))
         if not level:
             continue
@@ -298,7 +298,7 @@ ALARM_CI_TYPE = {"host": "hypervisor_host"}           # alarm entityType → CI 
 def datastore_items(db: Session) -> List[Dict[str, Any]]:
     from . import infra
     out = []
-    for d in infra.datastores(db)[:MAX_PER_SOURCE]:
+    for d in infra.datastores(db):
         if d["level"] == "ok":
             continue
         out.append(item("datastore", d["level"], _key("ds", d["vcenterKey"], d["key"], d["level"]),
@@ -320,7 +320,7 @@ def snapshot_items(db: Session) -> List[Dict[str, Any]]:
     from . import infra
     out = []
     for s in infra.snapshots(db):
-        if s["level"] in ("ok", "warn") or len(out) >= MAX_PER_SOURCE:      # watch-level snapshots: page only
+        if s["level"] in ("ok", "warn"):      # watch-level snapshots: page only
             continue
         out.append(item("snapshot", s["level"], _key("snap", s["vcenterKey"], s["vm"], s["level"]),
                         f"VM {s['vm']}: {s['count']} snapshot, cũ nhất {s['ageDays']:.0f} ngày".replace(".", ","),
@@ -345,7 +345,7 @@ def alarm_items(db: Session) -> List[Dict[str, Any]]:
     for x in every:
         by_entity.setdefault((x["vcenterKey"], x["entityType"], x["entity"]), []).append(x)
     sensors = {(h["vcenterKey"], h["host"]): h for h in infra.host_health(db) if h["level"] != "ok"}
-    for a in every[:MAX_PER_SOURCE]:
+    for a in every:
         if a["acknowledged"]:
             continue
         out.append(item("alarm", a["level"], _key("alarm", a["vcenterKey"], a["key"], a["status"]),
@@ -378,7 +378,7 @@ def alarm_items(db: Session) -> List[Dict[str, Any]]:
 def health_items(db: Session) -> List[Dict[str, Any]]:
     from . import infra
     out = []
-    for h in infra.host_health(db)[:MAX_PER_SOURCE]:
+    for h in infra.host_health(db):
         if h["level"] == "ok" or h["maintenance"]:
             continue
         out.append(item("health", h["level"], _key("hh", h["vcenterKey"], h["host"], h["level"]),
@@ -543,7 +543,7 @@ def hardware_items(db: Session) -> List[Dict[str, Any]]:
         out.append(item("hardware", "warn", _key("hwf", len(behind)), f"{vn_g(len(behind))} máy chủ có firmware lệch baseline OME",
                         ", ".join(names[:6]) + (f" và {len(names) - 6} máy khác" if len(names) > 6 else "") + ".",
                         page="set-sources", alert_key="hwf"))
-    return out[:MAX_PER_SOURCE]
+    return out
 
 
 def review_items(db: Session, today: dt.date) -> List[Dict[str, Any]]:
@@ -599,7 +599,8 @@ def collect(db: Session, today: Optional[dt.date] = None, use_cache: bool = True
         with _lock:
             if _cache["items"] is not None and time.monotonic() - _cache["at"] < MIN_REFRESH_SECONDS:
                 return _cache["items"], _cache["errors"]
-        return _compute(db, today or today_vn())
+        items, errors = _compute(db, today or today_vn())
+        return _capped(items), errors
 
 
 def _compute(db: Session, today: dt.date) -> Tuple[List[Dict[str, Any]], List[str]]:
@@ -618,8 +619,20 @@ def _compute(db: Session, today: dt.date) -> Tuple[List[Dict[str, Any]], List[st
             errors.append(name)
     items.sort(key=lambda x: (LEVEL_RANK.get(x["level"], 9), x["due"] or dt.date.max, x["title"]))
     with _lock:
-        _cache.update(at=time.monotonic(), items=items, errors=errors)
+        _cache.update(at=time.monotonic(), items=_capped(items), errors=errors)
     return items, errors
+
+
+def _capped(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """What people see (collect): the worst MAX_PER_SOURCE items per source. _compute returns every item, so the Discord
+    alerts and the event store never take an item cut from the list for a cleared one."""
+    seen: Dict[str, int] = {}
+    out = []
+    for it in items:
+        seen[it["source"]] = seen.get(it["source"], 0) + 1
+        if seen[it["source"]] <= MAX_PER_SOURCE:
+            out.append(it)
+    return out
 
 
 def invalidate() -> None:
