@@ -205,6 +205,12 @@ Hợp nhất dữ liệu theo serial / service tag và IP (Hồ sơ thiết bị
   Skill cần CLI `graphify` (gói PyPI `graphifyy`) và **tự cài gói này** nếu thiếu — ghim phiên bản (`uv tool install graphifyy==0.9.114`)
   trước khi chạy trên máy có dữ liệu nhạy cảm. Kết quả ở `graphify-out/` (đã `.gitignore`). Tài liệu / ảnh chỉ gửi Gemini khi đã đặt
   `GEMINI_API_KEY`; không đặt thì do chính phiên Claude xử lý.
+- `impeccable` — rà / chấm / đánh bóng giao diện web (`/impeccable audit|critique|polish|harden|typeset|layout …`) + 5 subagent
+  `.claude/agents/impeccable-*.md`. Nguồn `pbakaus/impeccable` (Apache-2.0, commit `b49177d`, skill 4.10.0, engine 0.1.27;
+  `LICENSE.txt` / `NOTICE.md` kèm theo), ghim hash trong `skills-lock.json`. **Không** cài hook (SessionStart / PostToolUse / Stop) —
+  bật bằng `/impeccable hooks on` chỉ khi chủ sản phẩm đồng ý. Lần chạy đầu launcher `scripts/impeccable` **tải một engine nhị phân**
+  về `~/.impeccable/bin/` (kiểm SHA-256 theo `scripts/engine-checksums.txt`). Với ICO: `design-system/ico/MASTER.md` vẫn là nguồn sự
+  thật — kết luận của Impeccable là đề xuất, không tự đổi token / font / bảng màu (quy tắc 6); trang “Vận hành / Đọc” giữ tiết chế.
 - `find-skills` — tìm skill trong hệ sinh thái `npx skills` (`vercel-labs/skills`, MIT, pin trong `skills-lock.json`). **Quy tắc cài skill mới của dự án** (thay Step 6 của skill): không dùng `-g` / `-y`; tải về thư mục tạm, đọc toàn bộ nội dung (script, hook, `allowed-tools`) trước, chỉ cài vào `.claude/skills/` sau khi chủ sản phẩm đồng ý, ghi nguồn + hash vào `skills-lock.json`, kèm giấy phép.
 - `ui-ux-pro-max` — tra cứu style / bảng màu / font / UX guideline (bên thứ ba, `nextlevelbuilder/ui-ux-pro-max-skill`,
   cài bằng `npx skills add`; mã nằm ở `.agents/skills/`, `.claude/skills/ui-ux-pro-max` là symlink, phiên bản ghim trong
