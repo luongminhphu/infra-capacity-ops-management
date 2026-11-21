@@ -419,3 +419,14 @@ def test_engine_text_is_vi_vn():
     page = report_sizing_full.render_full_html(vms, p, prof)
     page = _html.unescape(re.sub(r"<[^>]+>", " ", re.sub(r"<style.*?</style>", " ", page, flags=re.S)))
     assert "1.248 vCPU" in page and "1,248" not in page and "3.850.000 / core / năm" in page
+
+
+def test_profile_with_no_usable_cpu_is_not_a_candidate():
+    """Audit: 1×2 cores with 2 reserved cores counted CPU demand as 0 hosts and was recommended for 100 vCPU."""
+    tiny = sizing.HostProfile(name="tiny", sockets=1, cores_per_socket=2, ram_gb=1024)
+    ok = sizing.HostProfile(name="2x16C", sockets=2, cores_per_socket=16, ram_gb=512)
+    r = sizing.build_sizing([sizing.VmSpec(name="app", qty=1, vcpu=100, ram_gb=64)],
+                            sizing.SizingParams(reserve_cores=2, optimize_for="cost"), [tiny, ok])
+    rows = {x["profile"]["name"]: x for x in r["results"]}
+    assert rows["tiny"]["hostsTotal"] == 0 and rows["tiny"]["recommended"] is False
+    assert rows["2x16C"]["recommended"] is True

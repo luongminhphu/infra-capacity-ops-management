@@ -302,10 +302,14 @@ function buildUpgradeExtra(cluster, hosts, upgradeHosts, addHosts) {
   const avgRam = hosts.length ? hosts.reduce((a, h) => a + h.ramGB, 0) / hosts.length : 0;
   const eqCpu = avgCores > 0 ? dCores / avgCores : 0, eqRam = avgRam > 0 ? dRam / avgRam : 0;
 
-  // N+1 after the change: lose the (now) largest host by cores, new hosts included
+  // N+1 after the change (new hosts included): CPU against losing the host with most cores, RAM against losing the one
+  // with most RAM — the same rule as capacity.evaluate_ha_headroom / planning.
   const upgraded = hosts.map(h => byName.has(h.host) ? { ...h, ...byName.get(h.host) } : h).concat(addHosts);
-  const biggest = [...upgraded].sort((a, b) => b.cores - a.cores || b.ramGB - a.ramGB)[0];
-  const n1 = modelWithOverrides(cluster, { upgradeHosts, addHosts, removeHostNames: biggest ? [biggest.host] : [] });
+  const bigCpu = [...upgraded].sort((a, b) => b.cores - a.cores || b.ramGB - a.ramGB)[0];
+  const bigRam = [...upgraded].sort((a, b) => b.ramGB - a.ramGB || b.cores - a.cores)[0];
+  const lose = (h) => modelWithOverrides(cluster, { upgradeHosts, addHosts, removeHostNames: h ? [h.host] : [] });
+  const n1 = { cpuPct: lose(bigCpu).cpuPct, ramPct: (bigRam === bigCpu ? lose(bigCpu) : lose(bigRam)).ramPct };
+  const biggest = bigCpu === bigRam || !(n1.ramPct > n1.cpuPct) ? bigCpu : bigRam;
   const n1Ok = upgraded.length >= 2 && isFinite(n1.cpuPct) && isFinite(n1.ramPct) && n1.cpuPct <= 100 && n1.ramPct <= 100;
   const addCores = addHosts.reduce((a, h) => a + h.cores, 0), addRam = addHosts.reduce((a, h) => a + h.ramGB, 0);
   const addRows = addHosts.map(h => `<tr><td><strong>${esc(h.host)}</strong> ${uiTag('mới')}</td>

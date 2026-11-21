@@ -5,6 +5,7 @@ per source" (each live vCenter's most recent successful run, plus the most
 recent manual import, combined).
 """
 import json
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -19,11 +20,20 @@ def get_effective_policy(db: Session, settings: Settings) -> "capacity.Policy":
     """Merge env-var defaults with any admin-adjusted thresholds stored in the
     app_settings table (see routers/settings.py)."""
     overrides = {row.key: row.value for row in db.query(AppSetting).all()}
+
+    def num(key: str, fallback: float, floor: float) -> float:
+        """Like core.js::rebuildFromRaw: empty / 0 / not a number → the default, then never below the floor
+        (values stored before the input check, or from the environment)."""
+        try:
+            v = float(overrides.get(key, getattr(settings, key)))
+        except (TypeError, ValueError):
+            v = 0.0
+        return max(floor, v if math.isfinite(v) and v else fallback)
     return capacity.Policy(
-        cpu_overcommit_max=float(overrides.get("cpu_overcommit_max", settings.cpu_overcommit_max)),
-        ram_overcommit_max=float(overrides.get("ram_overcommit_max", settings.ram_overcommit_max)),
-        ht_factor=float(overrides.get("ht_factor", settings.ht_factor)),
-        idle_days=int(float(overrides.get("idle_days", settings.idle_days))),
+        cpu_overcommit_max=num("cpu_overcommit_max", 6.0, 0.1),
+        ram_overcommit_max=num("ram_overcommit_max", 1.0, 0.1),
+        ht_factor=num("ht_factor", 2.0, 1.0),
+        idle_days=int(num("idle_days", 30, 1)),
         include_storage=capacity.parse_bool(overrides.get("include_storage"), default=bool(settings.include_storage)),
     )
 

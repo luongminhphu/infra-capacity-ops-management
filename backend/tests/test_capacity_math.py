@@ -291,3 +291,30 @@ def test_compliance_findings_carry_codes_for_worked_example():
     ]
     for f in findings:
         assert f["code"] == capacity.finding_code("host_ram", "CL1", f["entity"], "vc1")
+
+
+def test_ha_headroom_ram_checked_against_the_host_with_most_ram():
+    """Audit: the 'largest' host was picked by cores only. A 64C/256 GB, B and D 32C/1024 GB, 1800 GB of RAM:
+    losing A leaves 2048 GB (88 %) but losing B leaves 1280 GB (141 %) → does not survive."""
+    hosts = [_host("A", 64, 256), _host("B", 32, 1024), _host("D", 32, 1024)]
+    vms = [_vm("big", 16, 1800)]
+    [ha] = capacity.evaluate_ha_headroom(hosts, vms, Policy(ram_overcommit_max=1.0))
+    assert ha["ramPctAfter"] == pytest.approx(1800 / 1280 * 100)
+    assert ha["cpuPctAfter"] == pytest.approx(16 / (64 * 2) / 6 * 100)              # CPU still against losing A (64 cores)
+    assert ha["survives"] is False and ha["largestHost"] in ("B", "D")
+
+
+def test_effective_policy_has_the_same_floors_as_core_js():
+    from types import SimpleNamespace as NS
+    from app import data_access
+    from app.models import AppSetting
+
+    class Q:
+        def __init__(self, rows): self.rows = rows
+        def query(self, _m): return self
+        def all(self): return [AppSetting(key=k, value=v) for k, v in self.rows.items()]
+    env = NS(cpu_overcommit_max=6.0, ram_overcommit_max=1.0, ht_factor=2.0, idle_days=30, include_storage=False)
+    p = data_access.get_effective_policy(Q({"ram_overcommit_max": "0", "cpu_overcommit_max": "0.05", "ht_factor": "nan",
+                                            "idle_days": "-5"}), env)
+    # core.js: Math.max(0.1, x || 1.0) / Math.max(0.1, x || 6) / Math.max(1, x || 2) / Math.max(1, x || 30)
+    assert (p.ram_overcommit_max, p.cpu_overcommit_max, p.ht_factor, p.idle_days) == (1.0, 0.1, 2.0, 1)
