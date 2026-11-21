@@ -201,7 +201,7 @@ class Settings(BaseSettings):
     itsm_backfill_from: str = Field(default="2025-10-01")      # first request date read by the backfill
     itsm_rate_per_min: int = Field(default=60)                 # API calls per minute to one SDP server
     itsm_interval_minutes: int = Field(default=30)             # incremental reads after the backfill
-    itsm_templates: str = Field(default="")                    # comma-separated template names (VM requests)
+    itsm_templates: str = Field(default="VM provisioning, VM reconfiguration, VM Decommision")   # HSC's SDP templates
 
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)

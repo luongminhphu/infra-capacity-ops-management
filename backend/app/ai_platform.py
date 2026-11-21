@@ -44,6 +44,8 @@ TASKS: Dict[str, Tuple[str, str, bool]] = {
     "contract_diff": ("Tóm tắt thay đổi hợp đồng", "Tóm tắt điều khoản đổi giữa 2 version hợp đồng, đánh dấu điều khoản rủi ro.", True),
     "invoice_read": ("Đọc hoá đơn", "Đọc hoá đơn PDF trong hồ sơ thanh toán để hệ thống đối chiếu số tiền / MST / số hợp đồng.", True),
     "ask_ico": ("Hỏi ICO", "Trả lời câu hỏi tiếng Việt bằng công cụ chỉ đọc, theo đúng quyền của người hỏi.", True),
+    "itsm_parse": ("Đọc yêu cầu ServiceDesk", "Chép tài nguyên VM của yêu cầu ServiceDesk không đọc được bảng (chữ tự do, bảng lạ) — "
+                   "luôn vào hàng chờ duyệt, không tự tin cậy.", True),
 }
 
 # USD per million tokens (input, output) — Claude API list prices. An unknown model is priced at

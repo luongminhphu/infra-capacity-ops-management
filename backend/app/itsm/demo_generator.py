@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import ItsmConfig
 
-DEMO_TEMPLATES = ("Yêu cầu cấp máy ảo", "Yêu cầu tăng tài nguyên máy ảo")
+DEMO_TEMPLATES = ("VM provisioning", "VM reconfiguration", "VM Decommision")       # the three templates of HSC's SDP
 START = dt.datetime(2025, 10, 1, 2, 0)
 DEPARTMENTS = ("Khối Công nghệ", "Khối Ngân hàng số", "Khối Vận hành", "Phòng Dữ liệu")
 PROJECTS = ("Core Banking", "Mobile App", "Data Lake", "CRM", "Thanh toán QR")
@@ -43,6 +43,25 @@ def _table(rnd: random.Random, style: str, n: int, prefix: str) -> str:
     return f'<table border="1">{head}{"".join(rows)}</table>'
 
 
+def _reconfig(rnd: random.Random, n: int, prefix: str, combined: bool) -> str:
+    """VM reconfiguration body: an As-is table and a To-be table (rows in another order), or one table "Thông số | As-is | To-be"."""
+    vms = []
+    for i in range(n):
+        vcpu, ram, disk = rnd.choice((2, 4, 8)), rnd.choice((4, 8, 16, 32)), rnd.choice((80, 100, 200))
+        vms.append((f"{prefix}-prod-{i + 1:02d}", (vcpu, ram, disk), (vcpu * 2, ram * 2, disk + rnd.choice((0, 100)))))
+    if combined:
+        name, old, new = vms[0]
+        rows = [("Hostname", name, name), ("vCPU", old[0], new[0]), ("RAM", f"{old[1]} GB", f"{new[1]} GB"), ("Ổ cứng", f"{old[2]} GB", f"{new[2]} GB")]
+        return ('<table border="1"><tr><th>Thông số</th><th>As-is</th><th>To-be</th></tr>'
+                + "".join(f"<tr><td>{a}</td><td>{b}</td><td>{c}</td></tr>" for a, b, c in rows) + "</table>")
+
+    def tbl(rows):
+        return ('<table border="1"><tr><th>Tên VM</th><th>vCPU</th><th>RAM (GB)</th><th>Disk (GB)</th></tr>'
+                + "".join(f"<tr><td>{v}</td><td>{c}</td><td>{r}</td><td>{d}</td></tr>" for v, (c, r, d) in rows) + "</table>")
+    return ("<p><b>Cấu hình hiện tại (As-is)</b></p>" + tbl([(v, old) for v, old, _ in vms])
+            + "<p><b>Cấu hình đề xuất (To-be)</b></p>" + tbl([(v, new) for v, _, new in reversed(vms)]))
+
+
 def requests() -> List[Dict[str, Any]]:
     """The 65 demo requests as SDP detail objects, oldest first."""
     out = []
@@ -51,8 +70,8 @@ def requests() -> List[Dict[str, Any]]:
         created = START + dt.timedelta(days=i * 2.3, hours=rnd.randint(0, 8))
         updated = created + dt.timedelta(hours=rnd.randint(2, 96))
         project, dept = rnd.choice(PROJECTS), rnd.choice(DEPARTMENTS)
-        resize = i % 7 == 3
-        template = DEMO_TEMPLATES[1 if resize else 0]
+        resize, delete = i % 7 == 3, i % 9 == 5
+        template = DEMO_TEMPLATES[2 if delete else 1 if resize else 0]
         prefix = project.lower().replace(" ", "")[:8]
         if i >= 60:                                 # 5 requests written as free text (no table)
             body = (f"<p>Chào team hạ tầng,</p><p>Nhờ team tạo giúp {rnd.randint(1, 3)} VM {rnd.choice(OSES)} "
@@ -61,11 +80,13 @@ def requests() -> List[Dict[str, Any]]:
             subject = f"Nhờ tạo VM cho {project}"
         else:
             style = ("std", "alt", "nodisk", "merged")[i % 4]
-            body = (f"<p>Dự án: <b>{project}</b> — {dept}</p>" + _table(rnd, style, rnd.randint(1, 4), prefix)
+            table = (_reconfig(rnd, rnd.randint(1, 3), prefix, combined=i % 2 == 0) if resize and not delete
+                     else _table(rnd, style, rnd.randint(1, 4), prefix))
+            body = (f"<p>Dự án: <b>{project}</b> — {dept}</p>" + table
                     + '<p onclick="x()">Ghi chú: cần trước ngày go-live.</p><script>alert(1)</script>')
-            subject = f"{'Tăng tài nguyên' if resize else 'Cấp máy ảo'} — {project}"
+            subject = f"{'Xoá VM' if delete else 'Nâng cấp cấu hình VM' if resize else 'Cấp phát VM'} — {project}"
         status = "Đã đóng" if updated < dt.datetime(2026, 10, 1) else rnd.choice(("Đang xử lý", "Chờ duyệt", "Đã đóng"))
-        req = {"id": str(110000 + i), "subject": subject, "template": {"name": template, "id": "3" if resize else "2"},
+        req = {"id": str(110000 + i), "subject": subject, "template": {"name": template, "id": str(DEMO_TEMPLATES.index(template) + 2)},
                "requester": {"name": f"Người yêu cầu {i % 12 + 1}", "email_id": f"user{i % 12 + 1}@corp.example",
                              "department": {"name": dept}},
                "status": {"name": status}, "approval_status": {"name": "Approved" if status == "Đã đóng" else "Pending Approval"},
