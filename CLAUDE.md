@@ -141,6 +141,32 @@ VCENTER_1_DEMO=true NETBACKUP_1_DEMO=true ...
 11. **Test**: thêm hoặc sửa logic tính toán (`capacity`, `planning`, `sizing`, `licensing`,
    `backup/analysis`, `spend/budget_plan`) thì phải có test trong `backend/tests/` với số liệu cụ thể. Chạy
    `python -m pytest tests -q` trước khi kết thúc.
+12. **Code gọn, không chép lại** (quyết định của chủ sản phẩm). Viết xong tính năng, trước khi tạo PR thì chạy `/simplify`
+   cho thay đổi đang chờ và sửa luôn các điểm nó tìm ra (tái sử dụng · đơn giản hoá · hiệu năng · sửa đúng tầng), hành vi giữ nguyên.
+   - **Dùng helper có sẵn, không viết bản riêng:**
+     - tải file về: `downloads.attachment()` / `stamp()`;
+     - mức trạng thái: `shared/levels.py` (`LEVEL_RANK`, `LEVEL_TEXT`, `worst`);
+     - PDF: `pdf_kit` (`vn`, `data_table`, `level_pill`, `short_date`);
+     - Excel: `excel_style` (`_sheet_title`, `_write_rows`, `_widths`, `to_bytes`);
+     - IP của VM: `vm_ip.attach()` (trả lại danh sách dòng; `vc_key=None` cho client backup);
+     - khoá chuẩn: `shared/identity.py`;
+     - giờ: `timeutil` (`to_iso_utc`, `to_vn_str`);
+     - các helper khác trong `shared/`.
+     Thấy cùng một đoạn ở hai nơi thì đưa về helper dùng chung trong cùng thay đổi.
+   - **Không tính thừa:**
+     - không truy vấn trong vòng lặp (N+1);
+     - không gọi lại cùng một hàm tổng hợp hai lần trong một request: tính một lần rồi truyền xuống (ví dụ `infra.summary_from`);
+     - trang chi tiết đọc đúng một đối tượng, không dựng cả danh sách rồi lọc;
+     - lọc trong SQL thay vì tải hết rồi lọc bằng Python;
+     - cache có khoá dựng một lần cho nhiều luồng.
+   - **Không để code chết:** xoá hàm / endpoint / import / CSS không còn dùng, comment cũ, alias “tên cũ” không còn ai gọi.
+     Kiểm import thừa bằng `python -m pyflakes <file đã sửa>`.
+   - **Không tạo file vá riêng:**
+     - CSS trang / module thêm vào cuối `modules.css`; luật phải đè lên `shell.css` / `marks.css` thì thêm vào cuối `marks.css`;
+     - logic mới đặt vào đúng module, không thêm file “patch” / “fix” rời rạc.
+   - Sửa đúng gốc ở tầng dùng chung thay vì thêm ngoại lệ ở từng nơi gọi.
+   - Gỡ / chuyển CSS thì chụp ảnh trước / sau ở 1440 + 390 px để chắc giao diện không đổi.
+   - Điểm `/simplify` nêu ra mà chưa sửa (thay đổi lớn, đổi hành vi) thì ghi lại trong mô tả PR.
 
 ## Lộ trình ICO v2
 
