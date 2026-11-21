@@ -39,6 +39,8 @@ const PAGES = [
       desc: 'Máy chủ Dell trong OpenManage Enterprise: trạng thái, linh kiện, ổ đĩa dự báo hỏng, firmware so baseline, bảo hành Dell ↔ Opex.', scope: ['owner'] },
     { id: 'incidents', view: 'incidents', icon: 'siren', label: 'Sự cố', title: 'Sự cố',
       desc: 'Sự cố mở / đóng theo sự kiện của datastore, snapshot, alarm, host, storage, phần cứng, capacity, backup; MTTA / MTTR theo tháng.', scope: ['owner'] },
+    { id: 'changes', view: 'changes', icon: 'history', label: 'Nhật ký thay đổi', title: 'Nhật ký thay đổi',
+      desc: 'Ai đổi gì, khi nào trên vCenter: tạo / xoá / đổi cấu hình / di chuyển VM, bật tắt, bảo trì host, HA; kèm thay đổi chỉ thấy qua so sánh snapshot.', scope: ['owner'] },
     { id: 'history', view: 'history', icon: 'trending-up', label: 'Xu hướng & biến động', title: 'Xu hướng & biến động',
       desc: 'Biến động CPU/RAM so với ngưỡng overcommit giữa các snapshot và danh sách VM thêm / bớt / đổi cấu hình.', scope: ['vcenter', 'cluster', 'host'] },
     { id: 'inventory', view: 'inventory', icon: 'server', label: 'Host & VM', title: 'Host & VM',
@@ -146,7 +148,7 @@ const MENU = [
     { key: 'health', label: 'Sức khoẻ hạ tầng', icon: 'activity', tabs: [
       ['infra-ds', '', 'Datastore'], ['infra-snap', 'snapshots', 'Snapshot VM'], ['infra-alarm', 'alarms', 'Alarm vCenter'], ['infra-health', 'hosts', 'Sức khoẻ host'], ['infra-storage', 'storage', 'Storage']] },
     { key: 'hardware', label: 'Phần cứng', icon: 'server-cog', tabs: [['hardware', '', 'Máy chủ vật lý']] },
-    { key: 'incidents', label: 'Sự cố', icon: 'siren', tabs: [['incidents', '', 'Sự cố']] },
+    { key: 'incidents', label: 'Sự cố & thay đổi', icon: 'siren', tabs: [['incidents', '', 'Sự cố'], ['changes', 'changes', 'Nhật ký thay đổi']] },
     { key: 'agenda', label: 'Lịch việc & nhắc hạn', icon: 'calendar-clock', tabs: [['agenda', '', 'Lịch việc']] },
     { key: 'simulate', label: 'Mô phỏng & quy hoạch', icon: 'git-branch', tabs: [
       ['whatif', '', 'What-if capacity'], ['planning', 'planning', 'Quy hoạch tài nguyên'], ['lic-whatif', 'license', 'What-if license']] },
@@ -223,6 +225,7 @@ const VIEWS = {
   dcassets: { section: '#viewDcAssets', render: () => callIf('renderDcAssetsView') },
   hardware: { section: '#viewHardware', render: () => callIf('renderHardwareView') },
   incidents: { section: '#viewIncidents', render: () => callIf('renderIncidentsView') },
+  changes: { section: '#viewChanges', render: () => callIf('renderChangesView') },
   owners: { section: '#viewOwners', render: () => callIf('renderOwnersView'),
     sub: { get: () => (typeof osState !== 'undefined' && osState.sub) || 'systems',
            set: (s) => { if (typeof osState !== 'undefined') osState.sub = s || 'systems'; }, fallback: 'systems' } },

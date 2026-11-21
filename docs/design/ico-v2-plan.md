@@ -98,7 +98,7 @@ itsm_label_map     (label_norm, field)                                          
 | A | 3 | Rà soát owner 6 tháng: email, xác nhận, nhắc, leo thang, đóng kỳ, thu hồi, đối chiếu kỳ sau (G3a: #114; G3b: #115) | 2 | Một kỳ demo chạy trọn, không gửi trùng |
 | B | 4 | Dell OME: sức khoẻ linh kiện, ổ dự báo hỏng, firmware, bảo hành ↔ Opex, trang Phần cứng (G4a: #116; G4b: #117; G4c: #118) | 1 | Máy bảo hành OME ≠ Opex được liệt kê |
 | B | 5 | Kho sự kiện + vòng đời sự cố, MTTA / MTTR, flapping, timeline CI (G5: #128) | 1, 4 | Thống kê sự cố theo tháng |
-| B | 6 | Event vCenter + nhật ký thay đổi + gom sự cố theo đồ thị CI | 5 | PSU lỗi + alarm + HA restart = 1 sự cố |
+| B | 6 | Event vCenter + nhật ký thay đổi + gom sự cố theo đồ thị CI (G6: #134) | 5 | PSU lỗi + alarm + HA restart = 1 sự cố |
 | C | 7 | ITSM SDP: nạp lùi, đọc bảng trong body, AI dự phòng + hàng chờ duyệt, nối yêu cầu ↔ VM / hệ thống | 1, 2 | ≥ 90 % yêu cầu VM có tài nguyên đã duyệt |
 | C | 8 | Tổng kết năm (xin → cấp → dùng) + mô hình kế hoạch năm sau → Kế hoạch ngân sách / Capex | 3, 7 | Ra số host cần mua kèm nguồn số |
 | + | 9 | Sức khoẻ sâu: lệch cấu hình, EoGS / VMSA / chứng chỉ TLS, contention `QueryPerf`, VCSA; DR theo criticality; showback | 2, 5 | — |

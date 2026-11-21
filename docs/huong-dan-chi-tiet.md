@@ -1190,6 +1190,35 @@ Menu **Vận hành → Sự cố** (`#/incidents`, chi tiết `#/incidents?id=<s
 - Lưu `ops_event` 13 tháng; sự cố giữ lại để làm thống kê.
 - API: `GET /api/incidents`, `/api/incidents/stats`, `/api/incidents/{id}`, `POST /api/incidents/{id}/ack|assign|resolve`.
 
+### Nhật ký thay đổi và gom sự cố theo đồ thị CI (ICO v2 G6)
+
+Menu **Vận hành → Sự cố & thay đổi → Nhật ký thay đổi** (`#/incidents/changes`).
+
+- **Nguồn**: event vCenter đọc cùng lượt đồng bộ, **chỉ đọc** (`eventManager.QueryEvents`).
+  - Mỗi vCenter giữ một con trỏ; lần đầu đọc lùi 24 giờ.
+  - Một lần đọc trả đủ 1.000 event thì cửa sổ được chia đôi và đọc lại.
+  - Đọc lỗi thì con trỏ không đổi, vòng sau đọc lại đúng cửa sổ đó.
+  - 12 loại event: tạo / xoá / đổi cấu hình / di chuyển VM (vMotion, DRS, relocate), bật / tắt VM, host mất kết nối, host vào /
+    ra bảo trì, HA khởi động lại VM, HA phát hiện host lỗi, alarm đổi trạng thái.
+- **Người thực hiện** là tài khoản vCenter ghi trong event; DRS / HA không có người nên ghi *hệ thống*. Lọc theo loại, người,
+  thời gian, tên đối tượng và bộ lọc Owner. VM luôn kèm IP.
+- **Chỉ thấy qua so sánh snapshot**: VM thêm / bớt / đổi cấu hình giữa hai lần đồng bộ mà không có event tương ứng (event đã quá
+  hạn lưu của vCenter hoặc chưa đọc). Phần này không có người thực hiện.
+- **Thẻ đối tượng** có mục *Thay đổi gần đây*. **Trang sự cố** có *Thay đổi trong 24 giờ trước sự cố* trên các đối tượng của sự
+  cố.
+- **Gom sự cố** dựa trên sổ CI, chỉ qua liên kết **strong** (serial, quan hệ kiểm kê):
+  - Một sự kiện mới gắn vào sự cố chưa đóng của đối tượng phụ thuộc / bị phụ thuộc, mở trong vòng `EVENT_CORRELATE_MINUTES`
+    (mặc định 15 phút) quanh giờ của sự kiện.
+  - Liên kết weak (ghép theo tên / IP) không gom.
+  - Các sự cố đã tách rời trước đó được gộp vào sự cố cũ nhất.
+  - *Gốc sự cố* là đối tượng cao nhất có sự kiện. Ví dụ PSU lỗi trên OME + alarm phần cứng host + HA khởi động lại 2 VM = 1 sự
+    cố, gốc là máy chủ vật lý.
+- **HA khởi động lại VM, HA phát hiện host lỗi, host mất kết nối** là sự kiện một lần (nguồn *Event vCenter*).
+  - Chúng mở hoặc gộp vào sự cố, nhưng không có trạng thái *hết*.
+  - Sự cố chỉ có loại sự kiện này đóng khi người dùng bấm *Đóng sự cố*.
+- `change_log` giữ 13 tháng như `ops_event`.
+- API: `GET /api/changes?kind=&user=&q=&days=`, `GET /api/ci/{id}/changes`.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**

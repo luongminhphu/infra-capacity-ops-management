@@ -196,6 +196,7 @@ class Settings(BaseSettings):
     ome_warranty_hours: int = Field(default=24)
     ome_alert_backfill_days: int = Field(default=7)          # first read of AlertService: this far back
     hw_alert_retention_months: int = Field(default=13)       # hw_alert rows older than this are purged
+    event_correlate_minutes: int = Field(default=15)          # G6: an event joins an incident of a strongly linked CI opened this recently
 
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)

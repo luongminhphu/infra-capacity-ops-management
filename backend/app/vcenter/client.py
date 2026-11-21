@@ -9,6 +9,7 @@ Output rows use the SAME camelCase field names as the frontend's
 appState.hosts / appState.vms so they can be persisted and served back to the
 UI with zero translation layer (see app/capacity.py docstring).
 """
+import datetime as dt
 import http.client
 import logging
 import socket
@@ -412,9 +413,11 @@ def collect_inventory(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Di
     return hosts, vms
 
 
-def collect_inventory_full(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+def collect_inventory_full(cfg: VCenterConfig, events_since: Optional[dt.datetime] = None
+                           ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
     """(host_rows, vm_rows, extras) in one session; extras = datastores / snapshots / alarms / health
-    (vcenter/extras.py). A failure reading the extras never loses the inventory: extras come back empty."""
+    (vcenter/extras.py) + `events` / `eventsUntil` (vcenter/events.py, from `events_since`, G6). A failure reading the
+    extras or the events never loses the inventory: they come back empty (events: None, the cursor does not move)."""
     si = _connect(cfg)
     try:
         content = si.RetrieveContent()
@@ -447,6 +450,16 @@ def collect_inventory_full(cfg: VCenterConfig) -> Tuple[List[Dict[str, Any]], Li
         except Exception:  # noqa: BLE001 — operational extras are optional; the inventory is what matters
             logger.warning("Could not build datastore / snapshot / alarm / health data for %s", cfg.key, exc_info=True)
             extra = {"datastores": [], "snapshots": [], "alarms": [], "health": [], "error": True}
+        until = dt.datetime.utcnow()
+        try:
+            from . import events as _events
+            extra["events"] = _events.read(content, events_since or until - _events.FIRST_LOOKBACK, until)
+            extra["eventsUntil"] = until
+        except (socket.timeout, TimeoutError, ConnectionError, OSError):
+            raise
+        except Exception:  # noqa: BLE001 — the change log is optional: the next round reads the same window again
+            logger.warning("Could not read vCenter events for %s", cfg.key, exc_info=True)
+            extra["events"] = None
         return host_rows, vm_rows, extra
     except (socket.timeout, TimeoutError) as exc:
         raise _timeout_error(cfg, timeout_for(cfg), exc) from exc

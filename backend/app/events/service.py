@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 SOURCES = ("capacity", "backup", "datastore", "snapshot", "alarm", "health", "storage", "hardware")
 SOURCE_FEATURE = {"backup": "backup"}
+# "vcenter" = one-off vCenter events from the change log (G6); not an inbox source
+SOURCE_NAMES = {**SOURCE_LABELS, "vcenter": "Event vCenter"}
 FLAP_OPENS = 4
 FLAP_HOURS = 6
 FLAP_PER_MESSAGE = 10                 # 10 × ≤ 190 characters: one Discord message
@@ -71,9 +73,11 @@ def current_from_items(db: Session, items: Iterable[Dict[str, Any]]) -> Dict[str
 
 # ---------------------------------------------------------------- transitions
 def record_transitions(db: Session, current: Dict[str, Current], unknown: Iterable[str] = (),
-                       now: Optional[dt.datetime] = None) -> Dict[str, int]:
+                       now: Optional[dt.datetime] = None, points: Iterable[Dict[str, Any]] = ()) -> Dict[str, int]:
     """current: {source: {event_key: (level, ci_id, title, detail)}} for every watched source; sources in `unknown` (failed this
-    round) keep their open events untouched. Idempotent: the same `current` twice writes nothing the second time. Commits."""
+    round) keep their open events untouched. Idempotent: the same `current` twice writes nothing the second time. Commits.
+    points: one-off events that open no state (G6: HA restart, host failed — {source, key, level, ciId, title, detail, at}).
+    New events (opens + points) are placed upstream first (physical server → host → VM), so a group forms in one round."""
     now = now or dt.datetime.utcnow()
     skip = set(unknown)
     open_rows = {(r.source, r.event_key): r for r in db.query(OpsEventOpen)}
@@ -90,19 +94,14 @@ def record_transitions(db: Session, current: Dict[str, Current], unknown: Iterab
                         title=title[:500], detail=(detail or "")[:2000]))
         counts[transition] += 1
 
+    fresh: List[Dict[str, Any]] = [dict(p, point=True) for p in points]
     for src, cur in current.items():
         if src in skip:
             continue
         for key, (level, ci_id, title, detail) in cur.items():
             row = open_rows.get((src, key))
             if row is None:
-                inc = _incident_for(db, incidents, by_id, src, key, ci_id, level, title, now)
-                inc.event_count += 1
-                if recent.get(key, 0) + 1 >= FLAP_OPENS:
-                    inc.flapping = True
-                db.add(OpsEventOpen(source=src, event_key=key, ci_id=ci_id, incident_id=inc.id, level=level, title=title[:500],
-                                    opened_at=now, last_seen=now))
-                event(src, key, ci_id, inc.id, level, "open", title, detail)
+                fresh.append({"source": src, "key": key, "level": level, "ciId": ci_id, "title": title, "detail": detail})
                 continue
             row.last_seen, row.title = now, title[:500]
             if row.ci_id is None and ci_id is not None:       # CI appeared after the event opened (sổ CI built later)
@@ -114,6 +113,20 @@ def record_transitions(db: Session, current: Dict[str, Current], unknown: Iterab
                 inc = by_id.get(row.incident_id)
                 if inc is not None:
                     inc.peak_level = worst(inc.peak_level, level)
+    corr = _Correlator(db, now, incidents, by_id, [f["ciId"] for f in fresh]) if fresh else None
+    for f in sorted(fresh, key=lambda f: corr.rank(f["ciId"])):
+        src, key, level, ci_id, title = f["source"], f["key"], f["level"], f["ciId"], f["title"]
+        at = f.get("at") or now
+        inc = _incident_for(db, incidents, by_id, src, key, ci_id, level, title, at, corr)        # `at` = event time
+        inc.event_count += 1
+        if not f.get("point"):
+            if recent.get(key, 0) + 1 >= FLAP_OPENS:
+                inc.flapping = True
+            db.add(OpsEventOpen(source=src, event_key=key, ci_id=ci_id, incident_id=inc.id, level=level, title=title[:500],
+                                opened_at=now, last_seen=now))
+        db.add(OpsEvent(at=at, source=src, ci_id=ci_id, incident_id=inc.id, event_key=key, level=level, transition="open",
+                        title=title[:500], detail=(f.get("detail") or "")[:2000]))
+        counts["point" if f.get("point") else "open"] += 1
     for (src, key), row in open_rows.items():
         if src in skip or src not in current or key in current[src]:
             continue
@@ -142,9 +155,13 @@ def _recent_opens(db: Session, keys: List[str], now: dt.datetime) -> Dict[str, i
     return out
 
 
-def _incident_for(db, incidents, by_id, src, key, ci_id, level, title, now) -> OpsIncident:
+def _incident_for(db, incidents, by_id, src, key, ci_id, level, title, now, corr=None) -> OpsIncident:
     group = f"ci:{ci_id}" if ci_id is not None else f"ev:{src}:{key}"[:255]
     inc = incidents.get(group)
+    if inc is None and ci_id is not None and corr is not None:
+        inc = corr.join(ci_id, now)                  # G6: an incident of a strongly linked CI opened within 15 minutes of it
+        if inc is not None:
+            incidents[group] = inc
     if inc is None:
         inc = OpsIncident(ci_id=ci_id, root_ci_id=ci_id, group_key=group, source=src, title=title[:500], status="open",
                           peak_level=level, opened_at=now, event_count=0)
@@ -154,6 +171,83 @@ def _incident_for(db, incidents, by_id, src, key, ci_id, level, title, now) -> O
     else:
         inc.peak_level = worst(inc.peak_level, level)
     return inc
+
+
+# ---------------------------------------------------------------- G6: grouping along the CI graph
+TYPE_RANK = {"physical_server": 0, "storage_array": 0, "storage_volume": 1, "cluster": 1, "hypervisor_host": 2,
+             "datastore": 2, "vm": 3, "backup_client": 4}
+
+
+class _Correlator:
+    """Joins a new event to an unresolved incident opened within EVENT_CORRELATE_MINUTES on a CI linked to it by STRONG
+    dependency links (upstream: what it runs on; downstream: what runs on it). Weak links (name / IP guesses) never group.
+    Several such incidents (e.g. two VMs restarted before their host's alarm arrived) are merged into the oldest; the
+    incident's root becomes the most upstream CI that has an event (PSU of the physical server, not the VM)."""
+
+    def __init__(self, db: Session, now: dt.datetime, incidents: Dict[str, OpsIncident], by_id: Dict[int, OpsIncident],
+                 ci_ids: Iterable[Optional[int]]):
+        from ..cmdb.impact import DEPENDS_ON_SOURCE, DEPENDS_ON_TARGET
+        from ..cmdb.models import Ci, CiLink
+        from ..config import get_settings
+        self.db, self.incidents, self.by_id = db, incidents, by_id
+        self.window = dt.timedelta(minutes=get_settings().event_correlate_minutes)
+        self.up: Dict[int, Set[int]] = defaultdict(set)      # ci → what it depends on
+        self.down: Dict[int, Set[int]] = defaultdict(set)
+        for f, t, rel in (db.query(CiLink.from_ci, CiLink.to_ci, CiLink.relation)
+                          .filter(CiLink.confidence == "strong", CiLink.relation.in_(DEPENDS_ON_TARGET + DEPENDS_ON_SOURCE))):
+            dep, on = (f, t) if rel in DEPENDS_ON_TARGET else (t, f)
+            self.up[dep].add(on)
+            self.down[on].add(dep)
+        ids = {i for i in ci_ids if i} | {x for i in by_id.values() for x in (i.ci_id, i.root_ci_id) if x}
+        self.types = dict(db.query(Ci.id, Ci.type).filter(Ci.id.in_(list(ids) or [-1]))) if ids else {}
+
+    def rank(self, ci_id: Optional[int]) -> int:
+        return TYPE_RANK.get(self.types.get(ci_id), 5)
+
+    def _reach(self, ci_id: int, graph: Dict[int, Set[int]], depth: int = 4) -> Set[int]:
+        seen, frontier = set(), {ci_id}
+        for _ in range(depth):
+            frontier = {n for c in frontier for n in graph.get(c, ())} - seen - {ci_id}
+            if not frontier:
+                break
+            seen |= frontier
+        return seen
+
+    def join(self, ci_id: int, at: dt.datetime) -> Optional[OpsIncident]:
+        """`at` = time of the event (a vCenter event read late keeps its own time): incidents opened within the window
+        around it count."""
+        related = self._reach(ci_id, self.up) | self._reach(ci_id, self.down)
+        hits = sorted({i.id: i for i in self.by_id.values()
+                       if i.status != "resolved" and abs(i.opened_at - at) <= self.window and ({i.ci_id, i.root_ci_id} & related)}.values(),
+                      key=lambda i: (i.opened_at, i.id))
+        if not hits:
+            return None
+        target = hits[0]
+        roots = {target.root_ci_id or target.ci_id, ci_id}
+        for other in hits[1:]:
+            roots.add(other.root_ci_id or other.ci_id)
+            self._merge(other, target)
+        roots.discard(None)
+        # the most upstream CI with an event: none of the other roots is above it
+        top = [r for r in roots if not (self._reach(r, self.up) & (roots - {r}))]
+        target.root_ci_id = min(top, key=lambda r: (self.rank(r), r)) if top else target.root_ci_id
+        return target
+
+    def _merge(self, other: OpsIncident, target: OpsIncident) -> None:
+        self.db.flush()
+        self.db.query(OpsEvent).filter(OpsEvent.incident_id == other.id).update({"incident_id": target.id}, synchronize_session="evaluate")
+        self.db.query(OpsEventOpen).filter(OpsEventOpen.incident_id == other.id).update({"incident_id": target.id},
+                                                                                         synchronize_session="evaluate")
+        target.event_count += other.event_count
+        target.peak_level = worst(target.peak_level, other.peak_level)
+        target.flapping = bool(target.flapping or other.flapping)
+        if other.acked_at and not target.acked_at:
+            target.acked_at, target.acked_by = other.acked_at, other.acked_by
+        target.assignee = target.assignee or other.assignee
+        for k in [k for k, v in self.incidents.items() if v is other]:
+            self.incidents[k] = target
+        self.by_id.pop(other.id, None)
+        self.db.delete(other)                   # created minutes ago by the same round(s); its events now belong to target
 
 
 def notify_flapping(db: Session, post=None, now: Optional[dt.datetime] = None) -> int:
@@ -196,9 +290,40 @@ def notify_flapping(db: Session, post=None, now: Optional[dt.datetime] = None) -
     return sum(1 for i in pending if i.flap_alerted)
 
 
+def _points(db: Session) -> List[Dict[str, Any]]:
+    """Change-log events that are incidents by themselves (HA restart, host failed / lost) not turned into events yet;
+    marked handled here (committed with the transitions)."""
+    from .changes import KIND_LABELS, POINT_LEVEL
+    from .models import ChangeLog
+    rows = (db.query(ChangeLog).filter(ChangeLog.handled.is_(False), ChangeLog.kind.in_(list(POINT_LEVEL)))
+            .order_by(ChangeLog.at, ChangeLog.id).limit(500).all())
+    for r in rows:
+        r.handled = True
+    return [{"source": "vcenter", "key": f"vce|{r.vcenter_key}|{r.vc_event_id}", "level": POINT_LEVEL[r.kind], "ciId": r.ci_id,
+             "title": f"{KIND_LABELS[r.kind]}: {r.object_name or '—'}", "detail": r.message or "", "at": r.at} for r in rows]
+
+
+def _backfill_ci(db: Session) -> None:
+    """Change-log rows stored during a sync before the CI existed (first sync, VM created this round): the CI build of this
+    round has run since, so look them up again (last 2 days only)."""
+    from ..cmdb.models import vc_key
+    from .models import ChangeLog
+    rows = (db.query(ChangeLog).filter(ChangeLog.ci_id.is_(None), ChangeLog.object_name.isnot(None),
+                                       ChangeLog.object_type.in_(("vm", "host")),
+                                       ChangeLog.at >= dt.datetime.utcnow() - dt.timedelta(days=2)).limit(5000).all())
+    if not rows:
+        return
+    resolve = CiResolver(db)
+    for r in rows:
+        r.ci_id = resolve({"type": "vm", "name": r.object_name, "vc": r.vcenter_key} if r.object_type == "vm"
+                          else {"type": "hypervisor_host", "key": vc_key(r.vcenter_key, r.object_name)})
+
+
 def run(db: Session, items: List[Dict[str, Any]], errors: Iterable[str], post=None) -> Dict[str, int]:
-    """Leader round: inbox items already computed for the Discord alerts → transitions + flapping alert."""
-    counts = record_transitions(db, current_from_items(db, items), [e for e in errors if e in SOURCES])
+    """Leader round: inbox items already computed for the Discord alerts + one-off vCenter events → transitions,
+    grouping along the CI graph, flapping alert."""
+    _backfill_ci(db)
+    counts = record_transitions(db, current_from_items(db, items), [e for e in errors if e in SOURCES], points=_points(db))
     counts["flapAlerted"] = notify_flapping(db, post)
     return counts
 
@@ -206,10 +331,11 @@ def run(db: Session, items: List[Dict[str, Any]], errors: Iterable[str], post=No
 def purge(db: Session, now: Optional[dt.datetime] = None) -> int:
     """Events older than RETENTION_MONTHS (incidents stay: they are the monthly statistics)."""
     from ..collectors.retention import months_ago
+    from .changes import purge as purge_changes
     cutoff = months_ago(now or dt.datetime.utcnow(), RETENTION_MONTHS)
     n = db.query(OpsEvent).filter(OpsEvent.at < cutoff).delete(synchronize_session=False)
     db.commit()
-    return n
+    return n + purge_changes(db, cutoff)
 
 
 # ---------------------------------------------------------------- reads
@@ -246,14 +372,15 @@ def _ci_names(db: Session, ids: Iterable[int]) -> Dict[int, Dict[str, Any]]:
 
 
 def incident_out(i: OpsIncident, cis: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
-    return {"id": i.id, "title": i.title, "source": i.source, "sourceLabel": SOURCE_LABELS.get(i.source, i.source), "status": i.status, "level": i.peak_level, "ci": cis.get(i.ci_id),
+    return {"id": i.id, "title": i.title, "source": i.source, "sourceLabel": SOURCE_NAMES.get(i.source, i.source), "status": i.status, "level": i.peak_level, "ci": cis.get(i.ci_id),
+            "root": cis.get(i.root_ci_id) if i.root_ci_id and i.root_ci_id != i.ci_id else None,
             "openedAt": _iso(i.opened_at), "ackedAt": _iso(i.acked_at), "ackedBy": i.acked_by, "resolvedAt": _iso(i.resolved_at),
             "resolvedBy": i.resolved_by, "assignee": i.assignee, "eventCount": i.event_count, "flapping": bool(i.flapping),
             "note": i.note}
 
 
 def event_out(e: OpsEvent) -> Dict[str, Any]:
-    return {"id": e.id, "at": _iso(e.at), "source": e.source, "sourceLabel": SOURCE_LABELS.get(e.source, e.source), "ciId": e.ci_id, "incidentId": e.incident_id, "level": e.level,
+    return {"id": e.id, "at": _iso(e.at), "source": e.source, "sourceLabel": SOURCE_NAMES.get(e.source, e.source), "ciId": e.ci_id, "incidentId": e.incident_id, "level": e.level,
             "transition": e.transition, "title": e.title, "detail": e.detail}
 
 
@@ -277,9 +404,9 @@ def list_incidents(db: Session, status: Optional[str] = None, level: Optional[st
     if ids is not None:
         q = q.filter(OpsIncident.ci_id.in_(list(ids) or [-1]))
     rows = q.order_by(OpsIncident.opened_at.desc(), OpsIncident.id.desc()).limit(limit + 1).all()
-    cis = _ci_names(db, (r.ci_id for r in rows[:limit]))
+    cis = _ci_names(db, [x for r in rows[:limit] for x in (r.ci_id, r.root_ci_id)])
     return {"items": [incident_out(r, cis) for r in rows[:limit]], "truncated": len(rows) > limit,
-            "sources": [{"key": k, "label": SOURCE_LABELS[k]} for k in SOURCES if k not in hidden]}
+            "sources": [{"key": k, "label": SOURCE_NAMES[k]} for k in (*SOURCES, "vcenter") if k not in hidden]}
 
 
 def get_incident(db: Session, iid: int) -> OpsIncident:
@@ -291,8 +418,11 @@ def get_incident(db: Session, iid: int) -> OpsIncident:
 
 def incident_detail(db: Session, iid: int) -> Dict[str, Any]:
     inc = get_incident(db, iid)
+    from . import changes
     evs = db.query(OpsEvent).filter(OpsEvent.incident_id == iid).order_by(OpsEvent.at, OpsEvent.id).limit(1000).all()
-    return {**incident_out(inc, _ci_names(db, [inc.ci_id])), "events": [event_out(e) for e in evs]}
+    cis = {inc.ci_id, inc.root_ci_id} | {e.ci_id for e in evs}
+    return {**incident_out(inc, _ci_names(db, [inc.ci_id, inc.root_ci_id])), "events": [event_out(e) for e in evs],
+            "changesBefore": changes.before(db, cis, inc.opened_at)}        # G6: what changed on these CIs in the 24 h before
 
 
 def ci_timeline(db: Session, ci_id: int, limit: int = 300) -> List[Dict[str, Any]]:
@@ -364,7 +494,7 @@ def stats(db: Session, months: int = 6, osc=None, now: Optional[dt.datetime] = N
                 g[k]["tta"].append((r.acked_at - r.opened_at).total_seconds() / 60)
             if r.resolved_at:
                 g[k]["ttr"].append((r.resolved_at - r.opened_at).total_seconds() / 60)
-        return [{"key": k, "label": SOURCE_LABELS.get(k, k), "incidents": len(v["n"]), "crit": sum(1 for r in v["n"] if r.peak_level == "crit"),
+        return [{"key": k, "label": SOURCE_NAMES.get(k, k), "incidents": len(v["n"]), "crit": sum(1 for r in v["n"] if r.peak_level == "crit"),
                  "open": sum(1 for r in v["n"] if r.status != "resolved"), "mttaMin": _avg_min(v["tta"]), "mttrMin": _avg_min(v["ttr"])}
                 for k, v in sorted(g.items())]
     top = Counter(r.ci_id for r in rows if r.ci_id).most_common(10)

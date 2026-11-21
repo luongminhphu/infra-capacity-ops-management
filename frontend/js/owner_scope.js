@@ -6,7 +6,7 @@
    ========================================================= */
 const OWNER_SCOPED_PATHS = [/^\/data\/latest(\?|$)/, /^\/compliance\/findings(\?|$)/, /^\/export\/csv(\?|$)/,
   /^\/reports\/(pdf|brief|planning)(\?|$)/, /^\/dashboard\/executive(\?|$)/, /^\/backup\/(summary|report\/pdf|report\/xlsx)(\?|$)/, /^\/infra\/(snapshots|alarms)(\?|$)/,
-  /^\/incidents(\/stats)?(\?|$)/];
+  /^\/incidents(\/stats)?(\?|$)/, /^\/changes(\?|$)/];
 const OWNER_SCOPE_KEYS = ['systems', 'owners', 'departments', 'projects', 'criticality'];
 const ownerScope = { value: null, systems: null, serverLabel: '' };
 

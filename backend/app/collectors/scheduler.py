@@ -160,9 +160,15 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
     started_at = dt.datetime.utcnow()
     try:
         platform = getattr(cfg, "platform", "vmware")
+        from ..events import changes
+        events_since = changes.cursor(db, cfg.key)            # G6: vCenter events are read from here on
+        db.rollback()                                        # no transaction stays open while vCenter answers
         if cfg.demo:
             host_rows, vm_rows = demo_generator.collect_inventory(cfg)
             extras = demo_generator.collect_extras(cfg, host_rows, vm_rows)
+            until = dt.datetime.utcnow()
+            extras["events"] = demo_generator.collect_events(cfg, host_rows, vm_rows, events_since or until - dt.timedelta(hours=24), until)
+            extras["eventsUntil"] = until
         elif platform in ("proxmox", "nutanix"):
             from ..hypervisors import PLATFORM_LABELS, nutanix, proxmox
             from ..storage import StorageError
@@ -173,7 +179,7 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
                     f"Không đọc được {PLATFORM_LABELS[platform]} '{cfg.name}' ({cfg.host}): {exc}") from exc
         else:
             # same session: inventory + datastores / snapshots / alarms / host health (read-only)
-            host_rows, vm_rows, extras = vcenter_client.collect_inventory_full(cfg)
+            host_rows, vm_rows, extras = vcenter_client.collect_inventory_full(cfg, events_since)
         # The run row is written only once vCenter has answered: no DB transaction (and, on
         # SQLite, no database write lock) stays open while waiting on the network.
         run = SnapshotRun(vcenter_key=cfg.key, source="live", status="ok", started_at=started_at)
@@ -220,6 +226,7 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
 
         from .. import infra
         infra.store(db, cfg.key, extras, now)      # latest state + datastore usage history (metric_points)
+        changes.store(db, cfg.key, extras.get("events"), extras.get("eventsUntil"))     # change log (G6), deduplicated
 
         run.status = "ok"
         run.finished_at = dt.datetime.utcnow()
