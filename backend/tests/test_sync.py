@@ -164,9 +164,9 @@ def test_bulk_retrieval_builds_same_rows(monkeypatch):
     monkeypatch.setattr(vc, "_connect", lambda cfg: si)
     monkeypatch.setattr(vc, "Disconnect", lambda si: None)
     hosts, vms = vc.collect_inventory(NS(key="vc-x"))
-    # 6 object types (+ Folder, ResourcePool since G2b), the 3-host / 3-folder types span 2 pages → 8 calls in
-    # total, whatever the number of VMs.
-    assert collector.calls == 8
+    # 6 object types (+ Folder, ResourcePool since G2b), the 3-host / 3-folder types span 2 pages → 8 calls, + 3 batched
+    # reads of the configuration baseline (G9a: host config pages, devices of powered-on VMs) — whatever the number of VMs.
+    assert collector.calls == 11
     by_name = {h["host"]: h for h in hosts}
     assert by_name["esx01"]["cluster"] == "PROD" and by_name["esx01"]["clusterHa"] is True
     assert by_name["esx01"]["clusterDrs"] is False and by_name["esx01"]["cores"] == 32.0
