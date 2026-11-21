@@ -151,3 +151,18 @@ def test_ensure_schema_adds_ai_runs_cost_column(app_):  # noqa: F811
         conn.execute(text("ALTER TABLE ai_runs DROP COLUMN cost_usd_micros"))
     ensure_schema()
     assert "cost_usd_micros" in {c["name"] for c in inspect(engine).get_columns("ai_runs")}
+
+
+def test_inbox_cap_only_limits_what_people_see(monkeypatch):
+    """Audit: the 60-per-source cap of the Hộp việc made items past #60 look cleared to Discord and the event store."""
+    from app import inbox
+    many = [inbox.item("alarm", "bad", f"alarm|{i}", f"Alarm {i:03d}") for i in range(75)]
+    monkeypatch.setattr(inbox, "PROVIDERS", [("alarm", lambda db: many, False)])
+    db = SessionLocal()
+    try:
+        full, _ = inbox._compute(db, dt.date(2026, 11, 2))
+        shown, _ = inbox.collect(db, use_cache=True)
+    finally:
+        db.close()
+        inbox.invalidate()
+    assert len(full) == 75 and len(shown) == inbox.MAX_PER_SOURCE

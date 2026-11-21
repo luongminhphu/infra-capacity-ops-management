@@ -24,7 +24,7 @@ from ..database import SessionLocal
 from ..features import get_features, is_on
 from . import fiscal, service, settings as spend_settings
 from .models import OpexItem, SpendNotifyChannel, SpendReminderLog, SpendSmtpConfig, SpendVendor
-from .notify import NotifyError, ReminderLine, send
+from .notify import NotifyError, PartialDelivery, ReminderLine, send
 
 logger = logging.getLogger("vco.spend.reminder")
 
@@ -112,9 +112,11 @@ def _run(db: Session, now: dt.datetime) -> Dict[str, object]:
         if not rows:
             continue
         lines = [line_for(by_id[r.opex_id], vendors.get(by_id[r.opex_id].vendor_id), today, cfg.app_base_url) for r in rows]
-        error = None
+        error = partial = None
         try:
             send(ch, smtp_cfg, lines)
+        except PartialDelivery as exc:       # some of it went out: a retry would repeat that part → recorded as sent
+            partial = str(exc)
         except NotifyError as exc:
             error = str(exc)
         except Exception as exc:  # noqa: BLE001 — a bug in one channel must not stop the others
@@ -125,7 +127,7 @@ def _run(db: Session, now: dt.datetime) -> Dict[str, object]:
             if error:
                 r.status, r.last_error = "failed", error[:500]
             else:
-                r.status, r.sent_at, r.last_error = "sent", dt.datetime.utcnow(), None
+                r.status, r.sent_at, r.last_error = "sent", dt.datetime.utcnow(), (partial or "")[:500] or None
         summary["failed" if error else "sent"] += len(rows)
         db.commit()
         if error:
