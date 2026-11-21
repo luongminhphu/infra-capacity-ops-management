@@ -283,7 +283,34 @@ def collect_extras(cfg: VCenterConfig, host_rows: List[Dict[str, Any]], vm_rows:
         a["entityMoid"] = f"{a['entityType']}-{1001 + i}"
         a["vimType"] = vim_type.get(a["entityType"])
     return {"datastores": datastores, "snapshots": snapshots, "alarms": alarms, "health": health,
-            "vcenterUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cfg.key}/vcenter"))}
+            "vcenterUuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cfg.key}/vcenter")), "config": collect_config(host_rows, vm_rows)}
+
+
+def collect_config(host_rows: List[Dict[str, Any]], vm_rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Configuration facts (vcenter/config_facts.py shape) with fixed deviations: SSH on one host, ESXi Shell on another,
+    lockdown off, no NTP, no syslog, one cluster with a different ESXi build, HA admission control off, DRS partial,
+    old VMware Tools / hardware version and a mounted ISO on a few VMs."""
+    hosts = []
+    first_cluster = host_rows[0]["cluster"] if host_rows else None
+    last_of_first = max((i for i, h in enumerate(host_rows) if h["cluster"] == first_cluster), default=-1)
+    for i, h in enumerate(host_rows):
+        hosts.append({"host": h["host"], "cluster": h["cluster"], "facts": {
+            "sshRunning": i == 0, "sshPolicy": "on" if i == 0 else "off", "shellRunning": i == 1, "shellPolicy": "off",
+            "lockdown": "lockdownDisabled" if i in (0, 2) else "lockdownNormal",
+            "ntpServers": [] if i == 3 else ["ntp1.corp.local", "ntp2.corp.local"], "ntpRunning": i != 3,
+            "syslogHost": "" if i == 4 else "udp://syslog.corp.local:514",
+            "build": "21424296" if i == last_of_first else str(h.get("esxiBuild") or "24022510"), "version": h.get("esxiVersion")}})
+    clusters = []
+    for i, c in enumerate(dict.fromkeys(h["cluster"] for h in host_rows)):
+        clusters.append({"cluster": c, "facts": {"ha": True, "admissionControl": i != 0, "drs": True,
+                                                 "drsBehavior": "partiallyAutomated" if i == 1 else "fullyAutomated"}})
+    vms = []
+    for i, v in enumerate(vm_rows):
+        on = bool(v.get("isPoweredOn"))
+        vms.append({"vm": v["vm"], "cluster": v["cluster"], "facts": {
+            "poweredOn": on, "toolsStatus": "guestToolsNeedUpgrade" if i % 7 == 3 else "guestToolsCurrent",
+            "hwVersion": 13 if i % 11 == 5 else 19, "isos": ["[DS01] iso/rhel-9.4.iso"] if on and i % 13 == 6 else []}})
+    return {"hosts": hosts, "clusters": clusters, "vms": vms}
 
 
 DEMO_USERS = ("administrator@vsphere.local", "CORP\\nguyen.van.a", "CORP\\tran.thi.b", "svc-veeam@vsphere.local")
