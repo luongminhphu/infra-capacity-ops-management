@@ -226,6 +226,8 @@ def _sync_vcenter_locked(db: Session, cfg: VCenterConfig, settings: Settings) ->
 
         from .. import infra
         infra.store(db, cfg.key, extras, now)      # latest state + datastore usage history (metric_points)
+        from ..baseline import service as baseline
+        baseline.store(db, cfg.key, extras, now)    # configuration facts (G9a), evaluated on read
         changes.store(db, cfg.key, extras.get("events"), extras.get("eventsUntil"))     # change log (G6), deduplicated
 
         run.status = "ok"

@@ -27,7 +27,7 @@ LEVEL_RANK = {k: i for i, k in enumerate(LEVELS)}
 LEVEL_LABELS = {"crit": "VƯỢT NGƯỠNG", "bad": "CẢNH BÁO", "warn": "THEO DÕI", "task": "Chờ xử lý", "info": "Thông tin"}
 SOURCE_LABELS = {"capacity": "Capacity", "backup": "Backup", "datastore": "Datastore", "snapshot": "Snapshot VM",
                  "alarm": "Alarm vCenter", "health": "Sức khoẻ host", "storage": "Storage", "asset": "Thiết bị Data Center", "license": "License", "spend": "Chi phí & hợp đồng",
-                 "system": "Hệ thống", "review": "Rà soát owner", "hardware": "Phần cứng máy chủ"}
+                 "system": "Hệ thống", "review": "Rà soát owner", "hardware": "Phần cứng máy chủ", "config": "Lệch cấu hình"}
 CACHE_SECONDS = 60
 MAX_PER_SOURCE = 60
 PUSH_LEVEL_PCT = 90.0
@@ -397,6 +397,33 @@ def health_items(db: Session) -> List[Dict[str, Any]]:
     return out
 
 
+def config_items(db: Session) -> List[Dict[str, Any]]:
+    """Baseline deviations (G9a): one item per host / cluster deviation; VM deviations grouped per rule and cluster."""
+    from .baseline import service as baseline
+    rep = baseline.report(db)
+    out, vm_groups = [], {}
+    for f in rep["findings"]:
+        if f["scope"] == "vm":
+            vm_groups.setdefault((f["vcenterKey"], f["cluster"] or "", f["rule"]), []).append(f)
+            continue
+        ci = {"type": "hypervisor_host" if f["scope"] == "host" else "cluster", "key": vc_key(f["vcenterKey"], f["entity"])}
+        out.append(item("config", f["level"], _key("cfg", f["code"], f["level"]), f"{f['scope'] == 'host' and 'Host' or 'Cluster'} {f['entity']}: chưa đạt “{f['label']}”",
+                        f"{f['detail']} · mã {f['code']}", page="infra-config", query=f"q={quote(f['entity'])}", page_label="Xem lệch cấu hình",
+                        alert_key=_key("cfg", f["code"]), ci=ci,
+                        facts=_facts(_fact("Mã", f["code"]), _fact("vCenter", f["vcenterKey"]), _fact("Cluster", f.get("cluster"))),
+                        links=_entity_link(f["scope"], f["entity"], f["vcenterKey"])))
+    for (vc, cluster, rule), rows in vm_groups.items():
+        lv = rows[0]["level"]
+        names = ", ".join(f"{r['entity']}{' (' + r['ip'] + ')' if r.get('ip') else ''}" for r in rows[:8]) + (" …" if len(rows) > 8 else "")
+        out.append(item("config", lv, _key("cfg", vc, cluster, rule, lv), f"{len(rows)} VM ở cluster {cluster or '—'}: chưa đạt “{rows[0]['label']}”",
+                        names, page="infra-config", query=f"rule={quote(rule)}&q={quote(cluster)}", page_label="Xem lệch cấu hình",
+                        alert_key=_key("cfg", vc, cluster, rule),
+                        ci={"type": "cluster", "key": vc_key(vc, cluster)} if cluster else None,
+                        events=[_event(lv, f"{r['entity']}", f"{r['detail']} · mã {r['code']}", entity={"type": "vm", "name": r["entity"], "vc": vc})
+                                for r in rows]))
+    return out
+
+
 def storage_items(db: Session) -> List[Dict[str, Any]]:
     from . import infra
     out = []
@@ -578,7 +605,7 @@ PROVIDERS: List[Tuple[str, Callable[..., List[Dict[str, Any]]], bool]] = [
     ("datastore", datastore_items, False), ("snapshot", snapshot_items, False),
     ("alarm", alarm_items, False), ("health", health_items, False), ("storage", storage_items, False), ("asset", asset_items, True),
     ("license", license_items, True), ("spend", spend_items, True), ("system", system_items, False),
-    ("review", review_items, True), ("hardware", hardware_items, False),
+    ("review", review_items, True), ("hardware", hardware_items, False), ("config", config_items, False),
 ]
 
 _cache: Dict[str, Any] = {"at": 0.0, "items": None, "errors": []}

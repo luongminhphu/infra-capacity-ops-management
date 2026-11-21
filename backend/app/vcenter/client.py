@@ -450,6 +450,15 @@ def collect_inventory_full(cfg: VCenterConfig, events_since: Optional[dt.datetim
         except Exception:  # noqa: BLE001 — operational extras are optional; the inventory is what matters
             logger.warning("Could not build datastore / snapshot / alarm / health data for %s", cfg.key, exc_info=True)
             extra = {"datastores": [], "snapshots": [], "alarms": [], "health": [], "error": True}
+        try:
+            from . import config_facts
+            hosts_o, compute_o, vms_o, _ds = fetched
+            extra["config"] = config_facts.read(content, hosts_o, compute_o, vms_o, host_names(hosts_o, compute_o))
+        except (socket.timeout, TimeoutError, ConnectionError, OSError):
+            raise
+        except Exception:  # noqa: BLE001 — the baseline is optional: None keeps the previous facts (G9a)
+            logger.warning("Could not read configuration facts for %s", cfg.key, exc_info=True)
+            extra["config"] = None
         until = dt.datetime.utcnow()
         try:
             from . import events as _events

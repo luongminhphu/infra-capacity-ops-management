@@ -84,6 +84,7 @@ function entityHostHtml(d) {
     ${cl ? `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Cluster ${esc(cl.name)} ${uiPill(cl.overall.cls, cl.overall.text)}</div>
       ${enDl([['Host', enVal(cl.hosts)], ['VM', enVal(cl.vms)], ['CPU', enPct(cl.cpuPct)], ['RAM', enPct(cl.ramPct)],
               ['HA', cl.ha === true ? 'Bật' : cl.ha === false ? 'Tắt' : '—'], ['DRS', cl.drs === true ? 'Bật' : cl.drs === false ? 'Tắt' : '—']])}</section>` : ''}
+    ${enConfigHtml(d.cfgFindings)}
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>
     ${dev}
     <section class="table-card"><div class="panel-title" role="heading" aria-level="2">VM trên host (${esc(d.vms.length)})</div>
@@ -115,6 +116,7 @@ function entityVmHtml(d) {
     ${backup}
     ${enSystemHtml(d)}
     ${enItsmHtml(d.itsm)}
+    ${enConfigHtml(d.cfgFindings)}
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
 }
 

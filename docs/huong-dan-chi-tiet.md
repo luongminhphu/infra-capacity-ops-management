@@ -276,7 +276,7 @@ Mọi file xuất của app ở một chỗ, chia theo nhóm:
 | Nhóm | Báo cáo |
 |---|---|
 | Capacity & vận hành | Báo cáo Vận hành / Kỹ thuật (PDF), danh sách host & VM (Excel), dữ liệu tổng hợp (CSV) |
-| **Hạ tầng & phần cứng** | **Sức khoẻ hạ tầng** (PDF + Excel, mới), **Phần cứng máy chủ Dell OME** (PDF + Excel; lọc mức, hạn bảo hành), **Sổ CI** (Excel, mới; lọc loại / trạng thái) |
+| **Hạ tầng & phần cứng** | **Sức khoẻ hạ tầng** (PDF + Excel, mới), **Baseline cấu hình** (PDF + Excel), **Phần cứng máy chủ Dell OME** (PDF + Excel; lọc mức, hạn bảo hành), **Sổ CI** (Excel, mới; lọc loại / trạng thái) |
 | **Hệ thống & Owner** | **VM theo hệ thống** (PDF + Excel), **Hệ thống & Owner** (Excel nhập lại được), **Kết quả rà soát owner** theo kỳ (PDF + Excel; chỉ admin / quản trị Hệ thống & Owner) |
 | Quy hoạch & Sizing | Quy hoạch tài nguyên (PDF), Nhu cầu năm & kế hoạch năm sau (PDF, Excel), Sizing (PDF đầy đủ / rút gọn, Excel, mẫu nhập) |
 | License & Inventory | Tổng quan license (PDF), đánh giá license, ESXi & phần cứng, HĐH guest (Excel) |
@@ -1343,6 +1343,36 @@ thì dòng thành dự án Capex nháp.
 
 API: `GET /api/itsm/annual?year=`, `PUT /api/itsm/annual/{năm kế hoạch}/inputs` (admin), `POST /api/itsm/annual/{năm kế hoạch}/budget`
 (Chi phí — Biên tập), `GET /api/itsm/annual/report.pdf|xlsx?year=`.
+
+### Baseline cấu hình ESXi / cluster / VM (ICO v2 G9a)
+
+Menu **Vận hành → Sức khoẻ hạ tầng → Cấu hình** (`#/health/config`). Cấu hình đọc trong cùng phiên kiểm kê vCenter, **chỉ đọc**
+(PropertyCollector; syslog qua `QueryOptions`, cũng là lời gọi đọc). Proxmox / Nutanix không có baseline nên không bao giờ báo lệch
+kiểu VMware. Mục không đọc được (tài khoản thiếu quyền, host cũ) không tính là lệch.
+
+| Quy tắc | Phạm vi | Mức mặc định | Đạt khi |
+|---|---|---|---|
+| SSH trên ESXi tắt | Host | CẢNH BÁO | Dịch vụ TSM-SSH không chạy và không tự khởi động |
+| ESXi Shell tắt | Host | CẢNH BÁO | Dịch vụ TSM không chạy và không tự khởi động |
+| Lockdown mode bật | Host | THEO DÕI | Normal hoặc strict |
+| NTP | Host | CẢNH BÁO | Có ít nhất 1 server và ntpd đang chạy |
+| Syslog tập trung | Host | THEO DÕI | `Syslog.global.logHost` có giá trị |
+| HA + admission control | Cluster | CẢNH BÁO | Cả hai bật |
+| DRS | Cluster | THEO DÕI | Bật, fully automated |
+| Cùng build ESXi | Cluster | THEO DÕI | Mọi host trong cluster (cùng vCenter) một build |
+| VMware Tools | VM đang chạy | THEO DÕI | Current / unmanaged (open-vm-tools) |
+| Phiên bản phần cứng VM | VM | THEO DÕI | ≥ vmx tối thiểu (mặc định 14, sửa được) |
+| ISO đang gắn | VM đang chạy | THEO DÕI | Không có CD-ROM nối với file ISO |
+
+- Mỗi lệch có **mã đối soát** `CFG-XXXXX` ổn định (FNV-1a của quy tắc + vCenter + cluster + đối tượng).
+- **Admin** bật / tắt quy tắc, đổi mức và tham số ngay trên trang — áp dụng ngay vì quy tắc được đánh giá khi đọc.
+- **Chấp nhận có hạn**: cho một đối tượng hoặc cả cluster, có lý do và ngày hết hạn (tối đa 1 năm). Hết hạn thì lệch hiện lại.
+- Hộp việc nguồn *Lệch cấu hình*: host / cluster mỗi lệch một mục; VM gom theo quy tắc + cluster. Sự kiện / sự cố G5 gắn CI.
+  Gửi Discord: tắt mặc định, bật ở Cài đặt → Cảnh báo (nguồn *Lệch cấu hình*).
+- Thẻ host / VM có khối *Cấu hình*. Báo cáo PDF + Excel ở trang và ở Trung tâm báo cáo (nhóm Hạ tầng & phần cứng).
+
+API: `GET /api/baseline`, `PUT /api/baseline/rules/{rule}`, `POST /api/baseline/exceptions`, `DELETE /api/baseline/exceptions/{id}`
+(ghi: admin), `GET /api/baseline/report.pdf|xlsx`.
 
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 

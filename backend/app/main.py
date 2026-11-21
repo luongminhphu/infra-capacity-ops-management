@@ -20,6 +20,7 @@ from .routers import admin, ai_admin, ai_data as ai_data_router, report_archive 
 from .routers import dc_assets as dc_assets_router
 from .routers import cmdb as cmdb_router
 from .routers import incidents as incidents_router
+from .routers import baseline as baseline_router
 from .routers import itsm as itsm_router
 from .routers import hardware as hardware_router
 from .routers import owner_rules as owner_rules_router
@@ -169,6 +170,7 @@ app.include_router(bom_router.router)
 app.include_router(dc_assets_router.router)
 app.include_router(cmdb_router.router)
 app.include_router(incidents_router.router)
+app.include_router(baseline_router.router)
 app.include_router(incidents_router.changes_router)
 app.include_router(itsm_router.router)
 app.include_router(hardware_router.router)
