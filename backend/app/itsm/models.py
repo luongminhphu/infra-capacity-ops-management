@@ -3,8 +3,8 @@
 itsm_request keeps one row per request (UNIQUE source + request id), updated in place when SDP changes it; the cleaned
 description is stored (≤ 64 KB) so a better parser (G7b) can re-read it without calling SDP again. itsm_source_state keeps
 the read cursor and the backfill progress of each source."""
-from sqlalchemy import (BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, Index, Integer, String, Text,
-                        UniqueConstraint)
+from sqlalchemy import (BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String,
+                        Text, UniqueConstraint)
 
 from ..models import Base, utcnow
 from ..shared.schema import in_check as _in
@@ -64,6 +64,49 @@ class ItsmRequest(Base):
     fetched_at = Column(DateTime, nullable=False, default=utcnow)
 
 
+LINE_FIELDS = ("vm_name", "env", "os", "vcpu", "ram_gb", "disk_gb", "qty", "project")
+# VM reconfiguration: the As-is configuration next to the To-be one (vcpu / ram_gb / disk_gb) → the change
+BEFORE_FIELDS = ("vcpu_before", "ram_gb_before", "disk_gb_before")
+STORED_FIELDS = LINE_FIELDS + BEFORE_FIELDS
+
+
+class ItsmRequestLine(Base):
+    """One VM (or one resource change) of a request, read from the body table, by AI (status review) or by a person."""
+    __tablename__ = "itsm_request_line"
+    __table_args__ = (UniqueConstraint("request_id", "line_no", name="uq_itsm_request_line"),)
+
+    id = Column(Integer, primary_key=True)
+    request_id = Column(Integer, ForeignKey("itsm_request.id", ondelete="CASCADE"), nullable=False, index=True)
+    line_no = Column(Integer, nullable=False)
+    vm_name = Column(String(255))
+    env = Column(String(64))
+    os = Column(String(128))
+    project = Column(String(255))
+    vcpu = Column(Float)
+    ram_gb = Column(Float)
+    disk_gb = Column(Float)
+    qty = Column(Integer, nullable=False, default=1)
+    vcpu_before = Column(Float)                                     # As-is (VM reconfiguration); None = not given
+    ram_gb_before = Column(Float)
+    disk_gb_before = Column(Float)
+    raw = Column(Text)                                              # JSON: the cells the line came from
+
+
+class ItsmLabelMap(Base):
+    """Label of a body table (normalised with shared.text.norm_text) → standard field. Rows here add to / override the
+    built-in labels of itsm/parse.py (added from the review screen)."""
+    __tablename__ = "itsm_label_map"
+    __table_args__ = (UniqueConstraint("label_norm", name="uq_itsm_label_map"),
+                      CheckConstraint(_in("field", LINE_FIELDS + ("ignore",)), name="ck_itsm_label_field"))
+
+    id = Column(Integer, primary_key=True)
+    label_norm = Column(String(128), nullable=False)
+    field = Column(String(16), nullable=False)
+    created_by = Column(String(255))
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 from ..shared.stored_text import json_column as _json  # noqa: E402
 
 _json(ItsmRequest.udf, dict, "Trường bổ sung của yêu cầu SDP")
+_json(ItsmRequestLine.raw, dict, "Ô gốc của dòng yêu cầu")

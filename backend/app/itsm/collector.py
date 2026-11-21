@@ -43,8 +43,11 @@ def upsert(db: Session, key: str, p: Dict[str, Any], now: dt.datetime) -> None:
     if row is None:
         row = ItsmRequest(source_key=key, req_id=p["reqId"])
         db.add(row)
+    if row.description != p.get("description") and row.reviewed_at is None:
+        row.parse_status = None                       # new / changed body: read again (G7b); a person's decision stays
     for col, k in _FIELDS.items():
-        setattr(row, col, p.get(k))
+        if col != "kind" or row.reviewed_at is None:  # a kind set by a person stays
+            setattr(row, col, p.get(k))
     row.updated_at = dt.datetime.fromtimestamp(p["updatedMs"] / 1000, dt.timezone.utc).replace(tzinfo=None) if p.get("updatedMs") else None
     row.udf = json.dumps(p.get("udf") or {}, ensure_ascii=False)
     row.fetched_at = now
@@ -100,6 +103,14 @@ def sync_itsm(db: Session, cfg: ItsmConfig, force: bool = False, max_requests: i
         row.captured_at = row.last_ok_at = now
         row.last_error = row.last_error_at = None
         db.commit()
+        from .process import process
+        try:
+            parsed = process(db, cfg.key)              # body tables → lines; AI fallback → review queue (G7b)
+        except Exception:  # noqa: BLE001 — the requests are stored; parsing runs again next round
+            db.rollback()
+            logger.exception("ITSM parse failed for %s", cfg.key)
+            parsed = {}
         logger.info("Synced SDP %s: %d request(s) read, backfill %s, cursor %s", cfg.key, fetched,
                     "done" if row.backfill_done else "in progress", row.cursor_ms)
-        return {"key": cfg.key, "ok": True, "read": fetched, "backfillDone": bool(row.backfill_done), "requests": row.requests}
+        return {"key": cfg.key, "ok": True, "read": fetched, "backfillDone": bool(row.backfill_done), "requests": row.requests,
+                **{f"parse_{k}": v for k, v in parsed.items()}}

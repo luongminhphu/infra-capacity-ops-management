@@ -1246,6 +1246,47 @@ On-Premises qua API v3, **chỉ đọc**: client chỉ gửi GET, không tạo h
 - Tên trường theo tài liệu API v3. Khi nối máy chủ SDP thật của HSC, kiểm lại tên trường trên một yêu cầu thật; parser chấp nhận
   cả dạng `{"name": …}` lẫn chữ thường.
 
+### Nhu cầu hạ tầng — đọc yêu cầu ServiceDesk thành tài nguyên (ICO v2 G7b)
+
+Menu **Quản lý thông tin → Nhu cầu hạ tầng** (`#/demand`).
+
+**Ba loại yêu cầu** nhận theo tên template (rồi tới tiêu đề):
+
+| Template | Loại | Thống kê tính |
+|---|---|---|
+| VM provisioning | Cấp phát mới | Tài nguyên tạo ra |
+| VM reconfiguration | Nâng cấp / tinh chỉnh | **Phần thay đổi** = To-be − As-is (dấu − là giảm) |
+| VM Decommision | Xoá VM | Tài nguyên thu hồi |
+
+**Đọc bảng trong nội dung**
+- Chỉ dùng thư viện chuẩn của Python, không tải gì từ ngoài.
+- Nhận cả bảng ngang (nhiều VM, mỗi hàng một VM) và bảng dọc (*nhãn | giá trị*).
+- Ô gộp (rowspan / colspan) được lặp cho mọi hàng nó phủ.
+- Đơn vị đổi về GB: `8 GB`, `0,5 TB` → 512, `512 MB` → 0,5.
+- Nhãn so khớp không dấu với nhãn có sẵn (*Tên VM / Hostname*, *vCPU / CPU / Số core*, *RAM / Bộ nhớ*, *Ổ cứng / Disk / Dung lượng*,
+  *Số lượng / SL*, *Môi trường*, *HĐH / OS*, *Dự án*) cộng với nhãn do người duyệt thêm.
+- **VM reconfiguration** có hai bảng *As-is* và *To-be*.
+  - Vai trò của mỗi bảng lấy từ dòng chữ ngay trước bảng hoặc tiêu đề bảng (*As-is*, *hiện tại*, *To-be*, *đề xuất*…).
+  - Hai bảng ghép theo tên VM; không có tên thì theo thứ tự hàng.
+  - Cũng đọc được một bảng gộp *Thông số | As-is | To-be*.
+  - Thiếu bảng As-is thì không biết phần thay đổi, nên yêu cầu vào hàng chờ duyệt.
+
+**Độ tin cậy và hàng chờ duyệt**
+- Độ tin cậy tính theo độ đầy đủ của vCPU, RAM và Disk / tên VM.
+- Từ 0,7 trở lên là *Đọc tự động*. Thấp hơn, chữ tự do hoặc nhãn lạ thì vào hàng chờ duyệt.
+- Nếu AI đã bật, ICO hỏi AI một lần (che tên, có hạn mức, ghi `ai_runs`). Kết quả AI **không được tin tự động**: luôn ở *Chờ duyệt*.
+- Màn duyệt đặt nội dung gốc (hiển thị an toàn: không script, không tải ảnh / link) cạnh các dòng đọc được. Admin sửa dòng, đổi loại,
+  rồi *Duyệt* hoặc *Bỏ qua*.
+- Nhãn chưa biết hiện ngay trên màn duyệt. Gán nhãn vào trường chuẩn thì mọi yêu cầu chưa ai duyệt được đọc lại.
+- Quyết định của người là cuối: SDP sửa nội dung sau đó cũng không đọc lại.
+
+**Thống kê 12 tháng** (theo tháng giờ Việt Nam): số yêu cầu, số VM (× số lượng), vCPU, RAM, Disk cho từng loại.
+- Chỉ tính yêu cầu *Đọc tự động* hoặc *Đã duyệt*.
+- Số yêu cầu còn chờ duyệt ghi riêng, không cộng vào.
+
+API: `GET /api/itsm/requests`, `/api/itsm/requests/{id}`, `POST /api/itsm/requests/{id}/review` (admin), `GET|POST|DELETE /api/itsm/labels`
+(ghi: admin), `GET /api/itsm/stats?months=12`.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**

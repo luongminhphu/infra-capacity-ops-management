@@ -53,6 +53,7 @@ def test_parse_request_and_clean_html():
     assert p["createdAt"] < p["createdAt"] + dt.timedelta(seconds=1) and p["updatedMs"] == int(r["last_updated_time"]["value"])
     assert "<table" in p["description"] and "<script" not in p["description"] and "onclick" not in p["description"]
     assert sdp.kind_of("Yêu cầu tăng tài nguyên máy ảo", None) == "resize" and sdp.kind_of("Khác", "Nhờ tạo VM") == "new_vm"
+    assert sdp.kind_of("Yêu cầu cấp máy ảo", "Cấp máy ảo — CRM") == "new_vm"
     assert len(sdp.clean_html("é" * 50000).encode()) <= sdp.MAX_DESCRIPTION
 
 
@@ -144,7 +145,10 @@ def test_source_form_validates_templates_dates_and_key():
     row = DataSource()
     base = {"kind": "sdp", "key": "sdp-hsc", "name": "SDP", "host": "sdp.corp.local", "port": 8443}
     with pytest.raises(SourceError, match="template"):
-        apply_input(row, {**base, "apiKey": "k"}, True)
+        apply_input(row, {**base, "apiKey": "k", "templates": ""}, True)
+    row = DataSource()
+    apply_input(row, {**base, "apiKey": "k"}, True)                 # not given: HSC's three templates
+    assert json.loads(row.options)["templates"] == ["VM provisioning", "VM reconfiguration", "VM Decommision"]
     with pytest.raises(SourceError, match="technician key"):
         apply_input(DataSource(), {**base, "templates": "Yêu cầu cấp máy ảo"}, True)
     with pytest.raises(SourceError, match="Ngày nạp lùi"):

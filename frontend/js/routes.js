@@ -41,6 +41,8 @@ const PAGES = [
       desc: 'Sự cố mở / đóng theo sự kiện của datastore, snapshot, alarm, host, storage, phần cứng, capacity, backup; MTTA / MTTR theo tháng.', scope: ['owner'] },
     { id: 'changes', view: 'changes', icon: 'history', label: 'Nhật ký thay đổi', title: 'Nhật ký thay đổi',
       desc: 'Ai đổi gì, khi nào trên vCenter: tạo / xoá / đổi cấu hình / di chuyển VM, bật tắt, bảo trì host, HA; kèm thay đổi chỉ thấy qua so sánh snapshot.', scope: ['owner'] },
+    { id: 'itsm-requests', view: 'itsm', icon: 'inbox', label: 'Yêu cầu ServiceDesk', title: 'Nhu cầu hạ tầng — yêu cầu ServiceDesk',
+      desc: 'Yêu cầu cấp / tăng tài nguyên VM đọc từ ServiceDesk Plus: bảng tài nguyên đọc tự động, hàng chờ duyệt, nhãn bảng.', scope: [] },
     { id: 'history', view: 'history', icon: 'trending-up', label: 'Xu hướng & biến động', title: 'Xu hướng & biến động',
       desc: 'Biến động CPU/RAM so với ngưỡng overcommit giữa các snapshot và danh sách VM thêm / bớt / đổi cấu hình.', scope: ['vcenter', 'cluster', 'host'] },
     { id: 'inventory', view: 'inventory', icon: 'server', label: 'Host & VM', title: 'Host & VM',
@@ -162,6 +164,7 @@ const MENU = [
       ['lic-assess', '', 'Đánh giá & quyền sử dụng'], ['lic-snapshots', 'snapshots', 'Snapshot']] },
     { key: 'budget', label: 'Ngân sách & chi phí', icon: 'wallet', tabs: [
       ['spend-overview', '', 'Tổng quan ngân sách'], ['spend-opex', 'opex', 'Opex'], ['spend-capex', 'capex', 'Capex'], ['spend-plan', 'plan', 'Kế hoạch năm sau']] },
+    { key: 'demand', label: 'Nhu cầu hạ tầng', icon: 'inbox', tabs: [['itsm-requests', '', 'Yêu cầu ServiceDesk']] },
     { key: 'procure', label: 'Mua sắm', icon: 'shopping-cart', tabs: [
       ['spend-vendors', '', 'Nhà cung cấp'], ['spend-quotes', 'quotes', 'So sánh báo giá'], ['bom', 'bom', 'Chuẩn hoá BOM'],
       ['spend-renovations', 'renovations', 'Cải tạo văn phòng']] },
@@ -226,6 +229,7 @@ const VIEWS = {
   hardware: { section: '#viewHardware', render: () => callIf('renderHardwareView') },
   incidents: { section: '#viewIncidents', render: () => callIf('renderIncidentsView') },
   changes: { section: '#viewChanges', render: () => callIf('renderChangesView') },
+  itsm: { section: '#viewItsm', render: () => callIf('renderItsmView') },
   owners: { section: '#viewOwners', render: () => callIf('renderOwnersView'),
     sub: { get: () => (typeof osState !== 'undefined' && osState.sub) || 'systems',
            set: (s) => { if (typeof osState !== 'undefined') osState.sub = s || 'systems'; }, fallback: 'systems' } },

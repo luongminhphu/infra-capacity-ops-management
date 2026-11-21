@@ -78,9 +78,14 @@ def clean_html(html: Optional[str]) -> Optional[str]:
     return raw.decode("utf-8", "ignore")
 
 
-KIND_WORDS = (("decommission", ("thu hồi", "huỷ vm", "hủy vm", "xoá vm", "xóa vm", "decommission", "delete vm")),
-              ("resize", ("nâng cấp", "tăng", "mở rộng", "bổ sung tài nguyên", "resize", "upgrade", "extend")),
-              ("new_vm", ("tạo", "cấp mới", "khởi tạo", "new vm", "create vm", "máy ảo mới", "cấp vm")))
+# HSC's ServiceDesk templates: "VM provisioning" (new), "VM reconfiguration" (upgrade / tune), "VM Decommision" (delete —
+# spelled with one "s" on SDP). Checked in this order: a delete is never read as a new VM.
+KIND_WORDS = (("decommission", ("decommision", "decommission", "decom", "thu hồi", "huỷ vm", "hủy vm", "xoá vm", "xóa vm",
+                                "delete vm", "xoá tài nguyên", "xóa tài nguyên")),
+              ("resize", ("reconfiguration", "reconfigure", "reconfig", "nâng cấp", "tinh chỉnh", "tăng", "mở rộng",
+                          "bổ sung tài nguyên", "resize", "upgrade", "extend")),
+              ("new_vm", ("provisioning", "provision", "tạo", "cấp phát", "cấp mới", "khởi tạo", "new vm", "create vm", "máy ảo mới",
+                          "cấp vm", "cấp máy ảo", "cấp máy chủ ảo")))
 
 
 def kind_of(template: Optional[str], subject: Optional[str]) -> str:
