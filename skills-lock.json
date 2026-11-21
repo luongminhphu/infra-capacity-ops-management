@@ -7,6 +7,12 @@
       "skillPath": ".claude/skills/find-skills/SKILL.md",
       "computedHash": "c00eeea0e13e74fe4a9d84ba0a8542205a1b736d65f13134fe1a6647eb14976f"
     },
+    "graphify": {
+      "source": "Graphify-Labs/graphify",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/graphify/SKILL.md",
+      "computedHash": "bbddbc077b4374a2d6b5181e0d9d0e7cac576df46dff328d7934a1c2f077bc4d"
+    },
     "hunt-api-misconfig": {
       "source": "elementalsouls/Claude-BugHunter",
       "sourceType": "github",

@@ -199,6 +199,12 @@ Hợp nhất dữ liệu theo serial / service tag và IP (Hồ sơ thiết bị
 - `mcp-builder` — hướng dẫn làm MCP server chất lượng (đặt tên tool, annotation, `outputSchema`, phân trang, lỗi có
   hướng dẫn, bộ đánh giá 10 câu hỏi) của `anthropics/skills` (Apache-2.0, pin trong `skills-lock.json`). Dùng khi sửa
   `mcp_server.py` / thêm tool MCP; script `scripts/evaluation.py` chạy bộ đánh giá (cần API key, chạy tay).
+- `graphify` — dựng đồ thị tri thức của repo (AST cục bộ, không cần API key) để hỏi kiến trúc / quan hệ file: `/graphify .`,
+  `/graphify query "…"`. Nguồn `Graphify-Labs/graphify` (Apache-2.0, commit `b582ad4`, v0.9.114; `LICENSE.txt` / `NOTICE` kèm theo),
+  ghim hash trong `skills-lock.json`. Chỉ cài skill + `references/`; **không** cài khối always-on vào CLAUDE.md và hook PreToolUse.
+  Skill cần CLI `graphify` (gói PyPI `graphifyy`) và **tự cài gói này** nếu thiếu — ghim phiên bản (`uv tool install graphifyy==0.9.114`)
+  trước khi chạy trên máy có dữ liệu nhạy cảm. Kết quả ở `graphify-out/` (đã `.gitignore`). Tài liệu / ảnh chỉ gửi Gemini khi đã đặt
+  `GEMINI_API_KEY`; không đặt thì do chính phiên Claude xử lý.
 - `find-skills` — tìm skill trong hệ sinh thái `npx skills` (`vercel-labs/skills`, MIT, pin trong `skills-lock.json`). **Quy tắc cài skill mới của dự án** (thay Step 6 của skill): không dùng `-g` / `-y`; tải về thư mục tạm, đọc toàn bộ nội dung (script, hook, `allowed-tools`) trước, chỉ cài vào `.claude/skills/` sau khi chủ sản phẩm đồng ý, ghi nguồn + hash vào `skills-lock.json`, kèm giấy phép.
 - `ui-ux-pro-max` — tra cứu style / bảng màu / font / UX guideline (bên thứ ba, `nextlevelbuilder/ui-ux-pro-max-skill`,
   cài bằng `npx skills add`; mã nằm ở `.agents/skills/`, `.claude/skills/ui-ux-pro-max` là symlink, phiên bản ghim trong

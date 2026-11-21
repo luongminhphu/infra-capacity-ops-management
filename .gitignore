@@ -7,3 +7,6 @@ venv/
 *.egg-info/
 .DS_Store
 node_modules/
+
+# Graphify knowledge graph output (skill graphify) — local, regenerate with /graphify .
+graphify-out/
