@@ -416,10 +416,21 @@ def sync_everything(settings: Settings) -> List[Dict[str, Any]]:
 def _ops_alerts() -> Optional[Dict[str, int]]:
     """Discord alerts for capacity / backup at the 90 % level (docs/design/super-app.md decision 5).
     Returns the counters ({"new", "resolved", "sent", "failed"}) or None when the check failed."""
-    from .. import ops_alerts
+    from .. import inbox, ops_alerts
+    from ..events import service as events
     try:
         with SessionLocal() as db:
-            return ops_alerts.check_and_notify(db)
+            computed = inbox._compute(db, ops_alerts._today())     # once per round: event store + Discord alerts
+            try:
+                ev = events.run(db, *computed)
+            except Exception:  # noqa: BLE001 — the event store must not stop the Discord alerts
+                db.rollback()
+                logger.exception("Event store update failed")
+                ev = None
+            out = ops_alerts.check_and_notify(db, computed=computed)
+            if ev:
+                out.update({f"ev_{k}": v for k, v in ev.items()})
+            return out
     except Exception:  # noqa: BLE001 — an alert failure must not stop the polling loop
         logger.exception("Operations alerts check failed")
         return None

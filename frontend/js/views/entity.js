@@ -43,6 +43,14 @@ async function renderEntityView() {
   const body = { host: entityHostHtml, vm: entityVmHtml, server: entityServerHtml, datastore: entityDatastoreHtml, ci: entityCiHtml }[p.type](d);
   mount.innerHTML = body + enCiHtml(d.ci);
   refreshIcons();
+  const ciId = d.ci && d.ci.id;
+  if (ciId && typeof incEventsHtml === 'function') {         // event timeline of this CI (G5)
+    apiRequest(`/ci/${encodeURIComponent(ciId)}/timeline`).then(t => {
+      mount.insertAdjacentHTML('beforeend', `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Timeline sự kiện</div>
+        ${incEventsHtml(t.items)}</section>`);
+      refreshIcons();
+    }).catch(() => {});
+  }
 }
 
 function enFindings(fs) {

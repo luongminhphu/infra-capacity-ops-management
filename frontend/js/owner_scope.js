@@ -5,7 +5,8 @@
    same numbers on the same subset of VMs. Remembered per user (uiPref "ownerScope").
    ========================================================= */
 const OWNER_SCOPED_PATHS = [/^\/data\/latest(\?|$)/, /^\/compliance\/findings(\?|$)/, /^\/export\/csv(\?|$)/,
-  /^\/reports\/(pdf|brief|planning)(\?|$)/, /^\/dashboard\/executive(\?|$)/, /^\/backup\/(summary|report\/pdf|report\/xlsx)(\?|$)/, /^\/infra\/(snapshots|alarms)(\?|$)/];
+  /^\/reports\/(pdf|brief|planning)(\?|$)/, /^\/dashboard\/executive(\?|$)/, /^\/backup\/(summary|report\/pdf|report\/xlsx)(\?|$)/, /^\/infra\/(snapshots|alarms)(\?|$)/,
+  /^\/incidents(\/stats)?(\?|$)/];
 const OWNER_SCOPE_KEYS = ['systems', 'owners', 'departments', 'projects', 'criticality'];
 const ownerScope = { value: null, systems: null, serverLabel: '' };
 

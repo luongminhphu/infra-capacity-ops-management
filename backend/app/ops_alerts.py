@@ -76,14 +76,15 @@ def _akey(it: Dict[str, Any]) -> str:
 _run_lock = threading.Lock()
 
 
-def check_and_notify(db: Session, post=None) -> Dict[str, int]:
+def check_and_notify(db: Session, post=None, computed=None) -> Dict[str, int]:
     """Serialised (BEQ-03): the scheduler round and "Chạy ngay" never send the same alert twice —
-    the second caller waits, then sees what the first one recorded."""
+    the second caller waits, then sees what the first one recorded. computed: (items, errors) of inbox._compute already
+    run this round (the leader shares it with the event store)."""
     with _run_lock:
-        return _check_and_notify(db, post)
+        return _check_and_notify(db, post, computed)
 
 
-def _check_and_notify(db: Session, post=None) -> Dict[str, int]:
+def _check_and_notify(db: Session, post=None, computed=None) -> Dict[str, int]:
     """Compare the current push items with the stored state and tell each channel what it has not
     been told yet: the alerts it has not received, and "Đã hết" for the ones it received that have
     cleared. Delivery is tracked per channel, so a channel that failed gets them on a later run.
@@ -94,7 +95,7 @@ def _check_and_notify(db: Session, post=None) -> Dict[str, int]:
     from .shared.webhook import WebhookError as NotifyError, post_json as _post_json, validate_discord_url
     post = post or _post_json
     from .features import get_features
-    items, errors = inbox._compute(db, _today())
+    items, errors = computed or inbox._compute(db, _today())
     unknown = {e for e in errors if e in PUSH_SOURCES}
     if unknown:
         logger.warning("Ops alerts: provider(s) %s failed; their alerts are kept unchanged this run", ", ".join(sorted(unknown)))

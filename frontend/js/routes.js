@@ -37,6 +37,8 @@ const PAGES = [
       desc: 'Cảm biến phần cứng host (nguồn, quạt, nhiệt độ, bộ nhớ) và trạng thái kết nối.', scope: ['vcenter'] },
     { id: 'hardware', view: 'hardware', icon: 'server-cog', label: 'Máy chủ vật lý', title: 'Phần cứng — máy chủ vật lý',
       desc: 'Máy chủ Dell trong OpenManage Enterprise: trạng thái, linh kiện, ổ đĩa dự báo hỏng, firmware so baseline, bảo hành Dell ↔ Opex.', scope: ['owner'] },
+    { id: 'incidents', view: 'incidents', icon: 'siren', label: 'Sự cố', title: 'Sự cố',
+      desc: 'Sự cố mở / đóng theo sự kiện của datastore, snapshot, alarm, host, storage, phần cứng, capacity, backup; MTTA / MTTR theo tháng.', scope: ['owner'] },
     { id: 'history', view: 'history', icon: 'trending-up', label: 'Xu hướng & biến động', title: 'Xu hướng & biến động',
       desc: 'Biến động CPU/RAM so với ngưỡng overcommit giữa các snapshot và danh sách VM thêm / bớt / đổi cấu hình.', scope: ['vcenter', 'cluster', 'host'] },
     { id: 'inventory', view: 'inventory', icon: 'server', label: 'Host & VM', title: 'Host & VM',
@@ -144,6 +146,7 @@ const MENU = [
     { key: 'health', label: 'Sức khoẻ hạ tầng', icon: 'activity', tabs: [
       ['infra-ds', '', 'Datastore'], ['infra-snap', 'snapshots', 'Snapshot VM'], ['infra-alarm', 'alarms', 'Alarm vCenter'], ['infra-health', 'hosts', 'Sức khoẻ host'], ['infra-storage', 'storage', 'Storage']] },
     { key: 'hardware', label: 'Phần cứng', icon: 'server-cog', tabs: [['hardware', '', 'Máy chủ vật lý']] },
+    { key: 'incidents', label: 'Sự cố', icon: 'siren', tabs: [['incidents', '', 'Sự cố']] },
     { key: 'agenda', label: 'Lịch việc & nhắc hạn', icon: 'calendar-clock', tabs: [['agenda', '', 'Lịch việc']] },
     { key: 'simulate', label: 'Mô phỏng & quy hoạch', icon: 'git-branch', tabs: [
       ['whatif', '', 'What-if capacity'], ['planning', 'planning', 'Quy hoạch tài nguyên'], ['lic-whatif', 'license', 'What-if license']] },
@@ -219,6 +222,7 @@ const VIEWS = {
   inventory: { section: '#viewInventory', render: () => renderInventoryView() },
   dcassets: { section: '#viewDcAssets', render: () => callIf('renderDcAssetsView') },
   hardware: { section: '#viewHardware', render: () => callIf('renderHardwareView') },
+  incidents: { section: '#viewIncidents', render: () => callIf('renderIncidentsView') },
   owners: { section: '#viewOwners', render: () => callIf('renderOwnersView'),
     sub: { get: () => (typeof osState !== 'undefined' && osState.sub) || 'systems',
            set: (s) => { if (typeof osState !== 'undefined') osState.sub = s || 'systems'; }, fallback: 'systems' } },
