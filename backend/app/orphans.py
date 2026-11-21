@@ -20,16 +20,17 @@ from .models import (
     VmSnapshotState,
 )
 from .ipam.models import IpamHost, IpamNetwork, IpamSourceState, IpamVlan
+from .itsm.models import ItsmRequest, ItsmSourceState
 from .hardware.models import (
     HwAlert, HwComponentHealth, HwDeviceInventory, HwDeviceState, HwDiskState, HwFirmwareState, HwPartState, HwSourceState,
     HwWarranty,
 )
 
 FAMILIES = {"vcenter": "Nền tảng ảo hoá", "netbackup": "Máy chủ backup", "storage": "Storage", "hardware": "Phần cứng (Dell OME)",
-            "ipam": "IPAM (GestióIP)"}
+            "ipam": "IPAM (GestióIP)", "itsm": "ServiceDesk Plus"}
 KIND_FAMILY = {"vcenter": "vcenter", "proxmox": "vcenter", "nutanix": "vcenter", "netbackup": "netbackup",
                "pure": "storage", "netapp": "storage", "ome": "hardware",
-               "gestioip": "ipam"}
+               "gestioip": "ipam", "sdp": "itsm"}
 NOT_A_SOURCE = {None, "", "import"}
 CHUNK = 5000
 
@@ -51,6 +52,7 @@ TABLES: Dict[str, List[Tuple[str, Any, str]]] = {
         ("Volume / LUN", StorageVolumeState, "source_key"), ("Alert", StorageAlertState, "source_key"),
         ("Mảng", StorageArrayState, "source_key"),
     ],
+    "itsm": [("Yêu cầu SDP", ItsmRequest, "source_key"), ("Trạng thái nguồn", ItsmSourceState, "source_key")],
     "ipam": [
         ("IP (IPAM)", IpamHost, "source_key"), ("Network (IPAM)", IpamNetwork, "source_key"), ("VLAN (IPAM)", IpamVlan, "source_key"),
         ("Trạng thái nguồn", IpamSourceState, "source_key"),
@@ -94,6 +96,8 @@ def _last_seen(db: Session, family: str, key: str) -> Optional[dt.datetime]:
         return db.query(func.max(SnapshotRun.started_at)).filter(SnapshotRun.vcenter_key == key).scalar()
     if family == "netbackup":
         return db.query(func.max(BackupSyncRun.started_at)).filter(BackupSyncRun.nbu_key == key).scalar()
+    if family == "itsm":
+        return db.query(func.max(ItsmSourceState.captured_at)).filter(ItsmSourceState.source_key == key).scalar()
     if family == "ipam":
         return db.query(func.max(IpamSourceState.captured_at)).filter(IpamSourceState.source_key == key).scalar()
     if family == "hardware":

@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/admin/sources", tags=["sources"])
 # Status of every source for any signed-in user (top bar) + "Đồng bộ ngay" for every source (admin).
 status_router = APIRouter(prefix="/api/sources", tags=["sources"])
 FAMILY_OF_KIND = {"vcenter": "virtualization", "proxmox": "virtualization", "nutanix": "virtualization", "netbackup": "backup",
-                  "pure": "storage", "netapp": "storage", "ome": "hardware", "gestioip": "ipam"}
+                  "pure": "storage", "netapp": "storage", "ome": "hardware", "gestioip": "ipam", "sdp": "itsm"}
 
 
 @status_router.get("/status")
@@ -45,6 +45,8 @@ def _sync_task(fam: str, cfg, settings):
         return lambda: scheduler._sync_storage_task(cfg, peers or [cfg.key])
     if fam == "ipam":
         return lambda: scheduler._sync_ipam_task(cfg)
+    if fam == "itsm":
+        return lambda: scheduler._sync_itsm_task(cfg, force=True)
     return lambda: scheduler._sync_ome_task(cfg)
 
 

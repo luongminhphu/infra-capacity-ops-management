@@ -21,10 +21,12 @@ from . import secrets_box
 
 logger = logging.getLogger("vco.sources")
 
-KINDS = ("vcenter", "proxmox", "nutanix", "netbackup", "pure", "netapp", "ome", "gestioip")
+KINDS = ("vcenter", "proxmox", "nutanix", "netbackup", "pure", "netapp", "ome", "gestioip", "sdp")
 STORAGE_KINDS = ("pure", "netapp")
 HARDWARE_KINDS = ("ome",)        # Dell OpenManage Enterprise (hardware/)
 IPAM_KINDS = ("gestioip",)       # GestióIP IPAM (ipam/)
+ITSM_KINDS = ("sdp",)            # ServiceDesk Plus On-Prem (itsm/, G7a)
+_TEMPLATE_RE = re.compile(r"^[^\x00-\x1f<>\"]{1,120}$")
 _API_PATH_RE = re.compile(r"^/[A-Za-z0-9._/-]{1,127}$")
 _COLUMN_RE = re.compile(r"^[^\x00-\x1f<>]{1,64}$")
 # Hypervisor managers: one history family (snapshot runs keyed by the source key), so keys are unique across them.
@@ -67,6 +69,16 @@ def _secret(row: DataSource, field: str) -> str:
 
 
 def to_config(row: DataSource):
+    if row.kind in ITSM_KINDS:
+        import datetime as _dt
+        from .itsm import ItsmConfig
+        o = _opts(row)
+        return ItsmConfig(key=row.key, name=row.name, host=row.host, port=row.port, api_key=_secret(row, "api_key_enc"),
+                          verify_ssl=bool(row.verify_ssl), ca_pem=row.ca_pem or "", demo=bool(row.demo),
+                          timeout=int(o.get("timeout") or 60), templates=list(o.get("templates") or []),
+                          backfill_from=_dt.date.fromisoformat(o.get("backfillFrom") or "2025-10-01"),
+                          rate_per_min=int(o.get("ratePerMin") or 60), interval_minutes=int(o.get("intervalMinutes") or 30),
+                          kind=row.kind)
     if row.kind in IPAM_KINDS:
         from .ipam import DEFAULT_API_PATH, IpamConfig
         o = _opts(row)
@@ -151,6 +163,11 @@ def netbackup_configs(settings: Settings) -> List[NetBackupConfig]:
 def storage_configs(settings: Settings) -> list:
     """Pure FlashArray + NetApp ONTAP sources (Settings only — no environment variables)."""
     return _merged("pure", settings) + _merged("netapp", settings)
+
+
+def itsm_configs(settings: Settings) -> list:
+    """ServiceDesk Plus sources (Settings only)."""
+    return _merged("sdp", settings)
 
 
 def ipam_configs(settings: Settings) -> list:
@@ -267,6 +284,38 @@ def apply_input(row: DataSource, data: Dict[str, Any], creating: bool) -> None:
         row.options = json.dumps({"timeout": _storage_timeout(data, row)})
         if not row.demo and not (row.username and row.password_enc):
             raise SourceError("Cần user + mật khẩu của tài khoản ONTAP role readonly (ứng dụng http).")
+    elif kind == "sdp":
+        import datetime as _dt
+        from .config import get_settings
+        env = get_settings()
+        if data.get("apiKey"):
+            row.api_key_enc = secrets_box.encrypt(data["apiKey"])
+        if data.get("clearApiKey"):
+            row.api_key_enc = None
+        row.username, row.password_enc = None, None
+        o = _opts(row)
+        raw = data.get("templates") if "templates" in data else o.get("templates") or env.itsm_templates
+        names = [t.strip() for t in (raw.split(",") if isinstance(raw, str) else raw or []) if str(t).strip()]
+        if not names and not row.demo:
+            raise SourceError("Nhập ít nhất một template yêu cầu (tên đúng như trên ServiceDesk Plus), phân cách bằng dấu phẩy.")
+        if len(names) > 20 or not all(_TEMPLATE_RE.match(t) for t in names):
+            raise SourceError("Tối đa 20 template, mỗi tên 1–120 ký tự, không có ký tự đặc biệt.")
+        try:
+            start = _dt.date.fromisoformat(str(data.get("backfillFrom") or o.get("backfillFrom") or env.itsm_backfill_from))
+            rate = int(data.get("ratePerMin") or o.get("ratePerMin") or env.itsm_rate_per_min)
+            every = int(data.get("intervalMinutes") or o.get("intervalMinutes") or env.itsm_interval_minutes)
+            timeout = max(10, min(int(data.get("timeout") or o.get("timeout") or 60), 300))
+        except (TypeError, ValueError):
+            raise SourceError("Ngày nạp lùi (YYYY-MM-DD), số lời gọi / phút hoặc chu kỳ không hợp lệ.") from None
+        if not _dt.date(2015, 1, 1) <= start <= _dt.date.today():
+            raise SourceError("Ngày nạp lùi phải từ 2015 đến hôm nay.")
+        if not 1 <= rate <= 600 or not 5 <= every <= 1440:
+            raise SourceError("Số lời gọi / phút 1–600, chu kỳ đọc 5–1.440 phút.")
+        row.options = json.dumps({"timeout": timeout, "templates": names, "backfillFrom": start.isoformat(), "ratePerMin": rate,
+                                  "intervalMinutes": every}, ensure_ascii=False)
+        if not row.demo and not row.api_key_enc:
+            raise SourceError("Cần technician key của tài khoản chỉ có quyền xem yêu cầu (ServiceDesk Plus → Hồ sơ cá nhân → "
+                              "Tạo API key).")
     elif kind == "gestioip":
         row.api_key_enc = None
         o = _opts(row)
@@ -337,6 +386,8 @@ def public(row: DataSource) -> Dict[str, Any]:
         "domainType": o.get("domainType"), "domainName": o.get("domainName"), "apiVersion": o.get("apiVersion"),
         "timeout": o.get("timeout"), "clientName": o.get("clientName"), "apiPath": o.get("apiPath"),
         "serialColumn": o.get("serialColumn"), "macColumn": o.get("macColumn"), "updatedBy": row.updated_by,
+        "templates": o.get("templates"), "backfillFrom": o.get("backfillFrom"), "ratePerMin": o.get("ratePerMin"),
+        "intervalMinutes": o.get("intervalMinutes"),
         "updatedAt": row.updated_at.isoformat() + "Z" if row.updated_at else None,
         "lastTest": {"at": row.last_test_at.isoformat() + "Z", "ok": row.last_test_ok, "message": row.last_test_message}
         if row.last_test_at else None,
@@ -379,6 +430,12 @@ def row_from_env(cfg, kind: str, user: str) -> DataSource:
 def test_connection(cfg, kind: str) -> str:
     if cfg.demo:
         return "Chế độ DEMO — không kết nối máy chủ thật."
+    if kind in ITSM_KINDS:
+        from .itsm import ItsmError, sdp
+        try:
+            return sdp.test(cfg)
+        except ItsmError as exc:
+            raise SourceError(str(exc)) from exc
     if kind in IPAM_KINDS:
         from .ipam import IpamError, gestioip
         try:

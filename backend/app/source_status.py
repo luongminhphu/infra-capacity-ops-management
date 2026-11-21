@@ -14,9 +14,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-FAMILIES = {"virtualization": "Ảo hoá", "backup": "Backup", "storage": "Storage", "hardware": "Dell OME", "ipam": "IPAM"}
+FAMILIES = {"virtualization": "Ảo hoá", "backup": "Backup", "storage": "Storage", "hardware": "Dell OME", "ipam": "IPAM", "itsm": "ServiceDesk"}
 KIND_LABELS = {"vcenter": "vCenter", "proxmox": "Proxmox VE", "nutanix": "Nutanix", "netbackup": "NetBackup",
-               "pure": "Pure FlashArray", "netapp": "NetApp ONTAP", "ome": "Dell OME", "gestioip": "GestióIP"}
+               "pure": "Pure FlashArray", "netapp": "NetApp ONTAP", "ome": "Dell OME", "gestioip": "GestióIP", "sdp": "ServiceDesk Plus"}
 STATE_TEXT = {"ok": "Kết nối tốt", "error": "Lỗi kết nối", "stale": "Dữ liệu cũ", "never": "Chưa đồng bộ"}
 STATE_LEVEL = {"ok": "ok", "error": "crit", "stale": "warn", "never": "na"}
 STALE_FACTOR = 3
@@ -84,12 +84,14 @@ def configured() -> List[Tuple[str, str, Any]]:
     out += [("storage", c.vendor, c) for c in s.storages()]
     out += [("hardware", getattr(c, "kind", "ome"), c) for c in s.hardware()]
     out += [("ipam", getattr(c, "kind", "gestioip"), c) for c in s.ipam()]
+    out += [("itsm", getattr(c, "kind", "sdp"), c) for c in s.itsm()]
     return out
 
 
 def status_all(db: Session, now: Optional[dt.datetime] = None) -> List[Dict[str, Any]]:
     from .hardware.models import HwSourceState
     from .ipam.models import IpamSourceState
+    from .itsm.models import ItsmSourceState
     from .models import BackupSyncRun, SnapshotRun, StorageArrayState
     now = now or dt.datetime.utcnow()
     srcs = configured()
@@ -98,7 +100,8 @@ def status_all(db: Session, now: Optional[dt.datetime] = None) -> List[Dict[str,
             "backup": _runs(db, BackupSyncRun, "nbu_key", keys("backup")),
             "storage": _states(db, StorageArrayState, keys("storage")),
             "hardware": _states(db, HwSourceState, keys("hardware")),
-            "ipam": _states(db, IpamSourceState, keys("ipam"))}
+            "ipam": _states(db, IpamSourceState, keys("ipam")),
+            "itsm": _states(db, ItsmSourceState, keys("itsm"))}
     limit = stale_after()
     out = []
     for fam, kind, c in srcs:

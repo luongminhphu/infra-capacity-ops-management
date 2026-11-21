@@ -254,7 +254,7 @@ def _run_out(r, kind: str) -> Dict[str, Any]:
     return out
 
 
-FAMILIES = ("virtualization", "backup", "storage", "hardware", "ipam")
+FAMILIES = ("virtualization", "backup", "storage", "hardware", "ipam", "itsm")
 JOBS = ("sync", "cmdb", "owners", "reviews", "alerts", "retention", "metrics", "poll")
 
 
@@ -387,7 +387,7 @@ TOOLS: Dict[str, Dict[str, Any]] = {
                        "owners rules, reviews, alerts, retention, metrics, poll = whole round): trigger, pod, duration, "
                        "status, counters, error. runId → ico_trace_request. For totals per job use ico_job_runs.",
         "schema": _obj({
-            "source": {"type": "string", "enum": ["all", "virtualization", "backup", "storage", "hardware", "ipam", "vcenter",
+            "source": {"type": "string", "enum": ["all", "virtualization", "backup", "storage", "hardware", "ipam", "itsm", "vcenter",
                                                   "sync", "cmdb", "owners", "reviews", "alerts", "retention", "metrics", "poll"],
                        "default": "all"},
             "status": {"type": "string", "enum": ["ok", "error", "skipped", "timeout"]},
@@ -406,7 +406,7 @@ TOOLS: Dict[str, Dict[str, Any]] = {
         "fn": mcp_extra.tool_source_status, "title": "Data source status",
         "description": "Connection state of every configured data source (vCenter / Proxmox / Nutanix, NetBackup, Pure / NetApp, "
                        "Dell OME, GestióIP) from its real last syncs: ok / stale / error / never, last OK, last error.",
-        "schema": _obj({"family": {"type": "string", "enum": ["virtualization", "backup", "storage", "hardware", "ipam"]}}),
+        "schema": _obj({"family": {"type": "string", "enum": ["virtualization", "backup", "storage", "hardware", "ipam", "itsm"]}}),
         "output": _obj({"summary": _OBJ, "sources": _ARR, "staleAfterMinutes": {"type": "integer"}}, ("summary", "sources")),
     },
     "ico_data_freshness": {
