@@ -2,6 +2,7 @@
 
 Reads: any user of the full app (get_current_user). Decisions (approve / skip), labels and "read again": admin only.
 The original body is shown in a sandboxed iframe (no scripts, no external resources): see display_html."""
+import json
 import re
 from typing import Any, Dict, List, Optional
 
@@ -11,8 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..itsm import process
-from ..itsm.models import BEFORE_FIELDS, REQUEST_KINDS, STORED_FIELDS, ItsmLabelMap, ItsmRequest, ItsmRequestLine
+from ..itsm import link, process
+from ..itsm.models import BEFORE_FIELDS, KIND_LABELS, REQUEST_KINDS, STORED_FIELDS, ItsmLabelMap, ItsmProjectMap, ItsmRequest, ItsmRequestCi, ItsmRequestLine
 from ..itsm.parse import DEFAULT_LABELS, parse_html
 from ..models import AuditLog, User
 from ..security import get_current_user, require_admin
@@ -20,8 +21,6 @@ from ..shared.text import norm_text
 from ..timeutil import to_iso_utc as _iso
 
 router = APIRouter(prefix="/api/itsm", tags=["itsm"])
-KIND_LABELS = {"new_vm": "Cấp phát mới (VM provisioning)", "resize": "Nâng cấp / tinh chỉnh (VM reconfiguration)",
-               "decommission": "Xoá VM (VM Decommision)", "other": "Khác"}
 STATUS_LABELS = {"parsed": "Đọc tự động", "review": "Chờ duyệt", "failed": "Bỏ qua", None: "Chưa đọc"}
 FIELD_LABELS = {"vm_name": "Tên VM", "env": "Môi trường", "os": "Hệ điều hành", "vcpu": "vCPU", "ram_gb": "RAM (GB)",
                 "disk_gb": "Disk (GB)", "qty": "Số lượng", "project": "Dự án", "ignore": "Bỏ qua cột này",
@@ -89,7 +88,20 @@ def request_detail(rid: int, user: User = Depends(get_current_user), db: Session
     r = _req(db, rid)
     lines = db.query(ItsmRequestLine).filter_by(request_id=r.id).order_by(ItsmRequestLine.line_no).all()
     res = parse_html(r.description, process.labels(db))
+    from ..cmdb.models import Ci
+    from ..owners.models import System
+    s = db.get(System, r.system_id) if r.system_id else None
+    from .. import vm_ip
+    vms = vm_ip.attach(db, [{"lineNo": n, "match": m, "ciId": cid, "vm": name, "retired": st == "retired",
+                             "vcenterKey": json.loads(attrs or "{}").get("vcenterKey") or ""}
+                            for n, m, cid, name, st, attrs in
+                            db.query(ItsmRequestCi.line_no, ItsmRequestCi.match, Ci.id, Ci.name, Ci.status, Ci.attrs)
+                            .join(Ci, Ci.id == ItsmRequestCi.ci_id).filter(ItsmRequestCi.request_id == r.id)
+                            .order_by(ItsmRequestCi.line_no, Ci.name)])
     return {**_out(r, lines), "bodyHtml": display_html(r.description), "unknownLabels": res["unknownLabels"],
+            "project": r.project, "sdpUrl": link.sdp_url(r.source_key, r.req_id),
+            "system": {"id": s.id, "code": s.code, "name": s.name} if s else None,
+            "vms": vms,
             "fields": [{"key": k, "label": FIELD_LABELS[k] + (" to-be" if r.kind == "resize" and k in ("vcpu", "ram_gb", "disk_gb") else "")}
                        for k in _fields(r.kind)],
             "labelFields": [{"key": k, "label": v} for k, v in LABEL_FIELDS.items()]}
@@ -122,6 +134,52 @@ def review(rid: int, data: Dict[str, Any] = Body(...), user: User = Depends(requ
     db.add(AuditLog(username=user.username, action=f"itsm.review.{action}", detail=f'{{"request": "{r.req_id}"}}'))
     db.commit()
     return request_detail(rid, user, db)
+
+
+@router.get("/projects")
+def projects(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Projects named in the requests → system: confirmed mapping, exact match, or close suggestions to confirm (G7c)."""
+    from ..owners.models import System
+    systems = {s.id: s for s in db.query(System)}
+    mapped = {m.project_norm for m in db.query(ItsmProjectMap)}
+    rows = (process.counted(db.query(ItsmRequest.project, ItsmRequest.system_id, func.count(ItsmRequest.id)))
+            .filter(ItsmRequest.project.isnot(None)).group_by(ItsmRequest.project, ItsmRequest.system_id).all())
+    matcher = link.SystemMatcher(db) if any(sid is None for _, sid, _ in rows) else None
+    out = []
+    for project, sid, n in sorted(rows, key=lambda x: (x[1] is not None, -x[2], x[0])):
+        s = systems.get(sid)
+        out.append({"project": project, "requests": n, "system": {"id": s.id, "code": s.code, "name": s.name} if s else None,
+                    "how": None if s is None else "mapped" if norm_text(project) in mapped else "exact",
+                    "suggestions": matcher.suggest(project) if s is None else []})
+    return {"projects": out, "systems": [{"id": s.id, "code": s.code, "name": s.name}
+                                         for s in sorted(systems.values(), key=lambda s: s.code) if s.status == "active"]}
+
+
+@router.post("/projects")
+def map_project(data: Dict[str, Any] = Body(...), user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """{project, systemId} confirms project → system for every request naming it; systemId null removes the mapping."""
+    from ..owners.models import System
+    project = str(data.get("project") or "").strip()[:255]
+    key = norm_text(project)
+    if not key:
+        raise HTTPException(422, "Thiếu tên dự án.")
+    sid = data.get("systemId")
+    m = db.query(ItsmProjectMap).filter_by(project_norm=key).first()
+    if sid is None:
+        if m is not None:
+            db.delete(m)
+    else:
+        s = db.get(System, sid) if isinstance(sid, int) else None
+        if s is None or s.status != "active":
+            raise HTTPException(422, "Hệ thống không tồn tại hoặc đã ngừng.")
+        if m is None:
+            db.add(ItsmProjectMap(project_norm=key, project=project, system_id=s.id, created_by=user.username))
+        else:
+            m.system_id, m.created_by = s.id, user.username
+    db.add(AuditLog(username=user.username, action="itsm.project.map", detail=json.dumps({"project": project, "systemId": sid})))
+    db.flush()
+    link.run(db)        # re-link now; owner assignment ("itsm" source) follows at the next round
+    return projects(user, db)
 
 
 @router.get("/labels")

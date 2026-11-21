@@ -319,6 +319,9 @@ def vm_card(db: Session, user: User, name: str, vcenter: str = "") -> Dict[str, 
     from ..owners import service as owners
     out["system"] = owners.system_of_vm(db, ci.id) if ci is not None else None
     out["canAssignSystem"] = ci is not None and owners.can_manage(user)
+    if ci is not None and get_settings().itsm():
+        from ..itsm.link import vm_requests
+        out["itsm"] = vm_requests(db, ci.id, out["config"])
     return out
 
 

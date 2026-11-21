@@ -202,6 +202,7 @@ class Settings(BaseSettings):
     itsm_rate_per_min: int = Field(default=60)                 # API calls per minute to one SDP server
     itsm_interval_minutes: int = Field(default=30)             # incremental reads after the backfill
     itsm_templates: str = Field(default="VM provisioning, VM reconfiguration, VM Decommision")   # HSC's SDP templates
+    itsm_base_url: str = Field(default="")                     # SDP web URL for request links; empty = https://<host>:<port> of the source
 
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)

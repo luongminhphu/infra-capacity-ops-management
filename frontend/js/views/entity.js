@@ -114,7 +114,29 @@ function entityVmHtml(d) {
     </section>
     ${backup}
     ${enSystemHtml(d)}
+    ${enItsmHtml(d.itsm)}
     <section class="panel"><div class="panel-title" role="heading" aria-level="2">Phát hiện compliance</div>${enFindings(d.findings)}</section>`;
+}
+
+/* ServiceDesk requests that created / changed / removed this VM (G7c): requested vs current resources. */
+function enItsmHtml(list) {
+  if (!list || !list.length) return '';
+  const res = (o, k) => (o[k] === null || o[k] === undefined ? '—' : uiNumber(o[k]));
+  const rows = list.map(r => {
+    const q = r.requested, now = r.current;
+    const want = ['vcpu', 'ramGB', 'diskGB'].map(k => `${q[k + 'Before'] !== null && q[k + 'Before'] !== undefined ? `${res(q, k + 'Before')} → ` : ''}${res(q, k)}`);
+    const title = r.kind === 'new_vm' ? `Tạo theo yêu cầu #${esc(r.reqId)}` : `${esc(r.kindLabel)} #${esc(r.reqId)}`;
+    return `<tr><td><b>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}</b>
+        <span class="muted-sub">${esc(r.subject || '')}${r.createdAt ? ' · ' + esc(uiDateTime(r.createdAt, 'short')) : ''}</span></td>
+      <td>${r.match === 'strong' ? uiTag('khớp chắc') : uiTag('khớp theo tên ngắn')}</td>
+      <td class="num">${want[0]}<span class="muted-sub">hiện ${res(now, 'vcpu')}</span></td>
+      <td class="num">${want[1]}<span class="muted-sub">hiện ${res(now, 'ramGB')}</span></td>
+      <td class="num">${want[2]}<span class="muted-sub">hiện ${res(now, 'diskGB')}</span></td></tr>`;
+  }).join('');
+  return `<section class="panel"><div class="panel-head"><div class="panel-title" role="heading" aria-level="2">Yêu cầu ServiceDesk</div>
+      <div class="panel-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-nav-link="itsm-requests">Nhu cầu hạ tầng</button></div></div>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>Yêu cầu</th><th>Ghép</th><th>vCPU xin</th><th>RAM xin (GB)</th><th>Disk xin (GB)</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></section>`;
 }
 
 /* Hệ thống & Owner of a VM (G2a) + assign button for owner admins. */
@@ -127,7 +149,7 @@ function enSystemHtml(d) {
       ...(s.deputyEmail ? [['Backup', `${esc(s.deputyName || '')} <span class="mono">${esc(s.deputyEmail)}</span>`]] : []),
       ...((s.supportEmails || []).length || s.supportName ? [['Support (đội dự án)', `${esc(s.supportName || '')}${(s.supportEmails || []).map(e => ` <span class="mono">${esc(e)}</span>`).join(',')}${s.supportContact ? `<span class="muted-sub">${esc(s.supportContact)}</span>` : ''}`]] : []),
       ['Dự án · phòng ban', esc([s.project, s.department].filter(Boolean).join(' · ') || '—')],
-      ['Mức quan trọng', uiTag(s.criticalityLabel)], ['Gán bởi', esc(`${s.source === 'manual' ? 'Gán tay' : s.source}${s.assignedBy ? ' · ' + s.assignedBy : ''}`)]])
+      ['Mức quan trọng', uiTag(s.criticalityLabel)], ['Gán bởi', esc(`${({ manual: 'Gán tay', itsm: 'Yêu cầu ServiceDesk' })[s.source] || s.source}${s.assignedBy ? ' · ' + s.assignedBy : ''}`)]])
     : '<p class="muted-sub">VM chưa thuộc hệ thống nào — chưa có owner.</p>';
   return `<section class="panel"><div class="panel-head"><div class="panel-title" role="heading" aria-level="2">Hệ thống & Owner</div>
       <div class="panel-toolbar">${btn}<button class="btn btn-ghost btn-sm" type="button" data-nav-link="systems">Hệ thống & Owner</button></div></div>${body}</section>`;

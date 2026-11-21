@@ -70,7 +70,7 @@ def test_demo_vms_carry_folders_and_attributes():
 
 
 # ---------------------------------------------------------------- priority
-def test_four_overlapping_sources_follow_priority(db):  # noqa: F811
+def test_four_overlapping_sources_follow_priority(db, monkeypatch):  # noqa: F811
     s_man, s_attr, s_rule, s_itsm = (_system(db, n) for n in ("Manual", "Attr", "Rule", "Itsm"))
     _rule(db, "folder", "/Projects/Bank", s_rule)
     every = dict(folder="/Projects/Bank/Core", attrs={"System": "Attr"})
@@ -83,6 +83,8 @@ def test_four_overlapping_sources_follow_priority(db):  # noqa: F811
                 SystemMember(ci_id=v2, system_id=s_itsm, source="itsm", assigned_at=now),
                 SystemMember(ci_id=v3, system_id=s_itsm, source="itsm", assigned_at=now),
                 SystemMember(ci_id=v4, system_id=s_itsm, source="itsm", assigned_at=now)])
+    # v4 keeps "itsm" only while a ServiceDesk request still links it (strong) to that system (G7c)
+    monkeypatch.setattr("app.itsm.link.owner_sources", lambda _db: {v4: (s_itsm, "Yêu cầu ServiceDesk #1")})
     db.commit()
     res = rules.run(db)
     assert (_member(db, v1), _member(db, v2), _member(db, v3), _member(db, v4)) == \

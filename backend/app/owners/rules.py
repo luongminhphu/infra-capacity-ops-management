@@ -7,6 +7,8 @@ Priority, highest first:  manual  >  attribute  >  tag (G2d)  >  rule  >  itsm (
   rule       owner_rules by priority (then the longest pattern): folder (path prefix: "/Projects/Bank" matches
              "/Projects/Bank/Core"), resource_pool, cluster (exact, case-insensitive), attribute ("Name=value"),
              name_regex (re.search on the VM name; ≤ 200 characters, no nested quantifiers / back-references).
+  itsm       the VM was created by a ServiceDesk "VM provisioning" request whose project matched a system (strong link,
+             itsm/link.py).
 The engine only writes the assignments it owns (attribute, rule); a manual one is never touched. plan() computes the
 whole diff without writing (the "Chạy thử" button); apply() writes exactly that plan; run() = plan + apply + commit.
 """
@@ -28,7 +30,7 @@ from .models import OwnerProposal, OwnerRule, System, SystemMember
 logger = logging.getLogger("vco.owners")
 
 RANK = {"manual": 0, "attribute": 1, "tag": 2, "rule": 3, "itsm": 4}
-MANAGED = ("attribute", "rule")             # sources this engine adds and removes
+MANAGED = ("attribute", "rule", "itsm")     # sources this engine adds and removes
 UI_KINDS = ("folder", "resource_pool", "cluster", "attribute", "name_regex")
 KIND_LABELS = {"folder": "Thư mục vCenter", "resource_pool": "Resource pool", "cluster": "Cluster",
                "attribute": "Thuộc tính vCenter", "name_regex": "Tên VM (regex)"}
@@ -148,7 +150,7 @@ def _attr(attrs: Dict[str, str], name: str) -> str:
 
 
 def _decide(vm: Dict[str, Any], names: Dict[str, str], by_code, by_name, by_owner, rules: List[_Rule],
-            proposals: Dict[str, Dict[str, Any]]) -> Optional[Tuple[int, str, str]]:
+            proposals: Dict[str, Dict[str, Any]], itsm: Dict[int, Tuple[int, str]]) -> Optional[Tuple[int, str, str]]:
     """(system_id, source, reason) or None; unknown attribute values are recorded in `proposals`."""
     attrs = vm.get("customAttrs") or {}
     sys_val, owner_val = _attr(attrs, names["system"]), _attr(attrs, names["owner"]).lower()
@@ -171,6 +173,9 @@ def _decide(vm: Dict[str, Any], names: Dict[str, str], by_code, by_name, by_owne
     for r in rules:
         if r.match(vm):
             return r.system_id, "rule", f"{KIND_LABELS[r.kind]}: {r.pattern}"
+    if vm["ciId"] in itsm:
+        sid, why = itsm[vm["ciId"]]
+        return sid, "itsm", why
     return None
 
 
@@ -201,10 +206,12 @@ def plan(db: Session, rules: Optional[List[Dict[str, Any]]] = None, names: Optio
     active_ids = {s.id for s in systems}
     compiled = [r for r in _compile(rules) if r.system_id in active_ids]
     cur = {m.ci_id: m for m in db.query(SystemMember)}
+    from ..itsm.link import owner_sources
+    itsm = {c: v for c, v in owner_sources(db).items() if v[0] in active_ids}
     proposals: Dict[str, Dict[str, Any]] = {}
     adds, changes, removes, kept, same, none = [], [], [], 0, 0, 0
     for vm in _vms(db):
-        want = _decide(vm, names, by_code, by_name, by_owner, compiled, proposals)
+        want = _decide(vm, names, by_code, by_name, by_owner, compiled, proposals, itsm)
         m = cur.get(vm["ciId"])
         if want is None:
             if m is not None and m.source in MANAGED:
@@ -246,7 +253,7 @@ def apply(db: Session, p: Dict[str, Any], username: str = "system") -> Dict[str,
     """Write a plan (bulk statements; caller commits)."""
     now = dt.datetime.utcnow()
     by = f"auto:{username}" if username != "system" else "auto"
-    conf = {"attribute": "strong", "rule": "weak"}
+    conf = {"attribute": "strong", "rule": "weak", "itsm": "strong"}
     if p["adds"]:
         db.execute(insert(SystemMember), [{"ci_id": x["ciId"], "system_id": x["systemId"], "source": x["source"],
                                            "confidence": conf[x["source"]], "assigned_by": by, "assigned_at": now} for x in p["adds"]])
