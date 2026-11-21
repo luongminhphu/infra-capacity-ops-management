@@ -464,10 +464,17 @@ def _build_cmdb() -> Optional[Dict[str, Any]]:
 
 
 def _assign_owners() -> Optional[Dict[str, Any]]:
-    """Automatic system assignment from vCenter attributes / owner rules (owners/rules.py), after the CI build."""
+    """Automatic system assignment from vCenter attributes / owner rules (owners/rules.py), after the CI build.
+    ServiceDesk requests are linked to systems / VM CIs first (itsm/link.py): they feed the lowest source "itsm"."""
+    from ..itsm import link
     from ..owners import rules
     try:
         with SessionLocal() as db:
+            try:
+                link.run(db)
+            except Exception:  # noqa: BLE001 — the other owner sources still apply
+                db.rollback()
+                logger.exception("ITSM request linking failed")
             return rules.run(db)
     except Exception:  # noqa: BLE001 — derived data: never stops the polling loop
         logger.exception("Owner rules run failed")

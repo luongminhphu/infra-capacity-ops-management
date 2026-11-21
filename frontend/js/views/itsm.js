@@ -19,7 +19,7 @@ async function renderItsmView() {
     if (id) { mount.innerHTML = itsmDetailHtml(await apiRequest(`/itsm/requests/${encodeURIComponent(id)}`)); refreshIcons(); return; }
     const p = new URLSearchParams(Object.entries(itsmState).filter(([, v]) => v));
     const [list, stats] = await Promise.all([apiRequest(`/itsm/requests?${p}`), apiRequest('/itsm/stats?months=12')]);
-    mount.innerHTML = itsmStatsHtml(stats) + itsmListHtml(list);
+    mount.innerHTML = itsmStatsHtml(stats) + itsmListHtml(list) + itsmProjectsHtml(await apiRequest('/itsm/projects'));
     refreshIcons();
   } catch (err) { mount.innerHTML = uiError(err.message); }
 }
@@ -65,7 +65,10 @@ function itsmDetailHtml(r) {
   return `<section class="panel"><div class="panel-head"><div><div class="eyebrow">Yêu cầu #${esc(r.reqId)} · ${esc(r.template || '')}</div>
       <div class="panel-title" role="heading" aria-level="2">${esc(r.subject || '—')}</div>
       <p class="panel-sub">${esc(r.requester || '—')} · ${esc(r.requesterEmail || '')} · ${esc(r.department || '')} · ${esc(r.status || '')}</p></div>
-      <button class="btn btn-ghost btn-sm" type="button" data-itsm-back>Danh sách yêu cầu</button></div>
+      <div class="panel-toolbar">${r.sdpUrl ? `<a class="btn btn-ghost btn-sm" href="${esc(r.sdpUrl)}" target="_blank" rel="noopener noreferrer">Mở trên ServiceDesk</a>` : ''}
+        <button class="btn btn-ghost btn-sm" type="button" data-itsm-back>Danh sách yêu cầu</button></div></div>
+      ${r.project === null ? '' : enDl([['Dự án', esc(r.project)], ['Hệ thống', r.system ? `${esc(r.system.name)} <span class="muted-sub mono">${esc(r.system.code)}</span>` : uiPill('warn', 'Chưa khớp hệ thống')],
+              ['VM', r.vms.length ? r.vms.map(v => `${uiEntityLink('vm', v.vm, v.vcenterKey, false)} <span class="muted-sub mono sr-inline">${esc(v.ip || '—')}</span>${v.match === 'weak' ? ' ' + uiTag('tên ngắn') : ''}${v.retired ? ' ' + uiTag('đã gỡ') : ''}`).join(', ') : '—']])}
       <p>${uiPill(ITSM_STATUS_TONE[r.parseStatus] || 'na', r.reviewedAt ? `Đã duyệt bởi ${r.reviewedBy}` : r.parseLabel)}
         ${r.confidence !== null && r.confidence !== undefined ? `<span class="muted-sub sr-inline">độ tin cậy ${uiNumber(r.confidence * 100)}%</span>` : ''}</p></section>
     <div class="sr-two">
@@ -98,6 +101,13 @@ function itsmBind(mount) {
   mount.addEventListener('change', async (e) => {
     const f = e.target.closest('[data-itsm-filter]');
     if (f) { itsmState[f.dataset.itsmFilter] = f.value.trim(); renderItsmView(); return; }
+    const pm = e.target.closest('[data-itsm-project]');
+    if (pm) {
+      const body = { project: pm.dataset.itsmProject, systemId: pm.value ? Number(pm.value) : null };
+      try { await apiRequest('/itsm/projects', { method: 'POST', body: JSON.stringify(body) }); renderItsmView(); }
+      catch (err) { uiAlert(err.message); }
+      return;
+    }
     const l = e.target.closest('[data-itsm-label]');
     if (l && l.value) {
       try { await apiRequest('/itsm/labels', { method: 'POST', body: JSON.stringify({ label: l.dataset.itsmLabel, field: l.value }) }); renderItsmView(); }
@@ -126,6 +136,26 @@ function itsmBind(mount) {
     const row = e.target.closest('[data-itsm-open]');
     if (row && e.key === 'Enter') row.click();
   });
+}
+
+/* Project named in the requests → business system (G7c). Exact code / name matches are automatic; the rest get close
+   suggestions and an admin confirms (saved and reused). Matched new-VM requests feed the owner source "itsm". */
+function itsmProjectsHtml(d) {
+  if (!d.projects.length) return '';
+  const how = { mapped: 'đã xác nhận', exact: 'khớp chính xác' };
+  const pick = (p) => {
+    const sugg = new Set(p.suggestions.map(s => s.systemId));
+    const opts = [...p.suggestions.map(s => ({ id: s.systemId, code: s.code, name: s.name, hint: ` (gần đúng ${uiNumber(s.score * 100)}%)` })),
+      ...d.systems.filter(s => !sugg.has(s.id)).map(s => ({ ...s, hint: '' }))];
+    return `<select data-itsm-project="${esc(p.project)}" aria-label="Hệ thống cho dự án ${esc(p.project)}"><option value="">— chưa gán —</option>${opts.map(s =>
+      `<option value="${s.id}"${p.system && p.system.id === s.id ? ' selected' : ''}>${esc(`${s.code} — ${s.name}${s.hint}`)}</option>`).join('')}</select>`;
+  };
+  const rows = d.projects.map(p => `<tr><td><b>${esc(p.project)}</b><span class="muted-sub">${uiNumber(p.requests)} yêu cầu</span></td>
+      <td>${uiIsAdmin() ? pick(p) : (p.system ? esc(`${p.system.code} — ${p.system.name}`) : '—')}</td>
+      <td>${p.system ? uiTag(how[p.how]) : p.suggestions.length ? uiPill('warn', 'Có gợi ý') : uiPill('na', 'Chưa khớp')}</td></tr>`).join('');
+  return `<section class="panel"><div class="panel-title" role="heading" aria-level="2">Dự án → hệ thống</div>
+      <p class="panel-sub">Dự án trùng mã / tên hệ thống được ghép tự động. Dự án khác chọn hệ thống một lần, các yêu cầu sau dùng lại. VM tạo theo yêu cầu đã ghép hệ thống được gán owner tự động (ưu tiên thấp nhất, không đè gán tay).</p>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Dự án</th><th>Hệ thống</th><th>Ghép</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
 }
 
 /* One year of VM provisioning / reconfiguration / decommission (counted requests only: read automatically or reviewed). */

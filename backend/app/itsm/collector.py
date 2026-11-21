@@ -103,12 +103,14 @@ def sync_itsm(db: Session, cfg: ItsmConfig, force: bool = False, max_requests: i
         row.captured_at = row.last_ok_at = now
         row.last_error = row.last_error_at = None
         db.commit()
+        from . import link
         from .process import process
         try:
             parsed = process(db, cfg.key)              # body tables → lines; AI fallback → review queue (G7b)
+            link.run(db)                               # → system / VM (G7c); again after each CI build (scheduler)
         except Exception:  # noqa: BLE001 — the requests are stored; parsing runs again next round
             db.rollback()
-            logger.exception("ITSM parse failed for %s", cfg.key)
+            logger.exception("ITSM parse / link failed for %s", cfg.key)
             parsed = {}
         logger.info("Synced SDP %s: %d request(s) read, backfill %s, cursor %s", cfg.key, fetched,
                     "done" if row.backfill_done else "in progress", row.cursor_ms)

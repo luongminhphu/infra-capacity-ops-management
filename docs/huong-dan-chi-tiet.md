@@ -1287,6 +1287,32 @@ Menu **Quản lý thông tin → Nhu cầu hạ tầng** (`#/demand`).
 API: `GET /api/itsm/requests`, `/api/itsm/requests/{id}`, `POST /api/itsm/requests/{id}/review` (admin), `GET|POST|DELETE /api/itsm/labels`
 (ghi: admin), `GET /api/itsm/stats?months=12`.
 
+### Nối yêu cầu ↔ hệ thống ↔ VM (ICO v2 G7c)
+
+Chạy ở pod leader mỗi vòng đồng bộ, sau khi dựng sổ CI và trước bước gán owner tự động. Chỉ dùng yêu cầu *Đọc tự động* hoặc *Đã duyệt*.
+
+**Dự án → hệ thống**
+- Dự án của yêu cầu: cột *Dự án* trong bảng, nếu không có thì dòng *Dự án: …* trong nội dung, cuối cùng là phòng ban.
+- Ghép tự động khi trùng (không dấu, không phân biệt hoa thường) mã, tên hoặc dự án của **đúng một** hệ thống.
+- Dự án khác hiện ở khối **Dự án → hệ thống** trên trang Nhu cầu hạ tầng, kèm tối đa 3 hệ thống gần đúng.
+  Admin chọn hệ thống một lần; ánh xạ được lưu (`itsm_project_map`) và dùng lại cho mọi yêu cầu sau. Chọn *— chưa gán —* để bỏ.
+
+**Dòng yêu cầu → VM** (`itsm_request_ci`, so với mọi VM trong sổ CI, cả VM đã gỡ):
+
+| Mức | Điều kiện |
+|---|---|
+| Khớp chắc (strong) | Trùng tên VM đầy đủ hoặc FQDN. Với **cấp phát mới**, VM còn phải xuất hiện trong [ngày tạo yêu cầu, ngày hoàn tất + 14 ngày] — theo sự kiện *Tạo VM* của nhật ký thay đổi, nếu không có thì lần đầu thấy VM trong kiểm kê. Nâng cấp / xoá VM ghép VM có sẵn, không xét thời gian. |
+| Khớp yếu (weak) | Chỉ trùng tên ngắn (phần trước dấu chấm), hoặc trùng tên nhưng VM xuất hiện ngoài khoảng trên (tên dùng lại). |
+
+**Gán owner nguồn “itsm”**: VM khớp chắc với yêu cầu cấp phát mới đã ghép hệ thống được gán vào hệ thống đó, ưu tiên **thấp nhất**
+(gán tay > thuộc tính vCenter > tag > quy tắc > itsm). Mất liên kết thì phần gán này cũng được gỡ; gán tay không bao giờ bị đè.
+
+**Thẻ VM** có khối *Yêu cầu ServiceDesk*: “Tạo theo yêu cầu #…” (mở trên ServiceDesk), tài nguyên xin (As-is → To-be với nâng cấp)
+cạnh tài nguyên hiện tại. Link dùng `ITSM_BASE_URL` (vd `https://sdp.congty.vn`); để trống thì là `https://<host>:<port>` của nguồn
+(nguồn DEMO không có link). Trang chi tiết yêu cầu hiện dự án, hệ thống và các VM đã ghép (kèm IP).
+
+API: `GET /api/itsm/projects`, `POST /api/itsm/projects` `{project, systemId}` (admin).
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**

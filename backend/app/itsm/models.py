@@ -10,6 +10,8 @@ from ..models import Base, utcnow
 from ..shared.schema import in_check as _in
 
 REQUEST_KINDS = ("new_vm", "resize", "decommission", "other")
+KIND_LABELS = {"new_vm": "Cấp phát mới (VM provisioning)", "resize": "Nâng cấp / tinh chỉnh (VM reconfiguration)",
+               "decommission": "Xoá VM (VM Decommision)", "other": "Khác"}
 PARSE_STATUSES = ("parsed", "ai", "review", "failed")
 
 
@@ -102,6 +104,34 @@ class ItsmLabelMap(Base):
     id = Column(Integer, primary_key=True)
     label_norm = Column(String(128), nullable=False)
     field = Column(String(16), nullable=False)
+    created_by = Column(String(255))
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class ItsmRequestCi(Base):
+    """A request line ↔ the VM it created / changed / removed (G7c). strong = full name or FQDN (+ created within the request
+    window for a new VM); weak = short name only — never used for owner assignment."""
+    __tablename__ = "itsm_request_ci"
+    __table_args__ = (UniqueConstraint("request_id", "line_no", "ci_id", name="uq_itsm_request_ci"),
+                      CheckConstraint(_in("match", ("strong", "weak")), name="ck_itsm_request_ci_match"))
+
+    id = Column(Integer, primary_key=True)
+    request_id = Column(Integer, ForeignKey("itsm_request.id", ondelete="CASCADE"), nullable=False, index=True)
+    line_no = Column(Integer, nullable=False)
+    ci_id = Column(Integer, ForeignKey("ci.id", ondelete="CASCADE"), nullable=False, index=True)
+    match = Column(String(8), nullable=False)
+    matched_by = Column(String(32), nullable=False)          # name / fqdn / short_name (+ "+window" / "+outside_window" for a new VM)
+
+
+class ItsmProjectMap(Base):
+    """Project (or department) written in requests → business system, confirmed by an admin and reused."""
+    __tablename__ = "itsm_project_map"
+    __table_args__ = (UniqueConstraint("project_norm", name="uq_itsm_project_map"),)
+
+    id = Column(Integer, primary_key=True)
+    project_norm = Column(String(255), nullable=False)
+    project = Column(String(255), nullable=False)
+    system_id = Column(Integer, ForeignKey("systems.id", ondelete="CASCADE"), nullable=False)
     created_by = Column(String(255))
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
