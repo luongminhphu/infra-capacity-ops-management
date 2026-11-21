@@ -55,3 +55,11 @@ def ci_impact(ci_id: int, direction: str = Query(default="down", max_length=4), 
               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """down: what fails with this CI (host → VM → backup client…); up: what this CI depends on."""
     return svc.impact(db, user, ci_id, direction, depth)
+
+
+@router.get("/{ci_id}/timeline")
+def ci_timeline(ci_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Events of this CI, newest first (G5 event store); 404 like the card when the CI is hidden for the caller."""
+    from ..events import service as events
+    svc.get_ci(db, user, ci_id)
+    return {"items": events.ci_timeline(db, ci_id)}

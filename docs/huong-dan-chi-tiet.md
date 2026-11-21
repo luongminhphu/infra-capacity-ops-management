@@ -1163,6 +1163,32 @@ Mã Opex chỉ hiện với người có quyền xem Chi phí. **Kế hoạch n�
 
   Số trên PDF / Excel lấy cùng một hàm với trang nên luôn khớp.
 
+### Sự cố — kho sự kiện và vòng đời sự cố (ICO v2 G5)
+
+Menu **Vận hành → Sự cố** (`#/incidents`, chi tiết `#/incidents?id=<số>`). Mọi người dùng app đầy đủ đều xem và thao tác được.
+
+- **Sự kiện** lấy từ đúng các mục của Hộp việc thuộc 8 nguồn hạ tầng: capacity, backup, datastore, snapshot VM, alarm vCenter,
+  sức khoẻ host, storage, phần cứng Dell OME.
+  - Hộp việc tính một lần mỗi vòng ở pod leader; cùng kết quả đó đi vào kho sự kiện và cảnh báo Discord, nên ba nơi luôn thấy cùng
+    đối tượng, cùng khoá.
+  - Mỗi lần một đối tượng đổi mức ghi một dòng vào `ops_event` (chỉ thêm, không sửa): *Mở*, *Nặng hơn*, *Nhẹ hơn*, *Hết*.
+  - Nguồn đọc lỗi trong vòng đó: sự kiện của nguồn giữ nguyên, không bị coi là hết.
+  - Chạy lại cùng dữ liệu không ghi thêm gì.
+- **Sự cố** gom các sự kiện của cùng một đối tượng trong sổ CI (vd. alarm nguồn điện + cảm biến PSU của cùng host → một sự cố).
+  - Mục không gắn được đối tượng (vd. “184 VM chưa có backup”) là một sự cố riêng.
+  - Mọi sự kiện đã hết → sự cố tự đóng (*tự động*).
+  - Người dùng có thể **Nhận xử lý**, **Giao cho…**, **Đóng sự cố** (kèm ghi chú); mỗi thao tác ghi `audit_log`.
+  - Đóng tay khi còn sự kiện mở: sự kiện mới trên đối tượng đó mở sự cố mới.
+- **Chập chờn**: một sự kiện mở ≥ 4 lần trong 6 giờ → sự cố đánh dấu *chập chờn*, báo **một lần** lên các kênh Discord nhận cảnh báo
+  vận hành.
+- **Thống kê 6 tháng** (theo tháng giờ Việt Nam, theo nguồn, theo hệ thống của VM): số sự cố, số vượt ngưỡng, chưa đóng,
+  **MTTA** (mở → nhận) và **MTTR** (mở → đóng); 10 đối tượng nhiều sự cố nhất.
+- **Bộ lọc**: trạng thái, mức, nguồn, thời gian mở; bộ lọc Owner giữ sự cố của VM thuộc hệ thống đã chọn và của host / datastore /
+  cluster mà các VM đó chạy trên.
+- **Thẻ đối tượng** có mục *Timeline sự kiện* (`GET /api/ci/{id}/timeline`).
+- Lưu `ops_event` 13 tháng; sự cố giữ lại để làm thống kê.
+- API: `GET /api/incidents`, `/api/incidents/stats`, `/api/incidents/{id}`, `POST /api/incidents/{id}/ack|assign|resolve`.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**

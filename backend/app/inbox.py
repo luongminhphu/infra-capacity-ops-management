@@ -42,7 +42,7 @@ def item(source: str, level: str, key: str, title: str, detail: str = "", page: 
          due: Optional[dt.date] = None, feature: Optional[str] = None, role: Optional[str] = None,
          push: bool = False, alert_key: Optional[str] = None, page_label: str = "",
          facts: Optional[List[Dict[str, Any]]] = None, links: Optional[List[Dict[str, Any]]] = None,
-         events: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+         events: Optional[List[Dict[str, Any]]] = None, ci: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """role: None (any signed-in user) | 'spend:viewer|editor|approver' | 'admin'.
     alert_key: identity for Discord alerts when it must not change with the level (the inbox key does
     change, so a worsened item reappears after "Xong"); defaults to the key.
@@ -51,11 +51,12 @@ def item(source: str, level: str, key: str, title: str, detail: str = "", page: 
     links: extra jumps, {label, page, query} (a page of the app), {label, entity: {type, name, vc}} (an entity card)
     or {label, href} (an external https link built by a checked helper, e.g. vcenter/links.object_url).
     events: the concrete events behind the item (alerts, failed jobs, sensors, parts), newest / worst first,
-    {level, title, detail?, at?, page?, query?, entity?} — the drill-down to the root cause (max MAX_EVENTS)."""
+    {level, title, detail?, at?, page?, query?, entity?} — the drill-down to the root cause (max MAX_EVENTS).
+    ci: the CI the item is about, for the event store (events/service.CiResolver): {type, key} or {type, name, vc?}."""
     return {"key": key[:255], "source": source, "level": level, "title": title[:300], "detail": detail[:600], "page": page,
             "query": query, "pageLabel": page_label, "due": due, "feature": feature, "role": role, "push": push,
             "alertKey": (alert_key or key)[:255], "facts": facts or [], "links": links or [],
-            "events": (events or [])[:MAX_EVENTS]}
+            "events": (events or [])[:MAX_EVENTS], "ci": ci}
 
 
 def _fact(label: str, value: Any, kind: str = "") -> Optional[Dict[str, Any]]:
@@ -126,6 +127,7 @@ def capacity_items(db: Session) -> List[Dict[str, Any]]:
                         f"{r['hosts']} host, {r['vms']} VM — {r['overall']['text']}. Xem chi tiết và đề xuất ở Capacity.",
                         page="dashboard", push=peak >= PUSH_LEVEL_PCT,
                         alert_key=_key("cap", r["name"]),      # BEQ-04: one alert per cluster, whatever the level
+                        ci={"type": "cluster", "name": r["name"]},
                         facts=_facts(_fact("CPU (so với ngưỡng)", _pct(cpu)), _fact("RAM (so với ngưỡng)", _pct(ram)),
                                      _fact("Overcommit vCPU : core", _num(m.get("cpuOvercommit"), 2)),
                                      _fact("RAM cấp / RAM vật lý", _num(m.get("ramOvercommit"), 2)),
@@ -194,7 +196,8 @@ def backup_items(db: Session) -> List[Dict[str, Any]]:
                         f"{f.get('title') or ''}{' — ' + f['entity'] if f.get('entity') else ''}",
                         f"{f.get('detail') or ''} {('→ ' + f['action']) if f.get('action') else ''}".strip(),
                         page=page, query=query, page_label=page_label, feature="backup",
-                        facts=_facts(_fact("Nhóm", area), _fact("Đối tượng", ent)), events=events))
+                        facts=_facts(_fact("Nhóm", area), _fact("Đối tượng", ent)), events=events,
+                        ci={"type": "backup_client", "name": ent} if area == "Client" and ent else None))
     return out
 
 
@@ -289,6 +292,9 @@ def system_items(db: Session) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------- infrastructure health (app/infra.py)
+ALARM_CI_TYPE = {"host": "hypervisor_host"}           # alarm entityType → CI type (vm / datastore / cluster are the same)
+
+
 def datastore_items(db: Session) -> List[Dict[str, Any]]:
     from . import infra
     out = []
@@ -301,6 +307,7 @@ def datastore_items(db: Session) -> List[Dict[str, Any]]:
                         "; ".join(d["reasons"]) + f". Cluster: {', '.join(d['clusters']) or '—'}.",
                         page="infra-ds", query=f"ds={quote(d['vcenterKey'] + '|' + d['key'])}",
                         page_label="Xem datastore này", alert_key=_key("ds", d["vcenterKey"], d["key"]),
+                        ci={"type": "datastore", "key": f"{d['vcenterKey']}:{d['key']}"},
                         facts=_facts(_fact("vCenter", d["vcenterKey"]), _fact("Cluster", ", ".join(d["clusters"])),
                                      _fact("Đã dùng", _pct(d["usedPct"])),
                                      _fact("Đầy sau", f"~{d['daysToFull']:.0f} ngày" if d.get("daysToFull") is not None else None),
@@ -319,7 +326,7 @@ def snapshot_items(db: Session) -> List[Dict[str, Any]]:
                         f"VM {s['vm']}: {s['count']} snapshot, cũ nhất {s['ageDays']:.0f} ngày".replace(".", ","),
                         "; ".join(s["reasons"]) + ". Xoá / hợp nhất snapshot sau khi xác nhận với chủ VM.",
                         page="infra-snap", query=f"vm={quote(s['vm'])}", page_label="Xem snapshot của VM",
-                        alert_key=_key("snap", s["vcenterKey"], s["vm"]),
+                        alert_key=_key("snap", s["vcenterKey"], s["vm"]), ci={"type": "vm", "name": s["vm"], "vc": s["vcenterKey"]},
                         facts=_facts(_fact("vCenter", s["vcenterKey"]), _fact("Cluster", s.get("cluster")), _fact("Host", s.get("host")),
                                      _fact("Snapshot cũ nhất", s.get("oldestAt"), "datetime")),
                         events=[_event(s["level"], f"Snapshot {i.get('name') or '—'}", i.get("description") or "", i.get("createdAt"))
@@ -346,6 +353,7 @@ def alarm_items(db: Session) -> List[Dict[str, Any]]:
                         f"vCenter {a['vcenterKey']}, {a['entityType']}{(', cluster ' + a['cluster']) if a.get('cluster') else ''}.",
                         page="infra-alarm", query=f"alarm={quote(a['vcenterKey'] + '|' + a['key'])}", page_label="Xem alarm này",
                         alert_key=_key("alarm", a["vcenterKey"], a["key"]),
+                        ci={"type": ALARM_CI_TYPE.get(a["entityType"], a["entityType"]), "name": a["entity"], "vc": a["vcenterKey"]},
                         facts=_facts(_fact("Alarm", a["alarm"]), _fact("Trạng thái trên vCenter", ALARM_STATUS_TEXT.get(a["status"], a["status"])),
                                      _fact("Đối tượng", f"{ENTITY_TEXT.get(a['entityType'], a['entityType'])} {a['entity']}"),
                                      _fact("Cluster", a.get("cluster")), _fact("vCenter", a["vcenterKey"]),
@@ -377,7 +385,7 @@ def health_items(db: Session) -> List[Dict[str, Any]]:
                         f"Host {h['host']}: phần cứng {infra.LEVEL_TEXT[h['level']].lower()}",
                         "; ".join(h["reasons"][:4]) or "Trạng thái tổng của host không xanh.",
                         page="infra-health", query=f"host={quote(h['host'])}", page_label="Xem sức khoẻ host này",
-                        alert_key=_key("hh", h["vcenterKey"], h["host"]),
+                        alert_key=_key("hh", h["vcenterKey"], h["host"]), ci={"type": "hypervisor_host", "key": f"{h['vcenterKey']}:{h['host']}"},
                         facts=_facts(_fact("vCenter", h["vcenterKey"]), _fact("Cluster", h.get("cluster")),
                                      _fact("Kết nối", h.get("connection")), _fact("Trạng thái tổng", h.get("overallStatus"))),
                         events=([_event("crit", f"Host {h['connection']} với vCenter")] if h["connection"] != "connected" else [])
@@ -397,7 +405,7 @@ def storage_items(db: Session) -> List[Dict[str, Any]]:
         out.append(item("storage", a["level"], _key("st", a["sourceKey"], a["level"]),
                         f"Storage {a['name']}{(' (' + a['model'] + ')') if a.get('model') else ''}: {infra.LEVEL_TEXT[a['level']].lower()}",
                         "; ".join(a["reasons"][:4]) + ".", page="infra-storage", query=f"array={quote(a['sourceKey'])}",
-                        page_label="Xem mảng này", alert_key=_key("st", a["sourceKey"]),
+                        page_label="Xem mảng này", alert_key=_key("st", a["sourceKey"]), ci={"type": "storage_array", "key": a["sourceKey"]},
                         facts=_facts(_fact("Hãng · model", " · ".join(x for x in (a.get("vendor"), a.get("model")) if x)),
                                      _fact("Phiên bản", a.get("version")), _fact("Đã dùng", _pct(a.get("usedPct"))),
                                      _fact("Độ trễ đọc / ghi", f"{_num(a.get('latencyReadMs'), 2)} / {_num(a.get('latencyWriteMs'), 2)} ms"
@@ -484,8 +492,10 @@ def hardware_items(db: Session) -> List[Dict[str, Any]]:
     if not devs:
         return []
 
+    from .shared.identity import norm_serial
+
     def link(d) -> Dict[str, Any]:            # Phần cứng → this server (#/hardware?s=&d=), card of the physical server
-        return {"page": "hardware", "query": f"s={quote(d.source_key)}&d={d.device_id}", "page_label": "Xem máy chủ này",
+        return {"ci": {"type": "physical_server", "key": norm_serial(d.service_tag)} if d.service_tag else None, "page": "hardware", "query": f"s={quote(d.source_key)}&d={d.device_id}", "page_label": "Xem máy chủ này",
                 "links": ([{"label": f"Thẻ máy chủ {d.service_tag}", "page": "entity", "query": f"type=server&name={quote(d.service_tag)}"}]
                           if d.service_tag else []),
                 "facts": _facts(_fact("Model", d.model), _fact("Service tag", d.service_tag), _fact("iDRAC", d.idrac_ip),

@@ -19,6 +19,7 @@ from .routers import infra as infra_router
 from .routers import admin, ai_admin, ai_data as ai_data_router, report_archive as report_archive_router, users_admin as users_admin_router, bom as bom_router, exports as exports_router, appconfig, entities, home, auth, sources as sources_router, backup, compliance, dashboard, data, export, imports, licensing, reports, settings as settings_router, sizing, spend, spend_admin, spend_capex, spend_contracts, spend_import, spend_plans, spend_payments, spend_proposals, spend_quotes, spend_renovations, spend_reports, vcenters
 from .routers import dc_assets as dc_assets_router
 from .routers import cmdb as cmdb_router
+from .routers import incidents as incidents_router
 from .routers import hardware as hardware_router
 from .routers import owner_rules as owner_rules_router
 from .routers import owner_portal as owner_portal_router
@@ -166,6 +167,7 @@ app.include_router(users_admin_router.router)
 app.include_router(bom_router.router)
 app.include_router(dc_assets_router.router)
 app.include_router(cmdb_router.router)
+app.include_router(incidents_router.router)
 app.include_router(hardware_router.router)
 app.include_router(owner_rules_router.router)      # before owners: /api/systems/rules is not /{id}
 app.include_router(owners_router.router)

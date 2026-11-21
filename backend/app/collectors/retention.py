@@ -139,6 +139,8 @@ def maybe_purge(months: int, now: Optional[dt.datetime] = None) -> Optional[Dict
                 counts = purge_snapshots(db, months, now)
                 from ..config import get_settings
                 counts["hw_alert"] = purge_hw_alerts(db, get_settings().hw_alert_retention_months, now)
+                from ..events.service import purge as purge_events
+                counts["ops_event"] = purge_events(db, now)        # 13 months (G5)
             finally:
                 _cluster_unlock(db)
         if not counts.get("more"):               # finished: next pass tomorrow; otherwise next cycle
