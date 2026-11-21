@@ -71,7 +71,7 @@ EXPORTS: List[Dict[str, Any]] = [
     {"id": "systems-vm-xlsx", "group": "owners", "label": "Danh sách VM theo hệ thống (Excel)", "format": "xlsx",
      "method": "GET", "path": "/api/systems/report.xlsx", "rx": r"^/api/systems/report\.xlsx$", "feature": None, "role": None, "archive": False, "center": ["sys-xlsx"]},
     {"id": "review-pdf", "group": "owners", "label": "Kết quả rà soát owner (PDF)", "format": "pdf",
-     "method": "GET", "path": "/api/reviews/{id}/report.pdf", "rx": r"^/api/reviews/\d+/report\.pdf$", "feature": None, "role": None, "archive": True, "center": ["rv-pdf"]},
+     "method": "GET", "path": "/api/reviews/{id}/report.pdf", "rx": r"^/api/reviews/\d+/report\.pdf$", "feature": None, "role": None, "archive": False, "center": ["rv-pdf"]},
     {"id": "review-xlsx", "group": "owners", "label": "Kết quả rà soát owner (Excel)", "format": "xlsx",
      "method": "GET", "path": "/api/reviews/{id}/report.xlsx", "rx": r"^/api/reviews/\d+/report\.xlsx$", "feature": None, "role": None, "archive": False, "center": ["rv-xlsx"]},
     {"id": "bom-xlsx", "group": "bom", "label": "BOM chuẩn hoá (Excel)", "format": "xlsx",

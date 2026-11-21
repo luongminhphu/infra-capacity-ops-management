@@ -267,3 +267,30 @@ def test_admin_review_endpoints(app_, admin, portal):  # noqa: F811
 
 
 from test_spend_opex import admin, app_  # noqa: E402,F401  (fixtures)
+
+
+def test_escalation_to_a_manager_who_is_also_the_infra_address(db, flow):  # noqa: F811
+    """Audit: two escalations to one recipient in one round used to fail the commit and stop every review e-mail."""
+    db.get(System, flow["sa"]).manager_email = "infra@corp.example"
+    db.commit()
+    from sqlalchemy.orm import sessionmaker
+    app_like = sessionmaker(bind=db.get_bind(), autoflush=False)()          # like app.database.SessionLocal
+    c = flow["c"]
+    review.tick(app_like, NOW)
+    review.tick(app_like, at(26))                               # due: A's manager and the no-manager fallback are both infra
+    app_like.close()
+    assert [k for k in _kinds(db, c) if k[0] == "escalation"] == [("escalation", "infra@corp.example")]
+    assert ("infra@corp.example", ) in {(t,) for t, _ in flow["sent"]}
+
+
+def test_full_user_who_is_not_owner_admin_cannot_decide_others_items(app_, portal):  # noqa: F811
+    from test_spend_opex import _login
+    viewer = _login(app_, "viewer1")                            # full app scope, spend viewer, no owner admin
+    r = viewer.put(f"/api/owner/reviews/{portal['c']}/items", json={"itemIds": [portal["rv-a1"]], "decision": "keep"})
+    assert r.status_code == 404
+
+
+def test_review_pdf_is_not_archived():
+    """Its archive copy would be readable by every user (archive scope 'general'); the live PDF needs owner admin."""
+    from app import report_archive
+    assert not any(rx.match("/api/reviews/3/report.pdf") for rx, _, _ in report_archive._KIND_RX)

@@ -113,6 +113,10 @@ def my_review(cid: int, p: OwnerPrincipal = Depends(get_owner_user), db: Session
 def decide_mine(cid: int, data: dict = Body(...), p: OwnerPrincipal = Depends(get_owner_user), db: Session = Depends(get_db)):
     """One decision for several of the caller's items. Any id outside the caller's scope → 404 for the whole request."""
     from ..owners import review
+    from ..owners.access import OwnerPrincipal, owned_system_ids
+    from ..owners.service import can_manage
+    if p.system_ids is None and not can_manage(p.user):      # full app user, not owner admin: only their own systems
+        p = OwnerPrincipal(p.user, owned_system_ids(db, p.user))
     c = _campaign_or_404(db, p, cid)
     ids = data.get("itemIds")
     if not isinstance(ids, list) or not ids or len(ids) > 2000 or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):

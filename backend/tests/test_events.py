@@ -141,3 +141,13 @@ def test_items_resolve_to_ci_and_api_flow(db, admin):  # noqa: F811
     assert len(admin.get(f"/api/ci/{cid}/timeline").json()["items"]) == 2
     assert admin.get("/api/incidents/999999").status_code == 404
     assert admin.get("/api/incidents/stats?months=2").status_code == 200
+
+
+def test_ensure_schema_adds_ai_runs_cost_column(app_):  # noqa: F811
+    """Audit: a duplicate "ai_runs" key in the additive dict dropped cost_usd_micros on upgraded databases."""
+    from sqlalchemy import inspect, text
+    from app.database import engine, ensure_schema
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE ai_runs DROP COLUMN cost_usd_micros"))
+    ensure_schema()
+    assert "cost_usd_micros" in {c["name"] for c in inspect(engine).get_columns("ai_runs")}

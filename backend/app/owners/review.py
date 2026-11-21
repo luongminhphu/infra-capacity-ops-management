@@ -311,7 +311,12 @@ def tick(db: Session, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
                 opened = open_campaign(db, label, now=now).period_label
             except Exists:
                 db.rollback()
-    staged = advance(db, now)
+    try:
+        staged = advance(db, now)
+    except Exception:  # noqa: BLE001 — one broken campaign must not block delivery of every other notice
+        db.rollback()
+        logger.exception("Review advance failed; delivering pending notices anyway")
+        staged = {}
     verified = verify(db, now)
     return {"opened": opened, **staged, "verified": verified, **deliver(db, now)}
 
@@ -434,6 +439,7 @@ def _add_notice(db: Session, c: ReviewCampaign, recipient: str, kind: str, mail:
     subject, text, body = mail
     db.add(ReviewNotice(campaign_id=c.id, recipient=recipient, kind=kind, status="preview" if c.dry_run else "pending",
                         subject=subject[:255], body_text=text, body_html=body, vm_count=n, created_at=now))
+    db.flush()        # autoflush is off: the next check in this loop must see the row (manager e-mail = infra e-mail)
     return True
 
 
