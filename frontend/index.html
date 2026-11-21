@@ -1106,6 +1106,7 @@
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="netapp"><i data-lucide="plus"></i>NetApp ONTAP</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="ome"><i data-lucide="plus"></i>Dell OME</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="gestioip"><i data-lucide="plus"></i>GestióIP</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-src-add="sdp"><i data-lucide="plus"></i>ServiceDesk Plus</button>
                 <button class="btn btn-secondary btn-sm" type="button" data-src-add="netbackup"><i data-lucide="plus"></i>Máy chủ backup</button>
                 <button class="btn btn-primary btn-sm" type="button" data-src-add="vcenter"><i data-lucide="plus"></i>vCenter</button>
               </div>
@@ -1137,6 +1138,10 @@
                 <div class="field src-ipam"><label for="srcIpamPath">Đường dẫn API</label><input id="srcIpamPath" placeholder="/gestioip/api/api.cgi" maxlength="128"></div>
                 <div class="field src-ipam"><label for="srcIpamSerial">Cột chứa serial</label><input id="srcIpamSerial" placeholder="vd SN (cột tuỳ chỉnh của host)" maxlength="64"></div>
                 <div class="field src-ipam"><label for="srcIpamMac">Cột chứa MAC</label><input id="srcIpamMac" placeholder="vd MAC" maxlength="64"></div>
+                <div class="field src-sdp"><label for="srcSdpTemplates">Template yêu cầu</label><input id="srcSdpTemplates" placeholder="Yêu cầu cấp máy ảo, Yêu cầu tăng tài nguyên máy ảo" maxlength="2000"><span class="field-help">Tên đúng như trên ServiceDesk Plus, cách nhau bằng dấu phẩy.</span></div>
+                <div class="field src-sdp"><label for="srcSdpFrom">Nạp lùi từ ngày</label><input id="srcSdpFrom" type="date"></div>
+                <div class="field src-sdp"><label for="srcSdpRate">Lời gọi API / phút</label><input id="srcSdpRate" type="number" min="1" max="600" step="1" placeholder="60"></div>
+                <div class="field src-sdp"><label for="srcSdpEvery">Chu kỳ đọc (phút)</label><input id="srcSdpEvery" type="number" min="5" max="1440" step="1" placeholder="30"></div>
                 <div class="field src-nbu"><label for="srcApiVersion">API version</label><input id="srcApiVersion" placeholder="8.0 (NBU 10.0) · 12.0 (NBU 10.4)"></div>
                 <div class="field src-nbu"><label for="srcDomainType">Domain type</label><select id="srcDomainType"></select></div>
                 <div class="field src-nbu"><label for="srcDomainName">Domain name</label><input id="srcDomainName" placeholder="mặc định = tên máy chủ"></div>

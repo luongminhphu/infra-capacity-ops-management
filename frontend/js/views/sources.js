@@ -16,11 +16,13 @@ const SRC_DEFAULTS = {
   netapp: { port: 443, user: 'ico_ro', title: 'cụm NetApp ONTAP', label: 'NetApp ONTAP' },
   gestioip: { port: 443, user: '', title: 'GestióIP IPAM', label: 'GestióIP', userLabel: 'Tài khoản đọc (API)',
     userHint: 'ico_ro', hostHint: 'ipam.corp.local' },
+  sdp: { port: 8443, user: '', title: 'ServiceDesk Plus (On-Premises)', label: 'ServiceDesk Plus',
+    keyLabel: 'Technician key (tài khoản chỉ xem yêu cầu)', hostHint: 'sdp.corp.local' },
   ome: { port: 443, user: '', title: 'Dell OpenManage Enterprise', label: 'Dell OME', userLabel: 'Tài khoản Viewer (chỉ đọc)',
     userHint: 'ico_ro', hostHint: 'ome01.corp.local' },
 };
 /* Which credential fields each kind uses: user + password, API key / token, NetBackup-only fields. */
-const SRC_FIELDS = { vcenter: ['up'], proxmox: ['up'], nutanix: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'], ome: ['up'], gestioip: ['up', 'ipam'] };
+const SRC_FIELDS = { vcenter: ['up'], proxmox: ['up'], nutanix: ['up'], netbackup: ['up', 'key', 'nbu'], pure: ['key'], netapp: ['up'], ome: ['up'], gestioip: ['up', 'ipam'], sdp: ['key', 'sdp'] };
 
 function srcSetStatus(msg, isErr) { uiSetStatus('#srcStatus', msg, isErr ? 'error' : ''); }
 
@@ -145,6 +147,10 @@ function srcFormPayload() {
     demo: $('#srcDemo').checked,
   };
   if (kind === 'pure') p.apiKey = $('#srcApiKey').value;
+  if (kind === 'sdp') {
+    Object.assign(p, { apiKey: $('#srcApiKey').value, templates: $('#srcSdpTemplates').value, backfillFrom: $('#srcSdpFrom').value,
+      ratePerMin: Number($('#srcSdpRate').value) || undefined, intervalMinutes: Number($('#srcSdpEvery').value) || undefined });
+  }
   if (kind === 'gestioip') {
     Object.assign(p, { clientName: $('#srcIpamClient').value.trim() || 'DEFAULT', apiPath: $('#srcIpamPath').value.trim(),
       serialColumn: $('#srcIpamSerial').value.trim(), macColumn: $('#srcIpamMac').value.trim() });
@@ -171,6 +177,7 @@ function openSourceDialog(kind, item) {
   const fields = SRC_FIELDS[kind] || ['up'];
   $$('#srcDialog .src-nbu').forEach(el => el.classList.toggle('hidden', !fields.includes('nbu')));
   $$('#srcDialog .src-ipam').forEach(el => el.classList.toggle('hidden', !fields.includes('ipam')));
+  $$('#srcDialog .src-sdp').forEach(el => el.classList.toggle('hidden', !fields.includes('sdp')));
   $$('#srcDialog .src-up').forEach(el => el.classList.toggle('hidden', !fields.includes('up')));
   $$('#srcDialog .src-key').forEach(el => el.classList.toggle('hidden', !fields.includes('key')));
   if (d.keyLabel) $('#srcApiKeyLabel').textContent = d.keyLabel;
@@ -197,6 +204,10 @@ function openSourceDialog(kind, item) {
   $('#srcIpamPath').value = v.apiPath || '';
   $('#srcIpamSerial').value = v.serialColumn || '';
   $('#srcIpamMac').value = v.macColumn || '';
+  $('#srcSdpTemplates').value = (v.templates || []).join(', ');
+  $('#srcSdpFrom').value = v.backfillFrom || '2025-10-01';
+  $('#srcSdpRate').value = v.ratePerMin || '';
+  $('#srcSdpEvery').value = v.intervalMinutes || '';
   $('#srcVerify').checked = !!v.verifySsl;
   $('#srcCaPem').value = v.caPem || '';
   $('.src-ca').classList.toggle('hidden', !v.verifySsl);

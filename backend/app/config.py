@@ -197,6 +197,11 @@ class Settings(BaseSettings):
     ome_alert_backfill_days: int = Field(default=7)          # first read of AlertService: this far back
     hw_alert_retention_months: int = Field(default=13)       # hw_alert rows older than this are purged
     event_correlate_minutes: int = Field(default=15)          # G6: an event joins an incident of a strongly linked CI opened this recently
+    # G7a — ServiceDesk Plus (itsm/): defaults of a new source (each source can override them in Cài đặt → Nguồn dữ liệu)
+    itsm_backfill_from: str = Field(default="2025-10-01")      # first request date read by the backfill
+    itsm_rate_per_min: int = Field(default=60)                 # API calls per minute to one SDP server
+    itsm_interval_minutes: int = Field(default=30)             # incremental reads after the backfill
+    itsm_templates: str = Field(default="")                    # comma-separated template names (VM requests)
 
     # ---- Time series (app/metrics.py): raw points → hourly → daily ----
     metrics_raw_days: int = Field(default=7)
@@ -333,6 +338,11 @@ class Settings(BaseSettings):
         """GestióIP IPAM sources (Cài đặt → Nguồn dữ liệu)."""
         from .sources import ipam_configs
         return ipam_configs(self)
+
+    def itsm(self) -> list:
+        """ServiceDesk Plus sources (Cài đặt → Nguồn dữ liệu, G7a)."""
+        from .sources import itsm_configs
+        return itsm_configs(self)
 
     def hardware(self) -> list:
         """Dell OpenManage Enterprise sources (Cài đặt → Nguồn dữ liệu)."""

@@ -1219,6 +1219,33 @@ Menu **Vận hành → Sự cố & thay đổi → Nhật ký thay đổi** (`#/
 - `change_log` giữ 13 tháng như `ops_event`.
 - API: `GET /api/changes?kind=&user=&q=&days=`, `GET /api/ci/{id}/changes`.
 
+### ServiceDesk Plus — nguồn yêu cầu VM (ICO v2 G7a)
+
+**Cài đặt → Nguồn dữ liệu → + ServiceDesk Plus** (admin). ICO đọc yêu cầu tạo VM / tăng tài nguyên từ ServiceDesk Plus
+On-Premises qua API v3, **chỉ đọc**: client chỉ gửi GET, không tạo hay sửa ticket.
+
+- **Kết nối**:
+  - *Máy chủ* + *Cổng* (HTTPS, mặc định 8443).
+  - *Technician key*: của tài khoản chỉ có quyền xem yêu cầu; tạo ở Hồ sơ cá nhân → Tạo API key. Key được mã hoá và không trả
+    về.
+  - *Template yêu cầu*: tên đúng như trên SDP, nhiều tên cách nhau dấu phẩy.
+  - *Nạp lùi từ ngày*: mặc định 01/10/2025.
+  - *Lời gọi API / phút*: mặc định 60.
+  - *Chu kỳ đọc*: mặc định 30 phút.
+  - Nút *Kiểm tra kết nối* đọc trang yêu cầu đầu tiên.
+- **Nạp lùi**:
+  - Mỗi vòng đồng bộ đọc một lô nhỏ (tối đa 200 yêu cầu), sắp theo thời điểm cập nhật.
+  - Tiến độ được lưu sau mỗi trang, nên bị dừng giữa chừng thì lần sau chạy tiếp.
+  - Nạp lùi xong thì đọc tăng dần mỗi *Chu kỳ đọc*: chỉ các yêu cầu cập nhật sau lần đọc trước. Yêu cầu bị sửa sau đó được đọc lại.
+  - Đổi *Nạp lùi từ ngày* thì nạp lại từ ngày mới.
+- **Lưu**: mỗi yêu cầu một dòng (`itsm_request`), gồm template, tiêu đề, người yêu cầu, phòng ban, trạng thái, duyệt, các mốc
+  thời gian, trường bổ sung, và *nội dung gốc* (HTML đã bỏ script, giữ bảng, tối đa 64 KB).
+  - Nội dung gốc được giữ để bước đọc bảng (G7b) xử lý lại mà không phải gọi SDP lần nữa.
+  - Loại yêu cầu (cấp mới / tăng tài nguyên / thu hồi / khác) tạm suy từ tên template và tiêu đề.
+- Trạng thái kết nối hiện ở chip *ServiceDesk* trên thanh trên. Xoá nguồn thì dữ liệu của nguồn đó vào mục *Dữ liệu mồ côi*.
+- Tên trường theo tài liệu API v3. Khi nối máy chủ SDP thật của HSC, kiểm lại tên trường trên một yêu cầu thật; parser chấp nhận
+  cả dạng `{"name": …}` lẫn chữ thường.
+
 ### Cảnh báo vận hành (Cài đặt → Cảnh báo, admin)
 
 Mỗi nguồn (Capacity, Backup, Datastore, Snapshot VM, Alarm vCenter, Sức khoẻ host) có: bật / tắt gửi Discord, **gửi từ mức**

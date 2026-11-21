@@ -940,3 +940,5 @@ from .hardware import models as _hardware_models  # noqa: E402,F401
 from .ipam import models as _ipam_models  # noqa: E402,F401
 # Event store + incidents (G5).
 from .events import models as _events_models  # noqa: E402,F401
+# ServiceDesk Plus requests (G7a).
+from .itsm import models as _itsm_models  # noqa: E402,F401
