@@ -16,6 +16,8 @@ A plan for fiscal year Y is built from what the module already knows, then adjus
 * warranty  — servers still running whose Dell warranty (OME, G4b) ends before the end of Y and that no
               warranty Opex covers: one Opex line "Gia hạn bảo hành Dell" (hardware/warranty.plan_suggestions);
               once approved it becomes a planned Opex listing their service tags.
+* capacity  — "Mở rộng hạ tầng ảo hoá <năm>": the hosts to add and their price as last sent from Nhu cầu hạ tầng → Kế hoạch năm sau
+              (itsm/annual.py, frozen in itsm_year_plan.pushed; sourceId = the year). Once applied it becomes a draft Capex.
 * new       — a line typed in the plan (new service, new project), applied to the real
               Opex / Capex tables once the plan is approved.
 
@@ -43,8 +45,8 @@ from .settings import SpendSettings
 
 STATUS_LABELS = {"draft": "Nháp", "submitted": "Chờ duyệt", "approved": "Đã duyệt", "superseded": "Đã thay thế"}
 SOURCE_LABELS = {"renewal": "Gia hạn", "committed": "Đã ghi nhận", "capex": "Dự án Capex", "replace": "Thay thế thiết bị",
-                 "extend": "Dùng tiếp thiết bị", "warranty": "Bảo hành Dell", "new": "Mới đề xuất"}
-APPLIED_SOURCES = ("new", "replace", "extend", "warranty")            # lines that become a real Opex / Capex once the plan is approved
+                 "extend": "Dùng tiếp thiết bị", "warranty": "Bảo hành Dell", "capacity": "Mở rộng ảo hoá", "new": "Mới đề xuất"}
+APPLIED_SOURCES = ("new", "replace", "extend", "warranty", "capacity")            # lines that become a real Opex / Capex once the plan is approved
 PRIORITY_LABELS = {"must": "Bắt buộc", "should": "Nên có", "could": "Tuỳ chọn"}
 PRIORITY_RANK = {"must": 0, "should": 1, "could": 2}
 CAPEX_SPENT = ("approved", "in_progress", "closed")
@@ -156,6 +158,8 @@ def suggest(db: Session, year: int, cfg: SpendSettings) -> List[Dict[str, Any]]:
     out.extend(dc_assets.plan_suggestions(db, ys, ye))
     from ..hardware import warranty
     out.extend(warranty.plan_suggestions(db, ys, ye))
+    from ..itsm import annual
+    out.extend(annual.plan_suggestions(db, year, ys))
     return out
 
 
@@ -171,12 +175,13 @@ def _apply_suggestion(line: BudgetPlanLine, s: Dict[str, Any], plan: BudgetPlan)
         line.amount_gross = s["grossExact"]          # several VAT rates in one project: keep the exact sum
 
 
-def refresh(db: Session, plan: BudgetPlan, cfg: SpendSettings, user: User) -> Dict[str, int]:
+def refresh(db: Session, plan: BudgetPlan, cfg: SpendSettings, user: User, only: Optional[str] = None) -> Dict[str, int]:
     """Merge the current suggestions into `plan` (draft only). Lines people touched keep their
-    amount / decision; their reference data (base, dates, names) still follows the source."""
-    sugg = {(s["source"], s["sourceId"]): s for s in suggest(db, plan.fiscal_year, cfg)}
+    amount / decision; their reference data (base, dates, names) still follows the source.
+    `only` = one source (e.g. "capacity" from Nhu cầu hạ tầng): the other lines are left as they are."""
+    sugg = {(s["source"], s["sourceId"]): s for s in suggest(db, plan.fiscal_year, cfg) if only in (None, s["source"])}
     lines = db.query(BudgetPlanLine).filter(BudgetPlanLine.plan_id == plan.id).all()
-    by_key = {(l.source, l.source_id): l for l in lines if l.source != "new"}
+    by_key = {(l.source, l.source_id): l for l in lines if l.source != "new" and only in (None, l.source)}
     stats = {"added": 0, "updated": 0, "removed": 0, "stale": 0}
     now = dt.datetime.utcnow()
     order = max([l.sort_order for l in lines] or [0])

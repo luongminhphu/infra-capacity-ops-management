@@ -375,3 +375,190 @@ def plan_recommendations(plan: Dict[str, Any]) -> Dict[str, Any]:
                     f"(+{scenarios[base_i]['growthPct']:.0f}%/quý)"
                     + (f"; kịch bản cao cần {high_total['finalNodes']} node." if high_total["finalNodes"] else "."))
     return {"headline": headline, "statusCls": status_cls, "statusLabel": status_label, "recommendations": recs[:6]}
+
+
+# ================================================================ annual demand review + next-year plan (ICO v2 G8)
+# Pure functions over rows prepared by itsm/annual.py (the same dict feeds the page, the PDF and the Excel).
+SIZE_KEYS = ("vcpu", "ramGB", "diskGB")
+NO_KEY = "Chưa rõ"
+
+
+def _median(xs: List[float]) -> Optional[float]:
+    xs = sorted(xs)
+    if not xs:
+        return None
+    n = len(xs)
+    return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2.0
+
+
+def demand_summary(lines: List[Dict[str, Any]], year: int) -> Dict[str, Any]:
+    """Requested resources of one (Vietnam calendar) year.
+
+    `lines`: one row per request line, times already in Vietnam time — {requestId, kind ("new_vm" | "resize"),
+    createdAt, resolvedAt, department, project, env, vms, vcpu, ramGB, diskGB}; vms and resources are already × quantity,
+    a reconfiguration carries its change To-be − As-is and vms = 0. Groups: quarter, project, department, environment.
+    Processing time = resolvedAt − createdAt in days, median over the requests that are resolved."""
+    acc: Dict[tuple, Dict[str, Any]] = {}
+
+    def add(dim: str, key: str, ln: Dict[str, Any]) -> None:
+        b = acc.setdefault((dim, key), {"req": set(), "vms": 0, "vcpu": 0.0, "ramGB": 0.0, "diskGB": 0.0})
+        b["req"].add(ln["requestId"])
+        b["vms"] += ln.get("vms") or 0
+        for k in SIZE_KEYS:
+            b[k] += ln.get(k) or 0.0
+
+    days: Dict[Any, float] = {}
+    for ln in lines:
+        c = ln["createdAt"]
+        if c.year != year:
+            continue
+        add("total", "", ln)
+        add("quarter", f"Q{(c.month - 1) // 3 + 1}", ln)
+        for dim, field in (("project", "project"), ("department", "department"), ("env", "env")):
+            add(dim, ln.get(field) or NO_KEY, ln)
+        if ln.get("resolvedAt"):
+            days[ln["requestId"]] = max(0.0, (ln["resolvedAt"] - c).total_seconds() / 86400.0)
+
+    def row(dim: str, key: str) -> Dict[str, Any]:
+        b = acc.get((dim, key)) or {"req": set(), "vms": 0, "vcpu": 0.0, "ramGB": 0.0, "diskGB": 0.0}
+        return {"key": key, "requests": len(b["req"]), "vms": b["vms"], **{k: round(b[k], 1) for k in SIZE_KEYS}}
+
+    def ranked(dim: str) -> List[Dict[str, Any]]:
+        out = [row(dim, k) for d, k in acc if d == dim]
+        return sorted(out, key=lambda r: (-r["vcpu"], -r["ramGB"], r["key"]))
+
+    med = _median(list(days.values()))
+    return {"year": year, "totals": {**row("total", ""), "medianDays": None if med is None else round(med, 1), "resolved": len(days)},
+            "byQuarter": [row("quarter", f"Q{q}") for q in range(1, 5)],
+            "byProject": ranked("project"), "byDepartment": ranked("department"), "byEnv": ranked("env")}
+
+
+def _fulfil_group(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"vms": len(rows)}
+    for k in ("reqVcpu", "reqRamGB", "provVcpu", "provRamGB"):
+        out[k] = round(sum(r.get(k) or 0.0 for r in rows), 1)
+    for h in (90, 180):
+        have = [r for r in rows if r.get(f"used{h}")]
+        out[f"vms{h}"] = len(have)
+        out[f"used{h}Vcpu"] = round(sum(r[f"used{h}"]["vcpu"] for r in have), 1)
+        out[f"used{h}RamGB"] = round(sum(r[f"used{h}"]["ramGB"] for r in have), 1)
+    # The ratio uses the longest horizon measured, over the VMs measured at it (a VM younger than 180 days counts at 90).
+    h = 180 if out["vms180"] else 90 if out["vms90"] else None
+    out["horizon"] = h
+    for k, used in (("Vcpu", "vcpu"), ("RamGB", "ramGB")):
+        ratio = None
+        if h:
+            have = [r for r in rows if r.get(f"used{h}")]
+            req = sum(r.get(f"req{k}") or 0.0 for r in have)
+            ratio = sum(r[f"used{h}"][used] for r in have) / req if req > 0 else None
+        out[f"ratio{k}"] = None if ratio is None else round(ratio, 2)
+        out[f"factor{k}"] = None if ratio is None else round(min(1.0, ratio), 2)      # a factor never inflates a request
+    return out
+
+
+def fulfilment(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Requested → provisioned → used after 90 / 180 days, per department.
+
+    `items`: one VM created by a request (strong link) — {department, reqVcpu, reqRamGB, provVcpu, provRamGB (configuration when
+    it appeared), used90 / used180: {vcpu, ramGB} (configured × average usage % around that day) or None}.
+    ratio = used / requested; factor = min(1, ratio) — the "dùng thật / xin" applied to next year's requests."""
+    by: Dict[str, List[Dict[str, Any]]] = {}
+    for it in items:
+        by.setdefault(it.get("department") or NO_KEY, []).append(it)
+    deps = [{"department": d, **_fulfil_group(rows)} for d, rows in by.items()]
+    deps.sort(key=lambda r: (-r["reqVcpu"], r["department"]))
+    return {"departments": deps, "overall": _fulfil_group(items)}
+
+
+def organic_growth(series: List[Dict[str, Any]], from_requests: Dict[str, float], days: float = 365.0) -> Dict[str, Any]:
+    """Natural growth of one cluster per `days`: allocated vCPU / RAM (powered on) first → last point of the history, minus what
+    the VMs created by requests in that span added (counted apart as known demand: no double counting), scaled to a year.
+    Never negative; None values when the history covers < 30 days."""
+    pts = [p for p in series if p.get("date")]
+    out = {"spanDays": 0, "observedVcpu": None, "observedRamGB": None, "fromRequestsVcpu": round(from_requests.get("vcpu", 0.0), 1),
+           "fromRequestsRamGB": round(from_requests.get("ramGB", 0.0), 1), "vcpu": 0.0, "ramGB": 0.0}
+    if len(pts) < 2:
+        return out
+    span = (dt.date.fromisoformat(str(pts[-1]["date"])[:10]) - dt.date.fromisoformat(str(pts[0]["date"])[:10])).days
+    out["spanDays"] = span
+    if span < 30:
+        return out
+    for k, f in (("Vcpu", "usedVcpu"), ("RamGB", "usedRamGB")):
+        obs = float(pts[-1].get(f) or 0) - float(pts[0].get(f) or 0)
+        out[f"observed{k}"] = round(obs, 1)
+        key = "vcpu" if k == "Vcpu" else "ramGB"
+        out[key] = round(max(0.0, obs - from_requests.get(key, 0.0)) * days / span, 1)
+    return out
+
+
+def forecast(clusters: List[Dict[str, Any]], known: List[Dict[str, Any]], reclaims: List[Dict[str, Any]], node: Any,
+             policy: Policy, target_pct: float = 80.0, factors: Optional[Dict[str, Any]] = None,
+             default_cluster: Optional[str] = None) -> Dict[str, Any]:
+    """Next year's net demand per cluster and the hosts to add.
+
+    clusters: {name, hosts: [{cores, ramGB}], usedVcpu, usedRamGB (powered-on allocation now), organicVcpu, organicRamGB}
+    known:    {label, source ("approved" | "manual"), cluster?, department?, vcpu, ramGB, diskGB} — a row without a known cluster
+              goes to `default_cluster` (else the largest cluster); × the department factor of fulfilment() when `factors` is given
+    reclaims: {label, cluster, vcpu, ramGB} — committed reclaims (review G3) not done yet
+    node:     the standard host (sizing.HostProfile: cores, ram_gb, unit_price)
+    net = now + organic + known × factor − reclaims (≥ 0); hosts = _nodes_needed (target % of the overcommit threshold + N+1)."""
+    names = [c["name"] for c in clusters]
+    ht = max(1.0, float(policy.ht_factor or 1.0))
+    if default_cluster not in names:
+        default_cluster = max(clusters, key=lambda c: (sum(h.get("cores") or 0 for h in c["hosts"]), c["name"]))["name"] if clusters else None
+    dep = {d["department"]: d for d in (factors or {}).get("departments", [])}
+
+    def factor(department: Optional[str], key: str) -> float:
+        if not factors:
+            return 1.0
+        f = (dep.get(department or NO_KEY) or {}).get(f"factor{key}")
+        f = factors["overall"].get(f"factor{key}") if f is None else f
+        return 1.0 if f is None else float(f)
+
+    zero = {"knownVcpu": 0.0, "knownRamGB": 0.0, "knownDiskGB": 0.0, "reclaimVcpu": 0.0, "reclaimRamGB": 0.0}
+    per = {n: dict(zero) for n in names}
+    known_rows, reclaim_rows = [], []
+    for k in known:
+        cl = k.get("cluster") if k.get("cluster") in names else default_cluster
+        fv, fr = factor(k.get("department"), "Vcpu"), factor(k.get("department"), "RamGB")
+        r = {**k, "cluster": cl, "factorVcpu": fv, "factorRamGB": fr,
+             "vcpuNet": round((k.get("vcpu") or 0.0) * fv, 1), "ramGBNet": round((k.get("ramGB") or 0.0) * fr, 1)}
+        known_rows.append(r)
+        if cl is not None:
+            per[cl]["knownVcpu"] += r["vcpuNet"]
+            per[cl]["knownRamGB"] += r["ramGBNet"]
+            per[cl]["knownDiskGB"] += k.get("diskGB") or 0.0
+    for x in reclaims:
+        if x.get("cluster") in names:          # a reclaim outside the clusters in scope frees nothing here
+            reclaim_rows.append(x)
+            per[x["cluster"]]["reclaimVcpu"] += x.get("vcpu") or 0.0
+            per[x["cluster"]]["reclaimRamGB"] += x.get("ramGB") or 0.0
+    node_logical, node_ram = node.cores * ht, float(node.ram_gb)
+    rows = []
+    for c in clusters:
+        hosts = c["hosts"]
+        cap_l = sum((h.get("cores") or 0) * ht for h in hosts)
+        cap_r = sum(float(h.get("ramGB") or 0) for h in hosts)
+        p = per[c["name"]]
+        net_v = max(0.0, c["usedVcpu"] + c.get("organicVcpu", 0.0) + p["knownVcpu"] - p["reclaimVcpu"])
+        net_r = max(0.0, c["usedRamGB"] + c.get("organicRamGB", 0.0) + p["knownRamGB"] - p["reclaimRamGB"])
+        need = _nodes_needed(net_v, net_r, cap_l, cap_r, len(hosts), max((h.get("cores") or 0) * ht for h in hosts) if hosts else 0.0,
+                             max(float(h.get("ramGB") or 0) for h in hosts) if hosts else 0.0, node_logical, node_ram, policy, target_pct)
+        k = need["nodes"]
+        rows.append({"name": c["name"], "hosts": len(hosts), "usedVcpu": round(c["usedVcpu"], 1), "usedRamGB": round(c["usedRamGB"], 1),
+                     "organicVcpu": c.get("organicVcpu", 0.0), "organicRamGB": c.get("organicRamGB", 0.0),
+                     **{kk: round(v, 1) for kk, v in p.items()}, "netVcpu": round(net_v, 1), "netRamGB": round(net_r, 1),
+                     "cpuPctNow": _pct(c["usedVcpu"], cap_l, policy.cpu_overcommit_max),
+                     "ramPctNow": _pct(c["usedRamGB"], cap_r, policy.ram_overcommit_max),
+                     "cpuPct": _pct(net_v, cap_l, policy.cpu_overcommit_max), "ramPct": _pct(net_r, cap_r, policy.ram_overcommit_max),
+                     "cpuPctAfter": _pct(net_v, cap_l + k * node_logical, policy.cpu_overcommit_max),
+                     "ramPctAfter": _pct(net_r, cap_r + k * node_ram, policy.ram_overcommit_max), **need})
+    nodes = sum(r["nodes"] for r in rows)
+    price = int(node.unit_price) if node.unit_price else None
+    totals = {k: round(sum(r[k] for r in rows), 1) for k in ("usedVcpu", "usedRamGB", "organicVcpu", "organicRamGB", "knownVcpu",
+                                                              "knownRamGB", "knownDiskGB", "reclaimVcpu", "reclaimRamGB", "netVcpu", "netRamGB")}
+    return {"clusters": rows, "known": known_rows, "reclaims": reclaim_rows, "defaultCluster": default_cluster,
+            "node": {"name": node.name, "sockets": node.sockets, "coresPerSocket": node.cores_per_socket, "cores": node.cores,
+                     "ramGB": node.ram_gb, "unitPrice": price},
+            "targetPct": target_pct, "useFactor": bool(factors),
+            "totals": {**totals, "nodes": nodes, "amount": nodes * price if price is not None else None}}
